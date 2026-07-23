@@ -1,0 +1,156 @@
+{
+  "$meta": {
+    "name": "みんなでつくろう 大富豪 — アウトゲーム デザイントークン",
+    "sourceOfTruth": "design-tokens.css",
+    "basis": "キービジュアル案 2A「グランドフェス」(key-visual-2a.svg)+ 企画書 §6 調整 3 点",
+    "theme": "light-only",
+    "naming": "JSON のキー階層をドット→ハイフンにつなぐと CSS カスタムプロパティ名になる(例: color.primitive.navy-800 → --color-navy-800、semantic 階層は color.semantic.bg-app → --color-bg-app)",
+    "updated": "2026-07-24"
+  },
+  "color": {
+    "primitive": {
+      "white": { "value": "#FFFFFF", "role": "カード面(KV: カード面)" },
+      "cream-50": { "value": "#FFFBEF", "role": "明色テキスト・淡い面" },
+      "cream-100": { "value": "#FFF4DC", "role": "アプリ地(KV: ロゴ縁・リボン文字・タップ導線面)" },
+      "cream-200": { "value": "#F6E8C6", "role": "トラック・押下面" },
+      "cream-300": { "value": "#E8D9B5", "role": "クリーム地の弱い枠線" },
+      "navy-100": { "value": "#E9EBF2", "role": "白地の区切り線・無効面" },
+      "navy-200": { "value": "#C9CDDB", "role": "弱い枠線(KV: 審判の笛)" },
+      "navy-300": { "value": "#A9B0C7", "role": "無効テキスト(AA 対象外)" },
+      "navy-600": { "value": "#4A5578", "role": "補助テキスト・入力枠線" },
+      "navy-800": { "value": "#1C2447", "role": "本文・輪郭(KV: 全要素共通の輪郭線・文字)" },
+      "navy-900": { "value": "#14203D", "role": "ベタ落ち影(KV: ロゴ落ち影)" },
+      "blue-100": { "value": "#E1ECFA", "role": "情報の淡色地" },
+      "blue-400": { "value": "#4585D4", "role": "装飾(KV: 放射光線)" },
+      "blue-500": { "value": "#2B6FC2", "role": "リンク・フォーカス(KV: 深い青空)" },
+      "blue-600": { "value": "#235CA4", "role": "リンク押下" },
+      "red-100": { "value": "#FBE3DF", "role": "危険の淡色地" },
+      "red-500": { "value": "#E14B3B", "role": "装飾限定のブランド赤(KV: ロゴ「大」・リボン)" },
+      "red-600": { "value": "#C93A2B", "role": "テキストを載せる赤い塗り(AA)" },
+      "red-700": { "value": "#B23A2E", "role": "押下・危険テキスト(KV: リボン折返し)" },
+      "gold-200": { "value": "#FFE29A", "role": "金の淡色地" },
+      "gold-400": { "value": "#FFC53D", "role": "祝祭・注意(KV: ロゴ「富」・イエローカード・NEW RULE 面)" },
+      "gold-700": { "value": "#7A5A10", "role": "金系の文字(AA)" },
+      "green-100": { "value": "#DFF2E7", "role": "緑の淡色地" },
+      "green-500": { "value": "#2FA36B", "role": "ローカル・成功の面(KV: ロゴ「豪」・丘・LOCAL RULE 面)" },
+      "green-600": { "value": "#268A58", "role": "装飾(KV: 丘の奥)" },
+      "green-700": { "value": "#1E7A50", "role": "緑系の文字・塗り(AA)" },
+      "skin-300": { "value": "#F0C48F", "role": "イラスト専用(KV: キャラクターの肌)。UI の面・文字に使わない" }
+    },
+    "semantic": {
+      "bg-app": { "ref": "color.primitive.cream-100", "role": "アプリ全体の地" },
+      "bg-surface": { "ref": "color.primitive.white", "role": "カード・モーダル面" },
+      "bg-subtle": { "ref": "color.primitive.cream-50", "role": "注記ボックスなど" },
+      "bg-inverse": { "ref": "color.primitive.navy-800", "role": "トースト・反転面" },
+      "bg-brand": { "ref": "color.primitive.blue-500", "role": "ヒーロー帯(ロゴ背景の空)" },
+      "overlay": { "value": "rgba(20, 32, 61, 0.55)", "role": "モーダル背景(navy-900 α)" },
+      "text-primary": { "ref": "color.primitive.navy-800" },
+      "text-secondary": { "ref": "color.primitive.navy-600" },
+      "text-disabled": { "ref": "color.primitive.navy-300", "role": "無効状態のみ。AA 対象外" },
+      "text-on-fill": { "ref": "color.primitive.cream-50", "role": "紺・赤・緑の塗りの上" },
+      "text-link": { "ref": "color.primitive.blue-500" },
+      "text-danger": { "ref": "color.primitive.red-700", "role": "却下・低評価・実装失敗" },
+      "text-success": { "ref": "color.primitive.green-700", "role": "リリース・高評価" },
+      "text-caution": { "ref": "color.primitive.gold-700", "role": "審査中・実装中など進行中" },
+      "border-strong": { "ref": "color.primitive.navy-800", "role": "部品の太輪郭(2A の文法)" },
+      "border-control": { "ref": "color.primitive.navy-600", "role": "入力欄の既定枠線" },
+      "border-subtle": { "ref": "color.primitive.cream-300", "role": "クリーム地の弱い区切り" },
+      "border-divider": { "ref": "color.primitive.navy-100", "role": "白地の区切り線" },
+      "action-primary": { "ref": "color.primitive.red-600", "role": "主ボタン塗り" },
+      "action-primary-pressed": { "ref": "color.primitive.red-700" },
+      "action-secondary-bg": { "ref": "color.primitive.white", "role": "副ボタン塗り" },
+      "action-selected": { "ref": "color.primitive.navy-800", "role": "選択状態(セグメント)" },
+      "focus-ring": { "ref": "color.primitive.blue-500" },
+      "warning-bg": { "ref": "color.primitive.gold-400", "role": "イエローカード面。審判の文脈専用" },
+      "warning-ink": { "ref": "color.primitive.navy-800", "role": "イエローカード上の文字" },
+      "category-local": { "ref": "color.primitive.green-500", "role": "ローカルルール(KV: LOCAL RULE 面)" },
+      "category-local-bg": { "ref": "color.primitive.green-100" },
+      "category-local-text": { "ref": "color.primitive.green-700" },
+      "category-original": { "ref": "color.primitive.gold-400", "role": "オリジナルルール(KV: NEW RULE 面)" },
+      "category-original-bg": { "ref": "color.primitive.gold-200" },
+      "category-original-text": { "ref": "color.primitive.gold-700" },
+      "status-active-bg": { "ref": "color.primitive.navy-800", "role": "有効バッジ" },
+      "status-active-text": { "ref": "color.primitive.cream-50" },
+      "status-removed-bg": { "ref": "color.primitive.navy-100", "role": "排除済みバッジ" },
+      "status-removed-text": { "ref": "color.primitive.navy-600" },
+      "popularity-fill": { "ref": "color.primitive.gold-400", "role": "人気度バー。navy-800 の枠線を必須とする" },
+      "popularity-track": { "ref": "color.primitive.cream-200" }
+    }
+  },
+  "typography": {
+    "font-family-base": { "value": "'M PLUS Rounded 1c', 'Hiragino Maru Gothic ProN', 'Hiragino Sans', 'Yu Gothic', sans-serif" },
+    "font-weight": {
+      "regular": { "value": 400 },
+      "bold": { "value": 700 },
+      "heavy": { "value": 800, "role": "見出し・ロゴ級" }
+    },
+    "font-size": {
+      "display": { "value": "28px", "role": "画面タイトル級" },
+      "title-l": { "value": "22px", "role": "セクション見出し" },
+      "title-m": { "value": "18px", "role": "カード見出し・モーダル見出し" },
+      "title-s": { "value": "16px", "role": "ボタンラベル・リスト項目名" },
+      "body": { "value": "14px", "role": "本文の既定" },
+      "caption": { "value": "12px", "role": "注記・補足" },
+      "micro": { "value": "11px", "role": "タグ・バッジ内(太字で使う)" }
+    },
+    "line-height": {
+      "display": { "value": 1.3 },
+      "heading": { "value": 1.4 },
+      "body": { "value": 1.6 },
+      "caption": { "value": 1.5 }
+    },
+    "letter-spacing": {
+      "normal": { "value": "0" },
+      "wide": { "value": "0.04em", "role": "見出し" },
+      "cta": { "value": "0.08em", "role": "主ボタン・タップ導線" }
+    }
+  },
+  "space": {
+    "1": { "value": "4px" },
+    "2": { "value": "8px" },
+    "3": { "value": "12px" },
+    "4": { "value": "16px" },
+    "5": { "value": "20px" },
+    "6": { "value": "24px" },
+    "8": { "value": "32px" },
+    "10": { "value": "40px" },
+    "12": { "value": "48px" }
+  },
+  "radius": {
+    "s": { "value": "6px", "role": "タグ・小バッジ" },
+    "m": { "value": "10px", "role": "入力欄・リスト行" },
+    "l": { "value": "16px", "role": "カード・モーダル" },
+    "pill": { "value": "999px", "role": "主ボタン・セグメント(KV のピル)" }
+  },
+  "border": {
+    "thin": { "value": "1px", "role": "区切り線" },
+    "control": { "value": "1.5px", "role": "入力欄・タグ" },
+    "bold": { "value": "2px", "role": "ボタン・カードの標準輪郭" },
+    "heavy": { "value": "3px", "role": "強調(イエローカード・モーダル)" }
+  },
+  "shadow": {
+    "hard-s": { "value": "0 2px 0 #14203D", "role": "小ボタン・タグ" },
+    "hard-m": { "value": "0 3px 0 #14203D", "role": "ボタン・カード" },
+    "hard-l": { "value": "0 5px 0 #14203D", "role": "主 CTA・モーダル" },
+    "soft": { "value": "0 2px 8px rgba(28, 36, 71, 0.12)", "role": "浮遊面(トースト)のみ" }
+  },
+  "motion": {
+    "duration": {
+      "fast": { "value": "120ms", "role": "押下・ホバー" },
+      "base": { "value": "200ms", "role": "展開・フェード" },
+      "slow": { "value": "320ms", "role": "モーダル・画面転換" }
+    },
+    "easing": {
+      "standard": { "value": "cubic-bezier(0.2, 0, 0, 1)", "role": "通常の出入り" },
+      "pop": { "value": "cubic-bezier(0.34, 1.56, 0.64, 1)", "role": "祝祭系(バッジ・カード登場)" },
+      "exit": { "value": "cubic-bezier(0.4, 0, 1, 1)", "role": "退場" }
+    }
+  },
+  "size": {
+    "tap-min": { "value": "44px", "role": "タップターゲット最小" },
+    "control": { "value": "48px", "role": "ボタン・入力欄の標準高さ" },
+    "control-s": { "value": "36px", "role": "小ボタンの見た目高さ(当たり判定は 44px)" },
+    "focus-ring-width": { "value": "3px" },
+    "focus-ring-offset": { "value": "2px" }
+  }
+}

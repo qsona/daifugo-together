@@ -1,0 +1,163 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1920" font-family="'M PLUS Rounded 1c','Hiragino Maru Gothic ProN','Hiragino Sans',sans-serif">
+  <title>みんなでつくろう 大富豪 キービジュアル案2B ルール番付(縦長)</title>
+
+  <defs>
+    <pattern id="dots2b" width="30" height="30" patternUnits="userSpaceOnUse">
+      <circle cx="15" cy="15" r="5.5" fill="#E3A82B"/>
+    </pattern>
+    <path id="sp2b" d="M0,-70 C 12,-52 36,-44 36,-28 C 36,-14 18,-10 8,-18 C 10,-10 14,-4 20,2 L-20,2 C -14,-4 -10,-10 -8,-18 C -18,-10 -36,-14 -36,-28 C -36,-44 -12,-52 0,-70 Z"/>
+    <path id="ht2b" d="M0,-54 C -10,-68 -36,-64 -36,-42 C -36,-24 -14,-10 0,2 C 14,-10 36,-24 36,-42 C 36,-64 10,-68 0,-54 Z"/>
+    <polygon id="di2b" points="0,-60 32,-14 0,32 -32,-14"/>
+    <g id="cl2b">
+      <circle cx="0" cy="-30" r="16"/>
+      <circle cx="-16" cy="-6" r="16"/>
+      <circle cx="16" cy="-6" r="16"/>
+      <polygon points="-8,28 8,28 4,2 -4,2"/>
+    </g>
+  </defs>
+
+  <!-- 背景: クリーム地 -->
+  <rect width="1080" height="1920" fill="#F5EBD3"/>
+
+  <!-- 印刷枠(二重) -->
+  <rect x="40" y="40" width="1000" height="1840" fill="none" stroke="#26364D" stroke-width="10"/>
+  <rect x="64" y="64" width="952" height="1792" fill="none" stroke="#26364D" stroke-width="3"/>
+
+  <!-- 上端: 引き幕ストライプ -->
+  <g>
+    <rect x="64" y="64" width="68" height="84" fill="#2B8C7E"/>
+    <rect x="132" y="64" width="68" height="84" fill="#D9432F"/>
+    <rect x="200" y="64" width="68" height="84" fill="#26364D"/>
+    <rect x="268" y="64" width="68" height="84" fill="#2B8C7E"/>
+    <rect x="336" y="64" width="68" height="84" fill="#D9432F"/>
+    <rect x="404" y="64" width="68" height="84" fill="#26364D"/>
+    <rect x="472" y="64" width="68" height="84" fill="#2B8C7E"/>
+    <rect x="540" y="64" width="68" height="84" fill="#D9432F"/>
+    <rect x="608" y="64" width="68" height="84" fill="#26364D"/>
+    <rect x="676" y="64" width="68" height="84" fill="#2B8C7E"/>
+    <rect x="744" y="64" width="68" height="84" fill="#D9432F"/>
+    <rect x="812" y="64" width="68" height="84" fill="#26364D"/>
+    <rect x="880" y="64" width="68" height="84" fill="#2B8C7E"/>
+    <rect x="948" y="64" width="68" height="84" fill="#D9432F"/>
+    <rect x="64" y="148" width="952" height="8" fill="#E3A82B"/>
+  </g>
+
+  <!-- ハーフトーン(質感) -->
+  <circle cx="150" cy="1230" r="130" fill="url(#dots2b)" opacity="0.3"/>
+  <circle cx="940" cy="330" r="100" fill="url(#dots2b)" opacity="0.3"/>
+
+  <!-- タイトル上段プレート -->
+  <g transform="translate(540,250)">
+    <rect x="-370" y="-48" width="740" height="96" fill="#2B8C7E" stroke="#26364D" stroke-width="7"/>
+    <text x="0" y="22" font-size="62" font-weight="bold" text-anchor="middle" letter-spacing="6" fill="#FFFBF0">みんなでつくろう</text>
+  </g>
+
+  <!-- ロゴ背面のハーフトーン円 -->
+  <circle cx="540" cy="850" r="330" fill="url(#dots2b)" opacity="0.28"/>
+
+  <!-- 大富豪: 縦組み(朱の版ズレ → 紺) -->
+  <g font-size="310" font-weight="bold" text-anchor="middle" fill="#D9432F">
+    <text x="556" y="676">大</text>
+    <text x="556" y="1001">富</text>
+    <text x="556" y="1326">豪</text>
+  </g>
+  <g font-size="310" font-weight="bold" text-anchor="middle" fill="#26364D">
+    <text x="540" y="660">大</text>
+    <text x="540" y="985">富</text>
+    <text x="540" y="1310">豪</text>
+  </g>
+
+  <!-- 縦の欧文キャプション -->
+  <text transform="translate(348,455) rotate(90)" font-size="26" letter-spacing="8" fill="#26364D" opacity="0.75">DAIFUGO — MINNA DE TSUKUROU —</text>
+
+  <!-- 千社札: 左 -->
+  <g transform="translate(168,590) rotate(-3)">
+    <rect x="-69" y="-202" width="150" height="420" rx="6" fill="#26364D" opacity="0.12"/>
+    <rect x="-75" y="-210" width="150" height="420" rx="6" fill="#FFFBF0" stroke="#26364D" stroke-width="7"/>
+    <rect x="-61" y="-196" width="122" height="392" fill="none" stroke="#D9432F" stroke-width="3"/>
+    <rect x="-75" y="-210" width="150" height="64" fill="#26364D"/>
+    <text x="0" y="-166" font-size="30" font-weight="bold" text-anchor="middle" fill="#FFFBF0">新潟発</text>
+    <text x="0" y="-58" font-size="68" font-weight="bold" text-anchor="middle" fill="#26364D">8</text>
+    <text x="0" y="30" font-size="68" font-weight="bold" text-anchor="middle" fill="#26364D">切</text>
+    <text x="0" y="118" font-size="68" font-weight="bold" text-anchor="middle" fill="#26364D">り</text>
+  </g>
+  <g transform="translate(168,1030) rotate(2)">
+    <rect x="-69" y="-182" width="150" height="380" rx="6" fill="#26364D" opacity="0.12"/>
+    <rect x="-75" y="-190" width="150" height="380" rx="6" fill="#FFFBF0" stroke="#26364D" stroke-width="7"/>
+    <rect x="-61" y="-176" width="122" height="352" fill="none" stroke="#D9432F" stroke-width="3"/>
+    <rect x="-75" y="-190" width="150" height="64" fill="#26364D"/>
+    <text x="0" y="-146" font-size="30" font-weight="bold" text-anchor="middle" fill="#FFFBF0">東京発</text>
+    <text x="0" y="-42" font-size="68" font-weight="bold" text-anchor="middle" fill="#26364D">都</text>
+    <text x="0" y="46" font-size="68" font-weight="bold" text-anchor="middle" fill="#26364D">落</text>
+    <text x="0" y="134" font-size="68" font-weight="bold" text-anchor="middle" fill="#26364D">ち</text>
+  </g>
+
+  <!-- 千社札: 右 -->
+  <g transform="translate(912,570) rotate(3)">
+    <rect x="-69" y="-162" width="150" height="340" rx="6" fill="#26364D" opacity="0.12"/>
+    <rect x="-75" y="-170" width="150" height="340" rx="6" fill="#FFFBF0" stroke="#26364D" stroke-width="7"/>
+    <rect x="-61" y="-156" width="122" height="312" fill="none" stroke="#D9432F" stroke-width="3"/>
+    <rect x="-75" y="-170" width="150" height="64" fill="#D9432F"/>
+    <text x="0" y="-126" font-size="30" font-weight="bold" text-anchor="middle" fill="#FFFBF0">全国</text>
+    <text x="0" y="-14" font-size="68" font-weight="bold" text-anchor="middle" fill="#26364D">革</text>
+    <text x="0" y="74" font-size="68" font-weight="bold" text-anchor="middle" fill="#26364D">命</text>
+  </g>
+  <g transform="translate(912,1000) rotate(-2)">
+    <rect x="-69" y="-182" width="150" height="380" rx="6" fill="#26364D" opacity="0.12"/>
+    <rect x="-75" y="-190" width="150" height="380" rx="6" fill="#FFFBF0" stroke="#26364D" stroke-width="7"/>
+    <rect x="-61" y="-176" width="122" height="352" fill="none" stroke="#D9432F" stroke-width="3"/>
+    <rect x="-75" y="-190" width="150" height="64" fill="#26364D"/>
+    <text x="0" y="-146" font-size="30" font-weight="bold" text-anchor="middle" fill="#FFFBF0">千葉発</text>
+    <text x="0" y="-42" font-size="68" font-weight="bold" text-anchor="middle" fill="#26364D">し</text>
+    <text x="0" y="46" font-size="68" font-weight="bold" text-anchor="middle" fill="#26364D">ば</text>
+    <text x="0" y="134" font-size="68" font-weight="bold" text-anchor="middle" fill="#26364D">り</text>
+  </g>
+
+  <!-- スタンプ: ルール増殖中 -->
+  <g transform="translate(760,1275) rotate(-12)" opacity="0.9">
+    <circle cx="0" cy="0" r="100" fill="none" stroke="#D9432F" stroke-width="8"/>
+    <circle cx="0" cy="0" r="82" fill="none" stroke="#D9432F" stroke-width="3"/>
+    <text x="0" y="-14" font-size="40" font-weight="bold" text-anchor="middle" fill="#D9432F">ルール</text>
+    <text x="0" y="36" font-size="40" font-weight="bold" text-anchor="middle" fill="#D9432F">増殖中</text>
+  </g>
+
+  <!-- キャッチコピー -->
+  <g transform="translate(540,1445)">
+    <rect x="-430" y="-55" width="860" height="110" fill="#FFFBF0" stroke="#26364D" stroke-width="8"/>
+    <use href="#ht2b" transform="translate(-380,6) scale(0.5)" fill="#D9432F"/>
+    <use href="#di2b" transform="translate(380,4) scale(0.5)" fill="#E3A82B"/>
+    <text x="0" y="20" font-size="56" font-weight="bold" text-anchor="middle" letter-spacing="2" fill="#26364D">毎日どこかで、新ルール。</text>
+  </g>
+
+  <!-- スート家紋列 -->
+  <g>
+    <g transform="translate(372,1560)">
+      <circle r="42" fill="#FFFBF0" stroke="#26364D" stroke-width="6"/>
+      <use href="#sp2b" transform="translate(0,16) scale(0.55)" fill="#26364D"/>
+    </g>
+    <g transform="translate(484,1560)">
+      <circle r="42" fill="#FFFBF0" stroke="#26364D" stroke-width="6"/>
+      <use href="#ht2b" transform="translate(0,14) scale(0.55)" fill="#D9432F"/>
+    </g>
+    <g transform="translate(596,1560)">
+      <circle r="42" fill="#FFFBF0" stroke="#26364D" stroke-width="6"/>
+      <use href="#di2b" transform="translate(0,8) scale(0.55)" fill="#E3A82B"/>
+    </g>
+    <g transform="translate(708,1560)">
+      <circle r="42" fill="#FFFBF0" stroke="#26364D" stroke-width="6"/>
+      <use href="#cl2b" transform="translate(0,2) scale(0.55)" fill="#2B8C7E"/>
+    </g>
+  </g>
+
+  <!-- タップ導線: 切符型 -->
+  <g transform="translate(540,1690)">
+    <rect x="-340" y="-58" width="680" height="116" rx="8" fill="#FFFBF0" stroke="#26364D" stroke-width="8"/>
+    <line x1="-240" y1="-58" x2="-240" y2="58" stroke="#26364D" stroke-width="3" stroke-dasharray="8 8"/>
+    <text transform="translate(-290,0) rotate(-90)" font-size="26" font-weight="bold" text-anchor="middle" letter-spacing="4" fill="#D9432F">START</text>
+    <text x="42" y="16" font-size="46" font-weight="bold" text-anchor="middle" letter-spacing="4" fill="#26364D">タップして はじめる</text>
+  </g>
+
+  <!-- 下端の帯 -->
+  <rect x="64" y="1770" width="952" height="58" fill="#2B8C7E"/>
+  <text x="540" y="1808" font-size="27" text-anchor="middle" letter-spacing="4" fill="#FFFBF0">あなたの街のローカルルール、募集中です。</text>
+</svg>

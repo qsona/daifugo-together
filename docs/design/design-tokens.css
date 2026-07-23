@@ -1,0 +1,195 @@
+/* ============================================================
+   みんなでつくろう 大富豪 — アウトゲーム デザイントークン
+   ------------------------------------------------------------
+   このファイルがトークンの正(source of truth)。
+   同値の JSON 表現: design-tokens.json
+   見本と使い方: design-system.html / デザインシステム.md
+   基準: キービジュアル案 2A「グランドフェス」(key-visual-2a.svg)
+        + 企画書 §6 の調整 3 点(2026-07-24 開発者決定)
+   テーマ: ライトのみ(2A は昼の世界観。ダーク対応は将来課題)
+   ============================================================ */
+
+:root {
+  /* ----------------------------------------------------------
+     1. 色 — プリミティブ
+     KV 由来の色はコメントに出典を記す。
+     数字は明度段階(小さいほど明るい)。
+     ---------------------------------------------------------- */
+
+  /* ニュートラル(白・クリーム) */
+  --color-white: #FFFFFF;          /* KV: カード面 */
+  --color-cream-50: #FFFBEF;       /* 明色テキスト・淡い面 */
+  --color-cream-100: #FFF4DC;      /* KV: ロゴ縁・リボン文字・タップ導線面 */
+  --color-cream-200: #F6E8C6;      /* トラック・押下面 */
+  --color-cream-300: #E8D9B5;      /* クリーム地の弱い枠線 */
+
+  /* 紺(輪郭・文字) */
+  --color-navy-100: #E9EBF2;       /* 白地の区切り線・無効面 */
+  --color-navy-200: #C9CDDB;       /* KV: 審判の笛。弱い枠線 */
+  --color-navy-300: #A9B0C7;       /* 無効テキスト(AA 対象外) */
+  --color-navy-600: #4A5578;       /* 補助テキスト・入力枠線 */
+  --color-navy-800: #1C2447;       /* KV: 全要素共通の輪郭線・文字 */
+  --color-navy-900: #14203D;       /* KV: ロゴのベタ落ち影 */
+
+  /* 青(空・情報) */
+  --color-blue-100: #E1ECFA;       /* 情報の淡色地 */
+  --color-blue-400: #4585D4;       /* KV: 放射光線。装飾 */
+  --color-blue-500: #2B6FC2;       /* KV: 深い青空。リンク・フォーカス */
+  --color-blue-600: #235CA4;       /* リンク押下 */
+
+  /* 赤(アクション) */
+  --color-red-100: #FBE3DF;        /* 危険の淡色地 */
+  --color-red-500: #E14B3B;        /* KV: ロゴ「大」・リボン。装飾限定 */
+  --color-red-600: #C93A2B;        /* テキストを載せる赤い塗り(AA) */
+  --color-red-700: #B23A2E;        /* KV: リボン折返し。押下・危険テキスト */
+
+  /* 金(祝祭・注意) */
+  --color-gold-200: #FFE29A;       /* 金の淡色地 */
+  --color-gold-400: #FFC53D;       /* KV: ロゴ「富」・イエローカード・NEW RULE 面 */
+  --color-gold-700: #7A5A10;       /* 金系の文字(AA) */
+
+  /* 緑(成功・ローカル) */
+  --color-green-100: #DFF2E7;      /* 緑の淡色地 */
+  --color-green-500: #2FA36B;      /* KV: ロゴ「豪」・丘・LOCAL RULE 面 */
+  --color-green-600: #268A58;      /* KV: 丘(奥)。装飾 */
+  --color-green-700: #1E7A50;      /* 緑系の文字・塗り(AA) */
+
+  /* イラスト専用(UI の面・文字には使わない) */
+  --color-skin-300: #F0C48F;       /* KV: キャラクターの肌 */
+
+  /* ----------------------------------------------------------
+     2. 色 — セマンティック
+     コンポーネントからは原則こちらを参照する。
+     ---------------------------------------------------------- */
+
+  /* 背景 */
+  --color-bg-app: var(--color-cream-100);        /* アプリ全体の地 */
+  --color-bg-surface: var(--color-white);        /* カード・モーダル面 */
+  --color-bg-subtle: var(--color-cream-50);      /* 注記ボックスなど */
+  --color-bg-inverse: var(--color-navy-800);     /* トースト・反転面 */
+  --color-bg-brand: var(--color-blue-500);       /* ヒーロー帯(ロゴ背景の空) */
+  --color-overlay: rgba(20, 32, 61, 0.55);       /* モーダル背景(navy-900 α) */
+
+  /* テキスト */
+  --color-text-primary: var(--color-navy-800);
+  --color-text-secondary: var(--color-navy-600);
+  --color-text-disabled: var(--color-navy-300);  /* 無効状態のみ。AA 対象外 */
+  --color-text-on-fill: var(--color-cream-50);   /* 紺・赤・緑の塗りの上 */
+  --color-text-link: var(--color-blue-500);
+  --color-text-danger: var(--color-red-700);     /* 却下・低評価・実装失敗 */
+  --color-text-success: var(--color-green-700);  /* リリース・高評価 */
+  --color-text-caution: var(--color-gold-700);   /* 審査中・実装中など進行中 */
+
+  /* 枠線 */
+  --color-border-strong: var(--color-navy-800);  /* 部品の太輪郭(2A の文法) */
+  --color-border-control: var(--color-navy-600); /* 入力欄の既定枠線 */
+  --color-border-subtle: var(--color-cream-300); /* クリーム地の弱い区切り */
+  --color-border-divider: var(--color-navy-100); /* 白地の区切り線 */
+
+  /* アクション */
+  --color-action-primary: var(--color-red-600);          /* 主ボタン塗り */
+  --color-action-primary-pressed: var(--color-red-700);
+  --color-action-secondary-bg: var(--color-white);       /* 副ボタン塗り */
+  --color-action-selected: var(--color-navy-800);        /* 選択状態(セグメント) */
+  --color-focus-ring: var(--color-blue-500);
+
+  /* 意味色(企画固有) */
+  --color-warning-bg: var(--color-gold-400);     /* イエローカード面。審判の文脈専用 */
+  --color-warning-ink: var(--color-navy-800);    /* イエローカード上の文字 */
+  --color-category-local: var(--color-green-500);    /* ローカルルール(KV: LOCAL RULE 面) */
+  --color-category-local-bg: var(--color-green-100);
+  --color-category-local-text: var(--color-green-700);
+  --color-category-original: var(--color-gold-400);  /* オリジナル(KV: NEW RULE 面) */
+  --color-category-original-bg: var(--color-gold-200);
+  --color-category-original-text: var(--color-gold-700);
+  --color-status-active-bg: var(--color-navy-800);   /* 有効バッジ */
+  --color-status-active-text: var(--color-cream-50);
+  --color-status-removed-bg: var(--color-navy-100);  /* 排除済みバッジ */
+  --color-status-removed-text: var(--color-navy-600);
+  --color-popularity-fill: var(--color-gold-400);    /* 人気度バー(要 navy 枠線) */
+  --color-popularity-track: var(--color-cream-200);
+
+  /* ----------------------------------------------------------
+     3. タイポグラフィ
+     Web フォント読込前でも成立する丸ゴシック系フォールバック。
+     ---------------------------------------------------------- */
+  --font-family-base: 'M PLUS Rounded 1c', 'Hiragino Maru Gothic ProN',
+                      'Hiragino Sans', 'Yu Gothic', sans-serif;
+
+  --font-weight-regular: 400;
+  --font-weight-bold: 700;
+  --font-weight-heavy: 800;        /* 見出し・ロゴ級。M PLUS Rounded 1c の 800 */
+
+  --font-size-display: 28px;       /* 画面タイトル級(結果発表など) */
+  --font-size-title-l: 22px;       /* セクション見出し */
+  --font-size-title-m: 18px;       /* カード見出し・モーダル見出し */
+  --font-size-title-s: 16px;       /* ボタンラベル・リスト項目名 */
+  --font-size-body: 14px;          /* 本文の既定 */
+  --font-size-caption: 12px;       /* 注記・補足 */
+  --font-size-micro: 11px;         /* タグ・バッジ内(太字で使う) */
+
+  --line-height-display: 1.3;
+  --line-height-heading: 1.4;
+  --line-height-body: 1.6;
+  --line-height-caption: 1.5;
+
+  --letter-spacing-normal: 0;
+  --letter-spacing-wide: 0.04em;   /* 見出し */
+  --letter-spacing-cta: 0.08em;    /* 主ボタン・タップ導線 */
+
+  /* ----------------------------------------------------------
+     4. 余白(4px グリッド)
+     ---------------------------------------------------------- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* ----------------------------------------------------------
+     5. 角丸
+     ---------------------------------------------------------- */
+  --radius-s: 6px;                 /* タグ・小バッジ */
+  --radius-m: 10px;                /* 入力欄・リスト行 */
+  --radius-l: 16px;                /* カード・モーダル */
+  --radius-pill: 999px;            /* 主ボタン・セグメント(KV のピル) */
+
+  /* ----------------------------------------------------------
+     6. 輪郭線幅(太輪郭が 2A の文法)
+     ---------------------------------------------------------- */
+  --border-thin: 1px;              /* 区切り線 */
+  --border-control: 1.5px;         /* 入力欄・タグ */
+  --border-bold: 2px;              /* ボタン・カードの標準輪郭 */
+  --border-heavy: 3px;             /* 強調(イエローカード・モーダル) */
+
+  /* ----------------------------------------------------------
+     7. 影(ベタ落ち影 = ぼかしなしのオフセットが基本)
+     ---------------------------------------------------------- */
+  --shadow-hard-s: 0 2px 0 var(--color-navy-900);   /* 小ボタン・タグ */
+  --shadow-hard-m: 0 3px 0 var(--color-navy-900);   /* ボタン・カード */
+  --shadow-hard-l: 0 5px 0 var(--color-navy-900);   /* 主 CTA・モーダル */
+  --shadow-soft: 0 2px 8px rgba(28, 36, 71, 0.12);  /* 浮遊面(トースト)のみ */
+
+  /* ----------------------------------------------------------
+     8. モーション
+     ---------------------------------------------------------- */
+  --duration-fast: 120ms;          /* 押下・ホバー */
+  --duration-base: 200ms;          /* 展開・フェード */
+  --duration-slow: 320ms;          /* モーダル・画面転換 */
+  --easing-standard: cubic-bezier(0.2, 0, 0, 1);       /* 通常の出入り */
+  --easing-pop: cubic-bezier(0.34, 1.56, 0.64, 1);     /* 祝祭系(バッジ・カード登場) */
+  --easing-exit: cubic-bezier(0.4, 0, 1, 1);           /* 退場 */
+
+  /* ----------------------------------------------------------
+     9. サイズ・その他
+     ---------------------------------------------------------- */
+  --size-tap-min: 44px;            /* タップターゲット最小(見た目が小さくても当たり判定で確保) */
+  --size-control: 48px;            /* ボタン・入力欄の標準高さ */
+  --size-control-s: 36px;          /* 小ボタンの見た目高さ(当たり判定は 44px) */
+  --focus-ring-width: 3px;
+  --focus-ring-offset: 2px;
+}

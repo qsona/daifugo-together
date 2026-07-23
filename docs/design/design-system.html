@@ -1,0 +1,1211 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>みんなでつくろう 大富豪 — アウトゲーム デザインシステム</title>
+<style>
+/* ============================================================
+   トークン(design-tokens.css と同値をインライン化)
+   ※ 正(source of truth)は design-tokens.css。値を変えるときは
+     必ず design-tokens.css / design-tokens.json を先に更新する。
+   ============================================================ */
+:root {
+  --color-white: #FFFFFF;
+  --color-cream-50: #FFFBEF;
+  --color-cream-100: #FFF4DC;
+  --color-cream-200: #F6E8C6;
+  --color-cream-300: #E8D9B5;
+  --color-navy-100: #E9EBF2;
+  --color-navy-200: #C9CDDB;
+  --color-navy-300: #A9B0C7;
+  --color-navy-600: #4A5578;
+  --color-navy-800: #1C2447;
+  --color-navy-900: #14203D;
+  --color-blue-100: #E1ECFA;
+  --color-blue-400: #4585D4;
+  --color-blue-500: #2B6FC2;
+  --color-blue-600: #235CA4;
+  --color-red-100: #FBE3DF;
+  --color-red-500: #E14B3B;
+  --color-red-600: #C93A2B;
+  --color-red-700: #B23A2E;
+  --color-gold-200: #FFE29A;
+  --color-gold-400: #FFC53D;
+  --color-gold-700: #7A5A10;
+  --color-green-100: #DFF2E7;
+  --color-green-500: #2FA36B;
+  --color-green-600: #268A58;
+  --color-green-700: #1E7A50;
+  --color-skin-300: #F0C48F;
+
+  --color-bg-app: var(--color-cream-100);
+  --color-bg-surface: var(--color-white);
+  --color-bg-subtle: var(--color-cream-50);
+  --color-bg-inverse: var(--color-navy-800);
+  --color-bg-brand: var(--color-blue-500);
+  --color-overlay: rgba(20, 32, 61, 0.55);
+  --color-text-primary: var(--color-navy-800);
+  --color-text-secondary: var(--color-navy-600);
+  --color-text-disabled: var(--color-navy-300);
+  --color-text-on-fill: var(--color-cream-50);
+  --color-text-link: var(--color-blue-500);
+  --color-text-danger: var(--color-red-700);
+  --color-text-success: var(--color-green-700);
+  --color-text-caution: var(--color-gold-700);
+  --color-border-strong: var(--color-navy-800);
+  --color-border-control: var(--color-navy-600);
+  --color-border-subtle: var(--color-cream-300);
+  --color-border-divider: var(--color-navy-100);
+  --color-action-primary: var(--color-red-600);
+  --color-action-primary-pressed: var(--color-red-700);
+  --color-action-secondary-bg: var(--color-white);
+  --color-action-selected: var(--color-navy-800);
+  --color-focus-ring: var(--color-blue-500);
+  --color-warning-bg: var(--color-gold-400);
+  --color-warning-ink: var(--color-navy-800);
+  --color-category-local: var(--color-green-500);
+  --color-category-local-bg: var(--color-green-100);
+  --color-category-local-text: var(--color-green-700);
+  --color-category-original: var(--color-gold-400);
+  --color-category-original-bg: var(--color-gold-200);
+  --color-category-original-text: var(--color-gold-700);
+  --color-status-active-bg: var(--color-navy-800);
+  --color-status-active-text: var(--color-cream-50);
+  --color-status-removed-bg: var(--color-navy-100);
+  --color-status-removed-text: var(--color-navy-600);
+  --color-popularity-fill: var(--color-gold-400);
+  --color-popularity-track: var(--color-cream-200);
+
+  --font-family-base: 'M PLUS Rounded 1c', 'Hiragino Maru Gothic ProN', 'Hiragino Sans', 'Yu Gothic', sans-serif;
+  --font-weight-regular: 400;
+  --font-weight-bold: 700;
+  --font-weight-heavy: 800;
+  --font-size-display: 28px;
+  --font-size-title-l: 22px;
+  --font-size-title-m: 18px;
+  --font-size-title-s: 16px;
+  --font-size-body: 14px;
+  --font-size-caption: 12px;
+  --font-size-micro: 11px;
+  --line-height-display: 1.3;
+  --line-height-heading: 1.4;
+  --line-height-body: 1.6;
+  --line-height-caption: 1.5;
+  --letter-spacing-normal: 0;
+  --letter-spacing-wide: 0.04em;
+  --letter-spacing-cta: 0.08em;
+
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
+  --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px; --space-12: 48px;
+
+  --radius-s: 6px; --radius-m: 10px; --radius-l: 16px; --radius-pill: 999px;
+  --border-thin: 1px; --border-control: 1.5px; --border-bold: 2px; --border-heavy: 3px;
+
+  --shadow-hard-s: 0 2px 0 var(--color-navy-900);
+  --shadow-hard-m: 0 3px 0 var(--color-navy-900);
+  --shadow-hard-l: 0 5px 0 var(--color-navy-900);
+  --shadow-soft: 0 2px 8px rgba(28, 36, 71, 0.12);
+
+  --duration-fast: 120ms; --duration-base: 200ms; --duration-slow: 320ms;
+  --easing-standard: cubic-bezier(0.2, 0, 0, 1);
+  --easing-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --easing-exit: cubic-bezier(0.4, 0, 1, 1);
+
+  --size-tap-min: 44px; --size-control: 48px; --size-control-s: 36px;
+  --focus-ring-width: 3px; --focus-ring-offset: 2px;
+}
+
+/* ============================================================
+   ガイドページ自体の骨格
+   ============================================================ */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: var(--font-family-base);
+  background: var(--color-bg-app);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+  padding: var(--space-8) var(--space-4) 120px;
+}
+.wrap { max-width: 1280px; margin: 0 auto; }
+.pagehead {
+  background: var(--color-bg-surface);
+  border: var(--border-bold) solid var(--color-border-strong);
+  border-radius: var(--radius-l);
+  box-shadow: var(--shadow-hard-m);
+  padding: var(--space-6) var(--space-6);
+  margin-bottom: var(--space-8);
+}
+.pagehead h1 { font-size: var(--font-size-title-l); font-weight: var(--font-weight-heavy); letter-spacing: var(--letter-spacing-wide); line-height: var(--line-height-heading); }
+.pagehead .lead { margin-top: var(--space-2); font-size: var(--font-size-caption); color: var(--color-text-secondary); }
+.pagehead .truth {
+  margin-top: var(--space-3);
+  background: var(--color-bg-subtle);
+  border: var(--border-control) solid var(--color-border-subtle);
+  border-radius: var(--radius-m);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-caption);
+}
+.pagehead .truth b { color: var(--color-text-danger); }
+section { margin-bottom: var(--space-12); }
+h2 {
+  font-size: var(--font-size-title-l);
+  font-weight: var(--font-weight-heavy);
+  letter-spacing: var(--letter-spacing-wide);
+  line-height: var(--line-height-heading);
+  padding-left: var(--space-3);
+  border-left: 8px solid var(--color-red-500);
+  margin-bottom: var(--space-4);
+}
+h3 {
+  font-size: var(--font-size-title-m);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-heading);
+  margin: var(--space-6) 0 var(--space-3);
+}
+.panel {
+  background: var(--color-bg-surface);
+  border: var(--border-bold) solid var(--color-border-strong);
+  border-radius: var(--radius-l);
+  padding: var(--space-5);
+}
+.note {
+  font-size: var(--font-size-caption);
+  color: var(--color-text-secondary);
+  line-height: var(--line-height-caption);
+  margin-top: var(--space-2);
+}
+.note b { color: var(--color-text-primary); }
+code {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.92em;
+  background: var(--color-navy-100);
+  border-radius: 4px;
+  padding: 0 4px;
+}
+.tbl-wrap { overflow-x: auto; }
+table.spec { border-collapse: collapse; width: 100%; font-size: var(--font-size-caption); }
+table.spec th, table.spec td { border: var(--border-thin) solid var(--color-navy-200); padding: 6px 10px; text-align: left; vertical-align: top; }
+table.spec th { background: var(--color-bg-subtle); white-space: nowrap; }
+.pass { color: var(--color-text-success); font-weight: var(--font-weight-bold); }
+.warn-txt { color: var(--color-text-danger); font-weight: var(--font-weight-bold); }
+
+/* ---- 色見本 ---- */
+.swatches { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+.sw { width: 132px; border: var(--border-control) solid var(--color-navy-200); border-radius: var(--radius-m); overflow: hidden; background: var(--color-bg-surface); }
+.sw .chipc { height: 56px; border-bottom: var(--border-thin) solid var(--color-navy-200); }
+.sw .m { padding: 6px 8px; font-size: var(--font-size-micro); line-height: 1.45; }
+.sw .m b { display: block; font-size: var(--font-size-caption); }
+.sw .m span { color: var(--color-text-secondary); }
+
+/* ---- タイポ見本 ---- */
+.type-row { display: flex; align-items: baseline; gap: var(--space-4); padding: var(--space-3) 0; border-bottom: var(--border-thin) solid var(--color-border-divider); flex-wrap: wrap; }
+.type-row .meta { min-width: 220px; font-size: var(--font-size-caption); color: var(--color-text-secondary); }
+
+/* ---- 余白・角丸・影見本 ---- */
+.demo-grid { display: flex; flex-wrap: wrap; gap: var(--space-5); align-items: flex-end; }
+.space-demo { display: flex; align-items: flex-end; gap: var(--space-2); flex-wrap: wrap; }
+.space-demo .s { background: var(--color-blue-100); border: var(--border-thin) solid var(--color-blue-500); display: flex; align-items: flex-end; justify-content: center; font-size: 10px; color: var(--color-blue-600); }
+.radius-demo, .shadow-demo { width: 108px; height: 72px; background: var(--color-bg-surface); border: var(--border-bold) solid var(--color-border-strong); display: flex; align-items: center; justify-content: center; font-size: var(--font-size-micro); color: var(--color-text-secondary); text-align: center; }
+.border-demo { width: 108px; height: 48px; background: var(--color-bg-surface); display: flex; align-items: center; justify-content: center; font-size: var(--font-size-micro); color: var(--color-text-secondary); border-radius: var(--radius-m); }
+
+/* ---- モーション ---- */
+.motion-demo { display: inline-flex; align-items: center; gap: var(--space-4); flex-wrap: wrap; }
+.pop-demo {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--color-gold-400); color: var(--color-warning-ink);
+  border: var(--border-bold) solid var(--color-border-strong);
+  border-radius: var(--radius-pill); font-weight: var(--font-weight-bold);
+  padding: 10px 20px; cursor: pointer; user-select: none;
+  transition: transform var(--duration-fast) var(--easing-pop);
+}
+.pop-demo:hover { transform: scale(1.08) rotate(-2deg); }
+
+/* ============================================================
+   コンポーネント(c- プレフィックス)
+   ============================================================ */
+
+/* ボタン */
+.c-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
+  min-height: var(--size-control);
+  padding: 0 var(--space-5);
+  border: var(--border-bold) solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--color-action-secondary-bg);
+  color: var(--color-text-primary);
+  font-family: inherit;
+  font-size: var(--font-size-title-s);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-cta);
+  line-height: 1.2;
+  box-shadow: var(--shadow-hard-m);
+  cursor: pointer;
+  transition: transform var(--duration-fast) var(--easing-standard),
+              box-shadow var(--duration-fast) var(--easing-standard),
+              background-color var(--duration-fast) var(--easing-standard);
+}
+.c-btn.-primary { background: var(--color-action-primary); color: var(--color-text-on-fill); }
+.c-btn.-block { display: flex; width: 100%; }
+.c-btn.-small { min-height: var(--size-control-s); padding: 0 var(--space-4); font-size: 13px; box-shadow: var(--shadow-hard-s); }
+.c-btn:active, .c-btn.is-pressed { transform: translateY(3px); box-shadow: none; }
+.c-btn.-primary:active, .c-btn.-primary.is-pressed { background: var(--color-action-primary-pressed); }
+.c-btn:not(.-primary):active, .c-btn:not(.-primary).is-pressed { background: var(--color-cream-200); }
+.c-btn.is-disabled, .c-btn:disabled {
+  background: var(--color-navy-100); color: var(--color-text-disabled);
+  border-color: var(--color-navy-200); box-shadow: none; cursor: not-allowed; transform: none;
+}
+.c-btn:focus-visible, .c-seg:focus-visible, .c-input:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+.c-btn.is-focused { outline: var(--focus-ring-width) solid var(--color-focus-ring); outline-offset: var(--focus-ring-offset); }
+
+/* アプリバー */
+.c-appbar {
+  display: flex; align-items: center; gap: var(--space-2);
+  background: var(--color-bg-surface);
+  border-bottom: var(--border-bold) solid var(--color-border-strong);
+  padding: var(--space-2) var(--space-3);
+  min-height: 52px;
+}
+.c-appbar .back {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; margin: -4px 0;
+  border: var(--border-control) solid var(--color-border-strong);
+  border-radius: var(--radius-pill); background: var(--color-bg-surface);
+  font-weight: var(--font-weight-bold); cursor: pointer; flex-shrink: 0;
+}
+.c-appbar .ttl { font-size: var(--font-size-title-s); font-weight: var(--font-weight-heavy); letter-spacing: var(--letter-spacing-wide); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.c-appbar .act {
+  font-size: var(--font-size-micro); font-weight: var(--font-weight-bold);
+  border: var(--border-control) solid var(--color-border-strong);
+  border-radius: var(--radius-pill); padding: 4px 10px; background: var(--color-cream-100); white-space: nowrap;
+}
+
+/* セグメントコントロール */
+.c-seg {
+  display: flex; border: var(--border-bold) solid var(--color-border-strong);
+  border-radius: var(--radius-pill); overflow: hidden; background: var(--color-bg-surface);
+}
+.c-seg > span {
+  flex: 1; text-align: center; padding: 11px 6px;
+  font-size: var(--font-size-body); font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary); border-right: var(--border-control) solid var(--color-border-strong);
+  cursor: pointer; white-space: nowrap;
+}
+.c-seg > span:last-child { border-right: none; }
+.c-seg > span.is-on { background: var(--color-action-selected); color: var(--color-text-on-fill); }
+.c-seg.-mini > span { padding: 7px 6px; font-size: var(--font-size-caption); }
+
+/* フォーム */
+.c-field { display: flex; flex-direction: column; gap: var(--space-1); }
+.c-field > label { font-size: var(--font-size-caption); font-weight: var(--font-weight-bold); }
+.c-field > label .opt { font-weight: var(--font-weight-regular); color: var(--color-text-secondary); }
+.c-input, .c-select, .c-textarea {
+  width: 100%;
+  min-height: var(--size-control);
+  border: var(--border-control) solid var(--color-border-control);
+  border-radius: var(--radius-m);
+  background: var(--color-bg-surface);
+  font-family: inherit; font-size: var(--font-size-body); color: var(--color-text-primary);
+  padding: 10px var(--space-3);
+}
+.c-input::placeholder, .c-textarea::placeholder { color: var(--color-text-secondary); opacity: 1; }
+.c-select { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); cursor: pointer; }
+.c-select .ph { color: var(--color-text-secondary); }
+.c-select .arrow { font-size: 10px; color: var(--color-text-secondary); }
+.c-textarea { min-height: 96px; resize: vertical; }
+.c-input.is-focused, .c-select.is-focused, .c-textarea.is-focused {
+  border-color: var(--color-focus-ring); border-width: var(--border-bold);
+  outline: var(--focus-ring-width) solid rgba(43, 111, 194, 0.3); outline-offset: 1px;
+}
+.c-input.is-error, .c-textarea.is-error { border-color: var(--color-red-600); border-width: var(--border-bold); }
+.c-field .cap { font-size: var(--font-size-micro); color: var(--color-text-secondary); line-height: var(--line-height-caption); }
+.c-field .cap.-error { color: var(--color-text-danger); font-weight: var(--font-weight-bold); }
+
+/* タグ */
+.c-tag {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: var(--font-size-micro); font-weight: var(--font-weight-bold);
+  border-radius: var(--radius-s); padding: 2px 8px; white-space: nowrap;
+  border: var(--border-control) solid transparent; line-height: 1.5;
+}
+.c-tag.-pref { background: var(--color-bg-surface); border-color: var(--color-border-control); color: var(--color-text-secondary); }
+.c-tag.-local { background: var(--color-category-local-bg); border-color: var(--color-category-local-text); color: var(--color-category-local-text); }
+.c-tag.-original { background: var(--color-category-original-bg); border-color: var(--color-category-original-text); color: var(--color-category-original-text); }
+.c-tag.-active { background: var(--color-status-active-bg); border-color: var(--color-status-active-bg); color: var(--color-status-active-text); }
+.c-tag.-removed { background: var(--color-status-removed-bg); border-color: var(--color-navy-200); color: var(--color-status-removed-text); }
+.c-tag.-human { background: var(--color-status-active-bg); border-color: var(--color-status-active-bg); color: var(--color-status-active-text); }
+.c-tag.-ai { background: var(--color-bg-surface); border-color: var(--color-border-control); color: var(--color-text-secondary); }
+
+/* 人気度バー */
+.c-pop { display: flex; align-items: center; gap: var(--space-2); font-size: var(--font-size-micro); color: var(--color-text-secondary); }
+.c-pop .bar {
+  flex: 1; height: 10px; min-width: 40px;
+  background: var(--color-popularity-track);
+  border: var(--border-control) solid var(--color-border-strong);
+  border-radius: var(--radius-pill); overflow: hidden;
+}
+.c-pop .bar i {
+  display: block; height: 100%;
+  background: var(--color-popularity-fill);
+  border-right: var(--border-control) solid var(--color-border-strong);
+}
+.c-pop .val { font-weight: var(--font-weight-bold); color: var(--color-text-primary); white-space: nowrap; }
+
+/* ルールカード(図鑑行) */
+.c-rule {
+  display: flex; gap: var(--space-3);
+  background: var(--color-bg-surface);
+  border: var(--border-bold) solid var(--color-border-strong);
+  border-radius: var(--radius-l);
+  padding: var(--space-3);
+  box-shadow: var(--shadow-hard-s);
+}
+.c-rule .rank {
+  width: 40px; flex-shrink: 0; align-self: flex-start;
+  background: var(--color-cream-100);
+  border: var(--border-control) solid var(--color-border-strong);
+  border-radius: var(--radius-s);
+  text-align: center; padding: 3px 0 4px;
+}
+.c-rule .rank b { display: block; font-size: var(--font-size-title-m); font-weight: var(--font-weight-heavy); line-height: 1.1; }
+.c-rule .rank small { font-size: 9px; font-weight: var(--font-weight-bold); color: var(--color-text-secondary); }
+.c-rule .main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-1); }
+.c-rule .nm { font-size: var(--font-size-title-s); font-weight: var(--font-weight-heavy); display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.c-rule .desc { font-size: var(--font-size-micro); color: var(--color-text-secondary); }
+.c-rule .meta { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.c-rule.-removed { background: var(--color-cream-50); border-color: var(--color-navy-200); box-shadow: none; }
+.c-rule.-removed .nm { color: var(--color-text-secondary); text-decoration: line-through; text-decoration-thickness: 2px; }
+.c-rule.-removed .rank { background: var(--color-navy-100); border-color: var(--color-navy-200); color: var(--color-text-secondary); }
+
+/* ルール行(対局用シンプル) */
+.c-rule-slim {
+  background: var(--color-bg-surface);
+  border: var(--border-control) solid var(--color-border-strong);
+  border-radius: var(--radius-m);
+  padding: 10px var(--space-4);
+  font-size: var(--font-size-body); font-weight: var(--font-weight-bold);
+}
+
+/* ステッパー(提案ステータス) */
+.c-steps { display: flex; align-items: center; gap: var(--space-1); flex-wrap: wrap; }
+.c-steps .st {
+  font-size: var(--font-size-micro); font-weight: var(--font-weight-bold);
+  border: var(--border-control) solid var(--color-border-control);
+  border-radius: var(--radius-pill); padding: 3px 10px;
+  background: var(--color-bg-surface); color: var(--color-text-secondary); white-space: nowrap;
+}
+.c-steps .st.-done { background: var(--color-navy-800); border-color: var(--color-navy-800); color: var(--color-text-on-fill); }
+.c-steps .st.-now { background: var(--color-gold-400); border-color: var(--color-border-strong); color: var(--color-warning-ink); }
+.c-steps .st.-released { background: var(--color-green-700); border-color: var(--color-green-700); color: var(--color-text-on-fill); }
+.c-steps .st.-rejected { background: var(--color-red-600); border-color: var(--color-red-600); color: var(--color-text-on-fill); }
+.c-steps .ln { width: 12px; height: 2px; background: var(--color-navy-300); flex-shrink: 0; }
+.c-reason {
+  margin-top: var(--space-2);
+  border: var(--border-control) dashed var(--color-red-600);
+  background: var(--color-red-100);
+  border-radius: var(--radius-s);
+  font-size: var(--font-size-micro); color: var(--color-text-danger);
+  padding: 6px 10px; line-height: var(--line-height-caption);
+}
+
+/* 高評価 / 低評価 */
+.c-vote {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: var(--size-control-s); padding: 0 var(--space-4);
+  border: var(--border-bold) solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--color-bg-surface); color: var(--color-text-primary);
+  font-size: 13px; font-weight: var(--font-weight-bold); cursor: pointer;
+  box-shadow: var(--shadow-hard-s);
+  transition: transform var(--duration-fast) var(--easing-standard);
+}
+.c-vote svg { flex-shrink: 0; }
+.c-vote.-up.is-on { background: var(--color-green-700); border-color: var(--color-green-700); color: var(--color-text-on-fill); }
+.c-vote.-down.is-on { background: var(--color-red-600); border-color: var(--color-red-600); color: var(--color-text-on-fill); }
+.c-vote.is-on { box-shadow: none; transform: translateY(2px); }
+
+/* メンバースロット */
+.c-slot {
+  display: flex; align-items: center; gap: var(--space-3);
+  background: var(--color-bg-surface);
+  border: var(--border-control) solid var(--color-border-strong);
+  border-radius: var(--radius-m);
+  padding: var(--space-2) var(--space-3);
+  min-height: var(--size-tap-min);
+}
+.c-slot .av {
+  width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+  background: var(--color-blue-100); border: var(--border-control) solid var(--color-border-strong);
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.c-slot .nm { flex: 1; font-weight: var(--font-weight-bold); font-size: var(--font-size-body); min-width: 0; }
+.c-slot .nm small { display: block; font-size: var(--font-size-micro); font-weight: var(--font-weight-regular); color: var(--color-text-secondary); }
+.c-slot.-empty { border-style: dashed; border-color: var(--color-navy-300); background: var(--color-bg-subtle); }
+.c-slot.-empty .nm { color: var(--color-text-secondary); font-weight: var(--font-weight-regular); }
+.c-slot.-empty .av { background: var(--color-navy-100); border-style: dashed; border-color: var(--color-navy-300); }
+
+/* 招待コード(切符モチーフ) */
+.c-invite {
+  display: flex; align-items: center; gap: var(--space-3);
+  background: var(--color-cream-100);
+  border: var(--border-bold) solid var(--color-border-strong);
+  border-radius: var(--radius-l);
+  padding: var(--space-3) var(--space-4);
+  box-shadow: var(--shadow-hard-s);
+  position: relative;
+}
+.c-invite::before {
+  content: ""; position: absolute; inset: 5px;
+  border: var(--border-control) dashed var(--color-gold-400);
+  border-radius: calc(var(--radius-l) - 5px);
+  pointer-events: none;
+}
+.c-invite .code { flex: 1; font-size: var(--font-size-title-m); font-weight: var(--font-weight-heavy); letter-spacing: 0.12em; }
+.c-invite .code small { display: block; font-size: var(--font-size-micro); font-weight: var(--font-weight-bold); color: var(--color-text-secondary); letter-spacing: var(--letter-spacing-normal); }
+
+/* トースト */
+.c-toast {
+  display: inline-flex; align-items: center; gap: var(--space-2);
+  background: var(--color-bg-inverse); color: var(--color-text-on-fill);
+  border-radius: var(--radius-pill);
+  padding: 10px var(--space-5);
+  font-size: var(--font-size-body); font-weight: var(--font-weight-bold);
+  box-shadow: var(--shadow-soft);
+}
+.c-toast .ic {
+  width: 18px; height: 18px; border-radius: 50%; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.c-toast .ic.-ok { background: var(--color-green-500); }
+.c-toast .ic.-warn { background: var(--color-gold-400); }
+
+/* 空状態 */
+.c-empty { text-align: center; padding: var(--space-8) var(--space-4); }
+.c-empty .art { display: inline-block; position: relative; width: 72px; height: 64px; margin-bottom: var(--space-3); }
+.c-empty .art i {
+  position: absolute; width: 40px; height: 56px;
+  background: var(--color-bg-surface);
+  border: var(--border-bold) solid var(--color-border-strong);
+  border-radius: var(--radius-s);
+}
+.c-empty .art i:first-child { left: 4px; top: 6px; transform: rotate(-10deg); background: var(--color-cream-100); }
+.c-empty .art i:last-child { right: 4px; top: 0; transform: rotate(8deg); }
+.c-empty h4 { font-size: var(--font-size-title-s); font-weight: var(--font-weight-heavy); margin-bottom: var(--space-1); }
+.c-empty p { font-size: var(--font-size-caption); color: var(--color-text-secondary); margin-bottom: var(--space-4); }
+
+/* イエローカードモーダル */
+.c-modal {
+  background: var(--color-bg-surface);
+  border: var(--border-heavy) solid var(--color-border-strong);
+  border-radius: var(--radius-l);
+  box-shadow: var(--shadow-hard-l);
+  padding: var(--space-5) var(--space-4);
+  text-align: center;
+  display: flex; flex-direction: column; gap: var(--space-3);
+  max-width: 320px;
+}
+.c-ycard {
+  width: 56px; height: 80px; display: inline-block;
+  background: var(--color-warning-bg);
+  border: var(--border-heavy) solid var(--color-border-strong);
+  border-radius: var(--radius-s);
+  transform: rotate(-8deg);
+  box-shadow: var(--shadow-hard-s);
+}
+.c-ycard.-second { transform: rotate(9deg); margin-left: -28px; }
+.c-modal .cards { display: flex; justify-content: center; padding-top: var(--space-1); }
+.c-modal h4 { font-size: 20px; font-weight: var(--font-weight-heavy); letter-spacing: var(--letter-spacing-wide); }
+.c-modal .body-txt { font-size: var(--font-size-caption); text-align: left; line-height: var(--line-height-body); }
+.c-modal .sub-txt { font-size: var(--font-size-micro); text-align: left; color: var(--color-text-secondary); line-height: var(--line-height-caption); }
+.c-yslots { display: flex; justify-content: center; align-items: center; gap: var(--space-2); font-size: var(--font-size-micro); font-weight: var(--font-weight-bold); color: var(--color-text-secondary); }
+.c-yslots .slot { width: 24px; height: 34px; border: var(--border-control) dashed var(--color-navy-300); border-radius: 4px; background: var(--color-bg-surface); }
+.c-yslots .slot.-filled { background: var(--color-warning-bg); border: var(--border-control) solid var(--color-border-strong); }
+.c-stopbox {
+  text-align: left; background: var(--color-bg-subtle);
+  border: var(--border-control) solid var(--color-border-subtle);
+  border-radius: var(--radius-m); padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-micro); color: var(--color-text-secondary); line-height: var(--line-height-caption);
+}
+
+/* 見本行 */
+.specimen { display: flex; flex-wrap: wrap; gap: var(--space-4); align-items: center; margin-bottom: var(--space-3); }
+.specimen .lbl { width: 100%; font-size: var(--font-size-micro); font-weight: var(--font-weight-bold); color: var(--color-text-secondary); margin-bottom: -6px; }
+
+/* ============================================================
+   適用例: 375px スマホフレーム
+   ============================================================ */
+.screens { display: flex; flex-wrap: wrap; gap: var(--space-8) var(--space-6); justify-content: flex-start; }
+.screen-cell { width: 375px; max-width: 100%; }
+.screen-cell > h3 { margin-top: 0; }
+.screen-cell .src { font-size: var(--font-size-micro); color: var(--color-text-secondary); margin-bottom: var(--space-2); }
+.frame {
+  width: 375px; max-width: 100%;
+  background: var(--color-bg-app);
+  border: var(--border-heavy) solid var(--color-border-strong);
+  border-radius: 28px;
+  overflow: hidden;
+  box-shadow: var(--shadow-hard-l);
+  display: flex; flex-direction: column;
+  min-height: 700px;
+}
+.statusbar {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 6px 18px 4px;
+  font-size: var(--font-size-micro); font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+}
+.statusbar .icons { display: flex; gap: 4px; }
+.statusbar .icons i { display: block; width: 14px; height: 8px; background: var(--color-navy-300); border-radius: 2px; }
+.scr-body { padding: var(--space-3); display: flex; flex-direction: column; gap: var(--space-3); flex: 1; }
+
+/* 画面1b: メニュー */
+.hero {
+  position: relative;
+  background: repeating-conic-gradient(from 8deg at 50% 118%, var(--color-blue-500) 0deg 11deg, var(--color-blue-400) 11deg 22deg);
+  border: var(--border-bold) solid var(--color-border-strong);
+  border-radius: var(--radius-l);
+  overflow: hidden;
+  padding: var(--space-4) var(--space-3) var(--space-5);
+  text-align: center;
+}
+.garland { display: flex; justify-content: space-between; padding: 0 6px; margin-bottom: 6px; border-top: 2px solid var(--color-navy-800); }
+.garland i { width: 16px; height: 13px; clip-path: polygon(0 0, 100% 0, 50% 100%); }
+.menu-note { text-align: center; font-size: var(--font-size-caption); color: var(--color-text-secondary); line-height: var(--line-height-caption); padding: 0 var(--space-2); }
+.menu-hill { margin-top: auto; margin-bottom: calc(var(--space-3) * -1); margin-left: calc(var(--space-3) * -1); margin-right: calc(var(--space-3) * -1); line-height: 0; }
+
+/* 画面9a: モーダル背景 */
+.modal-scrim {
+  flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center;
+  background: var(--color-overlay);
+  padding: var(--space-5) var(--space-4);
+  position: relative;
+}
+.behind-skeleton { position: absolute; inset: 0; z-index: 0; padding: var(--space-3); display: flex; flex-direction: column; gap: var(--space-3); opacity: 0.5; filter: blur(1px); background: var(--color-bg-app); }
+.behind-skeleton::after { content: ""; position: absolute; inset: 0; background: var(--color-overlay); }
+.modal-scrim .c-modal { position: relative; z-index: 1; }
+.behind-note { position: relative; z-index: 1; font-size: var(--font-size-micro); color: var(--color-cream-50); margin-bottom: var(--space-2); text-align: center; }
+
+/* 図鑑画面のコンパクトセレクト */
+.zk-select { min-height: 38px; padding: 6px 10px; font-size: var(--font-size-caption); }
+.row { display: flex; gap: var(--space-2); }
+.row > * { flex: 1; min-width: 0; }
+.zk-stats { font-size: var(--font-size-micro); color: var(--color-text-secondary); line-height: var(--line-height-caption); }
+.zk-more { text-align: center; font-size: var(--font-size-micro); color: var(--color-text-secondary); padding: var(--space-1) 0; }
+
+@media (max-width: 430px) {
+  body { padding-left: var(--space-2); padding-right: var(--space-2); }
+  .panel { padding: var(--space-3); }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="pagehead">
+    <h1>みんなでつくろう 大富豪 — アウトゲーム デザインシステム</h1>
+    <div class="lead">
+      基準: キービジュアル案 2A「グランドフェス」(key-visual-2a.svg・2026-07-24 開発者決定)/ 対象: 対戦画面以外の全画面(アウトゲーム)/ テーマ: ライトのみ(2A は昼の世界観)。
+      運用ルール・React への持ち込み方は <code>デザインシステム.md</code> を参照。
+    </div>
+    <div class="truth">
+      <b>トークンの正は design-tokens.css。</b>本ページは同値をインライン化した自己完結のリビングスタイルガイドであり、値を変更するときは design-tokens.css と design-tokens.json を先に更新してから本ページへ反映する。
+    </div>
+  </div>
+
+  <!-- ============================================================ 1. 色 -->
+  <section>
+    <h2>1. カラートークン</h2>
+
+    <h3>1-1. プリミティブ(KV 2A 由来)</h3>
+    <div class="panel">
+      <div class="swatches">
+        <div class="sw"><div class="chipc" style="background:#FFFFFF"></div><div class="m"><b>white</b>#FFFFFF<br><span>カード面</span></div></div>
+        <div class="sw"><div class="chipc" style="background:#FFFBEF"></div><div class="m"><b>cream-50</b>#FFFBEF<br><span>明色テキスト・淡い面</span></div></div>
+        <div class="sw"><div class="chipc" style="background:#FFF4DC"></div><div class="m"><b>cream-100</b>#FFF4DC<br><span>アプリ地(KV: ロゴ縁)</span></div></div>
+        <div class="sw"><div class="chipc" style="background:#F6E8C6"></div><div class="m"><b>cream-200</b>#F6E8C6<br><span>トラック・押下面</span></div></div>
+        <div class="sw"><div class="chipc" style="background:#E8D9B5"></div><div class="m"><b>cream-300</b>#E8D9B5<br><span>弱い枠線</span></div></div>
+        <div class="sw"><div class="chipc" style="background:#E9EBF2"></div><div class="m"><b>navy-100</b>#E9EBF2<br><span>区切り・無効面</span></div></div>
+        <div class="sw"><div class="chipc" style="background:#C9CDDB"></div><div class="m"><b>navy-200</b>#C9CDDB<br><span>弱い枠線(KV: 笛)</span></div></div>
+        <div class="sw"><div class="chipc" style="background:#A9B0C7"></div><div class="m"><b>navy-300</b>#A9B0C7<br><span>無効テキスト</span></div></div>
+        <div class="sw"><div class="chipc" style="background:#4A5578"></div><div class="m"><b>navy-600</b>#4A5578<br><span>補助テキスト</span></div></div>
+        <div class="sw"><div class="chipc" style="background:#1C2447"></div><div class="m"><b>navy-800</b>#1C2447<br><span>本文・輪郭(KV 共通)</span></div></div>
+        <div class="sw"><div class="chipc" style="background:#14203D"></div><div class="m"><b>navy-900</b>#14203D<br><span>ベタ落ち影(KV)</span></div></div>
+        <div class="sw"><div class="chipc" style="background:#E1ECFA"></div><div class="m"><b>blue-100</b>#E1ECFA<br><span>情報の淡色地</span></div></div>
+        <div class="sw"><div class="chipc" style="background:#4585D4"></div><div class="m"><b>blue-400</b>#4585D4<br><span>装飾(KV: 光線)</span></div></div>
+        <div class="sw"><div class="chipc" style="background:#2B6FC2"></div><div class="m"><b>blue-500</b>#2B6FC2<br><span>リンク・フォーカス(KV: 空)</span></div></div>
+        <div class="sw"><div class="chipc" style="background:#235CA4"></div><div class="m"><b>blue-600</b>#235CA4<br><span>リンク押下</span></div></div>
+        <div class="sw"><div class="chipc" style="background:#FBE3DF"></div><div class="m"><b>red-100</b>#FBE3DF<br><span>危険の淡色地</span></div></div>
+        <div class="sw"><div class="chipc" style="background:#E14B3B"></div><div class="m"><b>red-500</b>#E14B3B<br><span>装飾限定(KV: ロゴ「大」)</span></div></div>
+        <div class="sw"><div class="chipc" style="background:#C93A2B"></div><div class="m"><b>red-600</b>#C93A2B<br><span>文字を載せる赤(AA)</span></div></div>
+        <div class="sw"><div class="chipc" style="background:#B23A2E"></div><div class="m"><b>red-700</b>#B23A2E<br><span>押下・危険文字(KV: 折返し)</span></div></div>
+        <div class="sw"><div class="chipc" style="background:#FFE29A"></div><div class="m"><b>gold-200</b>#FFE29A<br><span>金の淡色地</span></div></div>
+        <div class="sw"><div class="chipc" style="background:#FFC53D"></div><div class="m"><b>gold-400</b>#FFC53D<br><span>祝祭・注意(KV: 「富」・YC)</span></div></div>
+        <div class="sw"><div class="chipc" style="background:#7A5A10"></div><div class="m"><b>gold-700</b>#7A5A10<br><span>金系の文字(AA)</span></div></div>
+        <div class="sw"><div class="chipc" style="background:#DFF2E7"></div><div class="m"><b>green-100</b>#DFF2E7<br><span>緑の淡色地</span></div></div>
+        <div class="sw"><div class="chipc" style="background:#2FA36B"></div><div class="m"><b>green-500</b>#2FA36B<br><span>ローカル(KV: 「豪」・丘)</span></div></div>
+        <div class="sw"><div class="chipc" style="background:#268A58"></div><div class="m"><b>green-600</b>#268A58<br><span>装飾(KV: 丘の奥)</span></div></div>
+        <div class="sw"><div class="chipc" style="background:#1E7A50"></div><div class="m"><b>green-700</b>#1E7A50<br><span>緑系の文字・塗り(AA)</span></div></div>
+        <div class="sw"><div class="chipc" style="background:#F0C48F"></div><div class="m"><b>skin-300</b>#F0C48F<br><span>イラスト専用</span></div></div>
+      </div>
+      <div class="note"><b>装飾限定色</b>: red-500(ブランド赤)と green-500 の上のクリーム文字は AA を満たさない(計算値は下表)。文字を載せる塗りは red-600 / green-700 を使う。skin-300 は UI の面・文字に使わない。</div>
+    </div>
+
+    <h3>1-2. セマンティック割り当てとコントラスト実測</h3>
+    <div class="panel">
+      <div class="tbl-wrap">
+      <table class="spec">
+        <tr><th>用途(セマンティックトークン)</th><th>組み合わせ</th><th>実測比</th><th>基準</th><th>判定</th></tr>
+        <tr><td>本文 <code>--color-text-primary</code> / アプリ地</td><td>navy-800 / cream-100</td><td>13.80</td><td>AA 4.5</td><td class="pass">PASS</td></tr>
+        <tr><td>本文 / サーフェス</td><td>navy-800 / white</td><td>15.08</td><td>AA 4.5</td><td class="pass">PASS</td></tr>
+        <tr><td>補助テキスト <code>--color-text-secondary</code></td><td>navy-600 / cream-100</td><td>6.72</td><td>AA 4.5</td><td class="pass">PASS</td></tr>
+        <tr><td>反転テキスト(トースト・有効バッジ)</td><td>cream-50 / navy-800</td><td>14.57</td><td>AA 4.5</td><td class="pass">PASS</td></tr>
+        <tr><td>プライマリボタン文字</td><td>cream-50 / red-600</td><td>4.92</td><td>AA 4.5</td><td class="pass">PASS</td></tr>
+        <tr><td>プライマリ押下時文字</td><td>cream-50 / red-700</td><td>5.74</td><td>AA 4.5</td><td class="pass">PASS</td></tr>
+        <tr><td>リンク <code>--color-text-link</code></td><td>blue-500 / cream-100</td><td>4.63</td><td>AA 4.5</td><td class="pass">PASS</td></tr>
+        <tr><td>危険テキスト(却下・低評価)</td><td>red-700 / cream-100</td><td>5.43</td><td>AA 4.5</td><td class="pass">PASS</td></tr>
+        <tr><td>危険テキスト / 危険淡色地</td><td>red-700 / red-100</td><td>4.85</td><td>AA 4.5</td><td class="pass">PASS</td></tr>
+        <tr><td>成功テキスト(リリース・高評価)</td><td>green-700 / cream-100</td><td>4.86</td><td>AA 4.5</td><td class="pass">PASS</td></tr>
+        <tr><td>ローカルタグ文字 / 淡緑地</td><td>green-700 / green-100</td><td>4.55</td><td>AA 4.5</td><td class="pass">PASS</td></tr>
+        <tr><td>オリジナルタグ文字 / 淡金地</td><td>gold-700 / gold-200</td><td>5.03</td><td>AA 4.5</td><td class="pass">PASS</td></tr>
+        <tr><td>注意テキスト(審査中など)</td><td>gold-700 / cream-100</td><td>5.83</td><td>AA 4.5</td><td class="pass">PASS</td></tr>
+        <tr><td>イエローカード面の文字</td><td>navy-800 / gold-400</td><td>9.55</td><td>AA 4.5</td><td class="pass">PASS</td></tr>
+        <tr><td>フォーカスリング(非テキスト)</td><td>blue-500 / cream-100</td><td>4.63</td><td>3.0</td><td class="pass">PASS</td></tr>
+        <tr><td>入力欄の枠線(非テキスト)</td><td>navy-600 / white</td><td>7.34</td><td>3.0</td><td class="pass">PASS</td></tr>
+        <tr><td>[装飾限定] ブランド赤上の明色</td><td>cream-50 / red-500</td><td>3.85</td><td>AA 4.5</td><td class="warn-txt">FAIL → 装飾・大型表示のみ</td></tr>
+        <tr><td>[装飾限定] 緑面上のクリーム</td><td>cream-100 / green-500</td><td>2.93</td><td>AA 4.5</td><td class="warn-txt">FAIL → KV 絵柄内のみ</td></tr>
+        <tr><td>[要枠線] 人気度バー 塗り/トラック</td><td>gold-400 / cream-200</td><td>1.30</td><td>3.0</td><td class="warn-txt">FAIL → navy-800 枠線を必須化</td></tr>
+      </table>
+      </div>
+      <div class="note">実測は WCAG 2.x の相対輝度式による(計算スクリプトの結果を デザインシステム.md に記録)。<b>企画固有の意味割り当て</b>: 金 gold-400 = 祝祭とイエローカード(審判の文脈でだけ「警告」の意味を持つ)/ 緑 = ローカルルール・成功 / 金(NEW)= オリジナルルール / 赤 = 主アクション・危険 / 青 = 情報・リンク・フォーカス。</div>
+    </div>
+  </section>
+
+  <!-- ============================================================ 2. タイポ -->
+  <section>
+    <h2>2. タイポグラフィ</h2>
+    <div class="panel">
+      <div class="note" style="margin-top:0; margin-bottom:8px;">フォント: <code>'M PLUS Rounded 1c','Hiragino Maru Gothic ProN','Hiragino Sans','Yu Gothic',sans-serif</code>(Web フォント読込前でも成立する丸ゴシック系フォールバック。本ページは外部フォントを読み込まないため、環境のフォールバックで表示される)。</div>
+      <div class="type-row"><div class="meta">display / 28px / heavy(800) / lh 1.3</div><div style="font-size:28px; font-weight:800; letter-spacing:0.04em; line-height:1.3;">セットリザルト発表</div></div>
+      <div class="type-row"><div class="meta">title-l / 22px / heavy / lh 1.4</div><div style="font-size:22px; font-weight:800; letter-spacing:0.04em; line-height:1.4;">ルール図鑑</div></div>
+      <div class="type-row"><div class="meta">title-m / 18px / bold / lh 1.4</div><div style="font-size:18px; font-weight:700; line-height:1.4;">イエローカード!</div></div>
+      <div class="type-row"><div class="meta">title-s / 16px / bold / lh 1.4</div><div style="font-size:16px; font-weight:700; line-height:1.4;">タップしてはじめる</div></div>
+      <div class="type-row"><div class="meta">body / 14px / regular / lh 1.6</div><div style="font-size:14px; line-height:1.6;">はじめは基本ルールだけの「素の大富豪」。みんなの提案で、ルールはどんどん増えていく。</div></div>
+      <div class="type-row"><div class="meta">caption / 12px / regular / lh 1.5</div><div style="font-size:12px; line-height:1.5; color:var(--color-text-secondary);">入力は任意。あとから変えられます。</div></div>
+      <div class="type-row"><div class="meta">micro / 11px / bold / lh 1.5</div><div style="font-size:11px; font-weight:700; line-height:1.5;">報告: 埼玉県</div></div>
+      <div class="note"><b>文言規則(企画書 §6 確定)</b>: UI 文言に分かち書きの全角スペースを入れない(「タップしてはじめる」)。micro(11px)はタグ・バッジ内の太字専用で、本文には使わない。</div>
+    </div>
+  </section>
+
+  <!-- ============================================================ 3. 形 -->
+  <section>
+    <h2>3. 余白・角丸・輪郭線・影</h2>
+    <div class="panel">
+      <h3 style="margin-top:0;">余白(4px グリッド)</h3>
+      <div class="space-demo">
+        <div class="s" style="width:4px; height:24px;"></div>
+        <div class="s" style="width:8px; height:28px;"></div>
+        <div class="s" style="width:12px; height:32px;"></div>
+        <div class="s" style="width:16px; height:36px;">4</div>
+        <div class="s" style="width:20px; height:40px;">5</div>
+        <div class="s" style="width:24px; height:44px;">6</div>
+        <div class="s" style="width:32px; height:52px;">8</div>
+        <div class="s" style="width:40px; height:60px;">10</div>
+        <div class="s" style="width:48px; height:68px;">12</div>
+      </div>
+      <div class="note">--space-1(4px)〜 --space-12(48px)。画面の左右パディングは space-3(12px)、カード内は space-3〜4、セクション間は space-6 を既定とする。</div>
+
+      <h3>角丸</h3>
+      <div class="demo-grid">
+        <div class="radius-demo" style="border-radius:6px;">s 6px<br>タグ</div>
+        <div class="radius-demo" style="border-radius:10px;">m 10px<br>入力欄・行</div>
+        <div class="radius-demo" style="border-radius:16px;">l 16px<br>カード・モーダル</div>
+        <div class="radius-demo" style="border-radius:999px; width:150px;">pill<br>ボタン</div>
+      </div>
+
+      <h3>輪郭線幅</h3>
+      <div class="demo-grid">
+        <div class="border-demo" style="border:1px solid var(--color-navy-100);">thin 1px 区切り</div>
+        <div class="border-demo" style="border:1.5px solid var(--color-navy-600);">control 1.5px 入力</div>
+        <div class="border-demo" style="border:2px solid var(--color-navy-800);">bold 2px 標準</div>
+        <div class="border-demo" style="border:3px solid var(--color-navy-800);">heavy 3px 強調</div>
+      </div>
+      <div class="note">太い紺輪郭(bold 2px)が 2A の造形文法。操作できる部品(ボタン・カード)は bold、入力欄は control、強調面(モーダル・イエローカード)は heavy。</div>
+
+      <h3>影(ベタ落ち影が基本)</h3>
+      <div class="demo-grid">
+        <div class="shadow-demo" style="border-radius:12px; box-shadow:0 2px 0 var(--color-navy-900);">hard-s</div>
+        <div class="shadow-demo" style="border-radius:12px; box-shadow:0 3px 0 var(--color-navy-900);">hard-m</div>
+        <div class="shadow-demo" style="border-radius:12px; box-shadow:0 5px 0 var(--color-navy-900);">hard-l</div>
+        <div class="shadow-demo" style="border-radius:12px; box-shadow:0 2px 8px rgba(28,36,71,.12); border-color:var(--color-navy-200);">soft(トースト限定)</div>
+      </div>
+      <div class="note">ロゴのベタ落ち影(KV: navy-900)を UI に展開。ぼかし影(soft)は浮遊するトースト類のみに限定し、面の重なりはベタ影と輪郭線で表現する。押下時はベタ影を消して 3px 沈める(ボタン参照)。</div>
+    </div>
+  </section>
+
+  <!-- ============================================================ 4. モーション -->
+  <section>
+    <h2>4. モーション</h2>
+    <div class="panel">
+      <div class="tbl-wrap">
+      <table class="spec">
+        <tr><th>トークン</th><th>値</th><th>用途</th></tr>
+        <tr><td><code>--duration-fast</code></td><td>120ms</td><td>押下・ホバー・トグル</td></tr>
+        <tr><td><code>--duration-base</code></td><td>200ms</td><td>展開・フェード・タグ付け替え</td></tr>
+        <tr><td><code>--duration-slow</code></td><td>320ms</td><td>モーダル・画面転換</td></tr>
+        <tr><td><code>--easing-standard</code></td><td>cubic-bezier(0.2, 0, 0, 1)</td><td>通常の出入り</td></tr>
+        <tr><td><code>--easing-pop</code></td><td>cubic-bezier(0.34, 1.56, 0.64, 1)</td><td>祝祭系。バッジ・イエローカード・リザルトの登場</td></tr>
+        <tr><td><code>--easing-exit</code></td><td>cubic-bezier(0.4, 0, 1, 1)</td><td>退場</td></tr>
+      </table>
+      </div>
+      <div class="motion-demo" style="margin-top:12px;">
+        <span class="pop-demo">ホバーで pop の弾みを確認</span>
+        <button class="c-btn -primary" type="button">押下の沈み込みを確認</button>
+      </div>
+      <div class="note">にぎやかしは「登場時に 1 回だけ弾む」を基本とし、常時ループするアニメーションは置かない。OS の「視差効果を減らす」設定時は transform 系を fade に落とす(React 実装時に prefers-reduced-motion で分岐)。</div>
+    </div>
+  </section>
+
+  <!-- ============================================================ 5. コンポーネント -->
+  <section>
+    <h2>5. コンポーネント</h2>
+
+    <h3>5-1. ボタン</h3>
+    <div class="panel">
+      <div class="specimen">
+        <span class="lbl">primary(主 CTA。1 画面 1 個まで)/ 押下 / フォーカス / 無効</span>
+        <button class="c-btn -primary" type="button">提案を送信する</button>
+        <button class="c-btn -primary is-pressed" type="button">提案を送信する</button>
+        <button class="c-btn -primary is-focused" type="button">提案を送信する</button>
+        <button class="c-btn -primary is-disabled" type="button">提案を送信する</button>
+      </div>
+      <div class="specimen">
+        <span class="lbl">secondary / 押下 / 無効</span>
+        <button class="c-btn" type="button">ルール図鑑</button>
+        <button class="c-btn is-pressed" type="button">ルール図鑑</button>
+        <button class="c-btn is-disabled" type="button">ルール図鑑</button>
+      </div>
+      <div class="specimen">
+        <span class="lbl">small(補助操作。見た目 36px・当たり判定は余白で 44px を確保)</span>
+        <button class="c-btn -small" type="button">コピー</button>
+        <button class="c-btn -small is-pressed" type="button">コピー</button>
+        <button class="c-btn -primary -small" type="button">高評価</button>
+      </div>
+      <div class="specimen">
+        <span class="lbl">block(縦積みメニュー用)</span>
+        <div style="width:280px; display:flex; flex-direction:column; gap:10px;">
+          <button class="c-btn -primary -block" type="button">あそぶ</button>
+          <button class="c-btn -block" type="button">ルールをていあんする</button>
+        </div>
+      </div>
+      <div class="note">高さ 48px(small は 36px)。角丸 pill・紺 2px 輪郭・ベタ影 hard-m(small は hard-s)。押下で影を消し 3px 沈む。primary の塗りは red-600(ブランド赤 red-500 はコントラスト不足のため文字を載せる塗りに使わない)。文言に分かち書きスペースを入れない。</div>
+    </div>
+
+    <h3>5-2. アプリバー</h3>
+    <div class="panel">
+      <div style="max-width:375px; border:1px solid var(--color-navy-200); border-radius:8px; overflow:hidden;">
+        <div class="c-appbar">
+          <span class="back" role="button" aria-label="もどる">←</span>
+          <span class="ttl">ルール図鑑</span>
+          <span class="act">有効ルール 31</span>
+        </div>
+      </div>
+      <div class="note">白面+紺 2px 下線。戻るは 36px の円ボタン(当たり判定 44px)。右端のアクションチップは任意(対戦系画面で有効ルール件数などを出す)。タイトルは title-s 800。</div>
+    </div>
+
+    <h3>5-3. セグメントコントロール(区分選択)</h3>
+    <div class="panel">
+      <div class="specimen">
+        <div style="width:300px;"><div class="c-seg"><span class="is-on">ローカルルール</span><span>オリジナルルール</span></div></div>
+        <div style="width:300px;"><div class="c-seg -mini"><span class="is-on">おもしろかった</span><span>ふつう</span><span>つまらなかった</span></div></div>
+      </div>
+      <div class="note">選択は紺の塗り+明色文字(action-selected)。区分の色分け(ローカル=緑 / オリジナル=金)はタグとカードで示し、コントロール自体は中立の紺で統一して選択状態の読み取りを優先する。mini(3 分割)はセット評価用。</div>
+    </div>
+
+    <h3>5-4. フォーム部品</h3>
+    <div class="panel" style="max-width:420px; display:flex; flex-direction:column; gap:14px;">
+      <div class="c-field">
+        <label>ルール名</label>
+        <div class="c-input" role="textbox"><span class="ph" style="color:var(--color-text-secondary);">例: 8切り</span></div>
+      </div>
+      <div class="c-field">
+        <label>遊んでいた都道府県 <span class="opt">(任意)</span></label>
+        <div class="c-select"><span>埼玉県</span><span class="arrow">▼</span></div>
+        <div class="cap">「提案者がその土地で遊んでいた」という記録です。未選択でも提案できます。</div>
+      </div>
+      <div class="c-field">
+        <label>ルールの内容</label>
+        <div class="c-textarea"><span style="color:var(--color-text-secondary);">例: 8を出すと場が流れて、出した人からもう一度はじまる。</span></div>
+      </div>
+      <div class="c-field">
+        <label>フォーカス状態</label>
+        <div class="c-input is-focused">8切り</div>
+      </div>
+      <div class="c-field">
+        <label>エラー状態</label>
+        <div class="c-input is-error"></div>
+        <div class="cap -error">ルール名を入力してください</div>
+      </div>
+      <div class="note">任意項目はラベル末尾に「(任意)」を付ける(必須マークは使わず、任意側に印を付ける方針)。枠線は navy-600 1.5px、フォーカスで blue-500 2px+リング。プレースホルダーは navy-600(text-secondary)。</div>
+    </div>
+
+    <h3>5-5. タグ</h3>
+    <div class="panel">
+      <div class="specimen">
+        <span class="c-tag -pref">報告: 埼玉県</span>
+        <span class="c-tag -local">ローカル</span>
+        <span class="c-tag -local">ローカル(県の記載なし)</span>
+        <span class="c-tag -original">オリジナル</span>
+        <span class="c-tag -active">有効</span>
+        <span class="c-tag -removed">排除済み</span>
+        <span class="c-tag -human">人間</span>
+        <span class="c-tag -ai">AI</span>
+      </div>
+      <div class="note"><b>都道府県は非断定表現をコンポーネント仕様に焼き込む</b>: 県タグの文言は「報告: ◯◯県」固定。文章では「◯◯県で遊ばれていた報告」「◯◯発」を使い、「◯◯県のルール」という断定形はどの画面でも使わない(企画書 §4.1)。ローカル=緑 / オリジナル=金は KV 手札のルールカード(LOCAL RULE=緑・NEW RULE=金)の継承。</div>
+    </div>
+
+    <h3>5-6. 人気度バー</h3>
+    <div class="panel" style="max-width:420px; display:flex; flex-direction:column; gap:10px;">
+      <div class="c-pop"><span>人気度</span><span class="bar"><i style="width:87%"></i></span><span class="val">87</span></div>
+      <div class="c-pop"><span>人気度</span><span class="bar"><i style="width:42%"></i></span><span class="val">42</span></div>
+      <div class="c-pop"><span>人気度</span><span class="bar"><i style="width:12%"></i></span><span class="val">12</span></div>
+      <div class="note">塗りは gold-400(祝祭の金)。塗りとトラックの色差はコントラスト不足のため、<b>紺 1.5px の外枠と塗り右端の紺エッジを必須</b>とし、数値ラベルを常に併記する(バーだけで値を伝えない)。</div>
+    </div>
+
+    <h3>5-7. ルールカード(図鑑行)</h3>
+    <div class="panel" style="max-width:420px; display:flex; flex-direction:column; gap:10px;">
+      <div class="c-rule">
+        <div class="rank"><b>1</b><small>優先</small></div>
+        <div class="main">
+          <div class="nm">8切り <span class="c-tag -active">有効</span></div>
+          <div class="desc">埼玉県で遊ばれていた報告</div>
+          <div class="meta"><span class="c-tag -pref">報告: 埼玉県</span><span class="c-tag -local">ローカル</span></div>
+          <div class="c-pop"><span class="bar"><i style="width:87%"></i></span><span class="val">人気度 87</span></div>
+        </div>
+      </div>
+      <div class="c-rule">
+        <div class="rank"><b>3</b><small>優先</small></div>
+        <div class="main">
+          <div class="nm">革命返し <span class="c-tag -active">有効</span></div>
+          <div class="meta"><span class="c-tag -original">オリジナル</span></div>
+          <div class="c-pop"><span class="bar"><i style="width:74%"></i></span><span class="val">人気度 74</span></div>
+        </div>
+      </div>
+      <div class="c-rule -removed">
+        <div class="rank"><b>—</b></div>
+        <div class="main">
+          <div class="nm">手札全シャッフル <span class="c-tag -removed">排除済み</span></div>
+          <div class="desc">低評価が集まったため排除</div>
+          <div class="meta"><span class="c-tag -original">オリジナル</span></div>
+          <div class="c-pop"><span class="bar"><i style="width:12%"></i></span><span class="val">人気度 12</span></div>
+        </div>
+      </div>
+      <div class="note">人気度・優先度・都道府県(報告)・状態を併記する詳細側(企画書 §4.5)。排除済みは打ち消し線+淡色面で図鑑に残す。優先バッジは「n 優先」の枠付き数字。</div>
+    </div>
+
+    <h3>5-8. ルール行(対局用シンプル)</h3>
+    <div class="panel" style="max-width:420px; display:flex; flex-direction:column; gap:8px;">
+      <div class="c-rule-slim">8切り</div>
+      <div class="c-rule-slim">都落ち</div>
+      <div class="c-rule-slim">革命返し</div>
+      <div class="note">待機画面・対局中の有効ルール一覧はルール名だけ(§4.5「ラフな体験」)。人気度・都道府県・優先度の数値はこの形態では出さず、図鑑への導線を添える。</div>
+    </div>
+
+    <h3>5-9. 提案ステータスのステッパー</h3>
+    <div class="panel" style="display:flex; flex-direction:column; gap:14px;">
+      <div>
+        <div class="c-steps"><span class="st -done">審査中</span><span class="ln"></span><span class="st -done">実装中</span><span class="ln"></span><span class="st -released">リリース</span></div>
+      </div>
+      <div>
+        <div class="c-steps"><span class="st -done">審査中</span><span class="ln"></span><span class="st -now">実装中</span><span class="ln"></span><span class="st">リリース</span></div>
+      </div>
+      <div>
+        <div class="c-steps"><span class="st -done">審査中</span><span class="ln"></span><span class="st -rejected">却下</span></div>
+        <div class="c-reason">却下理由: ゲームの成立を損なうため実装不可と判断しました。</div>
+      </div>
+      <div>
+        <div class="c-steps"><span class="st -done">審査中</span><span class="ln"></span><span class="st -done">実装中</span><span class="ln"></span><span class="st -rejected">実装失敗</span></div>
+      </div>
+      <div class="note">状態色: 通過済み=紺 / 進行中=金(注意=「いま動いている」)/ リリース=緑(成功)/ 却下・実装失敗=赤。理由ボックスは赤の破線枠で、審判の裁定ではなく実装可否の説明として淡く出す。</div>
+    </div>
+
+    <h3>5-10. 高評価 / 低評価ボタン</h3>
+    <div class="panel">
+      <div class="specimen">
+        <button class="c-vote -up" type="button"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M2 7h3v7H2z"/><path d="M5 13V7l3-5c1 0 2 .8 2 2L9.4 7H13c.8 0 1.4.8 1.2 1.6l-1 4C13 13.4 12.4 14 11.6 14H5z"/></svg>高評価</button>
+        <button class="c-vote -up is-on" type="button"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M2 7h3v7H2z"/><path d="M5 13V7l3-5c1 0 2 .8 2 2L9.4 7H13c.8 0 1.4.8 1.2 1.6l-1 4C13 13.4 12.4 14 11.6 14H5z"/></svg>高評価済み</button>
+        <button class="c-vote -down" type="button"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" style="transform:rotate(180deg)"><path d="M2 7h3v7H2z"/><path d="M5 13V7l3-5c1 0 2 .8 2 2L9.4 7H13c.8 0 1.4.8 1.2 1.6l-1 4C13 13.4 12.4 14 11.6 14H5z"/></svg>低評価</button>
+        <button class="c-vote -down is-on" type="button"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" style="transform:rotate(180deg)"><path d="M2 7h3v7H2z"/><path d="M5 13V7l3-5c1 0 2 .8 2 2L9.4 7H13c.8 0 1.4.8 1.2 1.6l-1 4C13 13.4 12.4 14 11.6 14H5z"/></svg>低評価済み</button>
+      </div>
+      <div class="note">選択で塗りが付く(高=green-700 / 低=red-600)。選択状態は文言も「〜済み」に変える(色だけに頼らない)。セットで発動したルールにのみ表示(§4.4)。</div>
+    </div>
+
+    <h3>5-11. 待機画面のメンバースロット</h3>
+    <div class="panel" style="max-width:420px; display:flex; flex-direction:column; gap:8px;">
+      <div class="c-slot">
+        <span class="av"><svg width="16" height="16" viewBox="0 0 16 16" fill="var(--color-navy-600)"><circle cx="8" cy="5.5" r="3"/><path d="M2 14c.6-3 3-4.5 6-4.5s5.4 1.5 6 4.5z"/></svg></span>
+        <span class="nm">あなた<small>ホスト</small></span>
+        <span class="c-tag -human">人間</span>
+      </div>
+      <div class="c-slot">
+        <span class="av"><svg width="16" height="16" viewBox="0 0 16 16" fill="var(--color-navy-600)"><circle cx="8" cy="5.5" r="3"/><path d="M2 14c.6-3 3-4.5 6-4.5s5.4 1.5 6 4.5z"/></svg></span>
+        <span class="nm">プレイヤーB</span>
+        <span class="c-tag -human">人間</span>
+      </div>
+      <div class="c-slot -empty">
+        <span class="av"></span>
+        <span class="nm">(あき)</span>
+        <span class="c-tag -ai">開始時にAIが入ります</span>
+      </div>
+      <div class="note">空き枠は破線+淡色で「まだ埋まっていないが開始できる」ことを示す(4 人固定・AI 自動補充 §3.2)。人間=紺の塗りタグ、AI=枠線タグで区別する。</div>
+    </div>
+
+    <h3>5-12. 招待コード表示</h3>
+    <div class="panel" style="max-width:420px;">
+      <div class="c-invite">
+        <span class="code"><small>招待コード</small>ABCD-1234</span>
+        <button class="c-btn -small" type="button">コピー</button>
+      </div>
+      <div class="note">クリーム面+金の破線内枠で KV タップ導線の「切符」の気配を継承。コードは heavy・字間広めで読み間違いを防ぐ。コピー成功はトーストで返す。</div>
+    </div>
+
+    <h3>5-13. トースト</h3>
+    <div class="panel">
+      <div class="specimen">
+        <span class="c-toast"><span class="ic -ok"><svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="#FFFBEF" stroke-width="2" stroke-linecap="round"><path d="M1.5 5.5 4 8l4.5-6"/></svg></span>招待コードをコピーしました</span>
+        <span class="c-toast"><span class="ic -warn"></span>提案を受け付けました</span>
+      </div>
+      <div class="note">紺面+明色文字+soft 影。画面下部に 1 件だけ表示し、duration-base で出て 3 秒で退場。エラーはトーストにせず、その場のフォームエラーかモーダルで返す。</div>
+    </div>
+
+    <h3>5-14. イエローカードモーダル</h3>
+    <div class="panel">
+      <div style="display:flex; gap:24px; flex-wrap:wrap; align-items:flex-start;">
+        <div class="c-modal">
+          <div class="cards"><span class="c-ycard"></span></div>
+          <h4>イエローカード!</h4>
+          <p class="body-txt">審判より: あなたのルール提案文から、不正な命令(プロンプトインジェクション)が検出されました。この提案は受け付けられません。</p>
+          <div class="c-yslots"><span>警告</span><span class="slot -filled"></span><span class="slot"></span><span>1 / 2枚</span></div>
+          <p class="sub-txt">イエローカードが2枚になると、しばらくルール提案ができなくなります(対戦はそのまま遊べます)。</p>
+          <button class="c-btn -small" type="button">提案画面にもどる</button>
+        </div>
+        <div class="c-modal">
+          <div class="cards"><span class="c-ycard"></span><span class="c-ycard -second"></span></div>
+          <h4>2枚目のイエローカード</h4>
+          <p class="body-txt">審判より: イエローカードが2枚になったため、ルール提案機能をしばらく停止します。対戦はこれまでどおり遊べます。</p>
+          <div class="c-yslots"><span>警告</span><span class="slot -filled"></span><span class="slot -filled"></span><span>2 / 2枚</span></div>
+          <div class="c-stopbox">停止期間: ○日間(解除予定: 2026-07-30)。停止されるのはルール提案機能のみです。</div>
+          <button class="c-btn -small" type="button">あそぶ(対戦はできます)</button>
+          <button class="c-btn -small" type="button">ホームへもどる</button>
+        </div>
+      </div>
+      <div class="note"><b>「怒られてるのに笑える」トーンの使い方</b>: 黄はカードの絵とスロットにだけ使い、面全体を黄で塗らない(警報ではなく審判の小道具として見せる)。文は「審判より:」で始め、罰の説明とあわせて「対戦は遊べる」の救いを必ず同じ画面に置く。登場は easing-pop で 1 回弾む。カードの傾き ±8〜9° は KV の審判が掲げるカードの継承。</div>
+    </div>
+
+    <h3>5-15. 空状態</h3>
+    <div class="panel" style="max-width:420px;">
+      <div class="c-empty">
+        <span class="art"><i></i><i></i></span>
+        <h4>まだ提案がありません</h4>
+        <p>あなたの街のルールも、思いつきの新ルールも、ここから提案できます。</p>
+        <button class="c-btn" type="button">ルールをていあんする</button>
+      </div>
+      <div class="note">モチーフはトランプ 2 枚の重なり(キャラクターの吹き出し発言は置かない)。見出し+一文+次の行動、の 3 点構成を守る。</div>
+    </div>
+  </section>
+
+  <!-- ============================================================ 6. 適用例 -->
+  <section>
+    <h2>6. 適用例 — 代表 4 画面(375px)</h2>
+    <div class="note" style="margin-bottom:16px;">ワイヤーフレーム(wireframes.html)の情報構造を保ったままトーンを適用したハイファイ例。文言・要素の過不足はワイヤー準拠。</div>
+    <div class="screens">
+
+      <!-- 画面1b メニュー -->
+      <div class="screen-cell">
+        <h3>画面1b. メニュー</h3>
+        <div class="src">ワイヤー画面1b の情報構造(ロゴ小 / 主要3導線 / 補助2導線 / コンセプト一文)を維持</div>
+        <div class="frame">
+          <div class="statusbar"><span>9:41</span><span class="icons"><i></i><i></i><i></i></span></div>
+          <div class="scr-body">
+            <div class="hero">
+              <div class="garland">
+                <i style="background:#E14B3B"></i><i style="background:#FFC53D"></i><i style="background:#FFF4DC"></i><i style="background:#2FA36B"></i><i style="background:#E14B3B"></i><i style="background:#FFC53D"></i><i style="background:#2FA36B"></i><i style="background:#FFF4DC"></i><i style="background:#E14B3B"></i><i style="background:#FFC53D"></i><i style="background:#2FA36B"></i>
+              </div>
+              <svg viewBox="0 0 340 132" style="width:78%; max-width:270px; display:block; margin:0 auto;" role="img" aria-label="みんなでつくろう 大富豪">
+                <text x="170" y="30" font-size="24" font-weight="bold" text-anchor="middle" letter-spacing="2" fill="#FFFFFF" stroke="#1C2447" stroke-width="6" paint-order="stroke" stroke-linejoin="round" font-family="'M PLUS Rounded 1c','Hiragino Maru Gothic ProN','Hiragino Sans',sans-serif">みんなでつくろう</text>
+                <g font-size="72" font-weight="bold" text-anchor="middle" font-family="'M PLUS Rounded 1c','Hiragino Maru Gothic ProN','Hiragino Sans',sans-serif">
+                  <g transform="translate(3,4)" stroke="#14203D" stroke-width="12" stroke-linejoin="round" fill="#14203D">
+                    <text x="66" y="108">大</text><text x="170" y="108">富</text><text x="274" y="108">豪</text>
+                  </g>
+                  <g stroke="#1C2447" stroke-width="12" stroke-linejoin="round" fill="#1C2447">
+                    <text x="66" y="108">大</text><text x="170" y="108">富</text><text x="274" y="108">豪</text>
+                  </g>
+                  <g stroke="#FFF4DC" stroke-width="5" stroke-linejoin="round" paint-order="stroke">
+                    <text x="66" y="108" fill="#E14B3B">大</text><text x="170" y="108" fill="#FFC53D">富</text><text x="274" y="108" fill="#2FA36B">豪</text>
+                  </g>
+                </g>
+              </svg>
+            </div>
+            <button class="c-btn -primary -block" type="button" style="min-height:56px;">あそぶ</button>
+            <button class="c-btn -block" type="button">ルールをていあんする</button>
+            <button class="c-btn -block" type="button">ルール図鑑</button>
+            <div class="row">
+              <button class="c-btn -small" type="button">マイ提案</button>
+              <button class="c-btn -small" type="button">あそびかた</button>
+            </div>
+            <p class="menu-note">はじめは基本ルールだけの「素の大富豪」。<br>みんなの提案で、ルールはどんどん増えていく。</p>
+            <div class="menu-hill">
+              <svg viewBox="0 0 375 56" style="display:block; width:100%;" preserveAspectRatio="none">
+                <path d="M0,34 Q 95,10 190,26 Q 285,42 375,20 L375,56 L0,56 Z" fill="#2FA36B"/>
+                <path d="M0,46 Q 120,30 230,42 Q 310,50 375,40 L375,56 L0,56 Z" fill="#268A58"/>
+              </svg>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 画面6 提案フォーム -->
+      <div class="screen-cell">
+        <h3>画面6. ルール提案フォーム</h3>
+        <div class="src">ワイヤー画面6 の情報構造(区分 / 都道府県任意 / ルール名 / 内容 / 審査予告 / 送信)を維持</div>
+        <div class="frame">
+          <div class="statusbar"><span>9:41</span><span class="icons"><i></i><i></i><i></i></span></div>
+          <div class="c-appbar">
+            <span class="back" role="button" aria-label="もどる">←</span>
+            <span class="ttl">ルールをていあんする</span>
+          </div>
+          <div class="scr-body">
+            <div class="c-field">
+              <label>ルールの区分</label>
+              <div class="c-seg"><span class="is-on">ローカルルール</span><span>オリジナルルール</span></div>
+              <div class="cap">ローカル=実際に遊ばれていた(いる)ルール / オリジナル=自由発想のルール</div>
+            </div>
+            <div class="c-field">
+              <label>遊んでいた都道府県 <span class="opt">(任意)</span></label>
+              <div class="c-select"><span>埼玉県</span><span class="arrow">▼</span></div>
+              <div class="cap">ローカルルール選択時のみ表示。「その土地で遊んでいた」という記録で、未選択でも提案できます。</div>
+            </div>
+            <div class="c-field">
+              <label>ルール名</label>
+              <div class="c-input"><span style="color:var(--color-text-secondary);">例: 8切り</span></div>
+            </div>
+            <div class="c-field">
+              <label>ルールの内容</label>
+              <div class="c-textarea"><span style="color:var(--color-text-secondary);">例: 8を出すと場が流れて、出した人からもう一度はじまる。</span></div>
+            </div>
+            <div style="background:var(--color-bg-subtle); border:1.5px solid var(--color-border-subtle); border-radius:var(--radius-m); padding:10px 12px; display:flex; gap:10px; align-items:flex-start;">
+              <svg width="22" height="22" viewBox="0 0 22 22" style="flex-shrink:0; margin-top:2px;" aria-hidden="true">
+                <rect x="6.5" y="2" width="9" height="13" rx="1.6" fill="#FFC53D" stroke="#1C2447" stroke-width="1.6" transform="rotate(8 11 8)"/>
+                <circle cx="8" cy="17.4" r="2.6" fill="#C9CDDB" stroke="#1C2447" stroke-width="1.6"/>
+              </svg>
+              <span style="font-size:11px; color:var(--color-text-secondary); line-height:1.5;">提案はAIが実装可否を審査し、実装可能なら自動でゲームに組み込まれます。提案文にまぎれこませた不正な命令(プロンプトインジェクション)は検出され、イエローカードの対象になります。</span>
+            </div>
+            <button class="c-btn -primary -block" type="button">提案を送信する</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 画面8 ルール図鑑 -->
+      <div class="screen-cell">
+        <h3>画面8. ルール図鑑</h3>
+        <div class="src">ワイヤー画面8 の情報構造(フィルタ4種 / 件数・カバー数 / 非断定の注記 / 図鑑行 / 排除済み)を維持</div>
+        <div class="frame">
+          <div class="statusbar"><span>9:41</span><span class="icons"><i></i><i></i><i></i></span></div>
+          <div class="c-appbar">
+            <span class="back" role="button" aria-label="もどる">←</span>
+            <span class="ttl">ルール図鑑</span>
+          </div>
+          <div class="scr-body">
+            <div class="row">
+              <div class="c-select zk-select"><span>都道府県: すべて</span><span class="arrow">▼</span></div>
+              <div class="c-select zk-select"><span>状態: すべて</span><span class="arrow">▼</span></div>
+            </div>
+            <div class="row">
+              <div class="c-select zk-select"><span>区分: すべて</span><span class="arrow">▼</span></div>
+              <div class="c-select zk-select"><span>並び順: 人気度</span><span class="arrow">▼</span></div>
+            </div>
+            <div class="zk-stats">実装済みルール 34件(有効 31・排除済み 3)/ 都道府県カバー 14<br>「報告: 〜県」は、提案した人がその土地で遊んでいたという記録です。</div>
+            <div class="c-rule">
+              <div class="rank"><b>1</b><small>優先</small></div>
+              <div class="main">
+                <div class="nm">8切り <span class="c-tag -active">有効</span></div>
+                <div class="desc">埼玉県で遊ばれていた報告</div>
+                <div class="meta"><span class="c-tag -pref">報告: 埼玉県</span><span class="c-tag -local">ローカル</span></div>
+                <div class="c-pop"><span class="bar"><i style="width:87%"></i></span><span class="val">人気度 87</span></div>
+              </div>
+            </div>
+            <div class="c-rule">
+              <div class="rank"><b>2</b><small>優先</small></div>
+              <div class="main">
+                <div class="nm">都落ち <span class="c-tag -active">有効</span></div>
+                <div class="desc">福岡県で遊ばれていた報告</div>
+                <div class="meta"><span class="c-tag -pref">報告: 福岡県</span><span class="c-tag -local">ローカル</span></div>
+                <div class="c-pop"><span class="bar"><i style="width:81%"></i></span><span class="val">人気度 81</span></div>
+              </div>
+            </div>
+            <div class="c-rule">
+              <div class="rank"><b>3</b><small>優先</small></div>
+              <div class="main">
+                <div class="nm">革命返し <span class="c-tag -active">有効</span></div>
+                <div class="meta"><span class="c-tag -original">オリジナル</span></div>
+                <div class="c-pop"><span class="bar"><i style="width:74%"></i></span><span class="val">人気度 74</span></div>
+              </div>
+            </div>
+            <div class="c-rule">
+              <div class="rank"><b>4</b><small>優先</small></div>
+              <div class="main">
+                <div class="nm">5スキップ <span class="c-tag -active">有効</span></div>
+                <div class="meta"><span class="c-tag -local">ローカル(県の記載なし)</span></div>
+                <div class="c-pop"><span class="bar"><i style="width:66%"></i></span><span class="val">人気度 66</span></div>
+              </div>
+            </div>
+            <div class="c-rule -removed">
+              <div class="rank"><b>—</b></div>
+              <div class="main">
+                <div class="nm">手札全シャッフル <span class="c-tag -removed">排除済み</span></div>
+                <div class="desc">低評価が集まったため排除</div>
+                <div class="meta"><span class="c-tag -original">オリジナル</span></div>
+                <div class="c-pop"><span class="bar"><i style="width:12%"></i></span><span class="val">人気度 12</span></div>
+              </div>
+            </div>
+            <div class="zk-more">…ほか 29件(スクロール)</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 画面9a イエローカード -->
+      <div class="screen-cell">
+        <h3>画面9a. イエローカード(1枚目)</h3>
+        <div class="src">ワイヤー画面9a の情報構造(モーダル / カード / 警告スロット1/2 / 2枚制の予告 / 戻る導線)を維持</div>
+        <div class="frame">
+          <div class="statusbar"><span>9:41</span><span class="icons"><i></i><i></i><i></i></span></div>
+          <div class="modal-scrim">
+            <div class="behind-skeleton" aria-hidden="true">
+              <div style="height:52px; background:var(--color-bg-surface); border-bottom:2px solid var(--color-navy-800);"></div>
+              <div style="height:44px; background:var(--color-bg-surface); border:2px solid var(--color-navy-800); border-radius:999px;"></div>
+              <div style="height:48px; background:var(--color-bg-surface); border:1.5px solid var(--color-navy-600); border-radius:10px;"></div>
+              <div style="height:96px; background:var(--color-bg-surface); border:1.5px solid var(--color-navy-600); border-radius:10px;"></div>
+              <div style="height:48px; background:var(--color-red-600); border:2px solid var(--color-navy-800); border-radius:999px;"></div>
+            </div>
+            <div class="behind-note">(ルール提案フォームの上にモーダル表示)</div>
+            <div class="c-modal">
+              <div class="cards"><span class="c-ycard"></span></div>
+              <h4>イエローカード!</h4>
+              <p class="body-txt">審判より: あなたのルール提案文から、不正な命令(プロンプトインジェクション)が検出されました。この提案は受け付けられません。</p>
+              <div class="c-yslots"><span>警告</span><span class="slot -filled"></span><span class="slot"></span><span>1 / 2枚</span></div>
+              <p class="sub-txt">イエローカードが2枚になると、しばらくルール提案ができなくなります(対戦はそのまま遊べます)。</p>
+              <button class="c-btn -small" type="button">提案画面にもどる</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+</div>
+</body>
+</html>

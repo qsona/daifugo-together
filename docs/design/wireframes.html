@@ -148,6 +148,7 @@
   .rul .desc { font-size: 10.5px; color: var(--g5); }
   .rul.dead { background: var(--g2); color: var(--g5); }
   .rul.dead .nm { text-decoration: line-through; color: var(--g5); }
+  .rul.slim { padding: 9px 12px; }
 
   /* 提案ステータス */
   .steps { display: flex; align-items: center; gap: 4px; font-size: 10px; margin-top: 6px; flex-wrap: wrap; }
@@ -171,6 +172,10 @@
   .yslot { width: 26px; height: 38px; border: 1.5px dashed var(--g4); border-radius: 4px; background: #fff; }
   .yslot.filled { background: var(--accent); border: 1.5px solid var(--accent-dark); }
 
+  /* タイトル画面(1a) */
+  .tapstart { text-align: center; font-size: 15px; font-weight: 700; letter-spacing: .1em; padding: 10px 0 2px; }
+  .tapstart small { display: block; font-size: 10px; font-weight: 400; color: var(--g5); letter-spacing: 0; }
+
   .grid-title { max-width: 1420px; margin: 0 auto 18px; font-size: 18px; padding-left: 10px; border-left: 6px solid #222; }
 </style>
 </head>
@@ -179,8 +184,8 @@
 <!-- ================= ドキュメントヘッダー ================= -->
 <div class="doc">
   <h1>みんなでつくろう 大富豪 — 画面ワイヤーフレーム(low-fi)</h1>
-  <div class="sub">作成日: 2026-07-23 / 対象: docs/企画書.md の確定済み機能群</div>
-  <div class="kv"><span class="k">前提</span><span>スマートフォンファーストの Web アプリとして設計する(PC でも同一レイアウトが成立する想定)。各画面は幅 375px 相当のスマホフレームで表現する。</span></div>
+  <div class="sub">作成日: 2026-07-23 / 更新日: 2026-07-24(仕様確定を反映: 4 人固定・待機画面・3 戦 1 セット・全体共有・都道府県任意ほか) / 対象: docs/企画書.md の確定済み機能群</div>
+  <div class="kv"><span class="k">前提</span><span>スマートフォンファーストの Web アプリとして設計する(PC でも同一レイアウトが成立する想定)。各画面は幅 375px 相当のスマホフレームで表現する。対戦人数は 4 人固定(§3.2)。</span></div>
   <div class="kv"><span class="k">対象外</span><span>運用・観測(プロダクトバックログ E10: codex 利用枠の消費状況・採用率などの開発者向け画面)は本ワイヤーフレームの対象外。</span></div>
   <div class="kv"><span class="k">表現ルール</span><span>low-fi ワイヤーフレームのため、グレースケール基調+強調 1 色(黄)。黄は「注記マーカー <span class="legend-mk">1</span>」「ルール発動などの強調」「イエローカード」にのみ使用する。ポップなビジュアルデザイン(§6)はここでは表現せず、キービジュアル提案の担当領域とする。</span></div>
   <div class="kv"><span class="k">凡例</span><span>画面内の名称・数値・ルール名はすべてダミー(プレースホルダー)。ボタン内の「→ 画面N」は遷移先を示す設計注記であり、実画面には表示しない。</span></div>
@@ -190,138 +195,189 @@
   <table class="map">
     <tr><th>企画書の機能</th><th>節</th><th>対応する画面</th></tr>
     <tr><td>基本ルールのみの大富豪の対戦進行</td><td>§3.1</td><td>画面3: 対戦画面</td></tr>
-    <tr><td>対戦形態(AI 対戦・人間対戦・AI・人間混合)</td><td>§3.2</td><td>画面2: ルーム作成・参加(プレイヤー枠ごとの 人間/AI 切替)</td></tr>
-    <tr><td>対戦 AI はロジック実装(LLM 不使用)</td><td>§3.3</td><td>画面には出ない(バックエンド)。画面2・3 の「AI」バッジで存在のみ表現</td></tr>
-    <tr><td>ルール提案(ローカル/オリジナル区分、都道府県)</td><td>§4.1</td><td>画面6: ルール提案フォーム</td></tr>
+    <tr><td>対戦形態(4 人固定・開始時に不足枠を AI が自動補充・待機画面)</td><td>§3.2</td><td>画面2a: ルーム作成・参加、画面2b: 待機画面</td></tr>
+    <tr><td>対戦 AI はロジック実装(LLM 不使用)</td><td>§3.3</td><td>画面には出ない(バックエンド)。画面3・5a・5b の「AI」バッジで存在のみ表現</td></tr>
+    <tr><td>3 戦 1 セットの試合形式(ゲーム間は簡易リザルト・セット終了時に総合結果)</td><td>§3.4</td><td>画面5a: ゲーム間リザルト、画面5b: セットリザルト+評価</td></tr>
+    <tr><td>ルール提案(ローカル/オリジナル区分、都道府県は任意)</td><td>§4.1</td><td>画面6: ルール提案フォーム</td></tr>
     <tr><td>提案 → 実装可否判断 → codex 自動実装 → 反映</td><td>§4.2</td><td>画面6 の「送信」が起点(処理はバックエンド)。進行は画面7: マイ提案/ステータスに表示</td></tr>
-    <tr><td>人気度連動の優先順位</td><td>§4.3</td><td>画面4: 有効ルール一覧、画面8: ルール図鑑(優先度・人気度の表示)</td></tr>
-    <tr><td>1 ゲームごとの評価・低評価による淘汰</td><td>§4.4</td><td>画面5: リザルト+ゲーム評価(入力)、画面8: ルール図鑑(排除済み表示)</td></tr>
-    <tr><td>ルールの閲覧(ルール図鑑・有効ルールの確認)</td><td>§4.5</td><td>画面4: 有効ルール一覧、画面8: ルール図鑑</td></tr>
-    <tr><td>インジェクション検出をイエローカードとして演出</td><td>§5.1 / §5.2</td><td>画面9a/9b: イエローカード演出(1 枚目警告 / 2 枚目で利用停止)</td></tr>
-    <tr><td>ポップなキービジュアル</td><td>§6</td><td>画面1: タイトル/ホーム(領域のみ確保)</td></tr>
+    <tr><td>人気度連動の優先順位</td><td>§4.3</td><td>画面8: ルール図鑑(優先度・人気度を表示)。画面4 では優先順位を並び順にのみ使い、数値は出さない</td></tr>
+    <tr><td>セット(3 戦)ごとの評価・発動ルールへの高評価/低評価による淘汰</td><td>§4.4</td><td>画面5b: セットリザルト+評価(入力)、画面8: ルール図鑑(排除済み表示)</td></tr>
+    <tr><td>ルールの閲覧(適用ルールは全体共有で変更不可・対局中はラフ表示・ルール図鑑)</td><td>§4.5</td><td>画面2b(件数のみの軽い表示)、画面4: 有効ルール一覧(ルール名のみ)、画面8: ルール図鑑</td></tr>
+    <tr><td>インジェクション検出をイエローカードとして演出</td><td>§5.1 / §5.2</td><td>画面9a/9b: イエローカード演出(1 枚目警告 / 2 枚目でルール提案機能を停止)</td></tr>
+    <tr><td>ポップなキービジュアル(縦長 9:16 をタイトルに)</td><td>§6</td><td>画面1a: タイトル(縦長キービジュアル全面)、画面1b: メニュー(領域のみ確保)</td></tr>
     <tr><td>ローカルルールの地域性の資産化(都道府県カバー)</td><td>§4.1 / §11</td><td>画面8: ルール図鑑(都道府県表示・フィルタ)</td></tr>
   </table>
   </div>
 
   <h2>画面遷移の全体像</h2>
   <pre class="flow">
-[画面1 タイトル/ホーム]
-  ├─「あそぶ」────────────→ [画面2 ルーム作成・参加]
-  │                            ├─ ルールセットプレビュー「すべて見る」→ [画面4 有効ルール一覧]
-  │                            └─「この設定ではじめる」──→ [画面3 対戦画面]
-  │                                                          ├─「有効ルール」ボタン → [画面4 有効ルール一覧](対戦中に参照)
-  │                                                          └─ ゲーム終了 ────→ [画面5 リザルト+ゲーム評価]
-  │                                                                                ├─「もう一度あそぶ」→ [画面3]
-  │                                                                                └─「ホームへ」──→ [画面1]
-  ├─「ルールをていあんする」→ [画面6 ルール提案フォーム]
-  │                            ├─ 送信(正常)────→ [画面7 マイ提案/ステータス]
-  │                            └─ 送信(インジェクション検出)→ [画面9a イエローカード 1枚目]
-  │                                                             └─ 2枚目の検出 → [画面9b 利用停止]
-  ├─「ルール図鑑」──────→ [画面8 ルール図鑑]
-  └─「マイ提案」──────→ [画面7 マイ提案/ステータス]
+[画面1a タイトル(縦長キービジュアル)]
+  └─ タップしてはじめる ──→ [画面1b メニュー]
+        ├─「あそぶ」────────→ [画面2a ルーム作成・参加]
+        │                        └─ つくる / 招待コードではいる → [画面2b 待機画面]
+        │                              ├─ いまのルール「一覧を見る」→ [画面4 有効ルール一覧]
+        │                              │                                └─「図鑑でくわしく」→ [画面8]
+        │                              └─「開始する」(不足枠は AI が自動補充)→ [画面3 対戦画面]
+        │                                    ├─「有効ルール」ボタン → [画面4](対戦中に参照)
+        │                                    ├─ 第1・2戦の終了 ──→ [画面5a ゲーム間リザルト]─(自動で次戦)→ [画面3]
+        │                                    └─ 第3戦の終了 ────→ [画面5b セットリザルト+評価]
+        │                                                              ├─「もう1セットあそぶ」→ [画面3](同一メンバー)
+        │                                                              └─「ホームへ」──→ [画面1b]
+        ├─「ルールをていあんする」→ [画面6 ルール提案フォーム]
+        │                            ├─ 送信(正常)────→ [画面7 マイ提案/ステータス]
+        │                            └─ 送信(インジェクション検出)→ [画面9a イエローカード 1枚目]
+        │                                                             └─ 2枚目の検出 → [画面9b 提案機能停止]
+        ├─「ルール図鑑」──────→ [画面8 ルール図鑑]
+        └─「マイ提案」──────→ [画面7 マイ提案/ステータス]
   </pre>
 
   <h2>画面に載らないバックエンド処理と起点</h2>
   <ul>
-    <li><b>提案の自動実装パイプライン(§4.2・§5.1・§7)</b>: 起点は画面6「提案を送信する」。送信後にインジェクション検査 → 実装可否判断 → codex による自動実装 → デプロイ・反映、が順にバックエンドで走る。進行状況は画面7 のステータス(審査中 → 実装中 → リリース / 却下 / 実装失敗)として見え、リリースされたルールは画面4・画面8 に現れる。検出時のみ画面9 が表示される。</li>
-    <li><b>評価集計と淘汰(§4.4・§4.3)</b>: 起点は画面5「評価を送信」。バックエンドで評価を集計し、人気度・優先順位の更新(画面4・8 の表示に反映)と、低評価ルールの排除(画面8 の「排除済み」)が行われる。</li>
-    <li><b>対戦 AI のロジック(§3.3)</b>: 対局中の AI の手はサーバー側ロジックで決まる。画面上は AI バッジ(画面2・3)以外に UI を持たない。</li>
+    <li><b>提案の自動実装パイプライン(§4.2・§5.1・§7)</b>: 起点は画面6「提案を送信する」。送信後にインジェクション検査 → 実装可否判断 → codex による自動実装 → デプロイ・反映、が順にバックエンドで走る。進行状況は画面7 のステータス(審査中 → 実装中 → リリース / 却下 / 実装失敗)として見え、リリースされたルールは全卓共通で有効になり(§4.5)、画面4・画面8 に現れる。検出時のみ画面9a/9b が表示される。</li>
+    <li><b>評価集計と淘汰(§4.4・§4.3)</b>: 起点は画面5b「評価を送信」。セット(3 戦)ごとの「面白かったか」と、そのセットで発動したルールへの高評価・低評価を集計し、人気度・優先順位の更新(画面8 の表示に反映)と、低評価ルールの排除(画面8 の「排除済み」)が行われる。</li>
+    <li><b>対戦 AI のロジック(§3.3)と開始時の自動補充(§3.2)</b>: 起点は画面2b「開始する」。開始時点の人間の人数を確認し、4 人に足りない分をサーバーが AI で自動補充する(枠指定 UI はない)。対局中の AI の手はサーバー側ロジックで決まる。画面上は AI バッジ(画面3・5a・5b)以外に UI を持たない。</li>
   </ul>
 </div>
 
 <!-- ================= 画面一覧 ================= -->
-<div class="grid-title">画面一覧(全 10 フレーム / 9 画面)</div>
+<div class="grid-title">画面一覧(全 13 フレーム / 9 画面)</div>
 <div class="grid">
 
-  <!-- 1. タイトル/ホーム -->
+  <!-- 1a. タイトル -->
   <div class="cell">
-    <h3>画面1. タイトル/ホーム <span class="chip">企画書 §1・§2.2・§6</span></h3>
+    <h3>画面1a. タイトル <span class="chip">企画書 §1・§6</span></h3>
     <div class="frame">
       <div class="statusbar"><span>9:41</span><span class="icons"><i></i><i></i><i></i></span></div>
       <div class="body">
-        <div class="ph" style="height: 200px;"><span>キービジュアル領域 <span class="mk">1</span><br>(ポップなトーン想定・§6)<br>+ ゲームロゴ「みんなでつくろう 大富豪」</span></div>
-        <div class="btn primary">あそぶ <span class="goto">→ 画面2</span></div>
+        <div class="ph" style="height: 500px;"><span>縦長キービジュアル領域(9:16・全面)<span class="mk">1</span><br>ポップなトーン想定(§6)<br>ゲームロゴ「みんなでつくろう 大富豪」<br>+キャッチコピー「毎日どこかで、新ルール。」</span></div>
+        <div class="tapstart">▶ タップしてはじめる<small>(画面のどこを押しても進む)→ 画面1b</small></div>
+      </div>
+    </div>
+    <div class="notes">
+      <div class="nt">注記(この画面で満たす要件)</div>
+      <ul>
+        <li><span class="mk">1</span> タイトルは縦長(9:16)キービジュアル 1 枚を全面に使う(§6)。中身(ロゴ・コピーを含む)はキービジュアル提案の担当領域で、ここでは領域のみ確保。</li>
+        <li>メニューはこの画面に置かず、タップで画面1b(メニュー)へ分離する。キービジュアルを遮らないため。</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 1b. メニュー -->
+  <div class="cell">
+    <h3>画面1b. メニュー <span class="chip">企画書 §2.1・§2.2・§3.1</span></h3>
+    <div class="frame">
+      <div class="statusbar"><span>9:41</span><span class="icons"><i></i><i></i><i></i></span></div>
+      <div class="body">
+        <div class="ph" style="height: 90px;"><span>ロゴ(小)「みんなでつくろう 大富豪」</span></div>
+        <div class="btn primary">あそぶ <span class="goto">→ 画面2a</span></div>
         <div class="btn">ルールをていあんする <span class="goto">→ 画面6</span></div>
         <div class="btn">ルール図鑑 <span class="goto">→ 画面8</span></div>
         <div class="row">
           <div class="btn small">マイ提案 <span class="goto">→ 画面7</span></div>
           <div class="btn small">あそびかた</div>
         </div>
-        <div class="cap">はじめは基本ルールだけの「素の大富豪」(§3.1)。みんなの提案でルールが増えていく、という一文をここに置く想定。<span class="mk">2</span></div>
+        <div class="cap">はじめは基本ルールだけの「素の大富豪」(§3.1)。みんなの提案でルールが増えていく、という一文をここに置く想定。<span class="mk">1</span></div>
       </div>
     </div>
     <div class="notes">
       <div class="nt">注記(この画面で満たす要件)</div>
       <ul>
-        <li><span class="mk">1</span> キービジュアルは領域のみ確保。ポップなビジュアル(§6)の中身はキービジュアル提案の担当領域。</li>
-        <li><span class="mk">2</span> コアコンセプト「提案でルールが増える」(§2.1)をホームの一文で伝える。</li>
-        <li>主要 3 導線(あそぶ/ルール提案/ルール図鑑)+補助導線(マイ提案)を配置。</li>
+        <li><span class="mk">1</span> コアコンセプト「提案でルールが増える」(§2.1)をメニューの一文で伝える。</li>
+        <li>主要 3 導線(あそぶ/ルール提案/ルール図鑑)+補助導線(マイ提案)を配置。タイトル(画面1a)から分離したメニュー画面。</li>
       </ul>
     </div>
   </div>
 
-  <!-- 2. ルーム作成・参加 -->
+  <!-- 2a. ルーム作成・参加 -->
   <div class="cell">
-    <h3>画面2. ルーム作成・参加 <span class="chip">企画書 §3.2・§4.3(§9-7)</span></h3>
+    <h3>画面2a. ルーム作成・参加 <span class="chip">企画書 §3.2(§9-7)</span></h3>
     <div class="frame">
       <div class="statusbar"><span>9:41</span><span class="icons"><i></i><i></i><i></i></span></div>
-      <div class="appbar"><span class="back">←</span> ルーム作成・参加</div>
+      <div class="appbar"><span class="back">←</span> あそぶ</div>
       <div class="body">
         <div class="seg"><div class="on">ルームをつくる</div><div>招待コードではいる</div></div>
-        <div class="field">
-          <label>対戦人数</label>
-          <div class="seg mini"><div>3人</div><div class="on">4人</div><div>5人</div></div>
-          <div class="cap">※同時対戦人数の上限は未確定(§9-7)。ここでは 3〜5 人を仮置き。</div>
-        </div>
-        <div class="field">
-          <label>プレイヤー枠 <span class="mk">1</span></label>
-          <div class="box" style="display:flex; flex-direction:column; gap:8px;">
-            <div class="row" style="align-items:center;">
-              <span style="font-size:12px; flex:1.2;">枠1: あなた(ホスト)</span>
-              <span class="tag dark">人間・固定</span>
-            </div>
-            <div class="row" style="align-items:center;">
-              <span style="font-size:12px; flex:1.2;">枠2</span>
-              <div class="seg mini" style="flex:1;"><div>人間</div><div class="on">AI</div></div>
-            </div>
-            <div class="row" style="align-items:center;">
-              <span style="font-size:12px; flex:1.2;">枠3</span>
-              <div class="seg mini" style="flex:1;"><div class="on">人間</div><div>AI</div></div>
-            </div>
-            <div class="cap">枠3: 招待待ち… 招待コード <b>ABCD-1234</b> [コピー]</div>
-            <div class="row" style="align-items:center;">
-              <span style="font-size:12px; flex:1.2;">枠4</span>
-              <div class="seg mini" style="flex:1;"><div>人間</div><div class="on">AI</div></div>
-            </div>
-          </div>
-        </div>
         <div class="box">
-          <div class="bt">この卓の適用ルールセット <span class="mk">2</span></div>
-          <div class="cap" style="margin-bottom:6px;">有効ルール 12 件・人気度順に適用(§4.3)</div>
-          <div class="pop"><span style="min-width:6em;">1. 8切り</span><span class="tag">埼玉県</span><span class="bar"><i style="width:87%"></i></span><span>87</span></div>
-          <div class="pop"><span style="min-width:6em;">2. 都落ち</span><span class="tag">福岡県</span><span class="bar"><i style="width:81%"></i></span><span>81</span></div>
-          <div class="pop"><span style="min-width:6em;">3. 革命返し</span><span class="tag">オリジナル</span><span class="bar"><i style="width:74%"></i></span><span>74</span></div>
-          <div class="cap" style="margin-top:6px;">すべて見る <b>→ 画面4</b></div>
+          <div class="bt">対戦人数は 4 人 <span class="mk">1</span></div>
+          <div class="cap">人間/AI の枠を決める操作はありません。開始したとき、足りない分は AI プレイヤーが自動で入ります(§3.2)。</div>
         </div>
-        <div class="btn primary">この設定ではじめる <span class="goto">→ 画面3</span></div>
+        <div class="btn primary">ルームをつくる <span class="goto">→ 画面2b</span></div>
+        <div class="divider">招待された人は</div>
+        <div class="field">
+          <label>招待コード</label>
+          <div class="input">例: ABCD-1234</div>
+        </div>
+        <div class="btn">このコードではいる <span class="goto">→ 画面2b</span></div>
       </div>
     </div>
     <div class="notes">
       <div class="nt">注記(この画面で満たす要件)</div>
       <ul>
-        <li><span class="mk">1</span> プレイヤー枠ごとの 人間/AI 切替で、AI 対戦・人間対戦・<b>AI・人間混合</b>(§3.2)の 3 形態をこの 1 画面で表現。AI はロジック実装(§3.3、バックエンド)。</li>
-        <li><span class="mk">2</span> 現在の適用ルールセットのプレビュー。優先順位は人気度連動(§4.3)。</li>
-        <li>「招待コードではいる」タブが参加側の導線(マッチング方式の詳細は未確定 §9-7)。</li>
+        <li><span class="mk">1</span> 対戦人数は 4 人固定(§3.2)。人数選択やプレイヤー枠の人間/AI 指定は置かず、ルーム作成を軽い操作にする。</li>
+        <li>作成・参加のどちらも待機画面(画面2b)へ合流する。マッチング方式(部屋の公開範囲・野良マッチング)は未確定(§9-7)。</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 2b. 待機画面 -->
+  <div class="cell">
+    <h3>画面2b. 待機画面 <span class="chip">企画書 §3.2・§4.5(§9-7)</span></h3>
+    <div class="frame">
+      <div class="statusbar"><span>9:41</span><span class="icons"><i></i><i></i><i></i></span></div>
+      <div class="appbar"><span class="back">←</span> 待機中<span class="spacer"></span><span class="action">2 / 4 人</span></div>
+      <div class="body">
+        <div class="box" style="display:flex; flex-direction:column; gap:8px;">
+          <div class="bt" style="margin-bottom:0;">参加メンバー(4 人で対戦)<span class="mk">1</span></div>
+          <div class="row" style="align-items:center;">
+            <span style="font-size:12px; flex:2;">あなた(ホスト)</span>
+            <span class="tag dark">人間</span>
+          </div>
+          <div class="row" style="align-items:center;">
+            <span style="font-size:12px; flex:2;">プレイヤーB</span>
+            <span class="tag dark">人間</span>
+          </div>
+          <div class="row" style="align-items:center;">
+            <span style="font-size:12px; flex:2; color:var(--g4);">(あき)</span>
+            <span class="tag">開始時に AI が入ります</span>
+          </div>
+          <div class="row" style="align-items:center;">
+            <span style="font-size:12px; flex:2; color:var(--g4);">(あき)</span>
+            <span class="tag">開始時に AI が入ります</span>
+          </div>
+        </div>
+        <div class="box">
+          <div class="bt">友だちをさそう</div>
+          <div class="row" style="align-items:center;">
+            <span style="font-size:13px; font-weight:700; flex:1.6;">招待コード ABCD-1234</span>
+            <div class="btn small">コピー</div>
+          </div>
+        </div>
+        <div class="box">
+          <div class="bt">いまのルール <span class="mk">2</span></div>
+          <div class="row" style="align-items:center;">
+            <span class="cap" style="flex:2;">31 件・すべての卓に適用(変更不可)</span>
+            <div class="btn small">一覧を見る <span class="goto">→ 画面4</span></div>
+          </div>
+        </div>
+        <div class="btn primary">開始する <span class="goto">→ 画面3</span></div>
+        <div class="cap" style="text-align:center;">開始した時点で足りない分は AI プレイヤーが入ります(§3.2)</div>
+      </div>
+    </div>
+    <div class="notes">
+      <div class="nt">注記(この画面で満たす要件)</div>
+      <ul>
+        <li><span class="mk">1</span> 4 人固定(§3.2)。人間 1 人で開始すれば AI 対戦、4 人で人間対戦、その間は混合戦と、3 形態は AI 自動補充の結果として実現される(枠指定 UI は置かない)。</li>
+        <li><span class="mk">2</span> 適用ルールセットは選べない。その時点で有効な全ルールが全卓に適用される(全体共有 §4.5)ため、件数と「変更不可」だけの軽い表示にし、確認したい人だけ一覧(画面4)へ。</li>
+        <li>待機中の離脱の扱いは未確定(§9-7)。</li>
       </ul>
     </div>
   </div>
 
   <!-- 3. 対戦画面 -->
   <div class="cell">
-    <h3>画面3. 対戦画面 <span class="chip">企画書 §3.1・§3.2・§3.3・§4.3</span></h3>
+    <h3>画面3. 対戦画面 <span class="chip">企画書 §3.1・§3.2・§3.3・§4.5</span></h3>
     <div class="frame">
       <div class="statusbar"><span>9:41</span><span class="icons"><i></i><i></i><i></i></span></div>
-      <div class="appbar">対戦中(3巡目)<span class="spacer"></span><span class="action">有効ルール 12 → 画面4 <span class="mk">3</span></span></div>
+      <div class="appbar">第1戦(3巡目)<span class="spacer"></span><span class="action">有効ルール 31 → 画面4 <span class="mk">3</span></span></div>
       <div class="body">
         <div class="opps" style="margin-top:6px;">
           <div class="opp"><div class="av"></div><div class="nm">プレイヤーB</div><span class="tag dark">AI</span><div>残り 8枚</div></div>
@@ -333,7 +389,7 @@
           <div class="cards"><div class="card">8<small>♦</small></div></div>
           <div class="cap">プレイヤーC が ♦8 を出した</div>
         </div>
-        <div class="rulefire"><span class="mk">1</span><span>ルール発動!「8切り」— 場が流れます<br><span style="font-weight:400; font-size:10.5px;">(ローカル: 埼玉県・人気度 87)</span></span></div>
+        <div class="rulefire"><span class="mk">1</span><span>ルール発動!「8切り」— 場が流れます</span></div>
         <div class="log">
           <div>プレイヤーB: ♠5 ♥5 を出した</div>
           <div>プレイヤーC: ♦8 を出した</div>
@@ -364,8 +420,8 @@
     <div class="notes">
       <div class="nt">注記(この画面で満たす要件)</div>
       <ul>
-        <li>手札・場・他プレイヤー表示で基本進行(§3.1)を成立させる。AI バッジで混合対戦(§3.2)を可視化(AI の思考はロジック・バックエンド §3.3)。</li>
-        <li><span class="mk">1</span> ルール発動の演出バナー。「知らないルールが突然発動する」体験(§2.2)を伝える要素で、発動ルール名と出どころ(都道府県/オリジナル)を出す。</li>
+        <li>手札・場・他プレイヤー表示で基本進行(§3.1)を成立させる。AI バッジで混合対戦(§3.2)を可視化(AI の思考はロジック・バックエンド §3.3)。アプリバーの「第1戦」はセット内の何戦目かを示す(§3.4)。</li>
+        <li><span class="mk">1</span> ルール発動の演出バナー。「知らないルールが突然発動する」体験(§2.2)を伝える。出すのはルール名と効果だけにとどめ(ラフな体験 §4.5)、人気度・都道府県はここでは出さない。くわしくは図鑑(画面8)で。</li>
         <li><span class="mk">2</span> ログにもルール発動を残し、あとから確認できるようにする。</li>
         <li><span class="mk">3</span> 現在有効なルール一覧(画面4)への常設導線。</li>
       </ul>
@@ -374,65 +430,98 @@
 
   <!-- 4. 有効ルール一覧 -->
   <div class="cell">
-    <h3>画面4. 有効ルール一覧 <span class="chip">企画書 §4.3・§4.5(§9-1)</span></h3>
+    <h3>画面4. 有効ルール一覧 <span class="chip">企画書 §4.5(§4.3)</span></h3>
     <div class="frame">
       <div class="statusbar"><span>9:41</span><span class="icons"><i></i><i></i><i></i></span></div>
-      <div class="appbar"><span class="back">←</span> この卓の有効ルール</div>
+      <div class="appbar"><span class="back">←</span> いまの有効ルール</div>
       <div class="body">
-        <div class="cap">12 件・優先順位順。優先順位は人気度に連動し、ルールが競合したときは上位が先に適用される(§4.3)。<span class="mk">1</span></div>
-        <div class="rul"><div class="rank">1<small>優先</small></div><div class="main"><div class="nm">8切り</div><div class="desc">8 を出すと場が流れる</div><div class="pop"><span class="tag">ローカル: 埼玉県</span><span class="bar"><i style="width:87%"></i></span><span>人気度 87</span></div></div></div>
-        <div class="rul"><div class="rank">2<small>優先</small></div><div class="main"><div class="nm">都落ち</div><div class="desc">前回大富豪が 1 位になれないと即大貧民</div><div class="pop"><span class="tag">ローカル: 福岡県</span><span class="bar"><i style="width:81%"></i></span><span>人気度 81</span></div></div></div>
-        <div class="rul"><div class="rank">3<small>優先</small></div><div class="main"><div class="nm">革命返し</div><div class="desc">革命中にもう一度革命で元に戻る</div><div class="pop"><span class="tag">オリジナル</span><span class="bar"><i style="width:74%"></i></span><span>人気度 74</span></div></div></div>
-        <div class="rul"><div class="rank">4<small>優先</small></div><div class="main"><div class="nm">5スキップ</div><div class="desc">5 を出すと次の人を飛ばす</div><div class="pop"><span class="tag">ローカル: 大阪府</span><span class="bar"><i style="width:66%"></i></span><span>人気度 66</span></div></div></div>
-        <div class="rul"><div class="rank">5<small>優先</small></div><div class="main"><div class="nm">スペ3返し</div><div class="desc">ジョーカーに ♠3 で勝てる</div><div class="pop"><span class="tag">ローカル: 東京都</span><span class="bar"><i style="width:58%"></i></span><span>人気度 58</span></div></div></div>
-        <div class="ph" style="height:44px;"><span>…ほか 7 件(スクロール)</span></div>
-        <div class="cap">人気度はゲーム後の評価(§4.4)から算出される。算出式・同点時の扱いは未確定(§9-1)。</div>
+        <div class="cap">31 件・すべての卓に適用(変更不可 §4.5)。優先順位の高い順にならぶ。<span class="mk">1</span></div>
+        <div class="rul slim"><div class="main"><div class="nm">8切り</div></div></div>
+        <div class="rul slim"><div class="main"><div class="nm">都落ち</div></div></div>
+        <div class="rul slim"><div class="main"><div class="nm">革命返し</div></div></div>
+        <div class="rul slim"><div class="main"><div class="nm">5スキップ</div></div></div>
+        <div class="rul slim"><div class="main"><div class="nm">スペ3返し</div></div></div>
+        <div class="rul slim"><div class="main"><div class="nm">7渡し</div></div></div>
+        <div class="ph" style="height:44px;"><span>…ほか 25 件(スクロール)</span></div>
+        <div class="btn small">図鑑でくわしく <span class="mk">2</span> <span class="goto">→ 画面8</span></div>
       </div>
     </div>
     <div class="notes">
       <div class="nt">注記(この画面で満たす要件)</div>
       <ul>
-        <li><span class="mk">1</span> この卓で有効なルールを<b>優先順位</b>つきで一覧化し、<b>人気度</b>(バー+数値)と出どころ(都道府県/オリジナル)を併記(§4.3)。</li>
-        <li>画面2(卓のプレビュー)と画面3(対戦中の確認)の両方から遷移して参照する。</li>
+        <li><span class="mk">1</span> ルール名だけのラフな一覧(§4.5)。人気度・都道府県・優先度の数値はこの画面には出さない。基本は「遊んでいたらなんか発動した」というラフな体験でよい、という §4.5 の意図に合わせて情報量を絞る。</li>
+        <li>並び順としてだけ優先順位(人気度連動 §4.3)を使う。順位バッジなどの数値表示はしない(優先順位の仕組みが入るまでは順序なしの一覧でよい: バックログ RV-01)。</li>
+        <li><span class="mk">2</span> ちゃんと確認したくなった人向けの図鑑(画面8)への導線。人気度・優先度・都道府県はそちらで見せる。</li>
+        <li>待機画面(画面2b)と対戦中(画面3)の両方から遷移して参照する。</li>
       </ul>
     </div>
   </div>
 
-  <!-- 5. リザルト+ゲーム評価 -->
+  <!-- 5a. ゲーム間リザルト -->
   <div class="cell">
-    <h3>画面5. リザルト+ゲーム評価 <span class="chip">企画書 §4.4(§9-2)</span></h3>
+    <h3>画面5a. ゲーム間リザルト(簡易) <span class="chip">企画書 §3.4</span></h3>
     <div class="frame">
       <div class="statusbar"><span>9:41</span><span class="icons"><i></i><i></i><i></i></span></div>
-      <div class="appbar">リザルト</div>
+      <div class="appbar">第1戦 おわり<span class="spacer"></span><span class="action">セット 1 / 3 戦</span></div>
       <div class="body">
         <div class="box">
-          <div class="bt">今回の順位</div>
+          <div class="bt">第1戦の順位 <span class="mk">1</span></div>
           <div class="pop" style="font-size:12px;"><span style="min-width:3.5em;">1位</span><span class="tag dark">大富豪</span><span style="flex:1;">あなた</span></div>
           <div class="pop" style="font-size:12px;"><span style="min-width:3.5em;">2位</span><span class="tag">富豪</span><span style="flex:1;">プレイヤーB</span><span class="tag dark">AI</span></div>
           <div class="pop" style="font-size:12px;"><span style="min-width:3.5em;">3位</span><span class="tag">貧民</span><span style="flex:1;">プレイヤーC</span></div>
           <div class="pop" style="font-size:12px;"><span style="min-width:3.5em;">4位</span><span class="tag">大貧民</span><span style="flex:1;">プレイヤーD</span><span class="tag dark">AI</span></div>
         </div>
-        <div class="box">
-          <div class="bt">このゲームはおもしろかった? <span class="mk">1</span></div>
-          <div class="seg mini"><div class="on">おもしろかった</div><div>ふつう</div><div>つまらなかった</div></div>
-        </div>
-        <div class="box">
-          <div class="bt">つまらなかったルールがあれば低評価 <span class="mk">2</span></div>
-          <div class="cap" style="margin-bottom:6px;">この対局で発動したルール:</div>
-          <div class="row" style="align-items:center; margin-bottom:6px;"><span style="font-size:12px; flex:2;">8切り <span class="tag">埼玉県</span></span><div class="btn small" style="flex:1;">低評価</div></div>
-          <div class="row" style="align-items:center; margin-bottom:6px;"><span style="font-size:12px; flex:2;">革命返し <span class="tag">オリジナル</span></span><div class="btn small primary" style="flex:1;">低評価済み</div></div>
-          <div class="row" style="align-items:center;"><span style="font-size:12px; flex:2;">5スキップ <span class="tag">大阪府</span></span><div class="btn small" style="flex:1;">低評価</div></div>
-          <div class="cap" style="margin-top:6px;">低評価が集まったルールは排除される(閾値は未確定 §9-2)。評価は人気度=優先順位にも反映(§4.3)。</div>
-        </div>
-        <div class="btn primary">評価を送信してもう一度あそぶ <span class="goto">→ 画面3</span></div>
-        <div class="btn small">ホームへ <span class="goto">→ 画面1</span></div>
+        <div class="cap" style="text-align:center;">同じメンバーのまま、まもなく第2戦がはじまります <span class="mk">2</span></div>
+        <div class="btn primary">第2戦へ(5 秒後に自動で進む)<span class="goto">→ 画面3</span></div>
+        <div class="cap" style="text-align:center;">評価はセットの最後(3 戦目のあと)にまとめて行う(§4.4)</div>
       </div>
     </div>
     <div class="notes">
       <div class="nt">注記(この画面で満たす要件)</div>
       <ul>
-        <li><span class="mk">1</span> 1 ゲームごとの「面白かったか」評価(§4.4)。</li>
-        <li><span class="mk">2</span> つまらなかったルールへの<b>ルール単位の低評価</b>(§4.4)。対象はこの対局で発動したルールに限定して選びやすくする。</li>
+        <li><span class="mk">1</span> ゲーム間は順位のみの簡易リザルト(§3.4)。評価入力は置かず、テンポよく次戦へ進める。</li>
+        <li><span class="mk">2</span> 3 戦 1 セットは同一メンバー・同一 AI 構成で続行(§3.4)。順位はセット内で引き継がれ、都落ちのようなゲームをまたいで効くルールがここで機能する。</li>
+        <li>第1・2戦の終了後に表示。第3戦の終了後はこの画面を経ずセットリザルト(画面5b)へ。</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 5b. セットリザルト+評価 -->
+  <div class="cell">
+    <h3>画面5b. セットリザルト+評価 <span class="chip">企画書 §3.4・§4.4(§9-2)</span></h3>
+    <div class="frame">
+      <div class="statusbar"><span>9:41</span><span class="icons"><i></i><i></i><i></i></span></div>
+      <div class="appbar">セットリザルト(全3戦)</div>
+      <div class="body">
+        <div class="box">
+          <div class="bt">3 戦の総合結果 <span class="mk">1</span></div>
+          <div class="pop" style="font-size:12px;"><span style="min-width:4.5em;">総合 1位</span><span class="tag dark">大富豪</span><span style="flex:1;">あなた</span><span class="cap">1位→1位→2位</span></div>
+          <div class="pop" style="font-size:12px;"><span style="min-width:4.5em;">総合 2位</span><span class="tag">富豪</span><span style="flex:1;">プレイヤーB</span><span class="tag dark">AI</span><span class="cap">2位→3位→1位</span></div>
+          <div class="pop" style="font-size:12px;"><span style="min-width:4.5em;">総合 3位</span><span class="tag">貧民</span><span style="flex:1;">プレイヤーC</span><span class="cap">3位→2位→3位</span></div>
+          <div class="pop" style="font-size:12px;"><span style="min-width:4.5em;">総合 4位</span><span class="tag">大貧民</span><span style="flex:1;">プレイヤーD</span><span class="tag dark">AI</span><span class="cap">4位→4位→4位</span></div>
+        </div>
+        <div class="box">
+          <div class="bt">このセットはおもしろかった? <span class="mk">2</span></div>
+          <div class="seg mini"><div class="on">おもしろかった</div><div>ふつう</div><div>つまらなかった</div></div>
+        </div>
+        <div class="box">
+          <div class="bt">このセットで発動したルールを評価 <span class="mk">3</span></div>
+          <div class="cap" style="margin-bottom:6px;">よかったルールには高評価、つまらなかったルールには低評価:</div>
+          <div class="row" style="align-items:center; margin-bottom:6px;"><span style="font-size:12px; flex:1;">8切り</span><div class="btn small primary" style="flex:1.3;">高評価済み</div><div class="btn small" style="flex:1.3;">低評価</div></div>
+          <div class="row" style="align-items:center; margin-bottom:6px;"><span style="font-size:12px; flex:1;">革命返し</span><div class="btn small" style="flex:1.3;">高評価</div><div class="btn small primary" style="flex:1.3;">低評価済み</div></div>
+          <div class="row" style="align-items:center;"><span style="font-size:12px; flex:1;">都落ち</span><div class="btn small" style="flex:1.3;">高評価</div><div class="btn small" style="flex:1.3;">低評価</div></div>
+          <div class="cap" style="margin-top:6px;">対象はこのセットで発動したルールのみ(§4.4)。低評価が集まったルールは排除される(閾値は未確定 §9-2)。評価は人気度=優先順位にも反映(§4.3)。</div>
+        </div>
+        <div class="btn primary">評価を送信してもう1セットあそぶ <span class="goto">→ 画面3</span></div>
+        <div class="btn small">ホームへ <span class="goto">→ 画面1b</span></div>
+      </div>
+    </div>
+    <div class="notes">
+      <div class="nt">注記(この画面で満たす要件)</div>
+      <ul>
+        <li><span class="mk">1</span> セット終了時の総合結果(§3.4)。3 戦の順位推移と総合順位を見せる。</li>
+        <li><span class="mk">2</span> 評価はセット(3 戦)ごと(§4.4)。「このゲーム」ではなく「このセット」が単位。</li>
+        <li><span class="mk">3</span> ルール単位の評価は<b>高評価・低評価の両方</b>。対象はこのセットで発動したルールに限定する(§4.4)。</li>
         <li>評価送信を起点に、バックエンドで人気度更新・淘汰が走る(冒頭「バックエンド処理と起点」参照)。</li>
       </ul>
     </div>
@@ -451,9 +540,9 @@
           <div class="cap">ローカル=実際に遊ばれていた(いる)ルール / オリジナル=自由発想のルール(§4.1)</div>
         </div>
         <div class="field">
-          <label>遊んでいた都道府県 <span class="mk">2</span></label>
+          <label>遊んでいた都道府県(任意)<span class="mk">2</span></label>
           <div class="select"><span>埼玉県</span><span>▼</span></div>
-          <div class="cap">ローカルルール選択時のみ必須。オリジナル選択時はこの項目を非表示にする。</div>
+          <div class="cap">ローカルルール選択時のみ表示。入力は任意(未選択でも提案できる §4.1)。オリジナル選択時はこの項目を非表示にする。</div>
         </div>
         <div class="field">
           <label>ルール名</label>
@@ -473,7 +562,7 @@
       <div class="nt">注記(この画面で満たす要件)</div>
       <ul>
         <li><span class="mk">1</span> ローカル/オリジナルの 2 区分の選択(§4.1)。</li>
-        <li><span class="mk">2</span> ローカル選択時の<b>都道府県選択</b>(§4.1)。地域性を資産にするための必須入力。</li>
+        <li><span class="mk">2</span> ローカル選択時の都道府県選択は<b>任意入力</b>(§4.1)。「提案者がその土地で遊んでいた」という出自の記録として扱い、未入力でも提案できる。</li>
         <li><span class="mk">3</span> 送信が自動実装パイプライン(検査 → 可否判断 → codex 実装 → 反映、§4.2・§5.1)の起点であることを利用者にも予告する。</li>
       </ul>
     </div>
@@ -488,12 +577,12 @@
       <div class="body">
         <div class="cap">あなたの提案 4 件。ステータスは 審査中 → 実装中 → リリース(または却下 / 実装失敗)の順に進む。<span class="mk">1</span></div>
         <div class="box">
-          <div class="bt">8切り <span class="tag">ローカル: 埼玉県</span></div>
+          <div class="bt">8切り <span class="tag">ローカル(報告: 埼玉県)</span></div>
           <div class="steps"><span class="st done">審査中</span><span class="ln"></span><span class="st done">実装中</span><span class="ln"></span><span class="st done">リリース</span></div>
           <div class="cap" style="margin-top:4px;">2026-07-20 リリース。人気度 87・優先度 1 位 → 図鑑(画面8)</div>
         </div>
         <div class="box">
-          <div class="bt">7渡し <span class="tag">ローカル: 大阪府</span></div>
+          <div class="bt">7渡し <span class="tag">ローカル(報告: 大阪府)</span></div>
           <div class="steps"><span class="st done">審査中</span><span class="ln"></span><span class="st now">実装中</span><span class="ln"></span><span class="st">リリース</span></div>
           <div class="cap" style="margin-top:4px;"><span class="mk">2</span> codex が自動実装中(§4.2)。完了するとゲームに反映され、ここがリリースに変わる。</div>
         </div>
@@ -535,10 +624,11 @@
           <div class="select" style="font-size:11px;"><span>並び順: 人気度</span><span>▼</span></div>
         </div>
         <div class="cap">実装済みルール 34 件(有効 31・排除済み 3)/ 都道府県カバー 14 <span class="mk">1</span></div>
-        <div class="rul"><div class="rank">1<small>優先</small></div><div class="main"><div class="nm">8切り <span class="tag dark">有効</span></div><div class="pop"><span class="tag">ローカル: 埼玉県</span><span class="bar"><i style="width:87%"></i></span><span>人気度 87</span></div></div></div>
-        <div class="rul"><div class="rank">2<small>優先</small></div><div class="main"><div class="nm">都落ち <span class="tag dark">有効</span></div><div class="pop"><span class="tag">ローカル: 福岡県</span><span class="bar"><i style="width:81%"></i></span><span>人気度 81</span></div></div></div>
+        <div class="cap">「報告: 〜県」は、提案した人がその土地で遊んでいたという記録(§4.1)。<span class="mk">3</span></div>
+        <div class="rul"><div class="rank">1<small>優先</small></div><div class="main"><div class="nm">8切り <span class="tag dark">有効</span></div><div class="desc">埼玉県で遊ばれていた報告</div><div class="pop"><span class="tag">報告: 埼玉県</span><span class="bar"><i style="width:87%"></i></span><span>人気度 87</span></div></div></div>
+        <div class="rul"><div class="rank">2<small>優先</small></div><div class="main"><div class="nm">都落ち <span class="tag dark">有効</span></div><div class="desc">福岡県で遊ばれていた報告</div><div class="pop"><span class="tag">報告: 福岡県</span><span class="bar"><i style="width:81%"></i></span><span>人気度 81</span></div></div></div>
         <div class="rul"><div class="rank">3<small>優先</small></div><div class="main"><div class="nm">革命返し <span class="tag dark">有効</span></div><div class="pop"><span class="tag">オリジナル</span><span class="bar"><i style="width:74%"></i></span><span>人気度 74</span></div></div></div>
-        <div class="rul"><div class="rank">4<small>優先</small></div><div class="main"><div class="nm">5スキップ <span class="tag dark">有効</span></div><div class="pop"><span class="tag">ローカル: 大阪府</span><span class="bar"><i style="width:66%"></i></span><span>人気度 66</span></div></div></div>
+        <div class="rul"><div class="rank">4<small>優先</small></div><div class="main"><div class="nm">5スキップ <span class="tag dark">有効</span></div><div class="pop"><span class="tag">ローカル(県の記載なし)</span><span class="bar"><i style="width:66%"></i></span><span>人気度 66</span></div></div></div>
         <div class="rul dead"><div class="rank">—</div><div class="main"><div class="nm">手札全シャッフル <span class="tag">排除済み</span> <span class="mk">2</span></div><div class="pop"><span class="tag">オリジナル</span><span class="bar"><i style="width:12%"></i></span><span>人気度 12</span></div><div class="desc">低評価が集まったため排除(§4.4)</div></div></div>
         <div class="ph" style="height:44px;"><span>…ほか 29 件(スクロール)</span></div>
       </div>
@@ -546,8 +636,9 @@
     <div class="notes">
       <div class="nt">注記(この画面で満たす要件)</div>
       <ul>
-        <li>実装済みルールの一覧に<b>人気度・優先度・出身都道府県・状態(有効/排除済み)</b>を併記(§4.1・§4.3・§4.4)。</li>
-        <li><span class="mk">1</span> 都道府県カバー数は成功指標(§11)。都道府県フィルタで「この地方のルール」を掘れるようにし、地域性を資産として見せる。</li>
+        <li>実装済みルールの一覧に<b>人気度・優先度・都道府県・状態(有効/排除済み)</b>を併記(§4.1・§4.3・§4.4・§4.5)。ラフ表示(画面4)と違い、ちゃんと確認したい人向けの詳細側。</li>
+        <li><span class="mk">1</span> 都道府県カバー数は成功指標(§11)。都道府県フィルタで「この地方で遊ばれていた報告」を掘れるようにし、地域性を資産として見せる。</li>
+        <li><span class="mk">3</span> 都道府県は「〜で遊ばれていた報告」(提案者の出自の記録)というニュアンスで表示し、「〜県のルール」と断定しない(§4.1)。入力は任意のため「県の記載なし」のローカルルールもありうる。</li>
         <li><span class="mk">2</span> 排除済みルールも図鑑には残し、淘汰が機能していること(§11)を見えるようにする(復活の有無は未確定 §9-2)。</li>
       </ul>
     </div>
@@ -565,7 +656,7 @@
           <h4>イエローカード!</h4>
           <p>審判より: あなたのルール提案文から、不正な命令(プロンプトインジェクション)が検出されました。この提案は受け付けられません。</p>
           <div class="yslots"><span>警告</span><div class="yslot filled"></div><div class="yslot"></div><span>1 / 2 枚 <span class="mk">1</span></span></div>
-          <p style="font-size:11px; color:#666;">イエローカードが 2 枚になると、しばらく利用停止になります(§5.2)。誤検出と思われる場合の異議申し立て手段は検討中(§9-6)。</p>
+          <p style="font-size:11px; color:#666;">イエローカードが 2 枚になると、しばらくルール提案ができなくなります(対戦はそのまま遊べます・§5.2)。誤検出と思われる場合の異議申し立て手段は検討中(§9-6)。</p>
           <div class="btn small">提案画面にもどる <span class="goto">→ 画面6</span></div>
         </div>
       </div>
@@ -574,35 +665,36 @@
       <div class="nt">注記(この画面で満たす要件)</div>
       <ul>
         <li>インジェクション検出(§5.1)を黙って弾かず、サッカーの警告になぞらえた演出として見せる(§5.2)。</li>
-        <li><span class="mk">1</span> カードスロット 2 枠で「あと 1 枚で停止」という 2 枚制を明示。</li>
+        <li><span class="mk">1</span> カードスロット 2 枠で「あと 1 枚で提案停止」という 2 枚制を明示。</li>
       </ul>
     </div>
   </div>
 
   <!-- 9b. イエローカード 2枚目 -->
   <div class="cell">
-    <h3>画面9b. イエローカード演出(2枚目・利用停止) <span class="chip">企画書 §5.2(§9-6)</span></h3>
+    <h3>画面9b. イエローカード演出(2枚目・提案機能停止) <span class="chip">企画書 §5.2(§9-6)</span></h3>
     <div class="frame">
       <div class="statusbar"><span>9:41</span><span class="icons"><i></i><i></i><i></i></span></div>
       <div class="modalbg">
-        <div class="behind">(全画面表示。停止中に提案機能へ入ろうとしたときも表示)</div>
+        <div class="behind">(提案機能を使おうとしたときに表示。対戦・図鑑などはそのまま使える)</div>
         <div class="modal">
           <div class="ycards"><div class="ycard"></div><div class="ycard second"></div></div>
           <h4>2枚目のイエローカード</h4>
-          <p>審判より: イエローカードが 2 枚になったため、しばらくのあいだ利用を停止します(§5.2)。</p>
+          <p>審判より: イエローカードが 2 枚になったため、ルール提案機能をしばらく停止します。対戦はこれまでどおり遊べます(§5.2)。</p>
           <div class="yslots"><span>警告</span><div class="yslot filled"></div><div class="yslot filled"></div><span>2 / 2 枚 <span class="mk">1</span></span></div>
           <div class="box" style="text-align:left; background: var(--g1);">
-            <div class="cap">停止期間: ○日間(解除予定: 2026-07-30)<br>※期間・停止範囲(提案のみか全機能か)・救済手段は未確定(§9-6)。プレースホルダー表示。</div>
+            <div class="cap">停止期間: ○日間(解除予定: 2026-07-30)<br>※停止されるのはルール提案機能のみ(§5.2 決定済み)。期間・誤検出時の救済手段は未確定(§9-6)。プレースホルダー表示。</div>
           </div>
-          <div class="btn small">ホームへもどる <span class="goto">→ 画面1</span></div>
+          <div class="btn small">あそぶ(対戦はできます)<span class="goto">→ 画面2a</span></div>
+          <div class="btn small">ホームへもどる <span class="goto">→ 画面1b</span></div>
         </div>
       </div>
     </div>
     <div class="notes">
       <div class="nt">注記(この画面で満たす要件)</div>
       <ul>
-        <li><span class="mk">1</span> 2 枚目で「しばらく利用停止」(§5.2)。スロット 2/2 と停止期間の表示枠を置く。</li>
-        <li>停止期間・範囲・誤検出時の救済は未確定(§9-6)のため、文言はプレースホルダーとして明示。</li>
+        <li><span class="mk">1</span> 2 枚目で停止するのは<b>ルール提案機能のみ</b>(§5.2)。対戦は引き続き可能で、ゲームからは締め出さない。「あそぶ」導線を残してそれを画面上でも示す。</li>
+        <li>停止期間・誤検出時の救済は未確定(§9-6)のため、文言はプレースホルダーとして明示。</li>
       </ul>
     </div>
   </div>
