@@ -1,0 +1,192 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" font-family="'M PLUS Rounded 1c','Hiragino Maru Gothic ProN','Hiragino Sans',sans-serif">
+  <title>みんなでつくろう 大富豪 キービジュアル案C カードキャラの大行進</title>
+
+  <defs>
+    <!-- カードキャラの体(中心原点 96x132) -->
+    <g id="charC">
+      <rect x="-48" y="-66" width="96" height="132" rx="12" fill="#FFFFFF" stroke="#1A1F3C" stroke-width="6"/>
+      <circle cx="-13" cy="14" r="5.5" fill="#1A1F3C"/>
+      <circle cx="13" cy="14" r="5.5" fill="#1A1F3C"/>
+      <path d="M-9,26 Q0,36 9,26" fill="none" stroke="#1A1F3C" stroke-width="4.5" stroke-linecap="round"/>
+      <circle cx="-25" cy="24" r="6.5" fill="#FF7BAC" opacity="0.7"/>
+      <circle cx="25" cy="24" r="6.5" fill="#FF7BAC" opacity="0.7"/>
+    </g>
+    <path id="spadeC" d="M0,-26 C 5,-19 14,-16 14,-10 C 14,-5 7,-4 3,-7 C 4,-4 5,-1 8,1 L-8,1 C -5,-1 -4,-4 -3,-7 C -7,-4 -14,-5 -14,-10 C -14,-16 -5,-19 0,-26 Z"/>
+    <path id="heartC" d="M0,-21 C -4,-27 -14,-25 -14,-16 C -14,-9 -5,-4 0,1 C 5,-4 14,-9 14,-16 C 14,-25 4,-27 0,-21 Z"/>
+    <circle id="starC" r="3.2"/>
+  </defs>
+
+  <!-- 夜空 -->
+  <rect width="1600" height="900" fill="#1F2A55"/>
+
+  <!-- 星 -->
+  <g fill="#FFFFFF" opacity="0.85">
+    <use href="#starC" x="90" y="80"/>
+    <use href="#starC" x="240" y="150"/>
+    <use href="#starC" x="380" y="70"/>
+    <use href="#starC" x="560" y="120"/>
+    <use href="#starC" x="700" y="60"/>
+    <use href="#starC" x="960" y="90"/>
+    <use href="#starC" x="1120" y="60"/>
+    <use href="#starC" x="1250" y="140"/>
+    <use href="#starC" x="1540" y="90"/>
+    <use href="#starC" x="60" y="300"/>
+    <use href="#starC" x="150" y="430"/>
+    <use href="#starC" x="1560" y="330"/>
+    <use href="#starC" x="1480" y="450"/>
+    <use href="#starC" x="60" y="520"/>
+    <use href="#starC" x="1330" y="70"/>
+    <use href="#starC" x="880" y="140"/>
+  </g>
+  <!-- きらめき -->
+  <g stroke="#FFD95C" stroke-width="5" stroke-linecap="round">
+    <g transform="translate(210,320)">
+      <line x1="0" y1="-14" x2="0" y2="14"/><line x1="-14" y1="0" x2="14" y2="0"/>
+    </g>
+    <g transform="translate(1420,240)">
+      <line x1="0" y1="-14" x2="0" y2="14"/><line x1="-14" y1="0" x2="14" y2="0"/>
+    </g>
+  </g>
+
+  <!-- 流れ星 -->
+  <g transform="translate(1190,110) rotate(18)">
+    <line x1="-130" y1="0" x2="-18" y2="0" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round" opacity="0.7"/>
+    <polygon points="18,0 6,8 9,22 0,13 -11,19 -8,5 -18,-4 -5,-4 0,-18 5,-5" fill="#FFD95C"/>
+  </g>
+
+  <!-- 月 -->
+  <circle cx="1400" cy="170" r="88" fill="#FFE289"/>
+  <circle cx="1372" cy="150" r="16" fill="#F5D56E"/>
+  <circle cx="1428" cy="205" r="11" fill="#F5D56E"/>
+
+  <!-- 遠景シルエット: 大富豪の城と街 -->
+  <g fill="#2B3768">
+    <path d="M1290,700 L1290,540 L1330,540 L1330,500 L1362,500 L1362,540 L1420,540 L1420,460 L1440,460 L1440,440 L1470,440 L1470,460 L1490,460 L1490,540 L1540,540 L1540,500 L1572,500 L1572,540 L1600,540 L1600,700 Z"/>
+    <polygon points="1455,440 1455,392 1500,412 1455,428"/>
+    <path d="M0,760 L0,640 L70,640 L70,600 L120,600 L120,660 L200,660 L200,620 L260,620 L260,700 L330,700 L330,760 Z"/>
+    <path d="M330,780 Q 520,640 720,750 L 720,780 Z"/>
+  </g>
+
+  <!-- すごろく道 -->
+  <path id="roadC" d="M-60,858 C 300,690 480,900 800,782 C 1080,680 1210,830 1660,688" fill="none" stroke="#F4E8CF" stroke-width="130" stroke-linecap="round"/>
+  <path d="M-60,858 C 300,690 480,900 800,782 C 1080,680 1210,830 1660,688" fill="none" stroke="#CBB98E" stroke-width="130" stroke-dasharray="8 128" stroke-dashoffset="40"/>
+
+  <!-- 升のラベル -->
+  <g font-weight="bold" fill="#6B5B3E" text-anchor="middle">
+    <text x="120" y="836" font-size="33" transform="rotate(-20 120 836)">8切り</text>
+    <text x="360" y="808" font-size="33" transform="rotate(6 360 808)">都落ち</text>
+    <text x="620" y="822" font-size="33" transform="rotate(-8 620 822)">革命</text>
+    <text x="880" y="774" font-size="40" transform="rotate(-14 880 774)">?</text>
+    <text x="1120" y="768" font-size="33" transform="rotate(4 1120 768)">大阪</text>
+    <text x="1420" y="742" font-size="33" transform="rotate(-8 1420 742)">秋田</text>
+  </g>
+
+  <!-- ネオン看板: 本日の新ルール -->
+  <g transform="translate(225,550) rotate(-2) scale(0.85)">
+    <rect x="-215" y="-56" width="430" height="112" rx="14" fill="#141B3D" stroke="#4FE0B8" stroke-width="5"/>
+    <text x="0" y="-14" font-size="30" text-anchor="middle" letter-spacing="4" fill="#4FE0B8">本日の新ルール</text>
+    <text x="0" y="32" font-size="36" font-weight="bold" text-anchor="middle" fill="#FFD95C">「スペ3がえし」</text>
+    <g fill="#FFD95C">
+      <circle cx="-215" cy="-56" r="7"/><circle cx="0" cy="-62" r="7"/><circle cx="215" cy="-56" r="7"/>
+      <circle cx="-215" cy="56" r="7"/><circle cx="0" cy="62" r="7"/><circle cx="215" cy="56" r="7"/>
+    </g>
+  </g>
+
+  <!-- 行進キャラ 1: 旗持ちスペード -->
+  <g transform="translate(215,780)">
+    <rect x="-34" y="58" width="22" height="36" rx="10" fill="#1A1F3C"/>
+    <rect x="14" y="52" width="22" height="40" rx="10" fill="#1A1F3C" transform="rotate(14 25 72)"/>
+    <line x1="46" y1="-8" x2="84" y2="-46" stroke="#1A1F3C" stroke-width="12" stroke-linecap="round"/>
+    <line x1="84" y1="-160" x2="84" y2="-42" stroke="#1A1F3C" stroke-width="9" stroke-linecap="round"/>
+    <polygon points="84,-160 188,-132 84,-104" fill="#FF7BAC" stroke="#1A1F3C" stroke-width="6" stroke-linejoin="round"/>
+    <use href="#spadeC" transform="translate(116,-128) scale(1.15)" fill="#FFFFFF"/>
+    <use href="#charC"/>
+    <use href="#spadeC" transform="translate(0,-24)" fill="#1A1F3C"/>
+  </g>
+
+  <!-- 行進キャラ 2: スキップするハート -->
+  <g transform="translate(470,742) rotate(-9)">
+    <rect x="-40" y="52" width="22" height="40" rx="10" fill="#1A1F3C" transform="rotate(-18 -29 72)"/>
+    <rect x="18" y="52" width="22" height="40" rx="10" fill="#1A1F3C" transform="rotate(22 29 72)"/>
+    <line x1="-46" y1="-10" x2="-82" y2="-46" stroke="#1A1F3C" stroke-width="12" stroke-linecap="round"/>
+    <line x1="46" y1="-10" x2="82" y2="-46" stroke="#1A1F3C" stroke-width="12" stroke-linecap="round"/>
+    <use href="#charC"/>
+    <use href="#heartC" transform="translate(0,-24) scale(1.1)" fill="#FF6B6B"/>
+  </g>
+
+  <!-- 行進キャラ 3: ジョーカー帽の札振り -->
+  <g transform="translate(735,760) rotate(4)">
+    <rect x="-34" y="58" width="22" height="36" rx="10" fill="#1A1F3C"/>
+    <rect x="12" y="58" width="22" height="36" rx="10" fill="#1A1F3C"/>
+    <line x1="44" y1="-16" x2="78" y2="-60" stroke="#1A1F3C" stroke-width="12" stroke-linecap="round"/>
+    <g transform="translate(112,-96) rotate(14)">
+      <rect x="-58" y="-34" width="116" height="68" rx="10" fill="#FFD95C" stroke="#1A1F3C" stroke-width="6"/>
+      <text x="0" y="12" font-size="30" font-weight="bold" text-anchor="middle" fill="#1A1F3C">ぜんぶ8</text>
+    </g>
+    <use href="#charC"/>
+    <!-- 三又帽 -->
+    <g stroke="#1A1F3C" stroke-width="5" stroke-linejoin="round">
+      <path d="M-44,-62 C -50,-96 -28,-102 -20,-78 L -14,-64 Z" fill="#FF7BAC"/>
+      <path d="M-16,-66 C -8,-108 18,-108 12,-70 L 2,-62 Z" fill="#4FE0B8"/>
+      <path d="M18,-76 C 34,-100 54,-92 44,-62 L 24,-60 Z" fill="#FFD95C"/>
+    </g>
+    <circle cx="-46" cy="-94" r="7" fill="#FFD95C" stroke="#1A1F3C" stroke-width="4"/>
+    <circle cx="8" cy="-100" r="7" fill="#FF7BAC" stroke="#1A1F3C" stroke-width="4"/>
+    <circle cx="48" cy="-88" r="7" fill="#4FE0B8" stroke="#1A1F3C" stroke-width="4"/>
+  </g>
+
+  <!-- 行進キャラ 4: カードをくわえた犬 -->
+  <g transform="translate(1010,724) rotate(-4)">
+    <ellipse cx="0" cy="0" rx="46" ry="30" fill="#FFFFFF" stroke="#1A1F3C" stroke-width="6"/>
+    <circle cx="40" cy="-22" r="22" fill="#FFFFFF" stroke="#1A1F3C" stroke-width="6"/>
+    <path d="M28,-40 C 22,-56 34,-60 40,-46 Z" fill="#1A1F3C"/>
+    <path d="M48,-42 C 50,-58 62,-56 60,-42 Z" fill="#1A1F3C"/>
+    <circle cx="38" cy="-26" r="3.5" fill="#1A1F3C"/>
+    <circle cx="52" cy="-24" r="4.5" fill="#1A1F3C"/>
+    <g transform="translate(74,-6) rotate(18)">
+      <rect x="-20" y="-28" width="40" height="56" rx="6" fill="#FFFFFF" stroke="#1A1F3C" stroke-width="5"/>
+      <use href="#heartC" transform="scale(0.75)" fill="#FF6B6B"/>
+    </g>
+    <path d="M-44,-14 C -62,-30 -66,-8 -50,-2 Z" fill="#FFFFFF" stroke="#1A1F3C" stroke-width="5"/>
+    <rect x="-34" y="20" width="16" height="26" rx="8" fill="#1A1F3C"/>
+    <rect x="-6" y="24" width="16" height="24" rx="8" fill="#1A1F3C"/>
+    <rect x="20" y="20" width="16" height="26" rx="8" fill="#1A1F3C"/>
+  </g>
+
+  <!-- 行進キャラ 5: 追いかける審判 -->
+  <g transform="translate(1265,712) rotate(6)">
+    <g transform="translate(-40,-160) rotate(-6)">
+      <rect x="-66" y="-32" width="132" height="64" rx="20" fill="#FFFFFF" stroke="#1A1F3C" stroke-width="5"/>
+      <text x="0" y="12" font-size="32" font-weight="bold" text-anchor="middle" fill="#FF6B6B">ピーッ!</text>
+    </g>
+    <rect x="-36" y="52" width="20" height="38" rx="9" fill="#1A1F3C" transform="rotate(-16 -26 70)"/>
+    <rect x="16" y="52" width="20" height="38" rx="9" fill="#1A1F3C" transform="rotate(18 26 70)"/>
+    <line x1="36" y1="-16" x2="70" y2="-70" stroke="#1A1F3C" stroke-width="12" stroke-linecap="round"/>
+    <rect x="52" y="-128" width="44" height="60" rx="6" fill="#FFD95C" stroke="#1A1F3C" stroke-width="5" transform="rotate(12 74 -98)"/>
+    <rect x="-40" y="-30" width="80" height="88" rx="14" fill="#FFFFFF" stroke="#1A1F3C" stroke-width="6"/>
+    <rect x="-24" y="-30" width="14" height="88" fill="#1A1F3C"/>
+    <rect x="4" y="-30" width="14" height="88" fill="#1A1F3C"/>
+    <circle cx="0" cy="-58" r="27" fill="#FFDBAC" stroke="#1A1F3C" stroke-width="5"/>
+    <path d="M-27,-64 Q 0,-96 27,-64 L 27,-72 Q 0,-102 -27,-72 Z" fill="#1A1F3C"/>
+    <circle cx="-9" cy="-60" r="3.5" fill="#1A1F3C"/>
+    <circle cx="9" cy="-60" r="3.5" fill="#1A1F3C"/>
+    <circle cx="0" cy="-44" r="7" fill="#C9CDDB" stroke="#1A1F3C" stroke-width="3.5"/>
+  </g>
+
+  <!-- タイトルロゴ -->
+  <text x="800" y="175" font-size="82" font-weight="bold" text-anchor="middle" letter-spacing="8" fill="#FFFFFF" stroke="#1A1F3C" stroke-width="18" paint-order="stroke" stroke-linejoin="round">みんなでつくろう</text>
+
+  <g font-size="272" font-weight="bold" text-anchor="middle" stroke="#FF7BAC" stroke-width="42" stroke-linejoin="round" fill="#FF7BAC">
+    <text x="512" y="430" transform="rotate(-4 512 430)">大</text>
+    <text x="800" y="430" transform="rotate(3 800 430)">富</text>
+    <text x="1088" y="430" transform="rotate(-2 1088 430)">豪</text>
+  </g>
+  <g font-size="272" font-weight="bold" text-anchor="middle" stroke="#1A1F3C" stroke-width="14" stroke-linejoin="round" paint-order="stroke" fill="#FFD95C">
+    <text x="512" y="430" transform="rotate(-4 512 430)">大</text>
+    <text x="800" y="430" transform="rotate(3 800 430)">富</text>
+    <text x="1088" y="430" transform="rotate(-2 1088 430)">豪</text>
+  </g>
+
+  <!-- サブコピー -->
+  <text x="800" y="512" font-size="40" font-weight="bold" text-anchor="middle" letter-spacing="4" fill="#FFFFFF" opacity="0.95">きみのルールが、あしたの定番になる。</text>
+</svg>

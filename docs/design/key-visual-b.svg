@@ -1,0 +1,129 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" font-family="'M PLUS Rounded 1c','Hiragino Maru Gothic ProN','Hiragino Sans',sans-serif">
+  <title>みんなでつくろう 大富豪 キービジュアル案B レトロポップ印刷</title>
+
+  <defs>
+    <pattern id="dotsB" width="28" height="28" patternUnits="userSpaceOnUse">
+      <circle cx="14" cy="14" r="5.5" fill="#E8503A"/>
+    </pattern>
+    <pattern id="dotsBt" width="28" height="28" patternUnits="userSpaceOnUse">
+      <circle cx="14" cy="14" r="5.5" fill="#2E9E8F"/>
+    </pattern>
+
+    <!-- スート(中心原点) -->
+    <path id="spadeB" d="M0,-70 C 12,-52 36,-44 36,-28 C 36,-14 18,-10 8,-18 C 10,-10 14,-4 20,2 L-20,2 C -14,-4 -10,-10 -8,-18 C -18,-10 -36,-14 -36,-28 C -36,-44 -12,-52 0,-70 Z"/>
+    <path id="heartB" d="M0,-54 C -10,-68 -36,-64 -36,-42 C -36,-24 -14,-10 0,2 C 14,-10 36,-24 36,-42 C 36,-64 10,-68 0,-54 Z"/>
+    <polygon id="diaB" points="0,-64 34,-16 0,32 -34,-16"/>
+
+    <!-- レトロカード(中心原点 280x392) -->
+    <g id="cardFrameB">
+      <rect x="-140" y="-196" width="280" height="392" rx="24" fill="#FFFDF5" stroke="#27374D" stroke-width="12"/>
+      <rect x="-116" y="-172" width="232" height="344" rx="12" fill="none" stroke="#EFB93F" stroke-width="6"/>
+    </g>
+  </defs>
+
+  <!-- 背景 -->
+  <rect width="1600" height="900" fill="#F6EEDC"/>
+
+  <!-- 斜めストライプ帯 -->
+  <g transform="rotate(-16 800 450)">
+    <rect x="-300" y="60" width="2200" height="64" fill="#2E9E8F"/>
+    <rect x="-300" y="140" width="2200" height="20" fill="#EFB93F"/>
+    <rect x="-300" y="740" width="2200" height="64" fill="#2E9E8F"/>
+    <rect x="-300" y="700" width="2200" height="20" fill="#EFB93F"/>
+  </g>
+
+  <!-- ハーフトーンドット -->
+  <circle cx="230" cy="700" r="180" fill="url(#dotsB)" opacity="0.45"/>
+  <circle cx="1450" cy="130" r="150" fill="url(#dotsBt)" opacity="0.4"/>
+
+  <!-- 右: 扇形カード 3 枚 -->
+  <g>
+    <g transform="translate(1060,520) rotate(-16)">
+      <use href="#cardFrameB"/>
+      <use href="#heartB" transform="translate(0,-40) scale(1.9)" fill="#E8503A"/>
+      <text x="-96" y="-120" font-size="64" font-weight="bold" text-anchor="middle" fill="#E8503A">A</text>
+      <use href="#heartB" transform="translate(96,120) scale(0.5)" fill="#E8503A"/>
+    </g>
+    <g transform="translate(1290,530) rotate(2)">
+      <use href="#cardFrameB"/>
+      <use href="#spadeB" transform="translate(0,-52) scale(1.9)" fill="#27374D"/>
+      <!-- レトロなゆる顔 -->
+      <line x1="-30" y1="86" x2="-14" y2="86" stroke="#27374D" stroke-width="7" stroke-linecap="round"/>
+      <circle cx="22" cy="84" r="7" fill="#27374D"/>
+      <path d="M-16,116 Q 2,132 20,114" fill="none" stroke="#27374D" stroke-width="7" stroke-linecap="round"/>
+      <circle cx="-52" cy="106" r="10" fill="#E8503A" opacity="0.55"/>
+      <circle cx="52" cy="102" r="10" fill="#E8503A" opacity="0.55"/>
+      <text x="-96" y="-120" font-size="64" font-weight="bold" text-anchor="middle" fill="#27374D">A</text>
+      <use href="#spadeB" transform="translate(96,132) scale(0.5)" fill="#27374D"/>
+    </g>
+    <g transform="translate(1480,560) rotate(18)">
+      <use href="#cardFrameB"/>
+      <use href="#diaB" transform="translate(0,-36) scale(1.9)" fill="#EFB93F"/>
+      <text x="-96" y="-120" font-size="64" font-weight="bold" text-anchor="middle" fill="#EFB93F">A</text>
+      <use href="#diaB" transform="translate(96,124) scale(0.5)" fill="#EFB93F"/>
+    </g>
+  </g>
+
+  <!-- スタンプ: ルール増殖中 -->
+  <g transform="translate(1155,180) rotate(-12)" opacity="0.92">
+    <circle cx="0" cy="0" r="105" fill="none" stroke="#E8503A" stroke-width="8"/>
+    <circle cx="0" cy="0" r="86" fill="none" stroke="#E8503A" stroke-width="3"/>
+    <text x="0" y="-16" font-size="44" font-weight="bold" text-anchor="middle" fill="#E8503A">ルール</text>
+    <text x="0" y="38" font-size="44" font-weight="bold" text-anchor="middle" fill="#E8503A">増殖中</text>
+  </g>
+
+  <!-- ロゴブロック(左) -->
+  <g>
+    <g transform="translate(475,205) rotate(-3)">
+      <rect x="-330" y="-52" width="660" height="104" fill="#2E9E8F" stroke="#27374D" stroke-width="7"/>
+      <text x="0" y="24" font-size="66" font-weight="bold" text-anchor="middle" letter-spacing="6" fill="#FFFDF5">みんなでつくろう</text>
+    </g>
+
+    <!-- 大富豪: 版ズレ(赤を先に敷く) -->
+    <g font-size="295" font-weight="bold" text-anchor="middle" fill="#E8503A">
+      <text x="172" y="584">大</text>
+      <text x="472" y="584">富</text>
+      <text x="772" y="584">豪</text>
+    </g>
+    <g font-size="295" font-weight="bold" text-anchor="middle" fill="#27374D">
+      <text x="160" y="570">大</text>
+      <text x="460" y="570">富</text>
+      <text x="760" y="570">豪</text>
+    </g>
+
+    <!-- サブコピー -->
+    <g transform="translate(462,660)">
+      <line x1="-320" y1="34" x2="320" y2="34" stroke="#E8503A" stroke-width="6"/>
+      <text x="0" y="10" font-size="47" font-weight="bold" text-anchor="middle" letter-spacing="3" fill="#27374D">毎日どこかで、新ルール。</text>
+    </g>
+  </g>
+
+  <!-- 切符: ローカルルール -->
+  <g transform="translate(330,772) rotate(-5)">
+    <rect x="-170" y="-58" width="340" height="116" rx="10" fill="#FFFDF5" stroke="#27374D" stroke-width="6"/>
+    <line x1="-92" y1="-58" x2="-92" y2="58" stroke="#27374D" stroke-width="3" stroke-dasharray="8 8"/>
+    <text x="-131" y="-14" font-size="26" font-weight="bold" text-anchor="middle" fill="#E8503A">RULE</text>
+    <text x="-131" y="22" font-size="26" font-weight="bold" text-anchor="middle" fill="#E8503A">No.8</text>
+    <text x="38" y="-22" font-size="24" text-anchor="middle" fill="#2E9E8F">ローカルルール急行</text>
+    <text x="38" y="14" font-size="34" font-weight="bold" text-anchor="middle" fill="#27374D">8切り</text>
+    <text x="38" y="44" font-size="22" text-anchor="middle" fill="#27374D">新潟 発 → 全国 行</text>
+  </g>
+  <g transform="translate(680,792) rotate(4)">
+    <rect x="-170" y="-58" width="340" height="116" rx="10" fill="#FFFDF5" stroke="#27374D" stroke-width="6"/>
+    <line x1="-92" y1="-58" x2="-92" y2="58" stroke="#27374D" stroke-width="3" stroke-dasharray="8 8"/>
+    <text x="-131" y="-14" font-size="26" font-weight="bold" text-anchor="middle" fill="#E8503A">RULE</text>
+    <text x="-131" y="22" font-size="26" font-weight="bold" text-anchor="middle" fill="#E8503A">No.23</text>
+    <text x="38" y="-22" font-size="24" text-anchor="middle" fill="#2E9E8F">ローカルルール急行</text>
+    <text x="38" y="14" font-size="34" font-weight="bold" text-anchor="middle" fill="#27374D">都落ち</text>
+    <text x="38" y="44" font-size="22" text-anchor="middle" fill="#27374D">東京 発 → 全国 行</text>
+  </g>
+
+  <!-- 下端の帯 -->
+  <rect x="0" y="856" width="1600" height="44" fill="#27374D"/>
+  <text x="800" y="887" font-size="26" text-anchor="middle" letter-spacing="6" fill="#F6EEDC">あなたの街のローカルルール、募集中です。</text>
+
+  <!-- 散らしスート -->
+  <use href="#spadeB" transform="translate(900,130) scale(0.6)" fill="#27374D" opacity="0.85"/>
+  <use href="#diaB" transform="translate(1000,300) scale(0.5)" fill="#EFB93F"/>
+  <use href="#heartB" transform="translate(845,285) scale(0.45)" fill="#E8503A"/>
+</svg>

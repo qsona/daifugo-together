@@ -1,0 +1,230 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" font-family="'M PLUS Rounded 1c','Hiragino Maru Gothic ProN','Hiragino Sans',sans-serif">
+  <title>みんなでつくろう 大富豪 キービジュアル案A カードまつり</title>
+
+  <defs>
+    <!-- 放射光線 -->
+    <polygon id="rayA" points="800,420 2300,190 2300,650"/>
+
+    <!-- 顔パーツ -->
+    <g id="faceA">
+      <circle cx="-28" cy="40" r="8" fill="#FFB3C7"/>
+      <circle cx="28" cy="40" r="8" fill="#FFB3C7"/>
+      <circle cx="-14" cy="30" r="6.5" fill="#2E3057"/>
+      <circle cx="14" cy="30" r="6.5" fill="#2E3057"/>
+      <path d="M-11,44 Q0,56 11,44" fill="none" stroke="#2E3057" stroke-width="5" stroke-linecap="round"/>
+    </g>
+
+    <!-- カードキャラ: ハート -->
+    <g id="cardHeartA">
+      <rect x="-60" y="-84" width="120" height="168" rx="14" fill="#FFFFFF" stroke="#2E3057" stroke-width="7"/>
+      <path d="M0,-56 C -10,-70 -36,-66 -36,-44 C -36,-26 -14,-14 0,-2 C 14,-14 36,-26 36,-44 C 36,-66 10,-70 0,-56 Z" fill="#FF6B6B" stroke="#2E3057" stroke-width="5"/>
+      <use href="#faceA"/>
+    </g>
+
+    <!-- カードキャラ: スペード -->
+    <g id="cardSpadeA">
+      <rect x="-60" y="-84" width="120" height="168" rx="14" fill="#FFFFFF" stroke="#2E3057" stroke-width="7"/>
+      <path d="M0,-70 C 12,-52 36,-44 36,-28 C 36,-14 18,-10 8,-18 C 10,-10 14,-4 20,2 L-20,2 C -14,-4 -10,-10 -8,-18 C -18,-10 -36,-14 -36,-28 C -36,-44 -12,-52 0,-70 Z" fill="#2E3057" stroke="#2E3057" stroke-width="4"/>
+      <use href="#faceA"/>
+    </g>
+
+    <!-- カード: 8(顔なし) -->
+    <g id="card8A">
+      <rect x="-60" y="-84" width="120" height="168" rx="14" fill="#FFFFFF" stroke="#2E3057" stroke-width="7"/>
+      <text x="0" y="26" font-size="96" font-weight="bold" text-anchor="middle" fill="#FF6B6B">8</text>
+      <path d="M-40,-74 C -44,-79 -53,-77 -53,-70 C -53,-64 -46,-60 -40,-55 C -34,-60 -27,-64 -27,-70 C -27,-77 -36,-79 -40,-74 Z" fill="#FF6B6B"/>
+    </g>
+
+    <!-- カード: ダイヤ(顔なし) -->
+    <g id="cardDiaA">
+      <rect x="-60" y="-84" width="120" height="168" rx="14" fill="#FFFFFF" stroke="#2E3057" stroke-width="7"/>
+      <polygon points="0,-52 32,-8 0,36 -32,-8" fill="#FF9F45" stroke="#2E3057" stroke-width="5"/>
+    </g>
+
+    <!-- カード: クラブ(顔なし) -->
+    <g id="cardClubA">
+      <rect x="-60" y="-84" width="120" height="168" rx="14" fill="#FFFFFF" stroke="#2E3057" stroke-width="7"/>
+      <circle cx="0" cy="-32" r="17" fill="#58C48A" stroke="#2E3057" stroke-width="5"/>
+      <circle cx="-17" cy="-6" r="17" fill="#58C48A" stroke="#2E3057" stroke-width="5"/>
+      <circle cx="17" cy="-6" r="17" fill="#58C48A" stroke="#2E3057" stroke-width="5"/>
+      <polygon points="-9,30 9,30 4,4 -4,4" fill="#58C48A" stroke="#2E3057" stroke-width="5"/>
+    </g>
+
+    <!-- 紙吹雪 -->
+    <rect id="cfA" x="-8" y="-12" width="16" height="24" rx="4"/>
+  </defs>
+
+  <!-- 背景: 空 -->
+  <rect width="1600" height="900" fill="#59C9EF"/>
+
+  <!-- 放射光線 -->
+  <g fill="#7FD8F5" opacity="0.7">
+    <use href="#rayA"/>
+    <use href="#rayA" transform="rotate(30 800 420)"/>
+    <use href="#rayA" transform="rotate(60 800 420)"/>
+    <use href="#rayA" transform="rotate(90 800 420)"/>
+    <use href="#rayA" transform="rotate(120 800 420)"/>
+    <use href="#rayA" transform="rotate(150 800 420)"/>
+    <use href="#rayA" transform="rotate(180 800 420)"/>
+    <use href="#rayA" transform="rotate(210 800 420)"/>
+    <use href="#rayA" transform="rotate(240 800 420)"/>
+    <use href="#rayA" transform="rotate(270 800 420)"/>
+    <use href="#rayA" transform="rotate(300 800 420)"/>
+    <use href="#rayA" transform="rotate(330 800 420)"/>
+  </g>
+
+  <!-- 雲 -->
+  <g fill="#FFFFFF" opacity="0.9">
+    <ellipse cx="240" cy="110" rx="90" ry="34"/>
+    <ellipse cx="300" cy="90" rx="60" ry="28"/>
+    <ellipse cx="1370" cy="90" rx="95" ry="32"/>
+    <ellipse cx="1300" cy="110" rx="60" ry="26"/>
+  </g>
+
+  <!-- 丘 -->
+  <path d="M0,790 Q 380,700 800,768 Q 1200,830 1600,752 L1600,900 L0,900 Z" fill="#58C48A"/>
+  <path d="M0,830 Q 500,770 900,820 Q 1250,860 1600,810 L1600,900 L0,900 Z" fill="#46B278"/>
+
+  <!-- 飛び交うカード -->
+  <use href="#cardSpadeA" transform="translate(155,200) rotate(-18) scale(1.05)"/>
+  <use href="#card8A" transform="translate(1445,190) rotate(14)"/>
+  <use href="#cardHeartA" transform="translate(115,490) rotate(9)"/>
+  <use href="#cardDiaA" transform="translate(575,115) rotate(-12) scale(0.72)"/>
+  <use href="#cardClubA" transform="translate(1055,110) rotate(11) scale(0.72)"/>
+
+  <!-- 吹き出し: ルール名 -->
+  <g>
+    <g transform="translate(280,330) rotate(-4)">
+      <rect x="-115" y="-46" width="230" height="92" rx="26" fill="#FFFFFF" stroke="#2E3057" stroke-width="7"/>
+      <polygon points="-40,42 -10,42 -44,84" fill="#FFFFFF" stroke="#2E3057" stroke-width="7" stroke-linejoin="round"/>
+      <rect x="-40" y="34" width="34" height="12" fill="#FFFFFF"/>
+      <text x="0" y="16" font-size="48" font-weight="bold" text-anchor="middle" fill="#FF6B6B">8切り!</text>
+    </g>
+    <g transform="translate(185,600) rotate(3)">
+      <rect x="-130" y="-46" width="260" height="92" rx="26" fill="#FFFFFF" stroke="#2E3057" stroke-width="7"/>
+      <text x="0" y="16" font-size="44" font-weight="bold" text-anchor="middle" fill="#2E3057">都落ち〜!</text>
+    </g>
+    <g transform="translate(1385,310) rotate(4)">
+      <rect x="-110" y="-46" width="220" height="92" rx="26" fill="#FFD84D" stroke="#2E3057" stroke-width="7"/>
+      <text x="0" y="16" font-size="48" font-weight="bold" text-anchor="middle" fill="#2E3057">革命!!</text>
+    </g>
+    <g transform="translate(1455,445) rotate(-3)">
+      <rect x="-125" y="-44" width="250" height="88" rx="26" fill="#FFFFFF" stroke="#2E3057" stroke-width="7"/>
+      <text x="0" y="15" font-size="42" font-weight="bold" text-anchor="middle" fill="#58C48A">11バック!?</text>
+    </g>
+  </g>
+
+  <!-- 審判(イエローカード) -->
+  <g transform="translate(1265,680)">
+    <!-- 脚 -->
+    <rect x="-34" y="70" width="26" height="58" rx="12" fill="#2E3057"/>
+    <rect x="8" y="70" width="26" height="58" rx="12" fill="#2E3057"/>
+    <!-- 上げた腕 + イエローカード -->
+    <line x1="40" y1="-20" x2="88" y2="-96" stroke="#2E3057" stroke-width="18" stroke-linecap="round"/>
+    <rect x="66" y="-172" width="58" height="80" rx="8" fill="#FFD84D" stroke="#2E3057" stroke-width="6" transform="rotate(14 95 -132)"/>
+    <!-- 胴体: ストライプシャツ -->
+    <rect x="-52" y="-38" width="104" height="116" rx="18" fill="#FFFFFF" stroke="#2E3057" stroke-width="7"/>
+    <rect x="-32" y="-38" width="18" height="116" fill="#2E3057"/>
+    <rect x="4" y="-38" width="18" height="116" fill="#2E3057"/>
+    <!-- 左腕(腰) -->
+    <line x1="-44" y1="-14" x2="-66" y2="34" stroke="#2E3057" stroke-width="18" stroke-linecap="round"/>
+    <!-- 頭 -->
+    <circle cx="0" cy="-78" r="36" fill="#FFDBAC" stroke="#2E3057" stroke-width="6"/>
+    <path d="M-36,-86 Q 0,-128 36,-86 L 36,-96 Q 0,-134 -36,-96 Z" fill="#2E3057"/>
+    <circle cx="-12" cy="-80" r="4.5" fill="#2E3057"/>
+    <circle cx="12" cy="-80" r="4.5" fill="#2E3057"/>
+    <!-- 笛 -->
+    <circle cx="0" cy="-58" r="9" fill="#C9CDDB" stroke="#2E3057" stroke-width="4"/>
+  </g>
+
+  <!-- 左下: ハイタッチするカードキャラ -->
+  <g transform="translate(255,745) rotate(-8)">
+    <rect x="-26" y="80" width="22" height="34" rx="10" fill="#2E3057"/>
+    <rect x="6" y="80" width="22" height="34" rx="10" fill="#2E3057"/>
+    <line x1="52" y1="-30" x2="96" y2="-72" stroke="#2E3057" stroke-width="14" stroke-linecap="round"/>
+    <use href="#cardHeartA"/>
+  </g>
+  <g transform="translate(420,760) rotate(7)">
+    <rect x="-26" y="80" width="22" height="34" rx="10" fill="#2E3057"/>
+    <rect x="6" y="80" width="22" height="34" rx="10" fill="#2E3057"/>
+    <line x1="-52" y1="-30" x2="-96" y2="-74" stroke="#2E3057" stroke-width="14" stroke-linecap="round"/>
+    <use href="#cardSpadeA"/>
+  </g>
+  <!-- ハイタッチのスパーク -->
+  <g stroke="#FFD84D" stroke-width="8" stroke-linecap="round">
+    <line x1="342" y1="620" x2="342" y2="596"/>
+    <line x1="316" y1="636" x2="298" y2="620"/>
+    <line x1="368" y1="636" x2="386" y2="620"/>
+  </g>
+
+  <!-- 丘の上の観客 -->
+  <g transform="translate(650,830) scale(0.5)">
+    <rect x="-26" y="80" width="22" height="34" rx="10" fill="#2E3057"/>
+    <rect x="6" y="80" width="22" height="34" rx="10" fill="#2E3057"/>
+    <use href="#cardDiaA"/>
+  </g>
+  <g transform="translate(985,842) scale(0.45) rotate(5)">
+    <rect x="-26" y="80" width="22" height="34" rx="10" fill="#2E3057"/>
+    <rect x="6" y="80" width="22" height="34" rx="10" fill="#2E3057"/>
+    <use href="#cardClubA"/>
+  </g>
+
+  <!-- 紙吹雪 -->
+  <g stroke="none">
+    <use href="#cfA" transform="translate(420,120) rotate(24)" fill="#FF6B6B"/>
+    <use href="#cfA" transform="translate(700,70) rotate(-30)" fill="#FFD84D"/>
+    <use href="#cfA" transform="translate(920,150) rotate(40)" fill="#FFFFFF"/>
+    <use href="#cfA" transform="translate(1200,80) rotate(-16)" fill="#FF9EDB"/>
+    <use href="#cfA" transform="translate(500,220) rotate(60)" fill="#58C48A"/>
+    <use href="#cfA" transform="translate(1130,220) rotate(-48)" fill="#FF6B6B"/>
+    <use href="#cfA" transform="translate(70,320) rotate(12)" fill="#FFD84D"/>
+    <use href="#cfA" transform="translate(1540,260) rotate(-28)" fill="#FFFFFF"/>
+    <use href="#cfA" transform="translate(330,470) rotate(45)" fill="#FF9EDB"/>
+    <use href="#cfA" transform="translate(1290,460) rotate(-60)" fill="#FFD84D"/>
+    <use href="#cfA" transform="translate(620,650) rotate(20)" fill="#FFFFFF"/>
+    <use href="#cfA" transform="translate(1010,640) rotate(-38)" fill="#FF6B6B"/>
+    <use href="#cfA" transform="translate(160,700) rotate(52)" fill="#FFD84D"/>
+    <use href="#cfA" transform="translate(1480,690) rotate(-20)" fill="#58C48A"/>
+    <use href="#cfA" transform="translate(870,90) rotate(8)" fill="#58C48A"/>
+    <use href="#cfA" transform="translate(60,600) rotate(-40)" fill="#FF9EDB"/>
+    <circle cx="560" cy="330" r="9" fill="#FFFFFF"/>
+    <circle cx="1060" cy="320" r="9" fill="#FFD84D"/>
+    <circle cx="240" cy="240" r="8" fill="#FF9EDB"/>
+    <circle cx="1350" cy="180" r="8" fill="#FFFFFF"/>
+  </g>
+
+  <!-- バッジ: 新ルール増殖中 -->
+  <g transform="translate(175,145) rotate(-8)">
+    <circle cx="0" cy="0" r="100" fill="#FFD84D" stroke="#2E3057" stroke-width="8"/>
+    <circle cx="0" cy="0" r="84" fill="none" stroke="#FFFFFF" stroke-width="5" stroke-dasharray="4 10" stroke-linecap="round"/>
+    <text x="0" y="-30" font-size="36" font-weight="bold" text-anchor="middle" fill="#2E3057">新ルール</text>
+    <text x="0" y="14" font-size="36" font-weight="bold" text-anchor="middle" fill="#FF6B6B">ぞくぞく</text>
+    <text x="0" y="58" font-size="36" font-weight="bold" text-anchor="middle" fill="#2E3057">増殖中!</text>
+  </g>
+
+  <!-- タイトルロゴ -->
+  <g>
+    <text x="800" y="318" font-size="90" font-weight="bold" text-anchor="middle" letter-spacing="8" fill="#FFFFFF" stroke="#2E3057" stroke-width="22" paint-order="stroke" stroke-linejoin="round">みんなでつくろう</text>
+
+    <!-- 大富豪: 外縁(紺) -->
+    <g font-size="310" font-weight="bold" text-anchor="middle" stroke="#2E3057" stroke-width="48" stroke-linejoin="round" fill="#2E3057">
+      <text x="460" y="640" transform="rotate(-6 460 640)">大</text>
+      <text x="800" y="640" transform="rotate(4 800 640)">富</text>
+      <text x="1140" y="640" transform="rotate(-3 1140 640)">豪</text>
+    </g>
+    <!-- 大富豪: 白縁 + 本体 -->
+    <g font-size="310" font-weight="bold" text-anchor="middle" stroke="#FFFFFF" stroke-width="24" stroke-linejoin="round" paint-order="stroke">
+      <text x="460" y="640" transform="rotate(-6 460 640)" fill="#FF6B6B">大</text>
+      <text x="800" y="640" transform="rotate(4 800 640)" fill="#FFD84D">富</text>
+      <text x="1140" y="640" transform="rotate(-3 1140 640)" fill="#58C48A">豪</text>
+    </g>
+  </g>
+
+  <!-- サブコピーリボン -->
+  <g transform="translate(800,742) rotate(-1)">
+    <polygon points="-330,-36 330,-36 316,36 -316,36" fill="#FF6B6B" stroke="#2E3057" stroke-width="7" stroke-linejoin="round"/>
+    <polygon points="-330,-36 -396,0 -316,36" fill="#E8503A" stroke="#2E3057" stroke-width="7" stroke-linejoin="round"/>
+    <polygon points="330,-36 396,0 316,36" fill="#E8503A" stroke="#2E3057" stroke-width="7" stroke-linejoin="round"/>
+    <text x="0" y="16" font-size="46" font-weight="bold" text-anchor="middle" letter-spacing="4" fill="#FFFFFF">ルールは きみが つくる!</text>
+  </g>
+</svg>
