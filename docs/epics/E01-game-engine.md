@@ -1,5 +1,12 @@
 # E1: 素の大富豪ゲームエンジン 詳細設計
 
+> **改訂反映ノート(2026-07-25、E12 改訂による)** — 矛盾する記述は E12 を正とする。
+> - **契約は全面有効**: フック・Effect 語彙・優先順位・決定性・リプレイ形式など本書の契約設計はそのまま生きる。
+> - **読み替え**: サンドボックス隔離を前提とした記述(純粋性の「構造による強制」・バンドルの動的ロード)は、「静的 import + 設計規約 + レビュー/CI/lint による強制」に読み替える(E12 §4.6 改訂: ルール = packages/rules の通常 TS モジュール、有効/無効は DB フラグ)。
+> - **アクションログの永続化が要件に昇格**(E12 §4.4): 本書の ReplayInit + アクション列 JSONL を「任意のデバッグ出力」ではなく追記専用で永続化する(保存先・保持期間は E10 と確定)。
+> - **GE-05 に追加が必要**: デプロイ時の draining(新規ゲーム開始停止・進行中ゲーム完走)と、**セット途中打ち切り**(そこまでの結果で setResult へ遷移し評価に進む)の状態遷移(E12 §4.5)。
+> - choice 機構などの契約拡張は、デプロイ方式への変更で実施しやすくなった(契約変更とルールが同一コミットで揃い、バンドル版ズレ問題が消滅)。
+
 - 作成日: 2026-07-24
 - 状態: 提案(開発者レビュー待ち。§5 の要決定事項を除き、承認により確定)
 - 一次情報源: `docs/企画書.md`(§3.1〜3.4, §4.3〜4.5)/ `docs/product-backlog.md`(GE-01〜GE-05)
@@ -59,6 +66,37 @@
 4. **観測可能な状態はスナップショット経由のみ**: クライアントに渡る情報は `PlayerSnapshot`(§2.7)の型に載るものだけ。手札秘匿は redact(秘匿情報の削除)関数の型で保証する。
 
 ### 2.2 ゲーム状態のデータモデル(TypeScript 型定義)
+
+> **開発者レビュー反映(2026-07-25): 状態モデルを「config 外出し + 3 分割」に再構成する。** 以下を新しい正とし、本節の旧 `GameState` 定義は対応表で読み替える(実装時に本節全体を書き直す)。
+>
+> **(1) 静的な設定の外出し** — ゲーム開始前に確定しゲーム中は不変のものを `GameConfig` として分離し、リデューサの独立引数にする(`reduce(config, state, action)`)。`ReplayInit` は実質 `GameConfig` そのものになる。
+>
+> **(2) `GameState` はトップレベルを public / private / players の 3 つに分割** — 「誰に見せてよいか」を型構造で保証する。スナップショット生成は `{ ...config公開部, ...public, me: players[自分], others: players から枚数のみ導出 }` となり、`private` は**型ごと配信対象外**(E03 の allow-list `viewFor()` の構造的裏付け)。
+>
+> ```ts
+> // ゲーム開始前に確定・ゲーム中不変(リプレイの ReplayInit 相当)
+> export interface GameConfig {
+>   gameIndex: number;            // セット内の何戦目か
+>   seats: PlayerId[];            // 席順(時計回り)
+>   gameSeed: Seed;               // setSeed から導出(§2.6)
+>   ruleChain: RuleChainEntry[];  // セット開始時に固定されたチェーン(SetState と共有)
+> }
+>
+> export interface GameState {
+>   public: PublicGameState;                  // 全員に公開してよい
+>   private: PrivateGameState;                // エンジン専用。誰にも配信しない
+>   players: Record<PlayerId, PlayerState>;   // 各プレイヤー本人にのみ配信
+> }
+> ```
+>
+> | 旧 GameState のフィールド | 移動先 | 理由 |
+> |---|---|---|
+> | `gameIndex`・`seats` | **config** | ゲーム中不変 |
+> | `phase`・`direction`・`turn`・`field`・`discard`・`standingsTaken`・`history`・`firedRules`・`turnCount` | **public** | 全員に公開してよい進行情報(`direction` は reverseTurnOrder で変わるため config ではなく public) |
+> | `excluded`(退場者の手札処分先)・`memory`(ルール KV。E12 §4.3 でクライアント非配信確定)・`rng`・`hookCalls` | **private** | 非公開情報および エンジン内部状態。配り切りのため山札はないが、「手札以外の非公開ゾーン」はここに集約する(将来の伏せ札系ルールの置き場もここ) |
+> | `players`(各人の手札等) | **players** | 本人にのみ配信。他人へは `handCount` 等の導出値だけ |
+>
+> **(3) §2.5 への追記論点(開発者コメント、2026-07-25)**: 逐次適用の意味論は一旦 OK とするが、**「同じきっかけを食い合うルールの排他」は今後の検討課題**。例: 8切りと「8渡し」が両方有効なとき、現行の競合キー意味論では Effect が異なるため両方発動するが、体験としてはどちらか一方が分かりやすい。一方で同時発動してよい組み合わせも確実にある。「Effect の競合(現行の競合キー)」とは別レイヤーの「**トリガの排他**」という概念が要るかを、実例が増えた時点で E9 と共同で再検討する(ルール追加に伴い柔軟に見直す)。
 
 `packages/core` の公開型。コードは骨子であり、フィールド名・型は実装の規範とする(変更時は本書を更新)。
 
@@ -128,8 +166,10 @@ export type RuleMemory = Record<RuleId, Record<string, JsonValue>>;
 export type GamePhase = "awaitingPlay" | "finished";
 // dealing は同期処理で完結するため観測可能フェーズには置かない(§2.4)
 
+// 【旧定義】§2.2 冒頭の決定ブロック(2026-07-25)の「config 外出し + 3 分割」へ再配置される。
+// フィールドの意味・コメントは引き続き有効(移動先は決定ブロックの対応表)。
 export interface GameState {
-  gameIndex: number;                 // セット内の何戦目か(0 始まり)
+  gameIndex: number;                 // セット内の何戦目か(0 始まり)→ config へ
   phase: GamePhase;
   seats: PlayerId[];                 // 席順(時計回り)。ゲーム間で不変
   direction: 1 | -1;                 // 回り順(reverseTurnOrder で反転)
