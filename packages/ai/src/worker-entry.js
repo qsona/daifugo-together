@@ -157,14 +157,15 @@ function actionFor(player, play) {
   };
 }
 
-function scoreState(api, state, player) {
-  const terminal = api.isTerminal(state);
+function scoreState(api, position, player) {
+  const terminal = api.isTerminal(position);
   if (terminal) {
     const standing = terminal.standings.find(
       (entry) => entry.player === player,
     )?.standing;
     return REWARD.get(standing) ?? 0;
   }
+  const { state } = position;
   const occupied = new Set(
     Object.values(state.players).flatMap((entry) =>
       entry.standing === undefined ? [] : [entry.standing],
@@ -187,29 +188,30 @@ function scoreState(api, state, player) {
 }
 
 function rollout(api, initialState, rootPlay, payload, iteration) {
-  let state = api.applyPlay(
-    initialState,
+  let position = api.applyPlay(
+    api.createPosition(initialState),
     actionFor(payload.view.forPlayer, rootPlay),
-  ).state;
+  ).position;
   let rng = core.seedRng(`${payload.seed}:rollout:${iteration}`);
   for (
     let step = 0;
-    step < payload.config.cutoffSteps && !api.isTerminal(state);
+    step < payload.config.cutoffSteps && !api.isTerminal(position);
     step += 1
   ) {
+    const { state } = position;
     const player = state.public.turn;
     if (!player) {
       break;
     }
-    const legal = api.enumerateLegalPlays(state, player);
+    const legal = api.enumerateLegalPlays(position, player);
     if (legal.length === 0) {
       if (!state.public.field.current) {
         break;
       }
-      state = api.applyPlay(state, { type: 'pass', player }).state;
+      position = api.applyPlay(position, { type: 'pass', player }).position;
       continue;
     }
-    const strength = api.getEffectiveStrengthOrder(state);
+    const strength = api.getEffectiveStrengthOrder(position);
     const random = nextRandom(rng);
     rng = random.state;
     let selected;
@@ -220,9 +222,9 @@ function rollout(api, initialState, rootPlay, payload, iteration) {
     } else {
       selected = sortWeakFirst(legal, strength)[0];
     }
-    state = api.applyPlay(state, actionFor(player, selected)).state;
+    position = api.applyPlay(position, actionFor(player, selected)).position;
   }
-  return scoreState(api, state, payload.view.forPlayer);
+  return scoreState(api, position, payload.view.forPlayer);
 }
 
 function selectUcb(stats, total, c) {
@@ -310,7 +312,7 @@ function search(payload, onProgress) {
     snapshotContext: snapshotContext(payload.view),
   });
   const sample = determinize(payload.view, payload.seed, -1);
-  const strength = api.getEffectiveStrengthOrder(sample);
+  const strength = api.getEffectiveStrengthOrder(api.createPosition(sample));
   const scaled = Math.floor(
     payload.budget.maxPlayouts * payload.difficulty.budgetScale,
   );
