@@ -31,8 +31,8 @@ describe('effect priority and conflict resolution', () => {
         name: 'B',
         position: 99,
         priority: {
-          popularityScore: 0.5,
-          activatedAt: '2026-01-01T00:00:00.000Z',
+          score: 0.5,
+          activatedAt: Date.parse('2026-01-01T00:00:00.000Z'),
           ruleId: 'r-b',
         },
         bundleHash: 'b',
@@ -43,8 +43,8 @@ describe('effect priority and conflict resolution', () => {
         name: 'A',
         position: 99,
         priority: {
-          popularityScore: 0.5,
-          activatedAt: '2026-01-01T00:00:00.000Z',
+          score: 0.5,
+          activatedAt: Date.parse('2026-01-01T00:00:00.000Z'),
           ruleId: 'r-a',
         },
         bundleHash: 'a',
@@ -55,8 +55,8 @@ describe('effect priority and conflict resolution', () => {
         name: 'Popular',
         position: 99,
         priority: {
-          popularityScore: 0.8,
-          activatedAt: '2026-07-01T00:00:00.000Z',
+          score: 0.8,
+          activatedAt: Date.parse('2026-07-01T00:00:00.000Z'),
           ruleId: 'r-popular',
         },
         bundleHash: 'popular',

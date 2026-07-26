@@ -112,10 +112,10 @@ function integrateStartedGame(
   };
 }
 
-export function startSet(
+export function startSetTransition(
   input: StartSetInput,
   port: RuleChainPort = NO_RULE_CHAIN_PORT,
-): SetState {
+): SetTransition {
   if (input.members.length !== 4) {
     throw new Error('A set requires exactly four members');
   }
@@ -139,7 +139,22 @@ export function startSet(
     draining: false,
   };
   const game = startGame(gameConfig(state, 0), runtime(state, port));
-  return integrateStartedGame(state, 0, game);
+  const integrated = integrateStartedGame(state, 0, game);
+  return {
+    state: integrated,
+    events:
+      integrated.phase.name === 'setResult' && integrated.outcome
+        ? [...game.events, setEndedEvent(integrated.outcome)]
+        : game.events,
+    rejections: [],
+  };
+}
+
+export function startSet(
+  input: StartSetInput,
+  port: RuleChainPort = NO_RULE_CHAIN_PORT,
+): SetState {
+  return startSetTransition(input, port).state;
 }
 
 function finishDrainedSet(state: SetState): SetTransition {

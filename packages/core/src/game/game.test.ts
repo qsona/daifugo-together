@@ -93,6 +93,42 @@ describe('GE-02 game start and snapshots', () => {
     expect(otherCardIds.every((id) => !serialized.includes(id))).toBe(true);
   });
 
+  it('スナップショットのネストを書き換えても権威状態を変更しない', () => {
+    const game = started('snapshot-detachment');
+    const player = currentPlayer(game.state);
+    const card = game.state.players[player]?.hand[0];
+    if (!card) {
+      throw new Error('Expected an opening card');
+    }
+    const played = reduceGame(game.config, game.state, {
+      type: 'play',
+      player,
+      cards: [card.id],
+    });
+    const nextPlayer = currentPlayer(played.state);
+    const snapshot = buildPlayerSnapshot(
+      game.config,
+      played.state,
+      snapshotContext,
+      nextPlayer,
+    );
+
+    snapshot.field?.play.cards.splice(0);
+    snapshot.history.splice(0);
+    snapshot.legalMoves?.[0]?.cards.splice(0);
+
+    expect(played.state.public.field.current?.play.cards).toHaveLength(1);
+    expect(played.state.public.history.length).toBeGreaterThan(0);
+    expect(
+      buildPlayerSnapshot(
+        game.config,
+        played.state,
+        snapshotContext,
+        nextPlayer,
+      ).legalMoves?.[0]?.cards.length,
+    ).toBeGreaterThan(0);
+  });
+
   it('除外札・KV・RNG・hookCallsをJSONスナップショットへ露出しない', () => {
     const game = started('snapshot-redaction');
     const hiddenOwner = seats.find(

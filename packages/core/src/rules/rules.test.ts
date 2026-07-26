@@ -14,8 +14,8 @@ const ruleEntry: RuleChainEntry = {
   name: '8切り',
   position: 0,
   priority: {
-    popularityScore: 0,
-    activatedAt: '2026-07-26T00:00:00.000Z',
+    score: 0,
+    activatedAt: Date.parse('2026-07-26T00:00:00.000Z'),
     ruleId: 'r0001-yagiri',
   },
   bundleHash: 'fixture',
@@ -48,8 +48,8 @@ function fixtureEntry(ruleId: string, position: number): RuleChainEntry {
     name: ruleId,
     position,
     priority: {
-      popularityScore: 0,
-      activatedAt: '2026-07-26T00:00:00.000Z',
+      score: 0,
+      activatedAt: Date.parse('2026-07-26T00:00:00.000Z'),
       ruleId,
     },
     bundleHash: 'fixture',

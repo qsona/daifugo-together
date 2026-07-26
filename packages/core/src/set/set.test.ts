@@ -6,7 +6,7 @@ import type { GameState, PlayerId } from '../game/types.js';
 import { NO_RULE_CHAIN_PORT, type RuleChainPort } from '../rules/chain.js';
 import type { RuleChainEntry, RuleModule } from '../rules/contract.js';
 import { createInProcessRuleChainPort } from '../rules/in-process.js';
-import { reduceSet, startSet } from './set-reducer.js';
+import { reduceSet, startSet, startSetTransition } from './set-reducer.js';
 import { scoreSet } from './scoring.js';
 import type { SetState } from './types.js';
 
@@ -181,8 +181,8 @@ describe('GE-05 set progression', () => {
       name: '都落ち相当',
       position: 0,
       priority: {
-        popularityScore: 0,
-        activatedAt: '2026-07-26T00:00:00.000Z',
+        score: 0,
+        activatedAt: Date.parse('2026-07-26T00:00:00.000Z'),
         ruleId: 'r0200-cross-game',
       },
       bundleHash: 'fixture',
@@ -276,8 +276,8 @@ describe('GE-05 set progression', () => {
       name: '開幕順位',
       position: 0,
       priority: {
-        popularityScore: 0,
-        activatedAt: '2026-07-26T00:00:00.000Z',
+        score: 0,
+        activatedAt: Date.parse('2026-07-26T00:00:00.000Z'),
         ruleId: 'r0201-start-finish',
       },
       bundleHash: 'fixture',
@@ -303,7 +303,7 @@ describe('GE-05 set progression', () => {
     };
     const port = createInProcessRuleChainPort([module]);
 
-    const state = startSet(
+    const started = startSetTransition(
       {
         setId: 'start-finish',
         config: { gamesPerSet: 3, interimAutoAdvanceMs: 0 },
@@ -313,6 +313,7 @@ describe('GE-05 set progression', () => {
       },
       port,
     );
+    const state = started.state;
 
     expect(state.phase).toEqual({ name: 'interimResult', gameIndex: 0 });
     expect(state.currentGame?.public.phase).toBe('finished');
@@ -320,6 +321,9 @@ describe('GE-05 set progression', () => {
     expect(
       state.results[0]?.standings.map((result) => result.standing),
     ).toEqual([1, 2, 3, 4]);
+    expect(
+      started.events.filter((event) => event.type === 'effectApplied'),
+    ).toHaveLength(3);
   });
 
   it('順位点を合計し、同点は最終戦順位で決める', () => {

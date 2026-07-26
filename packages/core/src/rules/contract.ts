@@ -16,8 +16,8 @@ import type { StrengthOrder } from '../play/strength.js';
 export const ENGINE_CONTRACT_VERSION = 1;
 
 export interface PriorityKey {
-  popularityScore: number;
-  activatedAt: string;
+  score: number;
+  activatedAt: number;
   ruleId: RuleId;
 }
 

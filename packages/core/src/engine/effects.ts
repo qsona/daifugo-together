@@ -400,6 +400,64 @@ function announceLeaksPrivateCard(
   return privateIds.some((cardId) => text.includes(cardId));
 }
 
+function isJsonValue(value: unknown): value is JsonValue {
+  if (
+    value === null ||
+    typeof value === 'string' ||
+    typeof value === 'boolean'
+  ) {
+    return true;
+  }
+  if (typeof value === 'number') {
+    return Number.isFinite(value);
+  }
+  if (Array.isArray(value)) {
+    return value.every(isJsonValue);
+  }
+  if (
+    typeof value !== 'object' ||
+    Object.getPrototypeOf(value) !== Object.prototype
+  ) {
+    return false;
+  }
+  return Object.values(value).every(isJsonValue);
+}
+
+function effectPayloadValid(effect: Effect): boolean {
+  switch (effect.type) {
+    case 'clearField':
+    case 'reverseTurnOrder':
+      return true;
+    case 'skipTurns':
+      return Number.isFinite(effect.count) && Number.isInteger(effect.count);
+    case 'forceRank':
+      return (
+        Number.isInteger(effect.rank) && effect.rank >= 1 && effect.rank <= 4
+      );
+    case 'moveCards':
+      return (
+        (effect.cards.kind !== 'random' ||
+          (Number.isInteger(effect.cards.count) &&
+            Number.isFinite(effect.cards.count))) &&
+        (effect.cards.kind !== 'specific' ||
+          effect.cards.cardIds.every((cardId) => typeof cardId === 'string'))
+      );
+    case 'setMemory':
+      return (
+        typeof effect.key === 'string' &&
+        effect.key.length > 0 &&
+        isJsonValue(effect.value)
+      );
+    case 'announce':
+      return (
+        typeof effect.messageKey === 'string' &&
+        Object.values(effect.params ?? {}).every(
+          (value) => typeof value === 'string',
+        )
+      );
+  }
+}
+
 export function executeEffectHook(
   config: GameConfig,
   state: GameState,
@@ -443,7 +501,7 @@ export function executeEffectHook(
         position,
         effectIndex,
         effect,
-        ...(effect.type === 'moveCards'
+        ...(effect.type === 'moveCards' && effectPayloadValid(effect)
           ? {
               resolvedCards: resolveCardSelector(
                 invocation.state,
@@ -457,7 +515,9 @@ export function executeEffectHook(
     })
     .filter((emission) => {
       const allowed =
-        emission.effectIndex < 8 && effectAllowed(hook, emission.effect);
+        emission.effectIndex < 8 &&
+        effectPayloadValid(emission.effect) &&
+        effectAllowed(hook, emission.effect);
       if (!allowed) {
         invalid.push(emission);
       }
@@ -475,7 +535,12 @@ export function executeEffectHook(
     resolution: 'rejected',
     conflictKey: null,
     detail: {
-      reason: entry.effectIndex >= 8 ? 'effect-limit' : 'hook-not-allowed',
+      reason:
+        entry.effectIndex >= 8
+          ? 'effect-limit'
+          : !effectPayloadValid(entry.effect)
+            ? 'invalid-payload'
+            : 'hook-not-allowed',
     },
   }));
   const details = new Map<number, JsonValue>();
@@ -620,17 +685,24 @@ export function executeEffectHook(
         break;
       }
       case 'announce':
-        if (announceLeaksPrivateCard(invocation.state, entry.effect)) {
-          entry.resolution = {
-            status: 'rejected',
-            winnerRuleId: entry.ruleId,
-          };
-          details.set(index, {
-            applied: false,
-            reason: 'private-card-reference',
-          });
-        }
         break;
+    }
+  }
+
+  for (const [index, entry] of batch.entries.entries()) {
+    if (
+      entry.effect.type === 'announce' &&
+      entry.resolution.status === 'adopted' &&
+      announceLeaksPrivateCard(nextState, entry.effect)
+    ) {
+      entry.resolution = {
+        status: 'rejected',
+        winnerRuleId: entry.ruleId,
+      };
+      details.set(index, {
+        applied: false,
+        reason: 'private-card-reference',
+      });
     }
   }
 

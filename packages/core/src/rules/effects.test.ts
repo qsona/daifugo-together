@@ -17,8 +17,8 @@ function entry(ruleId: string): RuleChainEntry {
     name: ruleId,
     position: 0,
     priority: {
-      popularityScore: 0,
-      activatedAt: '2026-07-26T00:00:00.000Z',
+      score: 0,
+      activatedAt: Date.parse('2026-07-26T00:00:00.000Z'),
       ruleId,
     },
     bundleHash: 'fixture',
@@ -866,5 +866,131 @@ describe('GE-04 effect pipeline and lifecycle hooks', () => {
         },
       }),
     );
+  });
+
+  it('同一Effectバッチで手札へ戻したカードIDをannounceしない', () => {
+    const ruleEntry = entry('r0112-rehidden-announce');
+    const hiddenCard = createDeck().find((card) => card.rank === '7');
+    if (!hiddenCard) {
+      throw new Error('Expected a hidden card');
+    }
+    const module: RuleModule = {
+      meta: {
+        ruleId: ruleEntry.ruleId,
+        name: ruleEntry.name,
+        description: 'same-batch rehidden announce probe',
+        kind: 'original',
+        proposalId: 'fixture',
+        contractVersion: 1,
+        messages: {},
+      },
+      hooks: {
+        afterPlay: () => [
+          {
+            type: 'moveCards',
+            from: { kind: 'discard' },
+            to: { kind: 'hand', player: 'p4' },
+            cards: { kind: 'specific', cardIds: [hiddenCard.id] },
+          },
+          {
+            type: 'announce',
+            messageKey: 'probe',
+            params: { card: hiddenCard.id },
+          },
+        ],
+      },
+    };
+    const fixture = oneCardState([ruleEntry]);
+    const state: GameState = {
+      ...fixture.state,
+      public: {
+        ...fixture.state.public,
+        discard: [hiddenCard],
+      },
+    };
+    const card = state.players.p1?.hand[0];
+    if (!card) {
+      throw new Error('Expected an opening card');
+    }
+
+    const transition = reduceGame(
+      fixture.config,
+      state,
+      { type: 'play', player: 'p1', cards: [card.id] },
+      runtime(module),
+    );
+
+    expect(
+      transition.state.players.p4?.hand.some(
+        (candidate) => candidate.id === hiddenCard.id,
+      ),
+    ).toBe(true);
+    expect(transition.events.some((event) => event.type === 'ruleFired')).toBe(
+      false,
+    );
+    expect(transition.events).toContainEqual(
+      expect.objectContaining({
+        type: 'effectRejected',
+        effect: expect.objectContaining({ type: 'announce' }),
+        detail: {
+          applied: false,
+          reason: 'private-card-reference',
+        },
+      }),
+    );
+  });
+
+  it('有限整数でないEffect payloadを適用前に棄却する', () => {
+    const ruleEntry = entry('r0113-invalid-effect');
+    const module: RuleModule = {
+      meta: {
+        ruleId: ruleEntry.ruleId,
+        name: ruleEntry.name,
+        description: 'invalid numeric payload probe',
+        kind: 'original',
+        proposalId: 'fixture',
+        contractVersion: 1,
+        messages: {},
+      },
+      hooks: {
+        afterPlay: () =>
+          seats.map((player) => ({
+            type: 'skipTurns' as const,
+            player,
+            count: Number.NaN,
+          })),
+      },
+    };
+    const config: GameConfig = {
+      gameIndex: 0,
+      seats,
+      gameSeed: 'invalid-effect-payload',
+      ruleChain: [ruleEntry],
+    };
+    const started = startGame(config).state;
+    const player = started.public.turn;
+    const card = player ? started.players[player]?.hand[0] : undefined;
+    if (!player || !card) {
+      throw new Error('Expected an opening play');
+    }
+
+    const transition = reduceGame(
+      config,
+      started,
+      { type: 'play', player, cards: [card.id] },
+      runtime(module),
+    );
+
+    expect(transition.rejections).toEqual([]);
+    expect(
+      transition.events.filter(
+        (event) =>
+          event.type === 'effectRejected' &&
+          event.detail &&
+          typeof event.detail === 'object' &&
+          !Array.isArray(event.detail) &&
+          event.detail.reason === 'invalid-payload',
+      ),
+    ).toHaveLength(4);
   });
 });

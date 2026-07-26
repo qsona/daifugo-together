@@ -89,8 +89,8 @@ function entry(module: RuleModule, position: number): RuleChainEntry {
     name: module.meta.name,
     position,
     priority: {
-      popularityScore: 0,
-      activatedAt: '2026-07-26T00:00:00.000Z',
+      score: 0,
+      activatedAt: Date.parse('2026-07-26T00:00:00.000Z'),
       ruleId: module.meta.ruleId,
     },
     bundleHash: 'fixture',

@@ -31,8 +31,8 @@ export interface ResolvedBatch {
 
 export function comparePriority(left: PriorityKey, right: PriorityKey): number {
   return (
-    right.popularityScore - left.popularityScore ||
-    left.activatedAt.localeCompare(right.activatedAt) ||
+    right.score - left.score ||
+    left.activatedAt - right.activatedAt ||
     left.ruleId.localeCompare(right.ruleId)
   );
 }

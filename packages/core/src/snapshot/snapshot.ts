@@ -56,7 +56,7 @@ export function buildPlayerSnapshot(
   const isTurn =
     state.public.phase === 'awaitingPlay' && state.public.turn === forPlayer;
 
-  return {
+  return structuredClone({
     forPlayer,
     setId: context.setId,
     setPhase: context.setPhase,
@@ -104,5 +104,5 @@ export function buildPlayerSnapshot(
       name,
     })),
     history: [...state.public.history],
-  };
+  });
 }
