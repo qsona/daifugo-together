@@ -4,5 +4,6 @@ export * from './room/protocol.js';
 export * from './room/reducer.js';
 export * from './room/session.js';
 export * from './room/socket-gateway.js';
+export * from './room/timers.js';
 export * from './room/types.js';
 export * from './room/view.js';

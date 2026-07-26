@@ -13,6 +13,7 @@ import type {
   RoomCloseReason,
 } from './protocol.js';
 import { InMemorySessionStore } from './session.js';
+import { RoomTimerCoordinator } from './timers.js';
 import type { RoomState, RoomTransition } from './types.js';
 import { viewFor } from './view.js';
 
@@ -154,6 +155,20 @@ export function attachRoomSocketGateway(
       }
     }
   };
+  const timers = new RoomTimerCoordinator(rooms, {
+    now,
+    createSetSeed,
+    onTransition: emitTransition,
+    onError: report,
+  });
+  const publishTransition = (
+    previous: RoomState,
+    transition: RoomTransition,
+    closeReason?: RoomCloseReason,
+  ): void => {
+    emitTransition(previous, transition, closeReason);
+    timers.sync(transition.state);
+  };
 
   const handleUnexpected = <T>(
     error: unknown,
@@ -180,7 +195,7 @@ export function attachRoomSocketGateway(
         memberId: membership.member.memberId,
       });
       if (reconnected?.accepted) {
-        emitState(reconnected.state);
+        publishTransition(membership.room, reconnected);
         membership = rooms.findByUser(session.userId);
       }
     }
@@ -252,7 +267,7 @@ export function attachRoomSocketGateway(
           safeAck(ack, error);
           return;
         }
-        emitTransition(
+        publishTransition(
           current.room,
           transition!,
           current.room.phase === 'setResult'
@@ -283,7 +298,7 @@ export function attachRoomSocketGateway(
           safeAck(ack, error);
           return;
         }
-        emitState(transition!.state);
+        publishTransition(current.room, transition!);
         safeAck(ack, { ok: true, value: {} });
       } catch (error) {
         handleUnexpected(error, ack);
@@ -308,7 +323,7 @@ export function attachRoomSocketGateway(
           safeAck(ack, error);
           return;
         }
-        emitTransition(current.room, transition!);
+        publishTransition(current.room, transition!);
         safeAck(ack, { ok: true, value: {} });
       } catch (error) {
         handleUnexpected(error, ack);
@@ -342,7 +357,7 @@ export function attachRoomSocketGateway(
           safeAck(ack, error);
           return;
         }
-        emitState(transition!.state);
+        publishTransition(current.room, transition!);
         safeAck(ack, { ok: true, value: {} });
       } catch (error) {
         handleUnexpected(error, ack);
@@ -371,7 +386,7 @@ export function attachRoomSocketGateway(
           safeAck(ack, error);
           return;
         }
-        emitState(transition!.state);
+        publishTransition(current.room, transition!);
         safeAck(ack, { ok: true, value: {} });
       } catch (error) {
         handleUnexpected(error, ack);
@@ -416,7 +431,7 @@ export function attachRoomSocketGateway(
             safeAck(ack, error);
             return;
           }
-          emitState(transition!.state);
+          publishTransition(current.room, transition!);
         }
         if (!sessions.rename(session.userToken, displayName)) {
           safeAck(ack, failure('INTERNAL_ERROR'));
@@ -445,7 +460,7 @@ export function attachRoomSocketGateway(
           memberId: current.member.memberId,
         });
         if (transition?.accepted) {
-          emitTransition(current.room, transition);
+          publishTransition(current.room, transition);
         }
       } catch (error) {
         report(error);
@@ -457,6 +472,7 @@ export function attachRoomSocketGateway(
     rooms,
     sessions,
     close() {
+      timers.close();
       for (const socket of activeByUser.values()) {
         socket.disconnect(true);
       }
