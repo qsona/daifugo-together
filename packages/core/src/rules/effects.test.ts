@@ -1220,6 +1220,89 @@ describe('GE-04 effect pipeline and lifecycle hooks', () => {
     ).toHaveLength(8);
   });
 
+  it('公開RuleChainPortのEffect入出力を権威状態から隔離する', () => {
+    const ruleEntry = entry('r0120-isolated-port-effects');
+    const basePort = createInProcessRuleChainPort([]);
+    const retainedValue = { nested: { value: 'before' } };
+    let entriesFrozen = false;
+    let argumentFrozen = false;
+    const config: GameConfig = {
+      gameIndex: 0,
+      seats,
+      gameSeed: 'isolated-port-effects',
+      ruleChain: [ruleEntry],
+    };
+    const isolatedRuntime: RuleRuntime = {
+      port: {
+        ...basePort,
+        collectEffects: (hook, entries, _context, argument) => {
+          if (hook !== 'afterPlay') {
+            return [];
+          }
+          try {
+            entries[0]!.ruleId = 'CORRUPTED-RULE';
+          } catch {
+            entriesFrozen = true;
+          }
+          try {
+            const mutable = argument as {
+              cards: { id: string; rank: string }[];
+            };
+            mutable.cards[0]!.id = 'CORRUPTED';
+            mutable.cards[0]!.rank = '2';
+          } catch {
+            argumentFrozen = true;
+          }
+          return [
+            {
+              ruleId: ruleEntry.ruleId,
+              effects: [
+                {
+                  type: 'setMemory',
+                  scope: 'game',
+                  key: 'retained',
+                  value: retainedValue,
+                },
+              ],
+            },
+          ];
+        },
+      },
+      setHistory: [],
+      setMemory: {},
+    };
+    const started = startGame(config, isolatedRuntime);
+    const player = started.state.public.turn;
+    const card = player ? started.state.players[player]?.hand[0] : undefined;
+    if (!player || !card) {
+      throw new Error('Expected opening play');
+    }
+    const original = { id: card.id, rank: card.rank };
+
+    const transition = reduceGame(
+      config,
+      started.state,
+      { type: 'play', player, cards: [card.id] },
+      isolatedRuntime,
+    );
+    retainedValue.nested.value = 'after';
+
+    expect(entriesFrozen).toBe(true);
+    expect(argumentFrozen).toBe(true);
+    expect(config.ruleChain[0]?.ruleId).toBe(ruleEntry.ruleId);
+    expect(transition.state.public.field.current?.play.cards[0]).toMatchObject(
+      original,
+    );
+    expect(transition.state.private.memory[ruleEntry.ruleId]?.retained).toEqual(
+      {
+        nested: { value: 'before' },
+      },
+    );
+    expect(
+      transition.state.private.memory[ruleEntry.ruleId]?.retained,
+    ).not.toBe(retainedValue);
+  });
+
   it('onGameStartのskipTurnsを第1手番前に消化する', () => {
     const ruleEntry = entry('r0119-opening-skip');
     let skipped = '';

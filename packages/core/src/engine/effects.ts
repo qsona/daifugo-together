@@ -31,6 +31,7 @@ import type {
   Standings,
   Zone,
 } from '../rules/contract.js';
+import { safeCollectEffects } from '../rules/safe-port.js';
 import type { Play } from '../play/play.js';
 import { finishPlayer, forceStanding } from './standing.js';
 
@@ -615,18 +616,13 @@ export function executeEffectHook(
   const invalid: InvalidEffectEmission[] = [];
   const emissions: EffectEmission[] = [];
   const effectCountByRule = new Map<string, number>();
-  const collected: unknown = (() => {
-    try {
-      return runtime.port.collectEffects(
-        hook,
-        config.ruleChain,
-        context,
-        argument,
-      );
-    } catch {
-      return [];
-    }
-  })();
+  const collected = safeCollectEffects(
+    runtime.port,
+    hook,
+    config.ruleChain,
+    context,
+    argument,
+  );
   if (Array.isArray(collected)) {
     for (const collectedEntry of collected) {
       if (

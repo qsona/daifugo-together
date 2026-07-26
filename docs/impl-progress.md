@@ -193,10 +193,10 @@ TS-02 から継続で未解決のもの:
 
 ## 並行進行: E1 ゲームエンジン
 
-- 状態: GE-02・GE-03・GE-05・GE-04 のプロセス2実装完了。10回目の独立 GPT-5.6 Sol 完了レビューで追加された公開 port 入力隔離も修正し、再レビュー待ち。
+- 状態: GE-02・GE-03・GE-05・GE-04 のプロセス2実装完了。11回目の独立 GPT-5.6 Sol 完了レビューで追加された公開 Effect port の入出力隔離も修正し、再レビュー待ち。
 - プロセス1: `8c38c3d`（リベース前 `a3e98a1`）
 - プロセス2: `841745a`
-- 検証: Node 26.5.0 / pnpm 11.17.0 / TypeScript 6.0.3 で `pnpm verify` 成功。統合リポジトリ全体は 14 files / 104 tests。format・lint・design lint・typecheck・build 成功。ルールなし200セットは0.53秒、違反0・failsafe 0。
+- 検証: Node 26.5.0 / pnpm 11.17.0 / TypeScript 6.0.3 で `pnpm verify` 成功。統合リポジトリ全体は 14 files / 105 tests。format・lint・design lint・typecheck・build 成功。ルールなし200セットは0.32秒、違反0・failsafe 0。
 
 ### 完了内容
 
@@ -228,6 +228,8 @@ TS-02 から継続で未解決のもの:
 9回目の独立レビューでは、独自実装の公開 `RuleChainPort.modifyStrength` から同じ不正返値を返すと in-process adapter の検証を迂回でき、候補列挙・snapshot・SimulationApi の3経路で例外になり得ることを再現。公開 port 呼び出しを共通safe adapterへ集約し、`modifyStrength`は完全なCardRank順列、`modifyLegality`は候補数と一致するexact-shapeの結果だけを採用するようにした。例外・不正値・未知のinfluenced ruleIdは基本判定と空influencedへ隔離する。
 
 10回目の独立レビューでは、公開 port が `modifyStrength` 入力の基礎順序を反転して共有定数を恒久変更でき、`modifyLegality` 入力候補のCard参照を通じて権威handを変更できることを再現。portへ渡すentries・基礎順序・候補手・基礎合法性をdetached clone + deep freezeし、入力破壊を試みた呼出しも基本判定へ隔離するようにした。RuleContextは元から全共有データがdeep freeze済みのため維持した。
+
+11回目の独立レビューでは、公開 port の `collectEffects` だけが `config.ruleChain` と `afterPlay` の権威Card参照を直接受け取り、返した `setMemory.value` もport側の保持参照とstateで共有されることを再現。共通 `safeCollectEffects` 境界でentries・フック固有引数をdetached clone + deep freezeし、返値も例外境界内で `structuredClone` してから形状検証・適用するようにした。入力破壊と返値の事後変更を同時に試みる最小再現を回帰テストへ追加した。
 
 ### E1で置いた仮定
 

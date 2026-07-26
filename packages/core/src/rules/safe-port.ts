@@ -1,8 +1,13 @@
 import { CARD_RANKS, type CardRank } from '../cards/card.js';
 import type { Play } from '../play/play.js';
 import type { StrengthOrder } from '../play/strength.js';
-import type { RuleChainPort } from './chain.js';
-import type { Legality, RuleChainEntry, RuleContext } from './contract.js';
+import type { EffectHook, RuleChainPort } from './chain.js';
+import type {
+  Legality,
+  RuleChainEntry,
+  RuleContext,
+  Standings,
+} from './contract.js';
 import { detachedFrozen } from './context.js';
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
@@ -140,5 +145,27 @@ export function safeModifyLegality(
     };
   } catch {
     return { results: base, influenced: [] };
+  }
+}
+
+export function safeCollectEffects(
+  port: RuleChainPort,
+  hook: EffectHook,
+  entries: RuleChainEntry[],
+  context: RuleContext,
+  argument?: Play | Standings,
+): unknown {
+  try {
+    const returned: unknown = port.collectEffects(
+      hook,
+      detachedFrozen(entries) as RuleChainEntry[],
+      context,
+      argument === undefined
+        ? undefined
+        : (detachedFrozen(argument) as Play | Standings),
+    );
+    return structuredClone(returned);
+  } catch {
+    return [];
   }
 }
