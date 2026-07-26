@@ -1,0 +1,29 @@
+/* 画面 1b: メニュー(DS-02 で本実装。ここはプロセス1の遷移先スタブ) */
+
+.screen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: var(--space-6);
+  text-align: center;
+}
+
+.title {
+  margin: 0;
+  font-size: var(--font-size-display);
+  font-weight: var(--font-weight-heavy);
+  line-height: var(--line-height-display);
+  letter-spacing: var(--letter-spacing-wide);
+}
+
+.note {
+  margin: 0;
+  max-width: 32em;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-caption);
+}

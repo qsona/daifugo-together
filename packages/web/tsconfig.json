@@ -1,7 +1,24 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "rootDir": "src"
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2024", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "types": ["vite/client"],
+    "declaration": false,
+    "noEmit": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    /*
+     * vitest が持ち込む vite と packages/web の vite が pnpm 上で別インスタンスになり、
+     * node_modules 内の .d.ts どうしが衝突する。自前のコードとは無関係なので
+     * ライブラリ型のチェックだけを外す(Vite 公式テンプレートと同じ設定)。
+     */
+    "skipLibCheck": true,
+    "paths": {
+      "@design/*": ["../../docs/design/*"]
+    }
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "src/**/*.tsx", "vite.config.ts"]
 }

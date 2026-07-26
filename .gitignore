@@ -4,3 +4,7 @@ coverage/
 .pnpm-store/
 *.tsbuildinfo
 .DS_Store
+
+# Claude Code のローカル作業データ(launch.json だけ共有する)
+.claude/*
+!.claude/launch.json

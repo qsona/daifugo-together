@@ -1,0 +1,38 @@
+/* 画面 1a: タイトル(wireframes.html / E04 §3.1) */
+
+.screen {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  height: 100dvh;
+  /* 9:16 と端末アスペクトの差分はベース色(KV の深い青空)で埋める。 */
+  background: var(--color-bg-brand);
+  /* ステータスバー/ホームインジケータと重要要素が競合しないようにする。 */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+    env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+.visual {
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* 9:16 を保ったまま収める。余白はベース色に溶ける。 */
+  object-fit: contain;
+}
+
+/*
+ * 画面のどこを押しても進む(ワイヤー画面 1a)。
+ * 可視のアフォーダンスは KV 内の「タップしてはじめる」ピルが担うため、この面は透明。
+ */
+.startArea {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}

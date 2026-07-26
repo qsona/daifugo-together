@@ -21,4 +21,11 @@ export default tseslint.config(
       globals: globals.node,
     },
   },
+  {
+    // packages/web はブラウザで動く SPA(E12 §4.2)。
+    files: ['packages/web/src/**/*.{ts,tsx}'],
+    languageOptions: {
+      globals: globals.browser,
+    },
+  },
 );
