@@ -21,14 +21,14 @@
     <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon-180.png" />
 
-    <!--
-      OGP。og:image はスクレイパの都合で絶対 URL が要るため、
-      デプロイ先が決まった時点(E12)で絶対 URL に差し替える。
-    -->
+    <!-- OGP。og:image はスクレイパ向けに本番の絶対 URL を使う。 -->
     <meta property="og:type" content="website" />
     <meta property="og:title" content="みんなでつくろう 大富豪" />
     <meta property="og:description" content="毎日どこかで、新ルール。" />
-    <meta property="og:image" content="/ogp.png" />
+    <meta
+      property="og:image"
+      content="https://daifugo-together.fly.dev/ogp.png"
+    />
     <meta name="twitter:card" content="summary_large_image" />
   </head>
   <body>

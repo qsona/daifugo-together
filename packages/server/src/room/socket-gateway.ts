@@ -17,7 +17,7 @@ import {
 } from '@daifugo/core';
 import type { Server, Socket } from 'socket.io';
 
-import { runAiTurn } from '../ai-turn.js';
+import { runAiTurn, type AiTurnLog, type AiTurnMetric } from '../ai-turn.js';
 import { RoomManager } from './manager.js';
 import type {
   Ack,
@@ -70,6 +70,8 @@ export interface RoomSocketGatewayOptions {
   };
   sweepIntervalMs?: number;
   onError?: (error: unknown) => void;
+  onAiLog?: (log: AiTurnLog) => void;
+  onAiMetric?: (metric: AiTurnMetric) => void;
 }
 
 export interface RoomSocketGateway {
@@ -254,6 +256,8 @@ export function attachRoomSocketGateway(
           },
           fallbackPlay: () => legalPlays[0]!,
           animationDelay: { minMs: 0, maxMs: 0 },
+          ...(options.onAiLog ? { onLog: options.onAiLog } : {}),
+          ...(options.onAiMetric ? { onMetric: options.onAiMetric } : {}),
         });
         return result.decision.play.cards.map((card) => card.id);
       }),

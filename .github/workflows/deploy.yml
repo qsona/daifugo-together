@@ -1,0 +1,46 @@
+name: Deploy production
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    steps:
+      - name: Checkout the verified revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+
+      - name: Set up flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1 # v1
+
+      - name: Deploy the verified revision
+        run: >-
+          flyctl deploy
+          --remote-only
+          --ha=false
+          --image-label ${{ github.event.workflow_run.head_sha }}
+          --wait-timeout 10m
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

@@ -23,6 +23,13 @@ function databasePath(): string {
 }
 
 describe('SQLite persistence', () => {
+  it('DB接続のhealthを確認できる', () => {
+    const persistence = new SqlitePersistence(':memory:');
+    expect(persistence.checkHealth()).toBe(true);
+    persistence.close();
+    expect(persistence.checkHealth()).toBe(false);
+  });
+
   it('匿名tokenと表示名をプロセス再起動後も復元する', () => {
     const path = databasePath();
     const first = new SqlitePersistence(path, {

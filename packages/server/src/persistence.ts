@@ -276,6 +276,16 @@ export class SqlitePersistence implements RoomPersistencePort {
     return row ? JSON.parse(row.resultJson) : undefined;
   }
 
+  checkHealth(): boolean {
+    try {
+      const row = this.#sqlite.prepare('SELECT 1 AS ok').get() as
+        { ok: number } | undefined;
+      return row?.ok === 1;
+    } catch {
+      return false;
+    }
+  }
+
   close(): void {
     this.#sqlite.close();
   }

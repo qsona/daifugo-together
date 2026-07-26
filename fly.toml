@@ -1,0 +1,39 @@
+app = "daifugo-together"
+primary_region = "nrt"
+kill_signal = "SIGTERM"
+kill_timeout = "300s"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[deploy]
+  strategy = "rolling"
+
+[env]
+  PORT = "8080"
+  DATABASE_PATH = "/data/daifugo.sqlite"
+  WEB_DIST_DIR = "/app/packages/web/dist"
+
+# RoomStateはプロセス内、SQLiteは単一volume上にあるため、水平スケールしない。
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    grace_period = "15s"
+    interval = "15s"
+    method = "GET"
+    path = "/health"
+    timeout = "5s"
+
+[[mounts]]
+  source = "daifugo_data"
+  destination = "/data"
+
+[vm]
+  cpu_kind = "shared"
+  cpus = 1
+  memory = "512mb"

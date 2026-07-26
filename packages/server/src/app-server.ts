@@ -36,6 +36,7 @@ const CONTENT_TYPES: Record<string, string> = {
 export interface AppServerOptions {
   webDistDir: string;
   gateway?: RoomSocketGatewayOptions;
+  checkDatabase?: () => boolean;
 }
 
 export interface AppServer {
@@ -106,7 +107,53 @@ function createStaticHandler(webDistDir: string) {
 }
 
 export function createAppServer(options: AppServerOptions): AppServer {
+  let draining = false;
+  const handleHealth = (
+    request: IncomingMessage,
+    response: ServerResponse,
+  ): boolean => {
+    const pathname = new URL(request.url ?? '/', 'http://localhost').pathname;
+    if (pathname !== '/health') return false;
+
+    response.setHeader('content-type', 'application/json; charset=utf-8');
+    response.setHeader('cache-control', 'no-store');
+    if (request.method !== 'GET' && request.method !== 'HEAD') {
+      response.statusCode = 405;
+      response.setHeader('allow', 'GET, HEAD');
+      response.end();
+      return true;
+    }
+
+    const databaseHealthy = (() => {
+      try {
+        return options.checkDatabase?.() ?? true;
+      } catch {
+        return false;
+      }
+    })();
+    response.statusCode = databaseHealthy ? 200 : 503;
+    if (request.method === 'HEAD') {
+      response.end();
+      return true;
+    }
+    response.end(
+      JSON.stringify(
+        databaseHealthy
+          ? { status: draining ? 'draining' : 'ok', db: 'ok' }
+          : { status: 'error', db: 'error' },
+      ),
+    );
+    return true;
+  };
+
   const http = createServer((request, response) => {
+    try {
+      if (handleHealth(request, response)) return;
+    } catch {
+      response.statusCode = 400;
+      response.end();
+      return;
+    }
     void createStaticHandler(options.webDistDir)(request, response).catch(
       () => {
         if (!response.headersSent) response.statusCode = 500;
@@ -158,9 +205,7 @@ export function createAppServer(options: AppServerOptions): AppServer {
       });
     },
     async beginDrain() {
-      if (http.listening) {
-        http.close();
-      }
+      draining = true;
       await gateway.beginDrain();
     },
     close() {

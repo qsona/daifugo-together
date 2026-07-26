@@ -74,4 +74,49 @@ describe('production app server', () => {
     expect(ready.userToken.length).toBeGreaterThanOrEqual(16);
     client.disconnect();
   });
+
+  it('/healthはDB疎通とdrain状態を返し、drain中も200を保つ', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'daifugo-web-dist-'));
+    directories.push(directory);
+    const app = createAppServer({
+      webDistDir: directory,
+      checkDatabase: () => true,
+    });
+    apps.push(app);
+    const port = await app.listen(0, '127.0.0.1');
+    const url = `http://127.0.0.1:${String(port)}`;
+
+    await expect(fetchText(`${url}/health`)).resolves.toEqual({
+      status: 200,
+      body: '{"status":"ok","db":"ok"}',
+      contentType: 'application/json; charset=utf-8',
+    });
+
+    await app.beginDrain();
+
+    await expect(fetchText(`${url}/health`)).resolves.toEqual({
+      status: 200,
+      body: '{"status":"draining","db":"ok"}',
+      contentType: 'application/json; charset=utf-8',
+    });
+  });
+
+  it('/healthはDB疎通に失敗すると503を返す', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'daifugo-web-dist-'));
+    directories.push(directory);
+    const app = createAppServer({
+      webDistDir: directory,
+      checkDatabase: () => false,
+    });
+    apps.push(app);
+    const port = await app.listen(0, '127.0.0.1');
+
+    await expect(
+      fetchText(`http://127.0.0.1:${String(port)}/health`),
+    ).resolves.toEqual({
+      status: 503,
+      body: '{"status":"error","db":"error"}',
+      contentType: 'application/json; charset=utf-8',
+    });
+  });
 });

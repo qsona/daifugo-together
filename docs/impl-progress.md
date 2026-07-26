@@ -368,3 +368,15 @@ TS-02 から継続で未解決のもの:
 | waiting切断猶予、lobby TTL、無人対局abandon、join rate limit | E03 §2.1・§2.5・§3.1 | 完了。lifecycle timerとIP単位fixed-window limiterを追加 |
 | 最新Drizzle 0.45.2の公開`.d.ts`とTypeScript 6.0.3の不整合は`skipLibCheck`で隔離し、自前コードのstrict/exactOptionalチェックは維持する | ユーザー要望の最新版とTS 6.0.3 exactを両立するため | `tsconfig.base.json`。Drizzle側の型定義がTS 6で解消されたら解除可能 |
 | SPA配信とSQLiteは同一Nodeプロセス、DB既定パスは`data/daifugo.sqlite`、Web成果物は`packages/web/dist` | E12の単一常駐プロセス + 同一origin + SQLite方針 | 環境変数`DATABASE_PATH` / `WEB_DIST_DIR`でデプロイ時に変更可能 |
+
+---
+
+## 並行進行: E13 デプロイ・本番公開
+
+- 状態: **DP-01完了、DP-02/DP-03のリポジトリ実装と本番検証は完了**。公開URLは `https://daifugo-together.fly.dev/`、GitHubはpublicの `https://github.com/qsona/daifugo-together`。Environment `production`作成と`FLY_API_TOKEN`登録、およびmain push起点の初回CD実行確認はリポジトリ公開後に行う。
+- 構成: Fly.io `nrt`、Machine `48e0703f115398` 1台(shared CPU 1 / 512MB)、暗号化Volume `daifugo_data` 1GBを`/data`へマウント。`DATABASE_PATH=/data/daifugo.sqlite`、`auto_stop_machines=false`、`min_machines_running=1`、`kill_timeout=300s`。
+- 実装: Node 26.5.0 / pnpm 11.17.0のmulti-stage `Dockerfile`、`fly.toml`、CI成功SHAだけをデプロイする`.github/workflows/deploy.yml`、DB疎通とdrain状態を返す`/health`、Flyで追跡できるJSONログ、実セット検証スクリプト、構築・監視・ロールバックrunbookを追加した。`og:image`は本番絶対URLへ確定。
+- 自動検証: `pnpm verify`成功(format / lint / design lint / typecheck / **28 files・194 tests** / 6 packages build)。`/health`の通常200、drain中200、DB異常503を回帰化。`fly config validate`成功。Fly remote builderでNode ABIが一致する`better-sqlite3`を含む132MBの本番イメージをbuild済み。
+- 本番セット: 1人役+AI 3席の3戦セットを実Socket.IO経路で完走。初回は`replay_records=243` / `set_results=1`。2回目の対局中にrolling deployを実行し、15:42:33 SIGTERM → `server_drain_started`、15:43:25 `server_drain_completed`、exit code 0を確認。進行中ゲームは完走し、セットは仕様どおり1戦で途中終了した。
+- 永続性: 再デプロイ後も`users=2` / `replay_records=333` / `set_results=2`をreadonly接続で確認。ヘルスチェックpassing、OGP絶対URL、新バージョンでの部屋作成・退出も確認した。
+- ロールバック: Fly CLI v0.4.69で`fly releases --image`から直前の`e13-initial`を特定し、`fly deploy --image`で実際に切り替えた。`/health` passingと`replay_records=333` / `set_results=2`の保持を確認後、同じ手順で`e13-final`へ復帰。Machine version 4、ヘルスチェックpassingを確認済み。
