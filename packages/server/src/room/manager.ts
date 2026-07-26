@@ -172,7 +172,17 @@ export class RoomManager {
     if (!room) {
       return undefined;
     }
-    const transition = reduceRoom(room, action, this.#options.reducer);
+    const effectiveAction =
+      (action.type === 'continue' ||
+        action.type === 'leave' ||
+        action.type === 'expireSetResult') &&
+      this.#options.availableRules
+        ? {
+            ...action,
+            availableRules: this.#options.availableRules(),
+          }
+        : action;
+    const transition = reduceRoom(room, effectiveAction, this.#options.reducer);
     if (!transition.accepted) {
       return transition;
     }
@@ -183,6 +193,21 @@ export class RoomManager {
       );
       if (leaving?.userId && this.#byUser.get(leaving.userId) === roomId) {
         this.#byUser.delete(leaving.userId);
+      }
+    }
+    const nextMemberIds = new Set(
+      transition.state.members.map((member) => member.memberId),
+    );
+    for (const member of room.members) {
+      if (
+        member.userId &&
+        (!nextMemberIds.has(member.memberId) ||
+          transition.state.members.find(
+            (candidate) => candidate.memberId === member.memberId,
+          )?.departed) &&
+        this.#byUser.get(member.userId) === roomId
+      ) {
+        this.#byUser.delete(member.userId);
       }
     }
     if (transition.state.phase === 'closed') {

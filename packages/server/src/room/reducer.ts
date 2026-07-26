@@ -77,8 +77,9 @@ function numberedEvents(
   events: RoomGameEventPayload[],
 ): { events: RoomGameEvent[]; nextEventSeq: number } {
   let seq = state.nextEventSeq;
-  const numbered = events.map((event) => ({ ...event, seq: seq++ })) as
-    RoomGameEvent[] | never;
+  const numbered = structuredClone(
+    events.map((event) => ({ ...event, seq: seq++ })),
+  ) as RoomGameEvent[];
   return { events: numbered, nextEventSeq: seq };
 }
 
@@ -93,11 +94,11 @@ function committed(
     ...patch,
     v: state.v + 1,
     nextEventSeq: numbered.nextEventSeq,
-    lastEvents: numbered.events,
+    lastEvents: structuredClone(numbered.events),
   };
   return {
     state: nextState,
-    events: numbered.events,
+    events: structuredClone(numbered.events),
     accepted: true,
   };
 }
@@ -246,6 +247,135 @@ function phaseFromEngine(engine: SetTransition['state']): RoomState['phase'] {
   return engine.phase.name === 'setResult' ? 'setResult' : 'playing';
 }
 
+function settleMembersAtSetResult(
+  members: readonly RoomMember[],
+  engine: SetTransition['state'],
+): { members: RoomMember[]; removedMemberIds: string[] } {
+  if (engine.phase.name !== 'setResult') {
+    return { members: [...members], removedMemberIds: [] };
+  }
+  const removedMemberIds = members
+    .filter((member) => !member.isAI && (member.departed || !member.connected))
+    .map((member) => member.memberId);
+  return {
+    members: members.filter(
+      (member) => member.isAI || (!member.departed && member.connected),
+    ),
+    removedMemberIds,
+  };
+}
+
+function memberLeftEvents(
+  removedMemberIds: readonly string[],
+): RoomGameEventPayload[] {
+  return removedMemberIds.map((memberId) => ({
+    t: 'memberLeft',
+    memberId,
+  }));
+}
+
+function startSet(
+  state: RoomState,
+  humans: readonly RoomMember[],
+  input: {
+    now: number;
+    setSeed: string;
+    availableRules?: RuleChainEntry[];
+  },
+  options: RoomReducerOptions,
+  leadingEvents: RoomGameEventPayload[] = [],
+): RoomTransition {
+  const availableRules = structuredClone(
+    input.availableRules ?? state.availableRules,
+  );
+  const preparedHumans = humans.map((member) =>
+    member.connected
+      ? {
+          ...member,
+          seatId: null,
+          controller: 'human' as const,
+          aiActing: false,
+          wantsNextSet: false,
+        }
+      : {
+          ...member,
+          seatId: null,
+          controller: 'ai' as const,
+          aiActing: true,
+          wantsNextSet: false,
+        },
+  );
+  const addedAi = aiMembers(
+    state,
+    4 - preparedHumans.length,
+    options,
+    input.now,
+  );
+  const random = options.random ?? Math.random;
+  const members = withSeats([...preparedHumans, ...addedAi], random);
+  const fixedRules = structuredClone(availableRules);
+  const setNo = state.setNo + 1;
+  const started = startSetTransition(
+    {
+      setId: `${state.roomId}:set:${setNo}`,
+      config: {
+        gamesPerSet: options.gamesPerSet ?? DEFAULT_GAMES_PER_SET,
+        interimAutoAdvanceMs:
+          options.interimAutoAdvanceMs ?? DEFAULT_INTERIM_MS,
+      },
+      members: members.map((member) => ({
+        id: member.memberId,
+        displayName: member.displayName,
+        isAI: member.isAI,
+      })),
+      ruleChain: fixedRules,
+      setSeed: input.setSeed,
+    },
+    options.rulePort,
+  );
+  const settlement = settleMembersAtSetResult(members, started.state);
+  const phase = phaseAfterSettlement(started.state, settlement.members);
+  return committed(
+    state,
+    {
+      phase,
+      members: settlement.members,
+      availableRules,
+      fixedRules,
+      engine: started.state,
+      setNo,
+      turnDeadlineAt: null,
+      setRespondBy:
+        phase === 'setResult'
+          ? input.now +
+            (options.setResultTimeoutMs ?? DEFAULT_SET_RESULT_TIMEOUT_MS)
+          : null,
+    },
+    [
+      ...leadingEvents,
+      ...addedAi.map((member) => ({
+        t: 'aiFilled' as const,
+        memberId: member.memberId,
+      })),
+      { t: 'setStarted', setNo },
+      { t: 'gameStarted', gameNo: 1 },
+      ...publicEngineEvents(members, fixedRules, started.events),
+      ...memberLeftEvents(settlement.removedMemberIds),
+    ],
+  );
+}
+
+function phaseAfterSettlement(
+  engine: SetTransition['state'],
+  members: readonly RoomMember[],
+): RoomState['phase'] {
+  const phase = phaseFromEngine(engine);
+  return phase === 'setResult' &&
+    !members.some((member) => !member.isAI && !member.departed)
+    ? 'closed'
+    : phase;
+}
+
 function join(state: RoomState, action: Extract<RoomAction, { type: 'join' }>) {
   if (state.phase === 'closed') {
     return rejected(state, 'ROOM_CLOSED');
@@ -301,63 +431,53 @@ function start(
   if (!actor.isHost) {
     return rejected(state, 'NOT_HOST');
   }
-  const humans = state.members
-    .filter((member) => !member.isAI && !member.departed)
-    .map((member) =>
-      member.connected
-        ? { ...member, controller: 'human' as const, aiActing: false }
-        : { ...member, controller: 'ai' as const, aiActing: true },
-    );
-  const addedAi = aiMembers(state, 4 - humans.length, options, action.now);
-  const random = options.random ?? Math.random;
-  const members = withSeats([...humans, ...addedAi], random);
-  const fixedRules = structuredClone(state.availableRules);
-  const setNo = state.setNo + 1;
-  const started = startSetTransition({
-    setId: `${state.roomId}:set:${setNo}`,
-    config: {
-      gamesPerSet: options.gamesPerSet ?? DEFAULT_GAMES_PER_SET,
-      interimAutoAdvanceMs: options.interimAutoAdvanceMs ?? DEFAULT_INTERIM_MS,
-    },
-    members: members.map((member) => ({
-      id: member.memberId,
-      displayName: member.displayName,
-      isAI: member.isAI,
-    })),
-    ruleChain: fixedRules,
-    setSeed: action.setSeed,
-  });
-  const initialEvents: RoomGameEventPayload[] = [
-    ...addedAi.map((member) => ({
-      t: 'aiFilled' as const,
-      memberId: member.memberId,
-    })),
-    { t: 'setStarted', setNo },
-    { t: 'gameStarted', gameNo: 1 },
-    ...publicEngineEvents(members, fixedRules, started.events),
-  ];
-  return committed(
+  return startSet(
     state,
-    {
-      phase: phaseFromEngine(started.state),
-      members,
-      fixedRules,
-      engine: started.state,
-      setNo,
-      turnDeadlineAt: null,
-      setRespondBy:
-        started.state.phase.name === 'setResult'
-          ? action.now +
-            (options.setResultTimeoutMs ?? DEFAULT_SET_RESULT_TIMEOUT_MS)
-          : null,
-    },
-    initialEvents,
+    state.members.filter((member) => !member.isAI && !member.departed),
+    action,
+    options,
   );
+}
+
+function continueSet(
+  state: RoomState,
+  action: Extract<RoomAction, { type: 'continue' }>,
+  options: RoomReducerOptions,
+): RoomTransition {
+  if (state.phase !== 'setResult') {
+    return rejected(state, 'NOT_SET_RESULT');
+  }
+  const actor = state.members.find(
+    (member) =>
+      member.memberId === action.memberId &&
+      !member.isAI &&
+      !member.departed &&
+      member.connected,
+  );
+  if (!actor) {
+    return rejected(state, 'NOT_IN_ROOM');
+  }
+  if (actor.wantsNextSet) {
+    return { state, events: [], accepted: true };
+  }
+  const members = state.members.map((member) =>
+    member.memberId === actor.memberId
+      ? { ...member, wantsNextSet: true }
+      : member,
+  );
+  const humans = members.filter(
+    (member) => !member.isAI && !member.departed && member.connected,
+  );
+  if (humans.every((member) => member.wantsNextSet)) {
+    return startSet(state, humans, action, options);
+  }
+  return committed(state, { members }, []);
 }
 
 function leave(
   state: RoomState,
   action: Extract<RoomAction, { type: 'leave' }>,
+  options: RoomReducerOptions,
 ): RoomTransition {
   const leaving = state.members.find(
     (member) => member.memberId === action.memberId && !member.isAI,
@@ -419,12 +539,73 @@ function leave(
   if (nextHost) {
     events.push({ t: 'hostChanged', memberId: nextHost.memberId });
   }
+  const remainingHumans = withHost.filter(
+    (member) => !member.isAI && !member.departed && member.connected,
+  );
+  if (
+    state.phase === 'setResult' &&
+    remainingHumans.length > 0 &&
+    remainingHumans.every((member) => member.wantsNextSet) &&
+    action.now !== undefined &&
+    action.setSeed !== undefined
+  ) {
+    return startSet(
+      { ...state, members: withHost },
+      remainingHumans,
+      {
+        now: action.now,
+        setSeed: action.setSeed,
+        ...(action.availableRules === undefined
+          ? {}
+          : { availableRules: action.availableRules }),
+      },
+      options,
+      events,
+    );
+  }
   return committed(
     state,
     {
       phase: humansRemain ? state.phase : 'closed',
       members: withHost,
     },
+    events,
+  );
+}
+
+function expireSetResult(
+  state: RoomState,
+  action: Extract<RoomAction, { type: 'expireSetResult' }>,
+  options: RoomReducerOptions,
+): RoomTransition {
+  if (state.phase !== 'setResult') {
+    return rejected(state, 'NOT_SET_RESULT');
+  }
+  if (state.setRespondBy !== null && action.now < state.setRespondBy) {
+    return rejected(state, 'INVALID_SET_PHASE');
+  }
+  const continuing = state.members.filter(
+    (member) =>
+      !member.isAI &&
+      !member.departed &&
+      member.connected &&
+      member.wantsNextSet,
+  );
+  const continuingIds = new Set(continuing.map((member) => member.memberId));
+  const removedIds = state.members.flatMap((member) =>
+    !member.isAI && !continuingIds.has(member.memberId)
+      ? [member.memberId]
+      : [],
+  );
+  const events = memberLeftEvents(removedIds);
+  if (continuing.length === 0) {
+    return committed(state, { phase: 'closed', members: [] }, events);
+  }
+  return startSet(
+    { ...state, members: continuing },
+    continuing,
+    action,
+    options,
     events,
   );
 }
@@ -470,6 +651,46 @@ function connectionChanged(
   ]);
 }
 
+function rename(
+  state: RoomState,
+  action: Extract<RoomAction, { type: 'rename' }>,
+): RoomTransition {
+  if (state.phase === 'closed') {
+    return rejected(state, 'ROOM_CLOSED');
+  }
+  const member = state.members.find(
+    (candidate) =>
+      candidate.memberId === action.memberId &&
+      !candidate.isAI &&
+      !candidate.departed,
+  );
+  if (!member) {
+    return rejected(state, 'NOT_IN_ROOM');
+  }
+  const displayName = action.displayName.trim();
+  if (
+    displayName.length < 1 ||
+    displayName.length > 20 ||
+    [...displayName].some((character) => {
+      const code = character.codePointAt(0) ?? 0;
+      return code <= 31 || code === 127;
+    })
+  ) {
+    return rejected(state, 'INVALID_NAME');
+  }
+  return committed(
+    state,
+    {
+      members: state.members.map((candidate) =>
+        candidate.memberId === member.memberId
+          ? { ...candidate, displayName }
+          : candidate,
+      ),
+    },
+    [],
+  );
+}
+
 function gameAction(
   state: RoomState,
   action: Extract<RoomAction, { type: 'play' | 'pass' }>,
@@ -493,6 +714,7 @@ function gameAction(
     action.type === 'play'
       ? { type: 'play', player: actor.memberId, cards: action.cards }
       : { type: 'pass', player: actor.memberId },
+    options.rulePort,
   );
   if (
     transition.rejections.length > 0 ||
@@ -508,16 +730,19 @@ function gameAction(
         .join(','),
     );
   }
-  const phase = phaseFromEngine(transition.state);
+  const settlement = settleMembersAtSetResult(state.members, transition.state);
+  const phase = phaseAfterSettlement(transition.state, settlement.members);
   const engineEvents = publicEngineEvents(
     state.members,
     state.fixedRules ?? [],
     transition.events,
   );
+  engineEvents.push(...memberLeftEvents(settlement.removedMemberIds));
   return committed(
     state,
     {
       phase,
+      members: settlement.members,
       engine: transition.state,
       turnSeq: state.turnSeq + 1,
       turnDeadlineAt: null,
@@ -531,7 +756,11 @@ function gameAction(
   );
 }
 
-function advanceIntermission(state: RoomState): RoomTransition {
+function advanceIntermission(
+  state: RoomState,
+  action: Extract<RoomAction, { type: 'advanceIntermission' }>,
+  options: RoomReducerOptions,
+): RoomTransition {
   if (
     state.phase !== 'playing' ||
     !state.engine ||
@@ -539,7 +768,11 @@ function advanceIntermission(state: RoomState): RoomTransition {
   ) {
     return rejected(state, 'INVALID_SET_PHASE');
   }
-  const transition = reduceSet(state.engine, { type: 'advance' });
+  const transition = reduceSet(
+    state.engine,
+    { type: 'advance' },
+    options.rulePort,
+  );
   if (transition.rejections.length > 0) {
     return rejected(state, 'INVALID_SET_PHASE');
   }
@@ -547,14 +780,31 @@ function advanceIntermission(state: RoomState): RoomTransition {
     transition.state.phase.name === 'gameInProgress'
       ? transition.state.phase.gameIndex + 1
       : state.engine.results.length + 1;
-  return committed(state, { engine: transition.state }, [
+  const settlement = settleMembersAtSetResult(state.members, transition.state);
+  const phase = phaseAfterSettlement(transition.state, settlement.members);
+  const events: RoomGameEventPayload[] = [
     { t: 'gameStarted', gameNo },
     ...publicEngineEvents(
       state.members,
       state.fixedRules ?? [],
       transition.events,
     ),
-  ]);
+    ...memberLeftEvents(settlement.removedMemberIds),
+  ];
+  return committed(
+    state,
+    {
+      phase,
+      members: settlement.members,
+      engine: transition.state,
+      setRespondBy:
+        phase === 'setResult'
+          ? action.now +
+            (options.setResultTimeoutMs ?? DEFAULT_SET_RESULT_TIMEOUT_MS)
+          : null,
+    },
+    events,
+  );
 }
 
 export function reduceRoom(
@@ -568,14 +818,20 @@ export function reduceRoom(
     case 'start':
       return start(state, action, options);
     case 'leave':
-      return leave(state, action);
+      return leave(state, action, options);
     case 'disconnect':
     case 'reconnect':
       return connectionChanged(state, action);
+    case 'rename':
+      return rename(state, action);
+    case 'continue':
+      return continueSet(state, action, options);
+    case 'expireSetResult':
+      return expireSetResult(state, action, options);
     case 'play':
     case 'pass':
       return gameAction(state, action, options);
     case 'advanceIntermission':
-      return advanceIntermission(state);
+      return advanceIntermission(state, action, options);
   }
 }

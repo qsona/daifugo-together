@@ -4,6 +4,7 @@ import type {
   GameResult,
   Play,
   RuleChainEntry,
+  RuleChainPort,
   SetState,
   Standing,
   Title,
@@ -98,9 +99,29 @@ export type RoomAction =
       now: number;
     }
   | { type: 'start'; memberId: string; now: number; setSeed: string }
-  | { type: 'leave'; memberId: string }
+  | {
+      type: 'leave';
+      memberId: string;
+      now?: number;
+      setSeed?: string;
+      availableRules?: RuleChainEntry[];
+    }
   | { type: 'disconnect'; memberId: string }
   | { type: 'reconnect'; memberId: string }
+  | { type: 'rename'; memberId: string; displayName: string }
+  | {
+      type: 'continue';
+      memberId: string;
+      now: number;
+      setSeed: string;
+      availableRules?: RuleChainEntry[];
+    }
+  | {
+      type: 'expireSetResult';
+      now: number;
+      setSeed: string;
+      availableRules?: RuleChainEntry[];
+    }
   | {
       type: 'play';
       memberId: string;
@@ -109,7 +130,7 @@ export type RoomAction =
       now: number;
     }
   | { type: 'pass'; memberId: string; turnSeq: number; now: number }
-  | { type: 'advanceIntermission' };
+  | { type: 'advanceIntermission'; now: number };
 
 export type RoomErrorCode =
   | 'ALREADY_IN_ROOM'
@@ -119,10 +140,12 @@ export type RoomErrorCode =
   | 'NOT_HOST'
   | 'NOT_WAITING'
   | 'NOT_PLAYING'
+  | 'NOT_SET_RESULT'
   | 'NOT_YOUR_TURN'
   | 'STALE_TURN'
   | 'ILLEGAL_PLAY'
-  | 'INVALID_SET_PHASE';
+  | 'INVALID_SET_PHASE'
+  | 'INVALID_NAME';
 
 export interface RoomTransition {
   state: RoomState;
@@ -234,6 +257,7 @@ export interface RoomReducerOptions {
   setResultTimeoutMs?: number;
   random?: () => number;
   createAiMemberId?: (index: number) => string;
+  rulePort?: RuleChainPort;
 }
 
 export type RoomEngineResult = GameResult;

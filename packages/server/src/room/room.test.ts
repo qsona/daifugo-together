@@ -85,6 +85,60 @@ function expectNoOtherHands(state: RoomState): void {
   }
 }
 
+function finishSet(initial: RoomState): {
+  state: RoomState;
+  acceptedActions: number;
+} {
+  let state = initial;
+  let acceptedActions = 0;
+  for (let guard = 0; guard < 5_000 && state.phase === 'playing'; guard += 1) {
+    const engine = state.engine!;
+    if (engine.phase.name === 'interimResult') {
+      const advanced = reduceRoom(state, {
+        type: 'advanceIntermission',
+        now: 20_000 + guard,
+      });
+      expect(advanced.accepted).toBe(true);
+      state = advanced.state;
+      continue;
+    }
+    if (engine.phase.name === 'setResult') {
+      throw new Error('Room phase did not follow the set phase');
+    }
+    const game = engine.currentGame!;
+    const player = game.public.turn!;
+    const legal = enumerateLegalPlays(
+      {
+        gameIndex: engine.phase.gameIndex,
+        seats: engine.members.map((member) => member.id),
+        gameSeed: `${engine.setSeed}:${engine.phase.gameIndex}`,
+        ruleChain: engine.ruleChain,
+      },
+      game,
+      player,
+    );
+    const transition =
+      legal.length === 0
+        ? reduceRoom(state, {
+            type: 'pass',
+            memberId: player,
+            turnSeq: state.turnSeq,
+            now: 20_000 + guard,
+          })
+        : reduceRoom(state, {
+            type: 'play',
+            memberId: player,
+            turnSeq: state.turnSeq,
+            cards: legal[0]!.cards.map((card) => card.id),
+            now: 20_000 + guard,
+          });
+    expect(transition.accepted).toBe(true);
+    state = transition.state;
+    acceptedActions += 1;
+  }
+  return { state, acceptedActions };
+}
+
 describe('pure room reducer', () => {
   it('参加を直列化し、4人上限・重複・ホスト権限を強制する', () => {
     const state = fourHumanRoom();
@@ -338,6 +392,7 @@ describe('pure room reducer', () => {
       if (engine.phase.name === 'interimResult') {
         const advanced = reduceRoom(state, {
           type: 'advanceIntermission',
+          now: 10_000 + guard,
         });
         expect(advanced.accepted).toBe(true);
         state = advanced.state;
@@ -388,6 +443,185 @@ describe('pure room reducer', () => {
     expect(state.engine?.outcome?.completion).toBe('completed');
     expect(state.turnSeq).toBe(acceptedActions);
     expectNoOtherHands(state);
+  });
+
+  it('setResult到達時に切断中・明示離脱済みの人間を除去し、接続中の人間は残す', () => {
+    const started = start(join(join(room(), 2), 3));
+    const withDeparture = reduceRoom(started, {
+      type: 'leave',
+      memberId: 'member-1',
+    }).state;
+    const disconnected = reduceRoom(withDeparture, {
+      type: 'disconnect',
+      memberId: 'member-2',
+    }).state;
+    const finished = finishSet(disconnected).state;
+
+    expect(finished.phase).toBe('setResult');
+    expect(
+      finished.members.some(
+        (member) =>
+          member.memberId === 'member-1' || member.memberId === 'member-2',
+      ),
+    ).toBe(false);
+    expect(
+      finished.lastEvents.flatMap((event) =>
+        event.t === 'memberLeft' ? [event.memberId] : [],
+      ),
+    ).toContain('member-2');
+    expect(finished.members).toContainEqual(
+      expect.objectContaining({
+        memberId: 'member-3',
+        connected: true,
+        departed: false,
+      }),
+    );
+  });
+
+  it('残留人間全員のcontinueを待ち、AIを取り直して新しいセットを開始する', () => {
+    const finished = finishSet(start(join(room(), 2))).state;
+    expect(finished.phase).toBe('setResult');
+
+    const first = reduceRoom(
+      finished,
+      {
+        type: 'continue',
+        memberId: 'member-1',
+        now: 50_000,
+        setSeed: 'next-set',
+      },
+      { random: () => 0.999_999 },
+    );
+    expect(first.accepted).toBe(true);
+    expect(first.state.phase).toBe('setResult');
+    expect(
+      first.state.members.find((member) => member.memberId === 'member-1')
+        ?.wantsNextSet,
+    ).toBe(true);
+    expect(
+      first.state.members.find((member) => member.memberId === 'member-2')
+        ?.wantsNextSet,
+    ).toBe(false);
+
+    const second = reduceRoom(
+      first.state,
+      {
+        type: 'continue',
+        memberId: 'member-2',
+        now: 50_001,
+        setSeed: 'next-set',
+      },
+      { random: () => 0.999_999 },
+    );
+    expect(second.accepted).toBe(true);
+    expect(second.state.phase).toBe('playing');
+    expect(second.state.setNo).toBe(2);
+    expect(second.state.members).toHaveLength(4);
+    expect(second.state.members.filter((member) => member.isAI)).toHaveLength(
+      2,
+    );
+    expect(
+      second.state.members.every(
+        (member) => member.wantsNextSet === member.isAI,
+      ),
+    ).toBe(true);
+    expect(second.state.engine?.results).toEqual([]);
+    expect(second.state.engine?.setSeed).toBe('next-set');
+  });
+
+  it('setResultで継続しない人が離脱すると、継続者だけで次セットを始める', () => {
+    const finished = finishSet(start(join(room(), 2))).state;
+    const waiting = reduceRoom(finished, {
+      type: 'continue',
+      memberId: 'member-1',
+      now: 50_000,
+      setSeed: 'unused-until-ready',
+    }).state;
+    const left = reduceRoom(
+      waiting,
+      {
+        type: 'leave',
+        memberId: 'member-2',
+        now: 50_001,
+        setSeed: 'after-leave',
+      },
+      { random: () => 0.999_999 },
+    );
+
+    expect(left.state.phase).toBe('playing');
+    expect(left.state.setNo).toBe(2);
+    expect(
+      left.state.members
+        .filter((member) => !member.isAI)
+        .map((member) => member.memberId),
+    ).toEqual(['member-1']);
+    expect(left.state.members.filter((member) => member.isAI)).toHaveLength(3);
+    expect(left.state.engine?.setSeed).toBe('after-leave');
+  });
+
+  it('setResult期限で無応答者を除外し、継続者0なら閉じる', () => {
+    const finished = finishSet(start(join(room(), 2))).state;
+    const deadline = finished.setRespondBy!;
+    const early = reduceRoom(finished, {
+      type: 'expireSetResult',
+      now: deadline - 1,
+      setSeed: 'too-early',
+    });
+    expect(early.error?.code).toBe('INVALID_SET_PHASE');
+    expect(early.state).toBe(finished);
+
+    const expired = reduceRoom(finished, {
+      type: 'expireSetResult',
+      now: deadline,
+      setSeed: 'nobody-continues',
+    });
+    expect(expired.accepted).toBe(true);
+    expect(expired.state.phase).toBe('closed');
+    expect(expired.state.members).toEqual([]);
+  });
+
+  it('snapshotと公開eventを変更してもRoom/Core権威状態を変更できない', () => {
+    const started = start(fourHumanRoom());
+    const viewer = started.engine!.currentGame!.public.turn!;
+    const snapshot = viewFor(started, viewer);
+    const ownCard = snapshot.game!.yourHand[0]!;
+    const originalOwnId = ownCard.id;
+    ownCard.id = 'MUTATED_VIEW';
+    expect(
+      started.engine!.currentGame!.players[viewer]!.hand.some(
+        (card) => card.id === originalOwnId,
+      ),
+    ).toBe(true);
+    expect(
+      started.engine!.currentGame!.players[viewer]!.hand.some(
+        (card) => card.id === 'MUTATED_VIEW',
+      ),
+    ).toBe(false);
+
+    const leadCard = started.engine!.currentGame!.players[viewer]!.hand.find(
+      (card) => card.id === 'D03',
+    )!;
+    const played = reduceRoom(started, {
+      type: 'play',
+      memberId: viewer,
+      turnSeq: started.turnSeq,
+      cards: [leadCard.id],
+      now: 3_000,
+    });
+    const outputEvent = played.events.find((event) => event.t === 'played');
+    const stateEvent = played.state.lastEvents.find(
+      (event) => event.t === 'played',
+    );
+    expect(outputEvent?.t).toBe('played');
+    expect(stateEvent?.t).toBe('played');
+    if (outputEvent?.t === 'played' && stateEvent?.t === 'played') {
+      outputEvent.cards[0]!.id = 'MUTATED_OUTPUT_EVENT';
+      expect(stateEvent.cards[0]!.id).toBe('D03');
+      stateEvent.cards[0]!.id = 'MUTATED_STATE_EVENT';
+    }
+    expect(
+      played.state.engine!.currentGame!.public.field.current!.play.cards[0]!.id,
+    ).toBe('D03');
   });
 });
 

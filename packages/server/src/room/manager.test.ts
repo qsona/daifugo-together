@@ -1,3 +1,4 @@
+import { enumerateLegalPlays } from '@daifugo/core';
 import { describe, expect, it } from 'vitest';
 
 import { RoomManager, normalizeInviteCode } from './manager.js';
@@ -92,5 +93,90 @@ describe('RoomManager indexes', () => {
         memberId: 'missing',
       }),
     ).toBeUndefined();
+  });
+
+  it('setResultで切断者のuser indexを解放し、残留者だけを復帰対象にする', () => {
+    const rooms = manager();
+    const created = rooms.create({
+      userId: 'user-1',
+      displayName: 'ホスト',
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) {
+      return;
+    }
+    const joined = rooms.join(created.value.room.inviteCode, {
+      userId: 'user-2',
+      displayName: '切断者',
+    });
+    expect(joined.ok).toBe(true);
+    if (!joined.ok) {
+      return;
+    }
+    const roomId = created.value.room.roomId;
+    rooms.apply(roomId, {
+      type: 'start',
+      memberId: created.value.member.memberId,
+      now: 2_000,
+      setSeed: 'manager-complete-set',
+    });
+    rooms.apply(roomId, {
+      type: 'disconnect',
+      memberId: joined.value.member.memberId,
+    });
+
+    for (let guard = 0; guard < 5_000; guard += 1) {
+      const state = rooms.get(roomId);
+      expect(state).toBeDefined();
+      if (!state || state.phase !== 'playing') {
+        break;
+      }
+      const engine = state.engine!;
+      if (engine.phase.name === 'interimResult') {
+        rooms.apply(roomId, {
+          type: 'advanceIntermission',
+          now: 30_000 + guard,
+        });
+        continue;
+      }
+      if (engine.phase.name === 'setResult') {
+        throw new Error('Room phase did not follow setResult');
+      }
+      const player = engine.currentGame!.public.turn!;
+      const legal = enumerateLegalPlays(
+        {
+          gameIndex: engine.phase.gameIndex,
+          seats: engine.members.map((member) => member.id),
+          gameSeed: `${engine.setSeed}:${engine.phase.gameIndex}`,
+          ruleChain: engine.ruleChain,
+        },
+        engine.currentGame!,
+        player,
+      );
+      rooms.apply(
+        roomId,
+        legal.length === 0
+          ? {
+              type: 'pass',
+              memberId: player,
+              turnSeq: state.turnSeq,
+              now: 30_000 + guard,
+            }
+          : {
+              type: 'play',
+              memberId: player,
+              turnSeq: state.turnSeq,
+              cards: legal[0]!.cards.map((card) => card.id),
+              now: 30_000 + guard,
+            },
+      );
+    }
+
+    expect(rooms.get(roomId)?.phase).toBe('setResult');
+    expect(rooms.findByUser('user-2')).toBeUndefined();
+    expect(rooms.findByUser('user-1')?.room.roomId).toBe(roomId);
+    expect(rooms.create({ userId: 'user-2', displayName: '別部屋へ' }).ok).toBe(
+      true,
+    );
   });
 });

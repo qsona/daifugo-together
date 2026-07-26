@@ -41,7 +41,7 @@ function resultView(
   result: GameResult,
   seats: ReadonlyMap<string, SeatId>,
 ): GameResultView {
-  return {
+  return structuredClone({
     gameNo: result.gameIndex + 1,
     standings: result.standings.map((standing) => ({
       seat: requiredSeat(seats, standing.player),
@@ -49,7 +49,7 @@ function resultView(
       title: standing.title,
     })),
     firedRuleIds: [...result.firedRuleIds],
-  };
+  });
 }
 
 function historyView(
@@ -236,7 +236,7 @@ export function viewFor(
   }
   const seats = seatByMember(state.members);
   const rules = state.fixedRules ?? state.availableRules;
-  return {
+  return structuredClone({
     v: state.v,
     roomId: state.roomId,
     inviteCode: state.inviteCode,
@@ -253,5 +253,5 @@ export function viewFor(
     game: gameView(state, memberId, seats),
     setResult: setResultView(state),
     events: options.reconnect ? [] : structuredClone(state.lastEvents),
-  };
+  });
 }
