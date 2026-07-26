@@ -188,3 +188,112 @@ TS-02 から継続で未解決のもの:
 - **E04 §2.1.1 の「`src/assets` へコピー」は、§2.2(3) の「正本を 1 つに保つ」と手段が食い違っている。** 実装では alias 直接参照を採った(仮定 1・プロセス1 で採用裁定済み)。設計書側の記述の更新を提案する。
 - **E04 §1.3 は デザインシステム成果物を「並行作業で構築中」と書いているが、実際は 4 ファイルとも完成済み。** 状態記述の更新を提案する。
 - **`design-system.html` §5-4 のフォーカスリングだけがカタログ内で規約違反(生の色関数)**(仮定 13)。実装は color-mix に置き換えたが、カタログ側は触っていない。デザインシステム成果物側での修正を提案する。
+
+---
+
+## 並行進行: E1 ゲームエンジン
+
+- 状態: GE-02・GE-03・GE-05・GE-04 のプロセス2実装完了。11回目の独立 GPT-5.6 Sol 完了レビューで追加された公開 Effect port の入出力隔離も修正し、再レビュー待ち。
+- プロセス1: `8c38c3d`（リベース前 `a3e98a1`）
+- プロセス2: `841745a`
+- 検証: Node 26.5.0 / pnpm 11.17.0 / TypeScript 6.0.3 で `pnpm verify` 成功。統合リポジトリ全体は 14 files / 105 tests。format・lint・design lint・typecheck・build 成功。ルールなし200セットは0.32秒、違反0・failsafe 0。
+
+### 完了内容
+
+| ストーリー | プロセス2で仕上げた内容 |
+|---|---|
+| GE-02 | 権威判定と合法手表示の一致、スキップ消化、リード手詰まり保護、1000手強制終局、秘匿走査 |
+| GE-03 | `forceRank` の退場・非公開札隔離・競合時の近傍順位割当、全順位確定 |
+| GE-05 | draining、`setEnded`、set履歴・set KVのゲーム間参照、受理済みアクション追記境界、リプレイ実行器 |
+| GE-04 | 全Effect語彙、優先度・競合解決、resolutionログ、全フック、KVクォータ、4 fixtureの全16部分集合、シミュレーション |
+
+プロセス1の独立 GPT-5.6 Sol レビューは `GO_WITH_FIXES`。指摘された権威状態の可変参照、ルール間で共有された RNG/KV、合法手フェイルセーフの不一致、未接続フック、B-4 のアクションログ境界をすべて反映した。
+
+プロセス2の独立 GPT-5.6 Sol 完了レビューでは、(1) E2向け `SimulationApi` 未公開、(2) `moveCards` でactiveの手札が0枚になった後の順位未確定、(3) field→同一fieldの全札移動によるカード消失、(4) `onGameStart` だけで終局したゲームがSet側で進まない、(5) `afterFieldClear` でactiveが1人以下になった後に終局しない、の5件を再現。すべて修正し、最小再現を回帰テストへ追加した。
+
+2回目の独立レビューでは、(1) hook固有引数の可変参照、(2) `announce.params` への非公開カードID混入、(3) `SimulationApi` がset KVを次手へ引き継がない、(4) fallbackが単騎だけを仮定、(5) `turnLimit` failsafeをシミュレーション違反にしない、の5件を再現。hook引数の複製・deep freezeと例外隔離、非公開カード参照announceの棄却、`SimulationPosition { state, setMemory }` の明示的な状態包絡、全合法手からのfallback、failsafe種別集計とforced-termination違反化で修正した。あわせてルールなし経路の不要なcontext構築と各手のJSON全量往復を除き、200セット実測を37.42秒（レビュー値）から0.53秒へ短縮した。
+
+3回目の独立レビューでは、(1) 過去に公開されたカードを非公開手札へ戻すと、そのIDを`announce`に再掲できる、(2) `modifyLegality`返値の複製時にgetterが投げた例外がルール境界を抜ける、の2件を再現。現在hand/excludedにあるカードIDは公開履歴にかかわらず常に非公開参照として棄却し、フック返値の複製・形状検証・比較・採用を同じ例外境界内へ移した。getter例外と不正形状を含む最小再現を回帰テストへ追加した。
+
+4回目の独立レビューでは、(1) 同一Effectバッチ内で公開領域から手札へ戻したカードIDを後続announceで公開できる、(2) `skipTurns.count=NaN`がスキップ解決を停止させる、(3) `PlayerSnapshot`のネスト参照から権威状態を変更できる、(4) `startSet`では初回`onGameStart`のEffect解決ログを取得できない、(5) E09所有の`PriorityKey`正準型と公開型が不一致、の5件を再現。announceは全状態Effect適用後の最終状態で検査し、Effect payloadを有限整数・JSON値等のruntime境界で棄却し、snapshot全体をdeep cloneした。初回イベントを返す`startSetTransition`を追加し、`startSet`は状態だけを得る便宜APIとして維持した。PriorityKeyはE09どおり`{ score, activatedAt: epochMs, ruleId }`へ統一した。各最小再現を回帰テストへ追加した。
+
+5回目の独立レビューでは、(1) 欠落zone・不正scope・null params・非配列返値などEffect全体のruntime形状検証不足、(2) `onGameStart`の`skipTurns`を第1手番前に消化しない、(3) `ruleId`比較がE09のコード単位辞書順でなくlocale依存、を再現。Effect配列と判別可能ユニオンを`unknown`境界から例外安全に検証し、開始直後にも通常同等のskip/非active手番解決を通し、比較関数をE09掲載どおり`<`/`>`へ統一した。各最小再現を回帰テストへ追加した。
+
+6回目の独立レビューでは、(1) Effect の余剰フィールドに `BigInt`・`Date`・`Map`・非有限数・`undefined` を含めても採用され、返却遷移が JSON 非安全になる、(2) 不正な `byRank.rank` が形状検証を通る、(3) 公開 `RuleChainPort` が非配列 `effects` を返すと例外が境界を抜ける、を再現。Effect・Zone・CardSelector の許可キーと CardRank 列挙を含む JSON-safe な exact-shape 検証へ強化し、不正 payload は JSON-safe な内部代替値で棄却ログへ記録するようにした。公開 port の返値も `unknown` として配列形状を検査し、例外・不正値をゲーム停止なしで隔離した。
+
+7回目の独立レビューでは、(1) `clearField` → `afterFieldClear` 終局経路で `fieldCleared`・`playerRetired` が state の公開履歴へ二重追記される、(2) 公開 port が同じ `ruleId` を複数 entry に分けると1フック8 Effect上限を回避できる、(3) `onGameStart` だけで終わる初戦をシミュレーションの発動数・平均手数へ集計しない、を再現。終局分岐では未追記の終局イベントだけを履歴へ加え、Effect indexをruleId単位で通算し、simulationは`startSetTransition`の初期イベント・初期結果から集計を開始するように修正した。
+
+8回目の独立レビューでは、`modifyStrength` が関数を要素に持つ不正な `ranking` を返すと一度採用され、次の context 複製で `DataCloneError` が境界外へ漏れることを再現。返値の複製と、`CARD_RANKS` 全要素を重複なく一度ずつ含む exact-shape 検証を同じ例外境界内で行い、不正返値は直前の有効な強さ順を維持して無作用に隔離するようにした。
+
+9回目の独立レビューでは、独自実装の公開 `RuleChainPort.modifyStrength` から同じ不正返値を返すと in-process adapter の検証を迂回でき、候補列挙・snapshot・SimulationApi の3経路で例外になり得ることを再現。公開 port 呼び出しを共通safe adapterへ集約し、`modifyStrength`は完全なCardRank順列、`modifyLegality`は候補数と一致するexact-shapeの結果だけを採用するようにした。例外・不正値・未知のinfluenced ruleIdは基本判定と空influencedへ隔離する。
+
+10回目の独立レビューでは、公開 port が `modifyStrength` 入力の基礎順序を反転して共有定数を恒久変更でき、`modifyLegality` 入力候補のCard参照を通じて権威handを変更できることを再現。portへ渡すentries・基礎順序・候補手・基礎合法性をdetached clone + deep freezeし、入力破壊を試みた呼出しも基本判定へ隔離するようにした。RuleContextは元から全共有データがdeep freeze済みのため維持した。
+
+11回目の独立レビューでは、公開 port の `collectEffects` だけが `config.ruleChain` と `afterPlay` の権威Card参照を直接受け取り、返した `setMemory.value` もport側の保持参照とstateで共有されることを再現。共通 `safeCollectEffects` 境界でentries・フック固有引数をdetached clone + deep freezeし、返値も例外境界内で `structuredClone` してから形状検証・適用するようにした。入力破壊と返値の事後変更を同時に試みる最小再現を回帰テストへ追加した。
+
+### E1で置いた仮定
+
+| 仮定 | 根拠 | 影響範囲 |
+|---|---|---|
+| 契約 v1 は choice と `afterPass` を持たない | decision-log B-1 は未決だが E01 が暫定 B を明示 | RuleHooks、E7 の却下分類 |
+| `turnCount > 1000`、KV は 32 keys / 1KB value / 16KB namespace | decision-log B-2 は仮値で着手可 | reducer、Effect適用、simulation |
+| B-4 は core に保存先を持たせず、受理済みアクションの追記ポートとリプレイ型・実行器を提供 | 保存先・保持期間は未決だが、書込み開始点は確定可能 | `set/types.ts`、`replay/replay.ts`。永続実装は server / OP-03 |
+| draining中は進行中ゲームを完走し、ゲーム間なら即時、ゲーム中なら終了直後に既存結果で `setResult` | E01改訂ノート、E12 §4.5 | `requestDrain`、`SetOutcome.completion` |
+| 空のfieldを移動先にする `moveCards` は棄却 | `Zone.field` に `FieldState.current.by` を決める情報がない | `engine/effects.ts`。契約拡張時に見直し |
+| 上書き直前の `field.current` は `discard` へ移す | 最新プレイ1件のFieldStateとカード保存を両立 | reducer、snapshot |
+
+### E1で見つけた設計書の不整合
+
+- E01の旧節に54枚・14/14/13/13が残るが、同文書の確定版と decision-log A-3 はジョーカーなし52枚・13枚ずつ。実装は確定版に従った。
+- E01 §3.4の一部に次戦先手を前戦大貧民とする旧BR-11が残る。実装は確定版どおり毎ゲームのダイヤ3保持者。
+- 空のfieldを移動先にする `moveCards` は、所有者 `by` の決定規則が契約にない。現在は例外を投げず棄却し、resolutionログへ理由を残す。
+- E01 §2.12 の `createSimulationApi(chain, port)` だけでは、§2.2で分離された必須 `GameConfig`（gameSeed・seats・gameIndex）と `PlayerSnapshot` 用のセット文脈を復元できない。実装は `createSimulationApi({ config, snapshotContext, runtime })` とし、静的入力をfactoryで固定する形に読み替えた。E2はこの公開面を使用する。
+- 同じくE01 §2.12の `GameState` 単体では、§2.8で別管理されるsetスコープKVを複数手シミュレーションへ引き継げない。実装は `SimulationPosition { state, setMemory }` を各APIの入出力にし、探索分岐ごとの純粋性を保った。E2はpositionをプレイアウトごとにスレッドする必要がある。
+
+---
+
+## 並行進行: E2 対戦AI
+
+- 状態: AI-01 プロセス2実装完了。3回の独立 GPT-5.6 Sol 方向性レビュー指摘を反映し、最終方向性レビュー `GO`。完了レビュー待ち。
+- 検証: Node 26.5.0 / pnpm 11.17.0 / TypeScript 6.0.3。統合リポジトリ全体 17 files / 121 tests、format・lint・design lint・typecheck・build 成功。専用 `pnpm validate:ai` は500セット・1,500ゲーム完走、rejection 0、不正手0、fallback 0、random-legal 3席に対する平均報酬0.6847。lockfile再解決後の `pnpm outdated` は、ユーザー指定で固定したTypeScript（current/wanted 6.0.3、latest 7.0.2）以外0件。`@types/node` は26.1.1。
+- ユーザーストーリー確認: `packages/ai/src/ai-player.test.ts` の「1人+AI 3人で3ゲームのセットを拒否なく完走する」で、人間席1・AI席3の3ゲームセットを実際の E1 reducer に通し、全着手の rejection 0、結果3件、`completion=completed` を確認。
+
+### プロセス1で実装した方向
+
+- AI入力は `PlayerSnapshot` と権威側が列挙した `Play[]` のみ。他人の手札を型・実行時データのどちらでも渡さない。
+- 観測済みカードを除く52枚を、相手の公開残枚数に従ってseed付きで一様再配布する決定化。
+- 深さ1のルートUCB1、打ち切り付きロールアウト、順位報酬 `[1, 2/3, 1/3, 0]`、同一入力・seedの決定性。
+- Node標準 `worker_threads` の起動時warm-up・FIFO・1本再利用プールで探索。反復途中の統計を親へ送り、hard timeout時はpartial-search、統計0件なら最弱合法手へフォールバック。終了した旧workerの通知は新世代のジョブへ影響しない。
+- hard deadlineはキュー投入時から計測し、待機中に期限切れなら即座にfallbackする。workerが終了コード0を含め予期せず終了した場合もactiveを必ずsettleし、次世代workerで待機ジョブを続行する。
+- プロセス1の既定8プレイアウトではルート候補を最大4件に絞り、少なくとも1回はUCB1の再訪選択が起こるようにした。TS-03較正後は既定16プレイアウト・候補上限8・進捗batch 4へ更新した。`playoutBatchSize`はworkerから親へ進捗統計を送る最大反復間隔、`sliceMs`は進捗送信の最大経過時間として使い、hard timeout時に新しいpartial結果を回収する。
+- 外部AI API・HTTP・DB依存なし。合法手0件の強制パスはゲームループ側が即時処理する。
+
+### E2で置いた仮定
+
+| 仮定 | 根拠 | 影響範囲 |
+|---|---|---|
+| worker poolは1本、既定予算をsoft 50ms / hard 200msとする | Node 26のTS-03実測では1本でもイベントループを塞がず既定16プレイアウトをp95 40.8ms、最大80.2msで完了。shared-cpu-1xで2本はCPU総量を増やさない | `AiWorkerPool`、`ThinkBudget`。shared-cpu-2xへ移行する場合だけ再較正 |
+| プロセス1は提案ルール0件なので、worker内の決定化状態は空のrule chainで復元する | AI-01はフェーズ1。ルール追従はAI-02（フェーズ2） | `worker-entry.js`。プロセス2ではE1 runtime/configをworker要求へ運ぶ境界を確定する |
+| seed固定時の決定性を優先し、soft予算は壁時計打切りではなく `floor(softMs / 3)` を上限反復数へ変換する（既定50msで16本） | Node 26・cutoff 24のTS-03実測は約0.9 playout/ms。共有CPU・将来ルールのため約3倍の余裕を確保 | 探索反復数と強さ。500セットでもfallback 0、最大80.2ms |
+| `legalPlays.length === 0` はAIを呼ばずサーバーゲームループがpassする | E02の `AiDecision.play: Play` はpassを表現できない一方、本文は「0=パス強制」と明記 | E3のAI手番駆動。戦略的passは初版方策の「出せるなら出す」に従い選ばない |
+| 0.4〜1.2秒の演出遅延は探索ライブラリに入れず、着手を表示するserver/web側で入れる | CPU探索とUX待機を分離し、テストと再利用を決定的に保つ | E3/E4統合 |
+
+### プロセス2で完了したもの
+
+- `scripts/validate-ai.mjs` で500セット・1,500ゲームを実エンジンとworker AIへ通した。rejection 0、不正手0、fallback 0、全セット停止。random-legal 3席に対する平均報酬0.6847（基準0.60）、16,628着手の平均18.2ms・p95 40.8ms・最大80.2ms。
+- worker crash、探索例外、全サンプル失敗の障害注入。hard timeoutのpartial/heuristic分岐、旧worker終了後の次ジョブ継続、12世代連続crash/recoveryを回帰化した。
+- TS-03実測からpool 1本、約0.9 playout/ms、root cap 8、batch 4、cutoff 24、既定16プレイアウトへ較正した。hard 200msに対し正式検証の最大は80.2ms。
+- 非LLM・非ネットワーク依存をCIで機械検査するルール。
+- serverの `runAiTurn` に既定1秒watchdog、例外・不正手時のengine fallback、0.4〜1.2秒の演出遅延、`ai_playouts_per_move`・`ai_fallback_total`・`ai_move_wall_ms` と構造化ログを実装した。AIの探索とUX待機は分離している。
+
+プロセス2着手として `scripts/check-ai-boundaries.mjs` を `pnpm lint` に接続し、`packages/ai` の LLM SDK・HTTP/ネットワーク組込み・直接ネットワークAPIを機械的に拒否するようにした。違反 fixture を拒否するメタテストも追加した。
+
+障害注入は、worker が探索エラーを返した場合の合法 heuristic fallback と同一 worker の次着手再利用、および終了コード 0 の crash → 再生成 → 待機ジョブ継続を12世代連続で確認する stress テストまで追加した。
+
+提案ルールを含むworker境界はAI-02（フェーズ2）へ維持する。`RuleRuntime.port` は関数を含みstructured clone不能なので直接渡さず、serializableなルールID・設定・setHistory・公開可能memoryを送り、worker側で同じbundleをimportしてruntimeを再構成する。決定化factoryもcore側へ寄せる。
+
+### E2で見つけた設計書の不整合
+
+- 冒頭改訂ノートは探索を `worker_threads` 1〜2本で実行すると決定済みだが、§3.1(d)・§4.4・§6-5には「初期はホスト直列、兆候が出たらworkerへ移行」という旧記述が残る。実装は改訂ノートを正とした。
+- `AiDecision.play: Play` はpassを表現できない一方、§3.1(b)は合法手0件をパス強制としてAIの即決対象に含める。プロセス1ではAI呼出前にゲームループが強制passすることで契約を変えずに成立させた。
+- §4.4は`playoutBatchSize`をisolateへの一括送信単位、`sliceMs`をホスト側のyield間隔としている。改訂ノートに従い探索全体をworkerへ移したため、実装ではそれぞれ親へpartial統計を送る反復数・経過時間の上限に読み替えた。UCB1統計自体はworker内で毎反復更新するため、バッチ分古い統計にはならない。

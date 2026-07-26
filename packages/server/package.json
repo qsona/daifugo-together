@@ -10,7 +10,13 @@
     }
   },
   "scripts": {
+    "prebuild": "pnpm --filter @daifugo/ai... build",
     "build": "tsc -p tsconfig.build.json",
+    "pretypecheck": "pnpm --filter @daifugo/ai... build",
     "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@daifugo/ai": "workspace:*",
+    "@daifugo/core": "workspace:*"
   }
 }
