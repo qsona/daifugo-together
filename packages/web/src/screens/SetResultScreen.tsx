@@ -27,6 +27,7 @@ type SetResultScreenProps = {
   onPlayAgain: () => void;
   onHome: () => void;
   showEvaluation?: boolean;
+  waitingFor?: readonly string[] | null;
 };
 
 /**
@@ -43,6 +44,7 @@ export function SetResultScreen({
   onPlayAgain,
   onHome,
   showEvaluation = true,
+  waitingFor = null,
 }: SetResultScreenProps) {
   return (
     <div className={screen.screen}>
@@ -103,12 +105,20 @@ export function SetResultScreen({
          */}
 
         <div className={screen.footer}>
+          {waitingFor && waitingFor.length > 0 && (
+            <p role="status">{waitingFor.join('、')} を待っています…</p>
+          )}
           {/*
            * 評価はボタンを押した時点で送信済み(押した状態が残ることが確認そのもの)。
            * だから CTA は次の行動だけを言う。1 ボタン 1 動作。
            */}
-          <Button variant="primary" block onClick={onPlayAgain}>
-            もう1セットあそぶ
+          <Button
+            variant="primary"
+            block
+            disabled={waitingFor !== null}
+            onClick={onPlayAgain}
+          >
+            {waitingFor === null ? 'もう1セットあそぶ' : '待っています…'}
           </Button>
           <Button block onClick={onHome}>
             ホームへ

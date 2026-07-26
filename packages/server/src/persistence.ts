@@ -211,9 +211,7 @@ export class SqlitePersistence implements RoomPersistencePort {
     const next = transition.state;
     const now = 'now' in action ? action.now : Date.now();
     const transaction = this.#sqlite.transaction(() => {
-      const isInit =
-        (action.type === 'start' || action.type === 'continue') &&
-        next.engine?.setId !== previous.engine?.setId;
+      const isInit = next.engine?.setId !== previous.engine?.setId;
       const nextReplaySeq = next.engine
         ? (
             this.#sqlite

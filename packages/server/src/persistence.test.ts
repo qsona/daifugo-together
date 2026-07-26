@@ -57,6 +57,12 @@ describe('SQLite persistence', () => {
     });
     expect(created.ok).toBe(true);
     if (!created.ok) return;
+    const joined = rooms.join(created.value.room.inviteCode, {
+      userId: 'persistent-guest',
+      displayName: '永続ゲスト',
+    });
+    expect(joined.ok).toBe(true);
+    if (!joined.ok) return;
 
     const started = rooms.apply(created.value.room.roomId, {
       type: 'start',
@@ -167,6 +173,28 @@ describe('SQLite persistence', () => {
         .filter((record) => 'seq' in record)
         .map((_, index) => index),
     );
+
+    const continued = rooms.apply(state.roomId, {
+      type: 'continue',
+      memberId: created.value.member.memberId,
+      now: 10_000,
+      setSeed: 'unused-until-all-respond',
+    });
+    expect(continued?.state.phase).toBe('setResult');
+    const nextSet = rooms.apply(state.roomId, {
+      type: 'leave',
+      memberId: joined.value.member.memberId,
+      now: 10_001,
+      setSeed: 'second-set-seed',
+    });
+    expect(nextSet?.state.phase).toBe('playing');
+    const nextSetId = nextSet?.state.engine?.setId;
+    expect(nextSetId).not.toBe(engine.setId);
+    expect(persistence.replay(nextSetId!)[0]).toMatchObject({
+      formatVersion: 1,
+      setId: nextSetId,
+      setSeed: 'second-set-seed',
+    });
     persistence.close();
   });
 });

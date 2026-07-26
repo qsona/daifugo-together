@@ -449,6 +449,20 @@ function ConnectedApp({ client }: { client: MultiplayerClient }) {
   }
 
   if (room?.phase === 'setResult') {
+    const you = room.members.find(
+      (member) => member.memberId === room.you.memberId,
+    );
+    const waitingFor = you?.wantsNextSet
+      ? room.members
+          .filter(
+            (member) =>
+              !member.isAI &&
+              !member.departed &&
+              member.memberId !== room.you.memberId &&
+              member.wantsNextSet !== true,
+          )
+          .map((member) => member.displayName)
+      : null;
     return show(
       <SetResultScreen
         ranks={setRanks(room)}
@@ -474,6 +488,7 @@ function ConnectedApp({ client }: { client: MultiplayerClient }) {
           );
         }}
         showEvaluation={false}
+        waitingFor={waitingFor}
       />,
     );
   }
