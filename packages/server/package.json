@@ -17,6 +17,11 @@
   },
   "dependencies": {
     "@daifugo/ai": "workspace:*",
-    "@daifugo/core": "workspace:*"
+    "@daifugo/core": "workspace:*",
+    "socket.io": "^4.8.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "socket.io-client": "^4.8.3"
   }
 }
