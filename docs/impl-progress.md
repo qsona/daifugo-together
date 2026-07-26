@@ -249,3 +249,42 @@ TS-02 から継続で未解決のもの:
 - 空のfieldを移動先にする `moveCards` は、所有者 `by` の決定規則が契約にない。現在は例外を投げず棄却し、resolutionログへ理由を残す。
 - E01 §2.12 の `createSimulationApi(chain, port)` だけでは、§2.2で分離された必須 `GameConfig`（gameSeed・seats・gameIndex）と `PlayerSnapshot` 用のセット文脈を復元できない。実装は `createSimulationApi({ config, snapshotContext, runtime })` とし、静的入力をfactoryで固定する形に読み替えた。E2はこの公開面を使用する。
 - 同じくE01 §2.12の `GameState` 単体では、§2.8で別管理されるsetスコープKVを複数手シミュレーションへ引き継げない。実装は `SimulationPosition { state, setMemory }` を各APIの入出力にし、探索分岐ごとの純粋性を保った。E2はpositionをプレイアウトごとにスレッドする必要がある。
+
+---
+
+## 並行進行: E2 対戦AI
+
+- 状態: AI-01 プロセス1の縦断実装完了。方向性レビュー待ち。
+- 検証: Node 26.5.0 / pnpm 11.17.0 / TypeScript 6.0.3。統合リポジトリ全体 15 files / 87 tests、lint・typecheck 成功。
+- ユーザーストーリー確認: `packages/ai/src/ai-player.test.ts` の「1人+AI 3人で3ゲームのセットを拒否なく完走する」で、人間席1・AI席3の3ゲームセットを実際の E1 reducer に通し、全着手の rejection 0、結果3件、`completion=completed` を確認。
+
+### プロセス1で実装した方向
+
+- AI入力は `PlayerSnapshot` と権威側が列挙した `Play[]` のみ。他人の手札を型・実行時データのどちらでも渡さない。
+- 観測済みカードを除く52枚を、相手の公開残枚数に従ってseed付きで一様再配布する決定化。
+- 深さ1のルートUCB1、打ち切り付きロールアウト、順位報酬 `[1, 2/3, 1/3, 0]`、同一入力・seedの決定性。
+- Node標準 `worker_threads` の再利用プールで探索し、親側hard timeout時は最弱合法手へフォールバック。
+- 外部AI API・HTTP・DB依存なし。合法手0件の強制パスはゲームループ側が即時処理する。
+
+### E2で置いた仮定
+
+| 仮定 | 根拠 | 影響範囲 |
+|---|---|---|
+| B-7確定前はworker poolを1本、既定予算をsoft 50ms / hard 200msとする | E02改訂ノートが1〜2本、decision-log B-7が実測調整可 | `AiWorkerPool`、`ThinkBudget`。TS-03実測後に2本化・予算調整可 |
+| プロセス1は提案ルール0件なので、worker内の決定化状態は空のrule chainで復元する | AI-01はフェーズ1。ルール追従はAI-02（フェーズ2） | `worker-entry.js`。プロセス2ではE1 runtime/configをworker要求へ運ぶ境界を確定する |
+| seed固定時の決定性を優先し、soft予算は壁時計打切りではなく `softMs × 2` を上限反復数へ変換する仮係数とした。hard予算だけ親側壁時計watchdogで強制する | 壁時計打切りは同一入力の探索回数を非決定にする。B-7は未計測 | 探索反復数と強さ。TS-03のplayouts/msで係数を置換する |
+| `legalPlays.length === 0` はAIを呼ばずサーバーゲームループがpassする | E02の `AiDecision.play: Play` はpassを表現できない一方、本文は「0=パス強制」と明記 | E3のAI手番駆動。戦略的passは初版方策の「出せるなら出す」に従い選ばない |
+| 0.4〜1.2秒の演出遅延は探索ライブラリに入れず、着手を表示するserver/web側で入れる | CPU探索とUX待機を分離し、テストと再利用を決定的に保つ | E3/E4統合 |
+
+### プロセス2に回したもの
+
+- 1,000ゲームの合法性・停止性検証、500セットのrandom-legal基準との強さsmoke。
+- hard timeout、worker crash、探索例外、全サンプル失敗の障害注入とフォールバック階段の網羅。
+- TS-03実測に基づくpool本数、playouts/ms、root cap、batch size、cutoffの較正と200ms上限の性能試験。
+- 非LLM・非ネットワーク依存をCIで機械検査するルール。
+- 提案ルールを含む `GameConfig` / `RuleRuntime` のworker受け渡し。これはAI-02境界だが、AI-01完了レビューで方向だけ確認する。
+
+### E2で見つけた設計書の不整合
+
+- 冒頭改訂ノートは探索を `worker_threads` 1〜2本で実行すると決定済みだが、§3.1(d)・§4.4・§6-5には「初期はホスト直列、兆候が出たらworkerへ移行」という旧記述が残る。実装は改訂ノートを正とした。
+- `AiDecision.play: Play` はpassを表現できない一方、§3.1(b)は合法手0件をパス強制としてAIの即決対象に含める。プロセス1ではAI呼出前にゲームループが強制passすることで契約を変えずに成立させた。

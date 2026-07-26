@@ -1,0 +1,182 @@
+import {
+  buildPlayerSnapshot,
+  enumerateLegalPlays,
+  reduceSet,
+  startGame,
+  startSet,
+  type GameConfig,
+  type SetAction,
+  type SetState,
+  type SnapshotContext,
+} from '@daifugo/core';
+import { describe, expect, it } from 'vitest';
+
+import { createAiPlayer } from './ai-player.js';
+import { sameCandidate } from './heuristic.js';
+import { NORMAL_DIFFICULTY } from './types.js';
+import { AiWorkerPool } from './worker-pool.js';
+
+const seats = ['human', 'bot-1', 'bot-2', 'bot-3'];
+
+function gameConfig(state: SetState): GameConfig {
+  if (state.phase.name === 'setResult') {
+    throw new Error('Set has no active game');
+  }
+  return {
+    gameIndex: state.phase.gameIndex,
+    seats,
+    gameSeed: `${state.setSeed}:${state.phase.gameIndex}`,
+    ruleChain: [],
+  };
+}
+
+function snapshotContext(state: SetState): SnapshotContext {
+  return {
+    setId: state.setId,
+    setPhase: state.phase,
+    members: state.members,
+    setResults: state.results,
+  };
+}
+
+describe('AI-01', () => {
+  it('同じ観測・seedからworker threadで同じ合法手を選ぶ', async () => {
+    const config: GameConfig = {
+      gameIndex: 0,
+      seats,
+      gameSeed: 'ai-unit-game',
+      ruleChain: [],
+    };
+    const state = startGame(config).state;
+    const player = state.public.turn;
+    if (!player) {
+      throw new Error('Expected opening turn');
+    }
+    const context: SnapshotContext = {
+      setId: 'ai-unit-set',
+      setPhase: { name: 'gameInProgress', gameIndex: 0 },
+      members: seats.map((id) => ({
+        id,
+        displayName: id,
+        isAI: id !== 'human',
+      })),
+      setResults: [],
+    };
+    const input = {
+      view: buildPlayerSnapshot(config, state, context, player),
+      legalPlays: enumerateLegalPlays(config, state, player),
+      budget: {
+        softMs: 5,
+        hardMs: 1_000,
+        maxPlayouts: 12,
+        sliceMs: 10,
+      },
+      seed: 'same-ai-seed',
+      difficulty: NORMAL_DIFFICULTY,
+    };
+    const ai = createAiPlayer();
+    try {
+      const first = await ai.decideMove(input);
+      const second = await ai.decideMove(input);
+
+      expect(first.usedFallback).toBe('none');
+      expect(first.stats?.workerThread).toBe(true);
+      expect(
+        input.legalPlays.some((play) => sameCandidate(play, first.play)),
+      ).toBe(true);
+      expect(second.play).toEqual(first.play);
+      expect(second.stats).toEqual(first.stats);
+    } finally {
+      await ai.close();
+    }
+  });
+
+  it('1人+AI 3人で3ゲームのセットを拒否なく完走する', async () => {
+    let state = startSet({
+      setId: 'ai-integration-set',
+      config: { gamesPerSet: 3, interimAutoAdvanceMs: 0 },
+      members: seats.map((id) => ({
+        id,
+        displayName: id,
+        isAI: id !== 'human',
+      })),
+      ruleChain: [],
+      setSeed: 'ai-integration',
+    });
+    const ai = createAiPlayer({
+      search: { cutoffSteps: 8, rootCandidateCap: 6 },
+    });
+    let actions = 0;
+    try {
+      while (state.phase.name !== 'setResult' && actions < 2_000) {
+        if (state.phase.name === 'interimResult') {
+          const advanced = reduceSet(state, { type: 'advance' });
+          expect(advanced.rejections).toEqual([]);
+          state = advanced.state;
+          actions += 1;
+          continue;
+        }
+        const game = state.currentGame;
+        const player = game?.public.turn;
+        if (!game || !player) {
+          throw new Error('Expected an active AI test turn');
+        }
+        const config = gameConfig(state);
+        const legal = enumerateLegalPlays(config, game, player);
+        let action: SetAction;
+        if (legal.length === 0) {
+          action = { type: 'pass', player };
+        } else if (player === 'human') {
+          action = {
+            type: 'play',
+            player,
+            cards: legal[0]!.cards.map((card) => card.id),
+          };
+        } else {
+          const decision = await ai.decideMove({
+            view: buildPlayerSnapshot(
+              config,
+              game,
+              snapshotContext(state),
+              player,
+            ),
+            legalPlays: legal,
+            budget: {
+              softMs: 1,
+              hardMs: 1_000,
+              maxPlayouts: 2,
+              sliceMs: 1,
+            },
+            seed: `${state.setSeed}:${state.phase.gameIndex}:${game.public.turnCount}:${player}`,
+            difficulty: NORMAL_DIFFICULTY,
+          });
+          expect(legal.some((play) => sameCandidate(play, decision.play))).toBe(
+            true,
+          );
+          action = {
+            type: 'play',
+            player,
+            cards: decision.play.cards.map((card) => card.id),
+          };
+        }
+        const transition = reduceSet(state, action);
+        expect(transition.rejections).toEqual([]);
+        state = transition.state;
+        actions += 1;
+      }
+    } finally {
+      await ai.close();
+    }
+
+    expect(state.phase.name).toBe('setResult');
+    expect(state.results).toHaveLength(3);
+    expect(state.outcome?.completion).toBe('completed');
+    expect(actions).toBeLessThan(2_000);
+  }, 20_000);
+
+  it('B-7の仮値としてworker poolを1本に固定する', async () => {
+    const pool = new AiWorkerPool();
+    expect(pool.size).toBe(1);
+    await pool.close();
+  });
+});
