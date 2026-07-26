@@ -44,14 +44,19 @@ export function Card({ card, size = 'medium', selected, onToggle }: CardProps) {
     selected && styles.selected,
   );
 
-  const face = (
-    <>
+  /*
+   * ランクとスートは左上の隅に置く。手札は左から重ねるので、
+   * 各札の見えている部分は左端の細い帯だけになる。そこに情報を集めておけば
+   * 扇状に重なっていても全部の札が読める(カードゲーム UI の定石)。
+   */
+  const index = (
+    <span className={styles.index} aria-hidden="true">
       <span className={styles.rank}>{card.rank}</span>
-      <span className={styles.suit} aria-hidden="true">
-        {suitGlyph[card.suit]}
-      </span>
-    </>
+      <span className={styles.suit}>{suitGlyph[card.suit]}</span>
+    </span>
   );
+
+  const face = index;
 
   if (!onToggle) {
     return (

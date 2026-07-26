@@ -91,9 +91,12 @@ describe('DS-02: フェーズ 1 の主要画面が 1 本の導線でつながる
     await user.click(screen.getByRole('button', { name: /はじめる/ }));
     await user.click(screen.getByRole('button', { name: 'あそぶ' }));
 
-    // 画面 2a: 4 人固定なので人数選択 UI は置かず、人数は CTA に畳み込む。
-    expect(screen.getByRole('radio', { name: 'ルームをつくる' })).toBeTruthy();
-    expect(screen.queryByText(/枠を決める操作/)).toBeNull();
+    // 「あそぶ」は画面を挟まず二択のシートを開き、つくるなら待機画面へ直行する。
+    expect(
+      screen.getByRole('dialog', {
+        name: 'ルームをつくるか、招待コードではいる',
+      }),
+    ).toBeTruthy();
     await user.click(
       screen.getByRole('button', { name: '4人でルームをつくる' }),
     );
@@ -122,7 +125,6 @@ describe('DS-02: フェーズ 1 の主要画面が 1 本の導線でつながる
 
   it('画面に説明文を置かない(UI文言・情報量ガイド)', () => {
     for (const id of [
-      'roomEntry',
       'waitingRoom',
       'game',
       'gameResult',

@@ -1,4 +1,4 @@
-/* インゲーム部品: 手札(横スクロール・選択) */
+/* インゲーム部品: 手札(重ね表示・選択) */
 
 .tray {
   /* 手札は常に画面の下端に置く(親指の届く位置に固定する)。 */
@@ -13,25 +13,34 @@
   gap: var(--space-2);
 }
 
-.head {
-  display: flex;
-  align-items: baseline;
-  justify-content: flex-end;
-  gap: var(--space-2);
-  font-size: var(--font-size-micro);
-  font-weight: var(--font-weight-bold);
-  color: var(--color-text-secondary);
-}
-
-/* 意図どおり横スクロールで収める(縦に折り返さない)。 */
+/*
+ * 実際の手札と同じく左から重ねる。スクロールはさせない。
+ * --card-w は Card の幅、--card-gap は重ならないときの間隔。
+ */
 .cards {
+  --card-w: 52px;
+  --card-gap: 6px;
+
   display: flex;
-  gap: var(--space-2);
-  overflow-x: auto;
-  /* 選択で持ち上がる分と「選択中」ラベルの分の逃げ。 */
-  padding: var(--space-3) var(--space-1) var(--space-5);
   list-style: none;
   margin: 0;
+  /* 選択で持ち上がる分の逃げ。 */
+  padding: var(--space-4) 0 var(--space-1);
+}
+
+/*
+ * 札 1 枚ぶんの送り幅を、コンテナ幅に必ず収まるところまで詰める。
+ *   送り = min(重ならない間隔, (使える幅 - 札 1 枚) / (枚数 - 1))
+ * 負のマージンで送りを実現するので、枚数が増えるほど深く重なる。
+ */
+.slot + .slot {
+  margin-left: calc(
+    min(
+        var(--card-w) + var(--card-gap),
+        (100% - var(--card-w)) / (var(--count) - 1)
+      ) -
+      var(--card-w)
+  );
 }
 
 .actions {

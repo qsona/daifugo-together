@@ -32,23 +32,12 @@ export function CountdownButton({
       <Button variant="primary" block onClick={onActivate}>
         {children}
       </Button>
-      <svg
-        className={styles.ring}
-        viewBox="0 0 100 100"
-        preserveAspectRatio="none"
-        aria-hidden="true"
-      >
-        <rect
-          className={styles.track}
-          x="1"
-          y="1"
-          width="98"
-          height="98"
-          rx="49"
-          pathLength="100"
+      <div className={styles.track} aria-hidden="true">
+        <div
+          className={styles.fill}
           style={{ animationDuration: `${String(durationMs)}ms` }}
         />
-      </svg>
+      </div>
     </div>
   );
 }

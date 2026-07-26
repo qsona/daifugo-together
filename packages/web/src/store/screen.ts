@@ -6,13 +6,7 @@ import { create } from 'zustand';
  * フェーズ 2 の画面(4・6・7・8・9a・9b)は各機能 Epic が足す。
  */
 export type ScreenId =
-  | 'title'
-  | 'menu'
-  | 'roomEntry'
-  | 'waitingRoom'
-  | 'game'
-  | 'gameResult'
-  | 'setResult';
+  'title' | 'menu' | 'waitingRoom' | 'game' | 'gameResult' | 'setResult';
 
 type ScreenState = {
   current: ScreenId;

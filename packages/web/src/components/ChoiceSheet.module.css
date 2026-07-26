@@ -1,0 +1,61 @@
+/*
+ * 二択のシート。DS-02 追加。
+ * 「画面を 1 枚挟んで選ばせる」代わりに、その場で開いてタップで決めさせる。
+ * 選択肢が少なく、選んだ先が別の画面になるときに使う。
+ */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  border: none;
+  padding: 0;
+  background: var(--color-overlay);
+  animation: fade var(--duration-base) var(--easing-standard);
+}
+
+.backdrop {
+  flex: 1;
+}
+
+.sheet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-4)
+    calc(var(--space-6) + env(safe-area-inset-bottom));
+  background: var(--color-bg-app);
+  border-top: var(--border-heavy) solid var(--color-border-strong);
+  border-radius: var(--radius-l) var(--radius-l) 0 0;
+  animation: rise var(--duration-slow) var(--easing-pop);
+}
+
+/* つまみ。下から出てきたことと、下げて閉じられることを形で示す。 */
+.grip {
+  align-self: center;
+  width: 44px;
+  height: 5px;
+  border-radius: var(--radius-pill);
+  background: var(--color-navy-200);
+}
+
+@keyframes rise {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet {
+    animation-name: fade;
+  }
+}

@@ -1,0 +1,6 @@
+/* 「あそぶ」の二択シート */
+
+.back {
+  display: flex;
+  justify-content: center;
+}
