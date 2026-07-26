@@ -131,6 +131,7 @@ async function connect(
 ): Promise<{
   client: TestClient;
   ready: Parameters<ServerToClientEvents['session:ready']>[0];
+  statesBeforeReady: PlayerRoomView[];
 }> {
   const client: TestClient = createClient(harness.url, {
     autoConnect: false,
@@ -139,11 +140,21 @@ async function connect(
     reconnection: false,
   });
   harness.clients.push(client);
+  const statesBeforeReady: PlayerRoomView[] = [];
+  let readyReceived = false;
+  client.on('room:state', (view) => {
+    if (!readyReceived) statesBeforeReady.push(view);
+  });
   const readyPromise = once<
     Parameters<ServerToClientEvents['session:ready']>[0]
-  >((resolve) => client.once('session:ready', resolve));
+  >((resolve) =>
+    client.once('session:ready', (ready) => {
+      readyReceived = true;
+      resolve(ready);
+    }),
+  );
   client.connect();
-  return { client, ready: await readyPromise };
+  return { client, ready: await readyPromise, statesBeforeReady };
 }
 
 function emitAck<Event extends keyof ClientToServerEvents, Result>(
@@ -264,6 +275,7 @@ describe('Socket.IO room gateway', () => {
       created.ok ? created.value.roomId : '',
     );
     expect(replacement.ready.room?.events).toEqual([]);
+    expect(replacement.statesBeforeReady).toEqual([]);
   });
 
   it('切断中に権威状態が数手進んでも、再接続snapshotが最新版と一致する', async () => {

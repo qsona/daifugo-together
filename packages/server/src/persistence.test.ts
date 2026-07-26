@@ -49,7 +49,7 @@ describe('SQLite persistence', () => {
       createRoomId: () => 'persistent-room',
       createMemberId: () => `member-${++id}`,
       randomIndex: () => 0,
-      reducer: { random: () => 0.999_999 },
+      reducer: { gamesPerSet: 1, random: () => 0.999_999 },
     });
     const created = rooms.create({
       userId: 'persistent-user',
@@ -107,6 +107,66 @@ describe('SQLite persistence', () => {
       setSeed: 'persistent-set-seed',
     });
     expect(replay[1]).toMatchObject({ seq: 0 });
+
+    for (let guard = 0; guard < 5_000; guard += 1) {
+      const current = rooms.get(state.roomId);
+      if (!current || current.phase === 'setResult') break;
+      expect(current.phase).toBe('playing');
+      const currentEngine = current.engine!;
+      if (currentEngine.phase.name === 'interimResult') {
+        rooms.apply(state.roomId, {
+          type: 'advanceIntermission',
+          now: 2_000 + guard,
+        });
+        continue;
+      }
+      expect(currentEngine.phase.name).toBe('gameInProgress');
+      if (currentEngine.phase.name !== 'gameInProgress') break;
+      const currentPlayer = currentEngine.currentGame!.public.turn!;
+      const currentLegal = enumerateLegalPlays(
+        {
+          gameIndex: currentEngine.phase.gameIndex,
+          seats: currentEngine.members.map((member) => member.id),
+          gameSeed: `${currentEngine.setSeed}:${currentEngine.phase.gameIndex}`,
+          ruleChain: currentEngine.ruleChain,
+        },
+        currentEngine.currentGame!,
+        currentPlayer,
+      );
+      rooms.apply(
+        state.roomId,
+        currentLegal.length === 0
+          ? {
+              type: 'pass',
+              memberId: currentPlayer,
+              turnSeq: current.turnSeq,
+              now: 2_000 + guard,
+            }
+          : {
+              type: 'play',
+              memberId: currentPlayer,
+              turnSeq: current.turnSeq,
+              cards: currentLegal[0]!.cards.map((card) => card.id),
+              now: 2_000 + guard,
+            },
+      );
+    }
+    expect(rooms.get(state.roomId)?.phase).toBe('setResult');
+    expect(persistence.result(engine.setId)).toMatchObject({
+      completion: 'completed',
+      gamesPlayed: 1,
+    });
+    expect(
+      persistence
+        .replay(engine.setId)
+        .filter((record) => 'seq' in record)
+        .map((record) => record.seq),
+    ).toEqual(
+      persistence
+        .replay(engine.setId)
+        .filter((record) => 'seq' in record)
+        .map((_, index) => index),
+    );
     persistence.close();
   });
 });

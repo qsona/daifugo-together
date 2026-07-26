@@ -256,7 +256,7 @@ function tableSeats(room: PlayerRoomView): TableSeat[] {
     const seat = ((room.you.seatId! + offset) % 4) as 0 | 1 | 2 | 3;
     const member = bySeat.get(seat);
     const status = member?.isAI
-      ? member.aiActing
+      ? game.turn?.seat === seat
         ? '考え中…'
         : undefined
       : member?.departed
@@ -473,6 +473,7 @@ function ConnectedApp({ client }: { client: MultiplayerClient }) {
             }),
           );
         }}
+        showEvaluation={false}
       />,
     );
   }

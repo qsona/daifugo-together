@@ -122,6 +122,7 @@ export function attachRoomSocketGateway(
   const sessions = options.sessions ?? new InMemorySessionStore();
   const createSetSeed = options.createSetSeed ?? randomUUID;
   const activeByUser = new Map<string, RoomSocket>();
+  const readySocketIds = new Set<string>();
   const ai = options.ai ?? createAiPlayer();
   const ownsAi = options.ai === undefined;
   let draining = false;
@@ -149,7 +150,7 @@ export function attachRoomSocketGateway(
         continue;
       }
       const target = activeByUser.get(member.userId);
-      if (!target) {
+      if (!target || !readySocketIds.has(target.id)) {
         continue;
       }
       try {
@@ -325,6 +326,7 @@ export function attachRoomSocketGateway(
           })
         : null,
     });
+    readySocketIds.add(socket.id);
 
     socket.on('room:create', (payload, ack) => {
       try {
@@ -609,6 +611,7 @@ export function attachRoomSocketGateway(
     });
 
     socket.on('disconnect', () => {
+      readySocketIds.delete(socket.id);
       if (activeByUser.get(session.userId) !== socket) {
         return;
       }
@@ -666,6 +669,7 @@ export function attachRoomSocketGateway(
         socket.disconnect(true);
       }
       activeByUser.clear();
+      readySocketIds.clear();
     },
   };
 }
