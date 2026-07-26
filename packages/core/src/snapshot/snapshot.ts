@@ -10,6 +10,7 @@ import { enumerateLegalPlays } from '../play/candidates.js';
 import { BASE_STRENGTH_ORDER } from '../play/strength.js';
 import { noRuleRuntime, type RuleRuntime } from '../rules/chain.js';
 import { buildRuleContext, prepareRuleInvocation } from '../rules/context.js';
+import { safeModifyStrength } from '../rules/safe-port.js';
 
 const TITLES: Record<Standing, PlayerSnapshot['players'][number]['title']> = {
   1: '大富豪',
@@ -48,7 +49,8 @@ export function buildPlayerSnapshot(
       invocationIndices: strengthInvocation.invocationIndices,
     },
   );
-  const effectiveStrength = runtime.port.modifyStrength(
+  const effectiveStrength = safeModifyStrength(
+    runtime.port,
     config.ruleChain,
     baseContext,
     BASE_STRENGTH_ORDER,

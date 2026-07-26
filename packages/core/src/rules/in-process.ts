@@ -1,4 +1,3 @@
-import { CARD_RANKS, type CardRank } from '../cards/card.js';
 import type { RuleId } from '../game/types.js';
 import type { Play } from '../play/play.js';
 import type { StrengthOrder } from '../play/strength.js';
@@ -12,6 +11,7 @@ import type {
   Standings,
 } from './contract.js';
 import { contextForRule, detachedFrozen } from './context.js';
+import { cloneValidStrengthOrder } from './safe-port.js';
 
 function changed(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) !== JSON.stringify(right);
@@ -41,33 +41,6 @@ function isLegality(value: unknown): value is Legality {
     return false;
   }
   return !('reasonKey' in value) || typeof value.reasonKey === 'string';
-}
-
-function detachedStrengthOrder(value: unknown): StrengthOrder | null {
-  const cloned = detachedClone(value);
-  if (
-    typeof cloned !== 'object' ||
-    cloned === null ||
-    Array.isArray(cloned) ||
-    Reflect.ownKeys(cloned).some((key) => key !== 'ranking') ||
-    !('ranking' in cloned) ||
-    !Array.isArray(cloned.ranking) ||
-    cloned.ranking.length !== CARD_RANKS.length
-  ) {
-    return null;
-  }
-  const ranking = cloned.ranking;
-  if (
-    !ranking.every(
-      (rank): rank is CardRank =>
-        typeof rank === 'string' &&
-        CARD_RANKS.includes(rank as (typeof CARD_RANKS)[number]),
-    ) ||
-    new Set(ranking).size !== CARD_RANKS.length
-  ) {
-    return null;
-  }
-  return { ranking: [...ranking] };
 }
 
 export function createInProcessRuleChainPort(
@@ -129,7 +102,7 @@ export function createInProcessRuleChainPort(
         }
         let next: StrengthOrder | null;
         try {
-          next = detachedStrengthOrder(
+          next = cloneValidStrengthOrder(
             hook(contextForRule(context, entry.ruleId), detachedFrozen(result)),
           );
         } catch {

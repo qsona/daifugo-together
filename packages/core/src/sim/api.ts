@@ -15,6 +15,7 @@ import type { Play } from '../play/play.js';
 import { BASE_STRENGTH_ORDER, type StrengthOrder } from '../play/strength.js';
 import { noRuleRuntime, type RuleRuntime } from '../rules/chain.js';
 import { buildRuleContext, prepareRuleInvocation } from '../rules/context.js';
+import { safeModifyStrength } from '../rules/safe-port.js';
 import type { Standings } from '../rules/contract.js';
 import { buildPlayerSnapshot } from '../snapshot/snapshot.js';
 
@@ -107,7 +108,8 @@ export function createSimulationApi(
         invocationIndices: invocation.invocationIndices,
       },
     );
-    return runtime.port.modifyStrength(
+    return safeModifyStrength(
+      runtime.port,
       config.ruleChain,
       context,
       BASE_STRENGTH_ORDER,

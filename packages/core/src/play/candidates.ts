@@ -7,6 +7,7 @@ import {
   type RuleRuntime,
 } from '../rules/chain.js';
 import type { Legality } from '../rules/contract.js';
+import { safeModifyLegality, safeModifyStrength } from '../rules/safe-port.js';
 import { compareRanks, BASE_STRENGTH_ORDER } from './strength.js';
 import type { Play } from './play.js';
 
@@ -109,7 +110,8 @@ export function evaluateCandidates(
       invocationIndices: strengthInvocation.invocationIndices,
     },
   );
-  const strengthResult = runtime.port.modifyStrength(
+  const strengthResult = safeModifyStrength(
+    runtime.port,
     config.ruleChain,
     baseContext,
     BASE_STRENGTH_ORDER,
@@ -133,7 +135,8 @@ export function evaluateCandidates(
   const base = plays.map((play) =>
     baseLegality(legalityInvocation.state, play, strengthResult.result),
   );
-  const legalityResult = runtime.port.modifyLegality(
+  const legalityResult = safeModifyLegality(
+    runtime.port,
     config.ruleChain,
     context,
     plays,

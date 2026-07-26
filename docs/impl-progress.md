@@ -193,10 +193,10 @@ TS-02 から継続で未解決のもの:
 
 ## 並行進行: E1 ゲームエンジン
 
-- 状態: GE-02・GE-03・GE-05・GE-04 のプロセス2実装完了。8回目の独立 GPT-5.6 Sol 完了レビューで追加された強さ順返値境界も修正し、再レビュー待ち。
+- 状態: GE-02・GE-03・GE-05・GE-04 のプロセス2実装完了。9回目の独立 GPT-5.6 Sol 完了レビューで追加された公開 transform port 境界も修正し、再レビュー待ち。
 - プロセス1: `8c38c3d`（リベース前 `a3e98a1`）
 - プロセス2: `841745a`
-- 検証: Node 26.5.0 / pnpm 11.17.0 / TypeScript 6.0.3 で `pnpm verify` 成功。統合リポジトリ全体は 14 files / 103 tests。format・lint・design lint・typecheck・build 成功。ルールなし200セットは0.53秒、違反0・failsafe 0。
+- 検証: Node 26.5.0 / pnpm 11.17.0 / TypeScript 6.0.3 で `pnpm verify` 成功。統合リポジトリ全体は 14 files / 104 tests。format・lint・design lint・typecheck・build 成功。ルールなし200セットは0.53秒、違反0・failsafe 0。
 
 ### 完了内容
 
@@ -224,6 +224,8 @@ TS-02 から継続で未解決のもの:
 7回目の独立レビューでは、(1) `clearField` → `afterFieldClear` 終局経路で `fieldCleared`・`playerRetired` が state の公開履歴へ二重追記される、(2) 公開 port が同じ `ruleId` を複数 entry に分けると1フック8 Effect上限を回避できる、(3) `onGameStart` だけで終わる初戦をシミュレーションの発動数・平均手数へ集計しない、を再現。終局分岐では未追記の終局イベントだけを履歴へ加え、Effect indexをruleId単位で通算し、simulationは`startSetTransition`の初期イベント・初期結果から集計を開始するように修正した。
 
 8回目の独立レビューでは、`modifyStrength` が関数を要素に持つ不正な `ranking` を返すと一度採用され、次の context 複製で `DataCloneError` が境界外へ漏れることを再現。返値の複製と、`CARD_RANKS` 全要素を重複なく一度ずつ含む exact-shape 検証を同じ例外境界内で行い、不正返値は直前の有効な強さ順を維持して無作用に隔離するようにした。
+
+9回目の独立レビューでは、独自実装の公開 `RuleChainPort.modifyStrength` から同じ不正返値を返すと in-process adapter の検証を迂回でき、候補列挙・snapshot・SimulationApi の3経路で例外になり得ることを再現。公開 port 呼び出しを共通safe adapterへ集約し、`modifyStrength`は完全なCardRank順列、`modifyLegality`は候補数と一致するexact-shapeの結果だけを採用するようにした。例外・不正値・未知のinfluenced ruleIdは基本判定と空influencedへ隔離する。
 
 ### E1で置いた仮定
 

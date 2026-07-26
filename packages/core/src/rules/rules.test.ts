@@ -340,8 +340,60 @@ describe('GE-04 independent rule modules', () => {
     );
   });
 
+  it('公開RuleChainPortの不正なtransform返値を基本判定へ隔離する', () => {
+    const entry = fixtureEntry('r0002d-invalid-public-transform', 0);
+    const config: GameConfig = {
+      gameIndex: 0,
+      seats: ['p1', 'p2', 'p3', 'p4'],
+      gameSeed: 'invalid-public-transform',
+      ruleChain: [entry],
+    };
+    const started = startGame(config).state;
+    const player = started.public.turn;
+    const card = player ? started.players[player]?.hand[0] : undefined;
+    if (!player || !card) {
+      throw new Error('Expected an opening play');
+    }
+    const invalidStrengthRuntime: RuleRuntime = {
+      port: {
+        ...NO_RULE_CHAIN_PORT,
+        modifyStrength: () =>
+          ({
+            result: { ranking: [() => 0] },
+            influenced: [entry.ruleId],
+          }) as never,
+      },
+      setHistory: [],
+      setMemory: {},
+    };
+    const invalidLegalityRuntime: RuleRuntime = {
+      port: {
+        ...NO_RULE_CHAIN_PORT,
+        modifyLegality: () => null as never,
+      },
+      setHistory: [],
+      setMemory: {},
+    };
+
+    for (const ruleRuntime of [
+      invalidStrengthRuntime,
+      invalidLegalityRuntime,
+    ]) {
+      const transition = reduceGame(
+        config,
+        started,
+        { type: 'play', player, cards: [card.id] },
+        ruleRuntime,
+      );
+      expect(transition.rejections).toEqual([]);
+      expect(transition.state.public.field.current?.play.cards).toContainEqual(
+        card,
+      );
+    }
+  });
+
   it('modifyLegality返値の複製中に例外が起きても基本進行を続ける', () => {
-    const entry = fixtureEntry('r0002d-legality-getter', 0);
+    const entry = fixtureEntry('r0002e-legality-getter', 0);
     const malicious: RuleModule = {
       meta: {
         ruleId: entry.ruleId,
@@ -388,7 +440,7 @@ describe('GE-04 independent rule modules', () => {
   });
 
   it('modifyLegalityが不正な形状を返しても基本進行を続ける', () => {
-    const entry = fixtureEntry('r0002e-invalid-legality', 0);
+    const entry = fixtureEntry('r0002f-invalid-legality', 0);
     const invalid: RuleModule = {
       meta: {
         ruleId: entry.ruleId,
