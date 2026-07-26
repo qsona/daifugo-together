@@ -247,6 +247,87 @@ describe('pure room reducer', () => {
     expect(empty.state.members).toEqual([]);
   });
 
+  it('waiting切断者を60秒後に解放してhost移譲し、lobby TTLで部屋を閉じる', () => {
+    const joined = join(room(), 2);
+    const disconnected = reduceRoom(joined, {
+      type: 'disconnect',
+      memberId: 'member-1',
+      now: 1_000,
+    }).state;
+    const early = reduceRoom(disconnected, {
+      type: 'expireWaitingMember',
+      memberId: 'member-1',
+      expectedAt: 61_000,
+      now: 60_999,
+      setSeed: 'unused',
+    });
+    expect(early.error?.code).toBe('INVALID_SET_PHASE');
+
+    const released = reduceRoom(disconnected, {
+      type: 'expireWaitingMember',
+      memberId: 'member-1',
+      expectedAt: 61_000,
+      now: 61_000,
+      setSeed: 'unused',
+    });
+    expect(released.accepted).toBe(true);
+    expect(released.state.members).toHaveLength(1);
+    expect(released.state.members[0]).toMatchObject({
+      memberId: 'member-2',
+      isHost: true,
+    });
+
+    const expired = reduceRoom(released.state, {
+      type: 'expireRoom',
+      reason: 'lobbyExpired',
+      expectedAt: released.state.lobbyExpiresAt,
+      now: released.state.lobbyExpiresAt,
+    });
+    expect(expired.state.phase).toBe('closed');
+    expect(expired.state.members).toEqual([]);
+  });
+
+  it('playingで接続中人間が0になると5分後にabandonし、復帰すれば解除する', () => {
+    const started = start(room());
+    const disconnected = reduceRoom(started, {
+      type: 'disconnect',
+      memberId: 'member-1',
+      now: 2_000,
+    }).state;
+    expect(disconnected.abandonAt).toBe(302_000);
+
+    const early = reduceRoom(disconnected, {
+      type: 'expireRoom',
+      reason: 'abandoned',
+      expectedAt: 302_000,
+      now: 301_999,
+    });
+    expect(early.error?.code).toBe('INVALID_SET_PHASE');
+    const reconnected = reduceRoom(disconnected, {
+      type: 'reconnect',
+      memberId: 'member-1',
+      now: 3_000,
+    }).state;
+    expect(reconnected.abandonAt).toBeNull();
+    expect(
+      reduceRoom(reconnected, {
+        type: 'expireRoom',
+        reason: 'abandoned',
+        expectedAt: 302_000,
+        now: 302_000,
+      }).error?.code,
+    ).toBe('INVALID_SET_PHASE');
+
+    const abandoned = reduceRoom(disconnected, {
+      type: 'expireRoom',
+      reason: 'abandoned',
+      expectedAt: 302_000,
+      now: 302_000,
+    });
+    expect(abandoned.state.phase).toBe('closed');
+    expect(abandoned.state.members).toEqual([]);
+  });
+
   it('対局中の切断は席を保ったAI代行、復帰はhumanへ戻し、明示離脱は不可逆にする', () => {
     const started = start(join(room(), 2));
     const disconnected = reduceRoom(started, {

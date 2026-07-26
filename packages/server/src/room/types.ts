@@ -1,17 +1,29 @@
 import type {
-  Card,
   CardId,
   GameResult,
-  Play,
   RuleChainEntry,
   RuleChainPort,
+  RoomErrorCode,
+  RoomGameEvent,
+  RoomPhase,
+  SeatId,
   SetState,
-  Standing,
-  Title,
 } from '@daifugo/core';
 
-export type SeatId = 0 | 1 | 2 | 3;
-export type RoomPhase = 'waiting' | 'playing' | 'setResult' | 'closed';
+export type {
+  GameResultView,
+  MemberView,
+  MultiplayerGameView as GameView,
+  PlayerRoomView,
+  PublicPlayView,
+  RoomErrorCode,
+  RoomGameEvent,
+  RoomPhase,
+  RuleRef,
+  SeatId,
+  SetResultView,
+} from '@daifugo/core';
+
 export type SeatController = 'human' | 'ai';
 
 export interface RoomMember {
@@ -27,42 +39,9 @@ export interface RoomMember {
   departed: boolean;
   wantsNextSet: boolean;
   joinedAt: number;
+  disconnectedAt: number | null;
+  waitingDisconnectExpiresAt: number | null;
 }
-
-export interface RuleRef {
-  ruleId: string;
-  name: string;
-}
-
-export type RoomGameEvent = { seq: number } & (
-  | {
-      t:
-        | 'memberJoined'
-        | 'memberLeft'
-        | 'memberDisconnected'
-        | 'memberReconnected'
-        | 'hostChanged'
-        | 'aiFilled'
-        | 'aiTakeover'
-        | 'humanReturned';
-      memberId: string;
-    }
-  | { t: 'setStarted'; setNo: number }
-  | { t: 'gameStarted'; gameNo: number }
-  | { t: 'played'; seat: SeatId; cards: Card[] }
-  | { t: 'passed'; seat: SeatId }
-  | { t: 'turnTimeout'; seat: SeatId }
-  | { t: 'fieldCleared'; reason: 'allPassed' | 'rule' }
-  | { t: 'playerFinished'; seat: SeatId; rank: number }
-  | { t: 'gameEnded' }
-  | { t: 'setEnded' }
-  | {
-      t: 'ruleFired';
-      ruleId: string;
-      name: string;
-      messageKey: string;
-    }
-);
 
 export type RoomGameEventPayload = RoomGameEvent extends infer Event
   ? Event extends { seq: number }
@@ -84,6 +63,8 @@ export interface RoomState {
   setNo: number;
   turnDeadlineAt: number | null;
   setRespondBy: number | null;
+  lobbyExpiresAt: number;
+  abandonAt: number | null;
   lastEvents: RoomGameEvent[];
 }
 
@@ -123,6 +104,19 @@ export type RoomAction =
       availableRules?: RuleChainEntry[];
     }
   | {
+      type: 'expireWaitingMember';
+      memberId: string;
+      now: number;
+      expectedAt: number;
+      setSeed: string;
+    }
+  | {
+      type: 'expireRoom';
+      reason: 'lobbyExpired' | 'abandoned';
+      now: number;
+      expectedAt: number;
+    }
+  | {
       type: 'play';
       memberId: string;
       turnSeq: number;
@@ -140,21 +134,6 @@ export type RoomAction =
     }
   | { type: 'advanceIntermission'; now: number };
 
-export type RoomErrorCode =
-  | 'ALREADY_IN_ROOM'
-  | 'ROOM_FULL'
-  | 'ROOM_CLOSED'
-  | 'NOT_IN_ROOM'
-  | 'NOT_HOST'
-  | 'NOT_WAITING'
-  | 'NOT_PLAYING'
-  | 'NOT_SET_RESULT'
-  | 'NOT_YOUR_TURN'
-  | 'STALE_TURN'
-  | 'ILLEGAL_PLAY'
-  | 'INVALID_SET_PHASE'
-  | 'INVALID_NAME';
-
 export interface RoomTransition {
   state: RoomState;
   events: RoomGameEvent[];
@@ -163,88 +142,6 @@ export interface RoomTransition {
     code: RoomErrorCode;
     detail?: string;
   };
-}
-
-export interface MemberView {
-  memberId: string;
-  seatId: SeatId | null;
-  displayName: string;
-  isAI: boolean;
-  isHost: boolean;
-  connected: boolean;
-  aiActing: boolean;
-  departed: boolean;
-  handCount: number | null;
-  finishedRank: number | null;
-  wantsNextSet: boolean | null;
-}
-
-export type PublicPlayView =
-  | { t: 'gameStarted'; firstSeat: SeatId; handCounts: number[] }
-  | { t: 'played'; seat: SeatId; cards: Card[]; kind: Play['kind'] }
-  | { t: 'passed'; seat: SeatId }
-  | {
-      t: 'fieldCleared';
-      reason: 'allPassed' | 'rule';
-      nextLeaderSeat: SeatId;
-    }
-  | { t: 'turnChanged'; seat: SeatId }
-  | { t: 'playerFinished'; seat: SeatId; rank: Standing; title: Title }
-  | {
-      t: 'gameEnded';
-      standings: { seat: SeatId; rank: Standing; title: Title }[];
-    }
-  | { t: 'ruleFired'; ruleId: string; messageKey: string }
-  | { t: 'failsafe'; reason: 'leadNoLegalMove' | 'turnLimit' }
-  | { t: 'playerRetired'; seat: SeatId; cardCount: number; rank: Standing }
-  | { t: 'cardsMoved'; count: number };
-
-export interface GameResultView {
-  gameNo: number;
-  standings: { seat: SeatId; rank: Standing; title: Title }[];
-  firedRuleIds: string[];
-}
-
-export interface GameView {
-  gameNo: number;
-  status: 'playing' | 'intermission';
-  field: {
-    cards: Card[];
-    playedBySeat: SeatId | null;
-    passedSeats: SeatId[];
-  };
-  turn: {
-    seat: SeatId;
-    turnSeq: number;
-    deadlineAt: number | null;
-  } | null;
-  history: PublicPlayView[];
-  previousResults: GameResultView[];
-  yourHand: Card[];
-  legalPlays?: CardId[][];
-}
-
-export interface SetResultView {
-  standings: {
-    memberId: string;
-    totalRank: number;
-    title: string;
-    ranks: number[];
-  }[];
-  respondBy: number;
-}
-
-export interface PlayerRoomView {
-  v: number;
-  roomId: string;
-  inviteCode: string;
-  phase: Exclude<RoomPhase, 'closed'>;
-  members: MemberView[];
-  you: { memberId: string; seatId: SeatId | null };
-  activeRules: RuleRef[];
-  game: GameView | null;
-  setResult: SetResultView | null;
-  events: RoomGameEvent[];
 }
 
 export interface CreateRoomInput {
@@ -257,6 +154,7 @@ export interface CreateRoomInput {
   };
   availableRules?: RuleChainEntry[];
   now: number;
+  lobbyTtlMs?: number;
 }
 
 export interface RoomReducerOptions {
@@ -265,6 +163,9 @@ export interface RoomReducerOptions {
   setResultTimeoutMs?: number;
   turnLimitMs?: number;
   disconnectedTurnLimitMs?: number;
+  lobbyDisconnectGraceMs?: number;
+  lobbyTtlMs?: number;
+  abandonTimeoutMs?: number;
   random?: () => number;
   createAiMemberId?: (index: number) => string;
   rulePort?: RuleChainPort;

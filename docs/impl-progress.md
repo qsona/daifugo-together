@@ -318,7 +318,9 @@ TS-02 から継続で未解決のもの:
 - setResult到達時に切断者・明示離脱者を除去して`byUser`を即時解放。全残留人間のcontinue、leaveとの競合、120秒期限での無応答除外、AI再補充、新しい`SetState`と最新ルール一覧の再固定。
 - `viewFor`と公開Room eventをCore権威状態からdeep cloneし、gateway内処理からCard参照を変更できないようにした。
 - Socket.IO server/client 4.8.3のtyped event/ack、匿名token、同一tokenの後勝ち接続、再接続時`events: []`の全量snapshot、受信者別state emit。
+- `packages/core/src/protocol.ts`へ共有イベント型とzod schemaを置き、全client eventの受信時にstrict検証する。不正形は`BAD_PAYLOAD`、join過多は`RATE_LIMITED`、予期しない例外は`INTERNAL`でackする。zodは確認時latestの4.4.3をexact指定した。
 - fingerprint付きtimerでintermission・setResult・turnを駆動。同じ状態の再syncで期限を延長せず、古いcallbackとAI決定中に進んだ`turnSeq`をno-opにする。AI演出間隔はE3仕様の0.8〜2.5秒をRoom側で持ち、`runAiTurn`内の遅延は0に上書きして二重待機を避ける。
+- waiting切断60秒猶予、lobby TTL 30分、接続中人間0のabandon 5分を別のlifecycle timerで駆動。reconnectで予約を張り替え、部屋破棄時は全timerとindexを解除する。joinはIP単位10回/分のfixed-window制限を持つ。
 
 ### E3で置いた仮定・次工程
 
@@ -328,4 +330,4 @@ TS-02 から継続で未解決のもの:
 | AI補充member IDと暫定表示名はserver生成 | E03 §3.2で機械名を暫定許容 | E4のトーン確定後に名前プールを差替え |
 | E2の0.4〜1.2秒は探索adapter側の既定のまま維持し、E3の最終ペーシングは0.8〜2.5秒をRoom timer側で上書きする | E02の較正値とE03 §2.1/§3.2の値が不一致。Epic順では後段のE3 UX仕様を統合時の正とする | 完了。Room schedulerが0.8〜2.5秒、AI adapterへは遅延0を注入 |
 | `setRespondBy`・人間手番deadline・intermissionは状態に予約済みだが、タイマー駆動は未接続 | timer callbackも予約時`turnSeq`を再検証する必要がある | 完了。fingerprintと`turnSeq`再検証をfake timerで確認 |
-| waiting切断猶予、lobby TTL、無人対局abandon、join/create rate limitは未接続 | E03 §2.1・§2.5・§3.1 | 次工程でTimerCoordinatorのroom lifecycle keyとgateway rate limiterを追加 |
+| waiting切断猶予、lobby TTL、無人対局abandon、join rate limit | E03 §2.1・§2.5・§3.1 | 完了。lifecycle timerとIP単位fixed-window limiterを追加 |

@@ -1,6 +1,7 @@
 export * from './ai-turn.js';
 export * from './room/manager.js';
 export * from './room/protocol.js';
+export * from './room/rate-limit.js';
 export * from './room/reducer.js';
 export * from './room/session.js';
 export * from './room/socket-gateway.js';

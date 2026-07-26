@@ -25,6 +25,8 @@ const DEFAULT_INTERIM_MS = 5_000;
 const DEFAULT_SET_RESULT_TIMEOUT_MS = 120_000;
 const DEFAULT_TURN_LIMIT_MS = 60_000;
 const DEFAULT_DISCONNECTED_TURN_LIMIT_MS = 15_000;
+const DEFAULT_LOBBY_TTL_MS = 30 * 60_000;
+const DEFAULT_ABANDON_TIMEOUT_MS = 5 * 60_000;
 const SEATS: SeatId[] = [0, 1, 2, 3];
 
 export function createRoomState(input: CreateRoomInput): RoomState {
@@ -46,6 +48,8 @@ export function createRoomState(input: CreateRoomInput): RoomState {
         departed: false,
         wantsNextSet: false,
         joinedAt: input.now,
+        disconnectedAt: null,
+        waitingDisconnectExpiresAt: null,
       },
     ],
     availableRules: structuredClone(input.availableRules ?? []),
@@ -57,6 +61,8 @@ export function createRoomState(input: CreateRoomInput): RoomState {
     setNo: 0,
     turnDeadlineAt: null,
     setRespondBy: null,
+    lobbyExpiresAt: input.now + (input.lobbyTtlMs ?? DEFAULT_LOBBY_TTL_MS),
+    abandonAt: null,
     lastEvents: [],
   };
 }
@@ -162,6 +168,8 @@ function aiMembers(
     departed: false,
     wantsNextSet: true,
     joinedAt: now + index,
+    disconnectedAt: null,
+    waitingDisconnectExpiresAt: null,
   }));
 }
 
@@ -298,6 +306,8 @@ function startSet(
           controller: 'human' as const,
           aiActing: false,
           wantsNextSet: false,
+          disconnectedAt: null,
+          waitingDisconnectExpiresAt: null,
         }
       : {
           ...member,
@@ -305,6 +315,7 @@ function startSet(
           controller: 'ai' as const,
           aiActing: true,
           wantsNextSet: false,
+          waitingDisconnectExpiresAt: null,
         },
   );
   const addedAi = aiMembers(
@@ -352,6 +363,7 @@ function startSet(
         input.now,
         options,
       ),
+      abandonAt: null,
       setRespondBy:
         phase === 'setResult'
           ? input.now +
@@ -409,7 +421,11 @@ function deadlineAtForTurn(
   );
 }
 
-function join(state: RoomState, action: Extract<RoomAction, { type: 'join' }>) {
+function join(
+  state: RoomState,
+  action: Extract<RoomAction, { type: 'join' }>,
+  options: RoomReducerOptions,
+) {
   if (state.phase === 'closed') {
     return rejected(state, 'ROOM_CLOSED');
   }
@@ -441,6 +457,11 @@ function join(state: RoomState, action: Extract<RoomAction, { type: 'join' }>) {
     departed: false,
     wantsNextSet: false,
     joinedAt: action.now,
+    disconnectedAt: action.member.connected === false ? action.now : null,
+    waitingDisconnectExpiresAt:
+      action.member.connected === false
+        ? action.now + (options.lobbyDisconnectGraceMs ?? 60_000)
+        : null,
   };
   return committed(state, { members: [...state.members, member] }, [
     { t: 'memberJoined', memberId: member.memberId },
@@ -536,11 +557,19 @@ function leave(
     const humansRemain = members.some(
       (member) => !member.isAI && !member.departed,
     );
+    const connectedHumansRemain = members.some(
+      (member) => !member.isAI && !member.departed && member.connected,
+    );
     return committed(
       state,
       {
         phase: humansRemain ? state.phase : 'closed',
         members,
+        abandonAt:
+          humansRemain && !connectedHumansRemain
+            ? action.now +
+              (options.abandonTimeoutMs ?? DEFAULT_ABANDON_TIMEOUT_MS)
+            : null,
       },
       [
         { t: 'memberLeft', memberId: leaving.memberId },
@@ -641,6 +670,72 @@ function expireSetResult(
   );
 }
 
+function expireWaitingMember(
+  state: RoomState,
+  action: Extract<RoomAction, { type: 'expireWaitingMember' }>,
+  options: RoomReducerOptions,
+): RoomTransition {
+  if (state.phase !== 'waiting') {
+    return rejected(state, 'NOT_WAITING');
+  }
+  const member = state.members.find(
+    (candidate) =>
+      candidate.memberId === action.memberId &&
+      !candidate.isAI &&
+      !candidate.connected &&
+      candidate.waitingDisconnectExpiresAt === action.expectedAt,
+  );
+  if (!member || action.now < action.expectedAt) {
+    return rejected(state, 'INVALID_SET_PHASE');
+  }
+  return leave(
+    state,
+    {
+      type: 'leave',
+      memberId: member.memberId,
+      now: action.now,
+      setSeed: action.setSeed,
+    },
+    options,
+  );
+}
+
+function expireRoom(
+  state: RoomState,
+  action: Extract<RoomAction, { type: 'expireRoom' }>,
+): RoomTransition {
+  const validLobbyExpiry =
+    action.reason === 'lobbyExpired' &&
+    state.phase === 'waiting' &&
+    state.lobbyExpiresAt === action.expectedAt;
+  const validAbandonExpiry =
+    action.reason === 'abandoned' &&
+    state.phase === 'playing' &&
+    state.abandonAt === action.expectedAt &&
+    !state.members.some(
+      (member) => !member.isAI && !member.departed && member.connected,
+    );
+  if (
+    action.now < action.expectedAt ||
+    (!validLobbyExpiry && !validAbandonExpiry)
+  ) {
+    return rejected(state, 'INVALID_SET_PHASE');
+  }
+  return committed(
+    state,
+    {
+      phase: 'closed',
+      members: [],
+      turnDeadlineAt: null,
+      setRespondBy: null,
+      abandonAt: null,
+    },
+    memberLeftEvents(
+      state.members.flatMap((member) => (member.isAI ? [] : [member.memberId])),
+    ),
+  );
+}
+
 function connectionChanged(
   state: RoomState,
   action: Extract<RoomAction, { type: 'disconnect' | 'reconnect' }>,
@@ -667,9 +762,23 @@ function connectionChanged(
           connected: reconnecting,
           controller: aiActing ? ('ai' as const) : ('human' as const),
           aiActing,
+          disconnectedAt: reconnecting ? null : action.now,
+          waitingDisconnectExpiresAt:
+            !reconnecting && state.phase === 'waiting'
+              ? action.now + (options.lobbyDisconnectGraceMs ?? 60_000)
+              : null,
         }
       : candidate,
   );
+  const connectedHumans = members.filter(
+    (candidate) =>
+      !candidate.isAI && !candidate.departed && candidate.connected,
+  );
+  const abandonAt =
+    state.phase === 'playing' && connectedHumans.length === 0
+      ? (state.abandonAt ??
+        action.now + (options.abandonTimeoutMs ?? DEFAULT_ABANDON_TIMEOUT_MS))
+      : null;
   return committed(
     state,
     {
@@ -677,6 +786,7 @@ function connectionChanged(
       turnDeadlineAt: state.engine
         ? deadlineAtForTurn(state.engine, members, action.now, options)
         : null,
+      abandonAt,
     },
     [
       {
@@ -800,6 +910,7 @@ function gameAction(
           ? action.now +
             (options.setResultTimeoutMs ?? DEFAULT_SET_RESULT_TIMEOUT_MS)
           : null,
+      abandonAt: phase === 'playing' ? state.abandonAt : null,
     },
     engineEvents,
   );
@@ -857,6 +968,7 @@ function advanceIntermission(
           ? action.now +
             (options.setResultTimeoutMs ?? DEFAULT_SET_RESULT_TIMEOUT_MS)
           : null,
+      abandonAt: phase === 'playing' ? state.abandonAt : null,
     },
     events,
   );
@@ -869,7 +981,7 @@ export function reduceRoom(
 ): RoomTransition {
   switch (action.type) {
     case 'join':
-      return join(state, action);
+      return join(state, action, options);
     case 'start':
       return start(state, action, options);
     case 'leave':
@@ -883,6 +995,10 @@ export function reduceRoom(
       return continueSet(state, action, options);
     case 'expireSetResult':
       return expireSetResult(state, action, options);
+    case 'expireWaitingMember':
+      return expireWaitingMember(state, action, options);
+    case 'expireRoom':
+      return expireRoom(state, action);
     case 'play':
     case 'pass':
     case 'autoAct':

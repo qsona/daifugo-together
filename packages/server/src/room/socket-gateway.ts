@@ -8,6 +8,7 @@ import {
 } from '@daifugo/ai';
 import {
   buildPlayerSnapshot,
+  clientPayloadSchemas,
   enumerateLegalPlays,
   NO_RULE_CHAIN_PORT,
   type CardId,
@@ -27,8 +28,12 @@ import type {
   SocketData,
   RoomCloseReason,
 } from './protocol.js';
+import { FixedWindowRateLimiter } from './rate-limit.js';
 import { InMemorySessionStore } from './session.js';
-import { RoomTimerCoordinator } from './timers.js';
+import {
+  RoomLifecycleTimerCoordinator,
+  RoomTimerCoordinator,
+} from './timers.js';
 import type { RoomTimerOptions } from './timers.js';
 import type { RoomState, RoomTransition } from './types.js';
 import { viewFor } from './view.js';
@@ -59,6 +64,10 @@ export interface RoomSocketGatewayOptions {
     RoomTimerOptions,
     'setTimer' | 'clearTimer' | 'random' | 'aiDelayMinMs' | 'aiDelayMaxMs'
   >;
+  joinRateLimit?: {
+    maxAttempts: number;
+    windowMs: number;
+  };
   onError?: (error: unknown) => void;
 }
 
@@ -92,56 +101,30 @@ function roomFailure(
     return failure('ROOM_NOT_FOUND');
   }
   if (!transition.accepted) {
-    return failure(transition.error?.code ?? 'INTERNAL_ERROR');
+    return failure(transition.error?.code ?? 'INTERNAL');
   }
   return undefined;
-}
-
-function validTurnSeq(value: unknown): value is number {
-  return Number.isSafeInteger(value) && (value as number) >= 0;
-}
-
-function validCards(value: unknown): value is string[] {
-  return (
-    Array.isArray(value) &&
-    value.length >= 1 &&
-    value.length <= 4 &&
-    value.every((card) => typeof card === 'string' && card.length > 0)
-  );
-}
-
-function validDisplayName(value: unknown): value is string {
-  if (typeof value !== 'string') {
-    return false;
-  }
-  const trimmed = value.trim();
-  return (
-    trimmed.length >= 1 &&
-    [...trimmed].length <= 10 &&
-    ![...trimmed].some((character) => {
-      const code = character.codePointAt(0) ?? 0;
-      return code <= 31 || code === 127;
-    })
-  );
 }
 
 export function attachRoomSocketGateway(
   io: RoomSocketServer,
   options: RoomSocketGatewayOptions = {},
 ): RoomSocketGateway {
+  const now = options.now ?? Date.now;
   const rooms =
     options.rooms ??
-    new RoomManager(
-      options.rulePort
-        ? { reducer: { rulePort: options.rulePort } }
-        : undefined,
-    );
+    new RoomManager({
+      now,
+      ...(options.rulePort ? { reducer: { rulePort: options.rulePort } } : {}),
+    });
   const sessions = options.sessions ?? new InMemorySessionStore();
-  const now = options.now ?? Date.now;
   const createSetSeed = options.createSetSeed ?? randomUUID;
   const activeByUser = new Map<string, RoomSocket>();
   const ai = options.ai ?? createAiPlayer();
   const ownsAi = options.ai === undefined;
+  const joinRateLimiter = new FixedWindowRateLimiter(
+    options.joinRateLimit ?? { maxAttempts: 10, windowMs: 60_000 },
+  );
 
   const report = (error: unknown): void => {
     try {
@@ -186,7 +169,17 @@ export function attachRoomSocketGateway(
       }
     }
   };
-  const timers = new RoomTimerCoordinator(rooms, {
+  const lifecycleTimers = new RoomLifecycleTimerCoordinator(rooms, {
+    ...options.timers,
+    now,
+    createSetSeed,
+    onTransition: (previous, transition, reason) => {
+      emitTransition(previous, transition, reason);
+      phaseTimers.sync(transition.state);
+    },
+    onError: report,
+  });
+  const phaseTimers = new RoomTimerCoordinator(rooms, {
     ...options.timers,
     now,
     createSetSeed,
@@ -241,7 +234,10 @@ export function attachRoomSocketGateway(
         });
         return result.decision.play.cards.map((card) => card.id);
       }),
-    onTransition: emitTransition,
+    onTransition: (previous, transition, reason) => {
+      emitTransition(previous, transition, reason);
+      lifecycleTimers.sync(transition.state);
+    },
     onError: report,
   });
   const publishTransition = (
@@ -250,7 +246,8 @@ export function attachRoomSocketGateway(
     closeReason?: RoomCloseReason,
   ): void => {
     emitTransition(previous, transition, closeReason);
-    timers.sync(transition.state);
+    phaseTimers.sync(transition.state);
+    lifecycleTimers.sync(transition.state);
   };
 
   const handleUnexpected = <T>(
@@ -258,7 +255,7 @@ export function attachRoomSocketGateway(
     ack: ((result: Ack<T>) => void) | undefined,
   ): void => {
     report(error);
-    safeAck(ack, failure('INTERNAL_ERROR'));
+    safeAck(ack, failure('INTERNAL'));
   };
 
   io.on('connection', (socket) => {
@@ -292,14 +289,19 @@ export function attachRoomSocketGateway(
         : null,
     });
 
-    socket.on('room:create', (_payload, ack) => {
+    socket.on('room:create', (payload, ack) => {
       try {
+        if (!clientPayloadSchemas['room:create'].safeParse(payload).success) {
+          safeAck(ack, failure('BAD_PAYLOAD'));
+          return;
+        }
         const created = rooms.create(session);
         if (!created.ok) {
           safeAck(ack, failure(created.code));
           return;
         }
         emitState(created.value.room);
+        lifecycleTimers.sync(created.value.room);
         safeAck(ack, {
           ok: true,
           value: {
@@ -314,16 +316,22 @@ export function attachRoomSocketGateway(
 
     socket.on('room:join', (payload, ack) => {
       try {
-        if (!payload || typeof payload.inviteCode !== 'string') {
-          safeAck(ack, failure('ROOM_NOT_FOUND'));
+        if (!joinRateLimiter.allow(socket.handshake.address, now())) {
+          safeAck(ack, failure('RATE_LIMITED'));
           return;
         }
-        const joined = rooms.join(payload.inviteCode, session);
+        const parsed = clientPayloadSchemas['room:join'].safeParse(payload);
+        if (!parsed.success) {
+          safeAck(ack, failure('BAD_PAYLOAD'));
+          return;
+        }
+        const joined = rooms.join(parsed.data.inviteCode, session);
         if (!joined.ok) {
           safeAck(ack, failure(joined.code));
           return;
         }
         emitState(joined.value.room);
+        lifecycleTimers.sync(joined.value.room);
         safeAck(ack, {
           ok: true,
           value: { roomId: joined.value.room.roomId },
@@ -333,8 +341,12 @@ export function attachRoomSocketGateway(
       }
     });
 
-    socket.on('room:leave', (_payload, ack) => {
+    socket.on('room:leave', (payload, ack) => {
       try {
+        if (!clientPayloadSchemas['room:leave'].safeParse(payload).success) {
+          safeAck(ack, failure('BAD_PAYLOAD'));
+          return;
+        }
         const current = rooms.findByUser(session.userId);
         if (!current) {
           safeAck(ack, failure('NOT_IN_ROOM'));
@@ -356,7 +368,9 @@ export function attachRoomSocketGateway(
           transition!,
           current.room.phase === 'setResult'
             ? 'setEndedNoContinue'
-            : 'noHumans',
+            : current.room.phase === 'playing'
+              ? 'abandoned'
+              : 'noHumans',
         );
         safeAck(ack, { ok: true, value: {} });
       } catch (error) {
@@ -364,8 +378,12 @@ export function attachRoomSocketGateway(
       }
     });
 
-    socket.on('room:start', (_payload, ack) => {
+    socket.on('room:start', (payload, ack) => {
       try {
+        if (!clientPayloadSchemas['room:start'].safeParse(payload).success) {
+          safeAck(ack, failure('BAD_PAYLOAD'));
+          return;
+        }
         const current = rooms.findByUser(session.userId);
         if (!current) {
           safeAck(ack, failure('NOT_IN_ROOM'));
@@ -389,8 +407,12 @@ export function attachRoomSocketGateway(
       }
     });
 
-    socket.on('room:continue', (_payload, ack) => {
+    socket.on('room:continue', (payload, ack) => {
       try {
+        if (!clientPayloadSchemas['room:continue'].safeParse(payload).success) {
+          safeAck(ack, failure('BAD_PAYLOAD'));
+          return;
+        }
         const current = rooms.findByUser(session.userId);
         if (!current) {
           safeAck(ack, failure('NOT_IN_ROOM'));
@@ -416,12 +438,9 @@ export function attachRoomSocketGateway(
 
     socket.on('game:play', (payload, ack) => {
       try {
-        if (
-          !payload ||
-          !validTurnSeq(payload.turnSeq) ||
-          !validCards(payload.cards)
-        ) {
-          safeAck(ack, failure('ILLEGAL_PLAY'));
+        const parsed = clientPayloadSchemas['game:play'].safeParse(payload);
+        if (!parsed.success) {
+          safeAck(ack, failure('BAD_PAYLOAD'));
           return;
         }
         const current = rooms.findByUser(session.userId);
@@ -432,8 +451,8 @@ export function attachRoomSocketGateway(
         const transition = rooms.apply(current.room.roomId, {
           type: 'play',
           memberId: current.member.memberId,
-          turnSeq: payload.turnSeq,
-          cards: [...payload.cards],
+          turnSeq: parsed.data.turnSeq,
+          cards: [...parsed.data.cards],
           now: now(),
         });
         const error = roomFailure(transition);
@@ -450,8 +469,9 @@ export function attachRoomSocketGateway(
 
     socket.on('game:pass', (payload, ack) => {
       try {
-        if (!payload || !validTurnSeq(payload.turnSeq)) {
-          safeAck(ack, failure('ILLEGAL_PLAY'));
+        const parsed = clientPayloadSchemas['game:pass'].safeParse(payload);
+        if (!parsed.success) {
+          safeAck(ack, failure('BAD_PAYLOAD'));
           return;
         }
         const current = rooms.findByUser(session.userId);
@@ -462,7 +482,7 @@ export function attachRoomSocketGateway(
         const transition = rooms.apply(current.room.roomId, {
           type: 'pass',
           memberId: current.member.memberId,
-          turnSeq: payload.turnSeq,
+          turnSeq: parsed.data.turnSeq,
           now: now(),
         });
         const error = roomFailure(transition);
@@ -477,8 +497,12 @@ export function attachRoomSocketGateway(
       }
     });
 
-    socket.on('sync:request', (_payload, ack) => {
+    socket.on('sync:request', (payload, ack) => {
       try {
+        if (!clientPayloadSchemas['sync:request'].safeParse(payload).success) {
+          safeAck(ack, failure('BAD_PAYLOAD'));
+          return;
+        }
         const current = rooms.findByUser(session.userId);
         if (!current) {
           safeAck(ack, failure('NOT_IN_ROOM'));
@@ -498,11 +522,12 @@ export function attachRoomSocketGateway(
 
     socket.on('user:rename', (payload, ack) => {
       try {
-        if (!payload || !validDisplayName(payload.displayName)) {
-          safeAck(ack, failure('INVALID_NAME'));
+        const parsed = clientPayloadSchemas['user:rename'].safeParse(payload);
+        if (!parsed.success) {
+          safeAck(ack, failure('BAD_PAYLOAD'));
           return;
         }
-        const displayName = payload.displayName.trim();
+        const displayName = parsed.data.displayName;
         const current = rooms.findByUser(session.userId);
         if (current) {
           const transition = rooms.apply(current.room.roomId, {
@@ -518,7 +543,7 @@ export function attachRoomSocketGateway(
           publishTransition(current.room, transition!);
         }
         if (!sessions.rename(session.userToken, displayName)) {
-          safeAck(ack, failure('INTERNAL_ERROR'));
+          safeAck(ack, failure('INTERNAL'));
           return;
         }
         session.displayName = displayName;
@@ -557,7 +582,8 @@ export function attachRoomSocketGateway(
     rooms,
     sessions,
     close() {
-      timers.close();
+      phaseTimers.close();
+      lifecycleTimers.close();
       if (ownsAi) {
         void ai.close().catch(report);
       }

@@ -19,6 +19,19 @@ export interface RoomTimerAuthority {
           cards: CardId[] | null;
           reason: 'ai' | 'turnTimeout';
           now: number;
+        }
+      | {
+          type: 'expireWaitingMember';
+          memberId: string;
+          now: number;
+          expectedAt: number;
+          setSeed: string;
+        }
+      | {
+          type: 'expireRoom';
+          reason: 'lobbyExpired' | 'abandoned';
+          now: number;
+          expectedAt: number;
         },
   ): RoomTransition | undefined;
 }
@@ -40,9 +53,25 @@ export interface RoomTimerOptions {
   onError?: (error: unknown) => void;
 }
 
+interface LifecycleTimerSpecification {
+  fingerprint: string;
+  dueAt: number;
+  action:
+    | {
+        type: 'expireWaitingMember';
+        memberId: string;
+        expectedAt: number;
+      }
+    | {
+        type: 'expireRoom';
+        reason: 'lobbyExpired' | 'abandoned';
+        expectedAt: number;
+      };
+}
+
 interface ScheduledRoomTimer {
   fingerprint: string;
-  kind: 'intermission' | 'setResult' | 'turn';
+  kind: 'intermission' | 'setResult' | 'turn' | 'lifecycle';
   handle: unknown;
 }
 
@@ -171,7 +200,16 @@ export class RoomTimerCoordinator {
       const automated = member.isAI || member.departed;
       if (!automated && state.turnDeadlineAt === null) return undefined;
       return {
-        fingerprint: `${state.engine.setId}:turn:${state.turnSeq}:${memberId}`,
+        fingerprint: [
+          state.engine.setId,
+          'turn',
+          state.turnSeq,
+          memberId,
+          member.connected ? 'connected' : 'disconnected',
+          member.controller,
+          member.departed ? 'departed' : 'present',
+          state.turnDeadlineAt ?? 'ai-delay',
+        ].join(':'),
         delayMs: automated
           ? this.#aiDelay()
           : Math.max(0, state.turnDeadlineAt! - this.#now()),
@@ -278,5 +316,159 @@ export class RoomTimerCoordinator {
     return Math.round(
       this.#aiDelayMinMs + (this.#aiDelayMaxMs - this.#aiDelayMinMs) * sample,
     );
+  }
+}
+
+export class RoomLifecycleTimerCoordinator {
+  readonly #authority: RoomTimerAuthority;
+  readonly #now: () => number;
+  readonly #createSetSeed: () => string;
+  readonly #setTimer: (callback: () => void, delayMs: number) => unknown;
+  readonly #clearTimer: (handle: unknown) => void;
+  readonly #onTransition: NonNullable<RoomTimerOptions['onTransition']>;
+  readonly #onError: NonNullable<RoomTimerOptions['onError']>;
+  readonly #scheduled = new Map<string, ScheduledRoomTimer>();
+  #closed = false;
+
+  constructor(authority: RoomTimerAuthority, options: RoomTimerOptions = {}) {
+    this.#authority = authority;
+    this.#now = options.now ?? Date.now;
+    this.#createSetSeed = options.createSetSeed ?? randomUUID;
+    this.#setTimer =
+      options.setTimer ??
+      ((callback, delayMs) => setTimeout(callback, delayMs));
+    this.#clearTimer =
+      options.clearTimer ??
+      ((handle) => clearTimeout(handle as ReturnType<typeof setTimeout>));
+    this.#onTransition = options.onTransition ?? (() => {});
+    this.#onError = options.onError ?? (() => {});
+  }
+
+  get size(): number {
+    return this.#scheduled.size;
+  }
+
+  sync(state: RoomState): void {
+    if (this.#closed) return;
+    const specification = this.#specification(state);
+    const existing = this.#scheduled.get(state.roomId);
+    if (!specification) {
+      this.clearRoom(state.roomId);
+      return;
+    }
+    if (existing?.fingerprint === specification.fingerprint) return;
+    if (existing) this.#clearTimer(existing.handle);
+    const handle = this.#setTimer(
+      () => this.#fire(state.roomId, specification.fingerprint),
+      Math.max(0, specification.dueAt - this.#now()),
+    );
+    this.#scheduled.set(state.roomId, {
+      fingerprint: specification.fingerprint,
+      kind: 'lifecycle',
+      handle,
+    });
+  }
+
+  clearRoom(roomId: string): void {
+    const existing = this.#scheduled.get(roomId);
+    if (!existing) return;
+    this.#clearTimer(existing.handle);
+    this.#scheduled.delete(roomId);
+  }
+
+  close(): void {
+    this.#closed = true;
+    for (const roomId of [...this.#scheduled.keys()]) {
+      this.clearRoom(roomId);
+    }
+  }
+
+  #specification(state: RoomState): LifecycleTimerSpecification | undefined {
+    if (state.phase === 'waiting') {
+      const candidates: LifecycleTimerSpecification[] = [
+        {
+          fingerprint: `${state.roomId}:lobby:${state.lobbyExpiresAt}`,
+          dueAt: state.lobbyExpiresAt,
+          action: {
+            type: 'expireRoom',
+            reason: 'lobbyExpired',
+            expectedAt: state.lobbyExpiresAt,
+          },
+        },
+        ...state.members.flatMap((member) =>
+          !member.isAI &&
+          !member.connected &&
+          member.waitingDisconnectExpiresAt !== null
+            ? [
+                {
+                  fingerprint: `${state.roomId}:waiting:${member.memberId}:${member.waitingDisconnectExpiresAt}`,
+                  dueAt: member.waitingDisconnectExpiresAt,
+                  action: {
+                    type: 'expireWaitingMember' as const,
+                    memberId: member.memberId,
+                    expectedAt: member.waitingDisconnectExpiresAt,
+                  },
+                },
+              ]
+            : [],
+        ),
+      ];
+      return candidates.sort((left, right) => left.dueAt - right.dueAt)[0];
+    }
+    if (state.phase === 'playing' && state.abandonAt !== null) {
+      return {
+        fingerprint: `${state.roomId}:abandon:${state.abandonAt}`,
+        dueAt: state.abandonAt,
+        action: {
+          type: 'expireRoom',
+          reason: 'abandoned',
+          expectedAt: state.abandonAt,
+        },
+      };
+    }
+    return undefined;
+  }
+
+  #fire(roomId: string, fingerprint: string): void {
+    const scheduled = this.#scheduled.get(roomId);
+    if (scheduled?.fingerprint !== fingerprint) return;
+    this.#scheduled.delete(roomId);
+    try {
+      const previous = this.#authority.get(roomId);
+      if (!previous || this.#closed) return;
+      const specification = this.#specification(previous);
+      if (specification?.fingerprint !== fingerprint) {
+        this.sync(previous);
+        return;
+      }
+      const transition =
+        specification.action.type === 'expireWaitingMember'
+          ? this.#authority.apply(roomId, {
+              ...specification.action,
+              now: this.#now(),
+              setSeed: this.#createSetSeed(),
+            })
+          : this.#authority.apply(roomId, {
+              ...specification.action,
+              now: this.#now(),
+            });
+      if (!transition?.accepted) {
+        const latest = this.#authority.get(roomId);
+        if (latest) this.sync(latest);
+        return;
+      }
+      this.#onTransition(
+        previous,
+        transition,
+        specification.action.type === 'expireRoom'
+          ? specification.action.reason
+          : undefined,
+      );
+      this.sync(transition.state);
+    } catch (error) {
+      this.#onError(error);
+      const latest = this.#authority.get(roomId);
+      if (latest) this.sync(latest);
+    }
   }
 }

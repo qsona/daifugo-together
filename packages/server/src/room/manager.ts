@@ -119,6 +119,9 @@ export class RoomManager {
       },
       availableRules: this.#options.availableRules?.() ?? [],
       now: this.#options.now(),
+      ...(this.#options.reducer?.lobbyTtlMs === undefined
+        ? {}
+        : { lobbyTtlMs: this.#options.reducer.lobbyTtlMs }),
     });
     this.#rooms.set(room.roomId, room);
     this.#byInvite.set(room.inviteCode, room.roomId);

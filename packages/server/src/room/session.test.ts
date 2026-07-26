@@ -59,4 +59,18 @@ describe('InMemorySessionStore', () => {
     expect(first.userToken).toBe('token-000000000001');
     expect(second.userToken).toBe('token-000000000002');
   });
+
+  it('既定匿名名は人数が2桁になっても10文字以内に保つ', () => {
+    let id = 0;
+    const store = new InMemorySessionStore({
+      createUserId: () => `user-${++id}`,
+      createToken: () => `token-${String(id).padStart(16, '0')}`,
+    });
+    const names = Array.from(
+      { length: 12 },
+      () => store.resolve(undefined).displayName,
+    );
+    expect(names.every((name) => [...name].length <= 10)).toBe(true);
+    expect(names[9]).toBe('ゲスト00000A');
+  });
 });

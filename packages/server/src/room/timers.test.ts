@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { createRoomState, reduceRoom } from './reducer.js';
-import { RoomTimerCoordinator, type RoomTimerAuthority } from './timers.js';
+import {
+  RoomLifecycleTimerCoordinator,
+  RoomTimerCoordinator,
+  type RoomTimerAuthority,
+} from './timers.js';
 import type { RoomAction, RoomState, RoomTransition } from './types.js';
 
 interface FakeTimer {
@@ -251,5 +255,112 @@ describe('RoomTimerCoordinator', () => {
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
 
     expect(room.actions).toEqual([]);
+  });
+
+  it('同じ手番中のdisconnect/reconnectで15秒・60秒timerへ張り替える', () => {
+    const started = reduceRoom(
+      state(),
+      {
+        type: 'start',
+        memberId: 'member-1',
+        now: 1_000,
+        setSeed: 'connection-timer-set',
+      },
+      { random: () => 0.999_999 },
+    ).state;
+    const memberId = started.engine!.currentGame!.public.turn!;
+    const connected: RoomState = {
+      ...started,
+      members: started.members.map((member) =>
+        member.memberId === memberId
+          ? {
+              ...member,
+              isAI: false,
+              userId: 'timer-user',
+              connected: true,
+              controller: 'human',
+              departed: false,
+              disconnectedAt: null,
+              waitingDisconnectExpiresAt: null,
+            }
+          : member,
+      ),
+      turnDeadlineAt: 61_000,
+    };
+    const room = authority(connected);
+    const timers: FakeTimer[] = [];
+    let now = 2_000;
+    const coordinator = new RoomTimerCoordinator(room.api, {
+      now: () => now,
+      decideTurn: async () => null,
+      setTimer: (callback, delayMs) => {
+        const timer = { callback, delayMs, cleared: false };
+        timers.push(timer);
+        return timer;
+      },
+      clearTimer: (handle) => {
+        (handle as FakeTimer).cleared = true;
+      },
+    });
+    coordinator.sync(connected);
+    expect(timers[0]?.delayMs).toBe(59_000);
+
+    const disconnected = reduceRoom(connected, {
+      type: 'disconnect',
+      memberId,
+      now,
+    }).state;
+    room.set(disconnected);
+    coordinator.sync(disconnected);
+    expect(timers[0]?.cleared).toBe(true);
+    expect(timers[1]?.delayMs).toBe(15_000);
+
+    now = 3_000;
+    const reconnected = reduceRoom(disconnected, {
+      type: 'reconnect',
+      memberId,
+      now,
+    }).state;
+    room.set(reconnected);
+    coordinator.sync(reconnected);
+    expect(timers[1]?.cleared).toBe(true);
+    expect(timers[2]?.delayMs).toBe(60_000);
+  });
+
+  it('waiting切断猶予をlobby TTLより先に発火する', () => {
+    const base = state();
+    const waiting: RoomState = {
+      ...base,
+      members: base.members.map((member) => ({
+        ...member,
+        connected: false,
+        disconnectedAt: 1_000,
+        waitingDisconnectExpiresAt: 61_000,
+      })),
+    };
+    const room = authority(waiting);
+    const timers: FakeTimer[] = [];
+    let now = 1_000;
+    const coordinator = new RoomLifecycleTimerCoordinator(room.api, {
+      now: () => now,
+      createSetSeed: () => 'lifecycle-seed',
+      setTimer: (callback, delayMs) => {
+        const timer = { callback, delayMs, cleared: false };
+        timers.push(timer);
+        return timer;
+      },
+    });
+
+    coordinator.sync(waiting);
+    expect(timers[0]?.delayMs).toBe(60_000);
+    now = 61_000;
+    timers[0]?.callback();
+    expect(room.actions[0]).toEqual({
+      type: 'expireWaitingMember',
+      memberId: 'member-1',
+      expectedAt: 61_000,
+      now: 61_000,
+      setSeed: 'lifecycle-seed',
+    });
   });
 });

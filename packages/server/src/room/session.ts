@@ -25,7 +25,8 @@ export class InMemorySessionStore {
       options.createToken ?? (() => randomBytes(32).toString('base64url'));
     this.#createDisplayName =
       options.createDisplayName ??
-      ((sequence) => `ななしのプレイヤー${sequence}`);
+      ((sequence) =>
+        `ゲスト${sequence.toString(36).toUpperCase().padStart(6, '0').slice(-6)}`);
   }
 
   resolve(presentedToken: unknown): AnonymousSession {

@@ -53,7 +53,10 @@ function allStrings(value: unknown): string[] {
 
 async function createHarness(
   gatewayOptions: Partial<
-    Pick<RoomSocketGatewayOptions, 'rooms' | 'decideTurn' | 'timers'>
+    Pick<
+      RoomSocketGatewayOptions,
+      'rooms' | 'decideTurn' | 'timers' | 'joinRateLimit'
+    >
   > = {},
 ): Promise<Harness> {
   let userSequence = 0;
@@ -258,6 +261,73 @@ describe('Socket.IO room gateway', () => {
     );
     expect(left).toEqual({ ok: true, value: {} });
     await expect(closed).resolves.toEqual({ reason: 'noHumans' });
+  });
+
+  it('playingで最後の人間が明示leaveするとabandonedで閉じる', async () => {
+    const harness = await createHarness();
+    const owner = await connect(harness);
+    await emitAck<'room:create', { roomId: string; inviteCode: string }>(
+      owner.client,
+      'room:create',
+      {},
+    );
+    await emitAck<'room:start', Record<string, never>>(
+      owner.client,
+      'room:start',
+      {},
+    );
+    const closed = once<{ reason: string }>((resolve) =>
+      owner.client.once('room:closed', resolve),
+    );
+    const left = await emitAck<'room:leave', Record<string, never>>(
+      owner.client,
+      'room:leave',
+      {},
+    );
+    expect(left).toEqual({ ok: true, value: {} });
+    await expect(closed).resolves.toEqual({ reason: 'abandoned' });
+  });
+
+  it('同一IPのjoin総当たりを設定上限で拒否する', async () => {
+    const harness = await createHarness({
+      joinRateLimit: { maxAttempts: 2, windowMs: 60_000 },
+    });
+    const client = await connect(harness);
+    const first = await emitAck<'room:join', { roomId: string }>(
+      client.client,
+      'room:join',
+      { inviteCode: 'AAAA-AAAA' },
+    );
+    const second = await emitAck<'room:join', { roomId: string }>(
+      client.client,
+      'room:join',
+      { inviteCode: 'BBBB-BBBB' },
+    );
+    const limited = await emitAck<'room:join', { roomId: string }>(
+      client.client,
+      'room:join',
+      { inviteCode: 'CCCC-CCCC' },
+    );
+    expect(first).toEqual({ ok: false, code: 'ROOM_NOT_FOUND' });
+    expect(second).toEqual({ ok: false, code: 'ROOM_NOT_FOUND' });
+    expect(limited).toEqual({ ok: false, code: 'RATE_LIMITED' });
+  });
+
+  it('runtime payload schema違反をドメインエラーと分離してBAD_PAYLOADにする', async () => {
+    const harness = await createHarness();
+    const client = await connect(harness);
+    const badJoin = await emitAck<'room:join', { roomId: string }>(
+      client.client,
+      'room:join',
+      { inviteCode: 123 } as unknown as { inviteCode: string },
+    );
+    const badPlay = await emitAck<'game:play', Record<string, never>>(
+      client.client,
+      'game:play',
+      { turnSeq: -1, cards: [] },
+    );
+    expect(badJoin).toEqual({ ok: false, code: 'BAD_PAYLOAD' });
+    expect(badPlay).toEqual({ ok: false, code: 'BAD_PAYLOAD' });
   });
 
   it('1人+AI 3席をSocket/Room/Core/AI scheduler経由でセット結果まで完走する', async () => {
