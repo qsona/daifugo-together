@@ -1,3 +1,4 @@
+import { CARD_RANKS, type CardRank } from '../cards/card.js';
 import type { RuleId } from '../game/types.js';
 import type { Play } from '../play/play.js';
 import type { StrengthOrder } from '../play/strength.js';
@@ -40,6 +41,33 @@ function isLegality(value: unknown): value is Legality {
     return false;
   }
   return !('reasonKey' in value) || typeof value.reasonKey === 'string';
+}
+
+function detachedStrengthOrder(value: unknown): StrengthOrder | null {
+  const cloned = detachedClone(value);
+  if (
+    typeof cloned !== 'object' ||
+    cloned === null ||
+    Array.isArray(cloned) ||
+    Reflect.ownKeys(cloned).some((key) => key !== 'ranking') ||
+    !('ranking' in cloned) ||
+    !Array.isArray(cloned.ranking) ||
+    cloned.ranking.length !== CARD_RANKS.length
+  ) {
+    return null;
+  }
+  const ranking = cloned.ranking;
+  if (
+    !ranking.every(
+      (rank): rank is CardRank =>
+        typeof rank === 'string' &&
+        CARD_RANKS.includes(rank as (typeof CARD_RANKS)[number]),
+    ) ||
+    new Set(ranking).size !== CARD_RANKS.length
+  ) {
+    return null;
+  }
+  return { ranking: [...ranking] };
 }
 
 export function createInProcessRuleChainPort(
@@ -99,16 +127,15 @@ export function createInProcessRuleChainPort(
         if (!hook) {
           continue;
         }
-        let next: StrengthOrder;
+        let next: StrengthOrder | null;
         try {
-          const returned = hook(
-            contextForRule(context, entry.ruleId),
-            detachedFrozen(result),
+          next = detachedStrengthOrder(
+            hook(contextForRule(context, entry.ruleId), detachedFrozen(result)),
           );
-          next = {
-            ranking: [...returned.ranking],
-          };
         } catch {
+          continue;
+        }
+        if (!next) {
           continue;
         }
         if (changed(result, next)) {

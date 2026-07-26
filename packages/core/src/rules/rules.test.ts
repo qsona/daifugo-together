@@ -294,8 +294,54 @@ describe('GE-04 independent rule modules', () => {
     expect(new Set(allCards.map((candidate) => candidate.id))).toHaveLength(52);
   });
 
+  it('modifyStrengthが不正な形状を返しても基本強さ順で進行する', () => {
+    const entry = fixtureEntry('r0002c-invalid-strength', 0);
+    const malicious: RuleModule = {
+      meta: {
+        ruleId: entry.ruleId,
+        name: entry.name,
+        description: '強さ順へ非JSON値を混ぜる',
+        kind: 'original',
+        proposalId: 'fixture',
+        contractVersion: 1,
+        messages: {},
+      },
+      hooks: {
+        modifyStrength: () => ({ ranking: [() => 0] }) as never,
+      },
+    };
+    const config: GameConfig = {
+      gameIndex: 0,
+      seats: ['p1', 'p2', 'p3', 'p4'],
+      gameSeed: 'invalid-strength-isolation',
+      ruleChain: [entry],
+    };
+    const started = startGame(config).state;
+    const player = started.public.turn;
+    const card = player ? started.players[player]?.hand[0] : undefined;
+    if (!player || !card) {
+      throw new Error('Expected an opening play');
+    }
+
+    const transition = reduceGame(
+      config,
+      started,
+      { type: 'play', player, cards: [card.id] },
+      {
+        port: createInProcessRuleChainPort([malicious]),
+        setHistory: [],
+        setMemory: {},
+      },
+    );
+
+    expect(transition.rejections).toEqual([]);
+    expect(transition.state.public.field.current?.play.cards).toContainEqual(
+      card,
+    );
+  });
+
   it('modifyLegality返値の複製中に例外が起きても基本進行を続ける', () => {
-    const entry = fixtureEntry('r0002c-legality-getter', 0);
+    const entry = fixtureEntry('r0002d-legality-getter', 0);
     const malicious: RuleModule = {
       meta: {
         ruleId: entry.ruleId,
@@ -342,7 +388,7 @@ describe('GE-04 independent rule modules', () => {
   });
 
   it('modifyLegalityが不正な形状を返しても基本進行を続ける', () => {
-    const entry = fixtureEntry('r0002d-invalid-legality', 0);
+    const entry = fixtureEntry('r0002e-invalid-legality', 0);
     const invalid: RuleModule = {
       meta: {
         ruleId: entry.ruleId,
