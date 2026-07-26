@@ -582,26 +582,70 @@ table.spec th { background: var(--color-bg-subtle); white-space: nowrap; }
   border-radius: var(--radius-pill); padding: 1px 8px;
 }
 
-/* 場 */
+/* 場(プレイヤーごとの札山) */
 .c-field-area {
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-2);
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-2);
   background: var(--color-green-600);
   border: var(--border-bold) solid var(--color-border-strong);
   border-radius: var(--radius-l); box-shadow: var(--shadow-hard-s);
-  padding: var(--space-4) var(--space-3); min-height: 120px;
+  padding: var(--space-3);
 }
-.c-field-area .lb { font-size: var(--font-size-micro); font-weight: var(--font-weight-bold); color: var(--color-text-on-fill); }
+.c-fstack { display: flex; flex-direction: column; align-items: center; gap: var(--space-1); }
+.c-fstack.-self { grid-column: 2; }
+.c-fstack .nm { font-size: var(--font-size-micro); font-weight: var(--font-weight-bold); color: var(--color-text-on-fill); }
+.c-fstack .pile { display: flex; }
+.c-fstack .pile > .c-card { margin-right: -30px; }
+.c-fstack .pile > .c-card:last-child { margin-right: 0; }
+/* いま超えるべき最新のプレイ。 */
+.c-fstack.-lead .pile > .c-card:last-child { outline: var(--border-heavy) solid var(--color-gold-400); border-radius: var(--radius-s); }
+.c-fempty { width: 44px; height: 62px; border: var(--border-control) dashed var(--color-green-500); border-radius: var(--radius-s); }
 
-/* 実況ログ */
-.c-log {
-  background: var(--color-bg-subtle);
-  border: var(--border-control) solid var(--color-border-subtle);
-  border-radius: var(--radius-m); padding: var(--space-2) var(--space-3);
-  max-height: 96px; overflow-y: auto;
-  display: flex; flex-direction: column; gap: var(--space-1);
+/* ルール発動カットイン */
+.c-cutin {
+  position: relative; display: inline-flex; align-items: baseline; gap: var(--space-2);
+  padding: var(--space-2) var(--space-8);
+  background: var(--color-red-500);
+  border: var(--border-heavy) solid var(--color-border-strong);
+  box-shadow: var(--shadow-hard-m);
+  font-size: var(--font-size-display); font-weight: var(--font-weight-heavy);
+  letter-spacing: var(--letter-spacing-wide); color: var(--color-cream-100);
 }
-.c-log > div { font-size: var(--font-size-micro); color: var(--color-text-secondary); line-height: var(--line-height-caption); }
-.c-log > div.fired { color: var(--color-text-primary); font-weight: var(--font-weight-bold); }
+.c-cutin::before, .c-cutin::after { content: ""; position: absolute; top: 0; bottom: 0; width: 18px; background: var(--color-red-700); }
+.c-cutin::before { left: 0; clip-path: polygon(0 0, 100% 0, 0 50%, 100% 100%, 0 100%); }
+.c-cutin::after { right: 0; clip-path: polygon(100% 0, 0 0, 100% 50%, 0 100%, 100% 100%); }
+.c-cutin .ef { font-size: var(--font-size-caption); font-weight: var(--font-weight-bold); }
+.c-cutin.-stacked { margin-top: calc(var(--space-3) * -1); font-size: var(--font-size-title-l); }
+.c-cutin.-tl { transform: rotate(-3deg); }
+.c-cutin.-tr { transform: rotate(3deg); }
+/* 初登場のルールだけ金の NEW RULE 面にする。 */
+.c-cutin.-new { background: var(--color-gold-400); color: var(--color-warning-ink); }
+.c-cutin .new {
+  position: absolute; top: calc(var(--space-4) * -1); left: var(--space-5);
+  font-size: var(--font-size-micro); font-weight: var(--font-weight-heavy);
+  letter-spacing: var(--letter-spacing-cta); color: var(--color-warning-ink);
+  background: var(--color-cream-100); border: var(--border-control) solid var(--color-border-strong);
+  border-radius: var(--radius-pill); padding: 1px 10px;
+}
+.c-combo {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 44px; height: 44px; border-radius: 50%;
+  background: var(--color-gold-400); border: var(--border-heavy) solid var(--color-border-strong);
+  box-shadow: var(--shadow-hard-m);
+  font-size: var(--font-size-title-l); font-weight: var(--font-weight-heavy); color: var(--color-warning-ink);
+}
+
+/* 発動チップ(カットインが引いたあとの痕跡) */
+.c-achip {
+  display: inline-flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  background: var(--color-cream-100);
+  border: var(--border-control) solid var(--color-border-strong);
+  border-radius: var(--radius-pill); box-shadow: var(--shadow-hard-s);
+  font-family: inherit; font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-bold); color: var(--color-text-primary); cursor: pointer;
+}
+.c-achip .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--color-gold-400); border: var(--border-control) solid var(--color-border-strong); }
+.c-achip .ct { font-size: var(--font-size-micro); color: var(--color-text-secondary); }
 
 /* 手札 */
 .c-tray {
@@ -1163,17 +1207,37 @@ table.spec th { background: var(--color-bg-subtle); white-space: nowrap; }
     </div>
 
     <div class="panel">
-      <div class="specimen"><span class="lbl">場 / 実況ログ</span></div>
-      <div style="max-width:375px; display:flex; flex-direction:column; gap:12px;">
-        <div class="c-field-area"><span class="lb">場</span><span class="c-card -red -small"><b>8</b><i>♦</i></span></div>
-        <div class="c-log">
-          <div>プレイヤーB: ♠5 ♥5 を出した</div>
-          <div>プレイヤーC: ♦8 を出した</div>
-          <div class="fired">ルール発動「8切り」 場が流れた</div>
-          <div>あなたの番です</div>
+      <div class="specimen"><span class="lbl">場(プレイヤーごとの札山)</span></div>
+      <div style="max-width:375px;">
+        <div class="c-field-area">
+          <div class="c-fstack"><span class="nm">プレイヤーB</span><span class="pile"><span class="c-card -small"><b>5</b><i>♠</i></span><span class="c-card -red -small"><b>5</b><i>♥</i></span></span></div>
+          <div class="c-fstack -lead"><span class="nm">プレイヤーC</span><span class="pile"><span class="c-card -red -small"><b>8</b><i>♦</i></span></span></div>
+          <div class="c-fstack"><span class="nm">プレイヤーD</span><span class="pile"><span class="c-fempty"></span></span></div>
+          <div class="c-fstack -self"><span class="nm">あなた</span><span class="pile"><span class="c-fempty"></span></span></div>
         </div>
       </div>
-      <div class="note">卓の地は KV の丘の緑(green-600)。白いカードと紺輪郭が最も映える。ログのルール発動行だけ紺の太字にし、演出そのものはトースト(§5-13 の warn)で出す。</div>
+      <div class="note">卓の地は KV の丘の緑(green-600)。<b>中央に 1 つ積むのではなく、実際の卓と同じくプレイヤーごとの山に重ねる。</b>「誰が何を出したか」が常に見えているので、文字の実況ログを置かなくてよい(DS-02 で実況ログは廃止)。いま超えるべき最新プレイの山だけ金の縁で示す。場が流れるときは全山がまとめて掃け、その動きが 8 切り系ルールの効果表現そのものになる。</div>
+    </div>
+
+    <div class="panel">
+      <div class="specimen"><span class="lbl">ルール発動カットイン / 発動チップ</span></div>
+      <div style="max-width:375px; display:flex; flex-direction:column; gap:14px; align-items:flex-start;">
+        <div class="c-cutin"><span class="nm">8切り</span></div>
+        <div class="c-cutin -new"><span class="new">NEW RULE</span><span class="nm">新幹線</span><span class="ef">次の人を飛ばす</span></div>
+        <div style="align-self:stretch; display:flex; flex-direction:column; align-items:center;">
+          <div class="c-cutin">革命返し</div>
+          <div class="c-cutin -stacked -tl">スペ3返し</div>
+          <div class="c-cutin -stacked -tr -new"><span class="new">NEW RULE</span><span class="nm">都落ち</span></div>
+          <span class="c-combo">×3</span>
+        </div>
+        <button class="c-achip" type="button"><span class="dot"></span>革命返し<span class="ct">ほか2</span></button>
+      </div>
+      <div class="note">
+        <b>設計の芯: ルール名は文字で堂々と、効果は盤面で。</b>提案ルールの名前は事前に分からないので文字でしか伝えられない。だからカットインの文字は<b>ルール名 1 語に全振り</b>し、「ルール発動!」のような語は置かない(赤リボンが走り込むこと自体が発動の記号)。効果は直後の盤面アニメーション(場が掃ける・場と手札が反転する等)が見せ、盤面に現れない効果のためだけに 12 文字以内の効果ラベルを従として許す。<br>
+        <b>同時発動は逐次ではなく段重ね</b>(0.18 秒ずつずらして ±3° 交互に傾ける)+ 金の連発バッジ。逐次フル表示はテンポを殺し、1 枚に統合するとどのルールか消える。段重ねは両方を守り、入り乱れをコンボとして祝祭化する。<b>初登場のルールだけ</b>金の NEW RULE 面にして、「知らないルールが突然発動する」瞬間に一番強い意匠を使う。<br>
+        1 ボレー 1.2 秒以内・手札とボタンを覆わない・進行をブロックしない・タップでスキップ可・<code>prefers-reduced-motion</code> ではフェードのみ。カットインが引いたあとは発動チップが場の隅に残り、あとから確認できる(ワイヤー画面 3 の「ログにも発動を残す」要件はこのチップが満たす)。<br>
+        <b>他 Epic への申し送り</b>: リボンに収めるため、ルール名は提案時に 12 文字以内へ制限する必要がある(E5 の提案フォーム / decision-log C-3)。
+      </div>
     </div>
 
     <div class="panel">

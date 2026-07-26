@@ -1,14 +1,15 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 
 import type { RuleVote, SetFunRating } from './screens/SetResultScreen';
 import {
+  DEMO_ACTIVATION_VOLLEYS,
   DEMO_ACTIVE_RULE_COUNT,
-  DEMO_FIELD,
+  DEMO_FIELD_STACKS,
   DEMO_FIRED_RULES,
   DEMO_GAME_RANKS,
   DEMO_HAND,
   DEMO_INVITE_CODE,
-  DEMO_LOG,
+  DEMO_LEAD_PLAYER,
   DEMO_MEMBERS,
   DEMO_SEATS,
   DEMO_SET_RANKS,
@@ -34,6 +35,29 @@ export function App() {
   const [selectedCardIds, setSelectedCardIds] = useState<readonly string[]>([]);
   const [funRating, setFunRating] = useState<SetFunRating | null>(null);
   const [ruleVotes, setRuleVotes] = useState(DEMO_FIRED_RULES);
+  /** 見本のカットインを順に再生するための位置。null は再生していない状態。 */
+  const [volleyIndex, setVolleyIndex] = useState<number | null>(null);
+  const [lastVolleyIndex, setLastVolleyIndex] = useState<number | null>(null);
+
+  const activations =
+    volleyIndex === null ? [] : (DEMO_ACTIVATION_VOLLEYS[volleyIndex] ?? []);
+  const lastVolley =
+    lastVolleyIndex === null
+      ? null
+      : (DEMO_ACTIVATION_VOLLEYS[lastVolleyIndex] ?? null);
+
+  const playNextVolley = () => {
+    const next =
+      lastVolleyIndex === null
+        ? 0
+        : (lastVolleyIndex + 1) % DEMO_ACTIVATION_VOLLEYS.length;
+    setVolleyIndex(next);
+    setLastVolleyIndex(next);
+  };
+
+  const finishCutIn = useCallback(() => {
+    setVolleyIndex(null);
+  }, []);
 
   const toggleCard = (id: string) => {
     setSelectedCardIds((ids) =>
@@ -106,12 +130,18 @@ export function App() {
     case 'game':
       return (
         <GameScreen
-          progressLabel="第1戦(3巡目)"
+          gameLabel="第1戦"
           activeRuleCount={DEMO_ACTIVE_RULE_COUNT}
           seats={DEMO_SEATS}
-          field={DEMO_FIELD}
-          firedRule={{ name: '8切り', effect: '場が流れます' }}
-          log={DEMO_LOG}
+          fieldStacks={DEMO_FIELD_STACKS}
+          leadPlayerName={DEMO_LEAD_PLAYER}
+          activations={activations}
+          onCutInDone={finishCutIn}
+          lastActivation={
+            lastVolley && lastVolley[0]
+              ? { name: lastVolley[0].name, count: lastVolley.length }
+              : null
+          }
           hand={DEMO_HAND}
           selectedCardIds={selectedCardIds}
           isMyTurn
@@ -119,7 +149,8 @@ export function App() {
           onToggleCard={toggleCard}
           onPlay={() => {
             setSelectedCardIds([]);
-            go('gameResult');
+            // 見本のため、カードを出すたびにカットインの 3 パターンを順に再生する。
+            playNextVolley();
           }}
           onPass={() => {
             go('gameResult');

@@ -1,6 +1,8 @@
 /* インゲーム部品: 手札(横スクロール・選択) */
 
 .tray {
+  /* 手札は常に画面の下端に置く(親指の届く位置に固定する)。 */
+  margin-top: auto;
   background: var(--color-bg-surface);
   border: var(--border-bold) solid var(--color-border-strong);
   border-radius: var(--radius-l);

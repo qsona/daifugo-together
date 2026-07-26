@@ -131,6 +131,89 @@ describe('DS-02: フェーズ 1 の主要画面が 1 本の導線でつながる
     expect(play.hasAttribute('disabled')).toBe(false);
   });
 
+  it('場は各プレイヤーの札山として見える(実況ログを置かない)', () => {
+    useScreenStore.setState({ current: 'game' });
+    render(<App />);
+
+    // 誰が何を出したかは札山が常時見せる。
+    expect(
+      screen.getByRole('list', { name: 'プレイヤーBが出した札' }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('list', { name: 'プレイヤーCが出した札' }),
+    ).toBeTruthy();
+
+    // 文字の実況ログは存在しない。
+    expect(screen.queryByRole('list', { name: '実況ログ' })).toBeNull();
+    expect(screen.queryByText(/を出した$/)).toBeNull();
+  });
+
+  it('アプリバーに巡目を出さず、有効ルールへの導線は残す', () => {
+    useScreenStore.setState({ current: 'game' });
+    render(<App />);
+
+    expect(screen.getByRole('heading', { name: '第1戦' })).toBeTruthy();
+    expect(screen.queryByText(/巡目/)).toBeNull();
+    expect(screen.getByRole('button', { name: /有効ルール/ })).toBeTruthy();
+  });
+
+  it('カードを出すとルール名のカットインが出る(効果の説明文は置かない)', async () => {
+    const user = userEvent.setup();
+    useScreenStore.setState({ current: 'game' });
+    render(<App />);
+
+    expect(screen.queryByText('8切り')).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'クラブの3' }));
+    await user.click(
+      screen.getByRole('button', { name: 'えらんだカードを出す' }),
+    );
+
+    // 文字はルール名だけ。「ルール発動!」「場が流れます」の類は出さない。
+    expect(screen.getByText('8切り')).toBeTruthy();
+    expect(screen.queryByText(/ルール発動/)).toBeNull();
+    expect(screen.queryByText(/場が流れます/)).toBeNull();
+  });
+
+  it('カットインは進行をブロックせず、タップでとばせる', async () => {
+    const user = userEvent.setup();
+    useScreenStore.setState({ current: 'game' });
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: 'クラブの3' }));
+    await user.click(
+      screen.getByRole('button', { name: 'えらんだカードを出す' }),
+    );
+
+    await user.click(screen.getByRole('button', { name: '演出をとばす' }));
+
+    expect(screen.queryByRole('button', { name: '演出をとばす' })).toBeNull();
+    // 引いたあとは発動チップが残り、あとから確認できる。
+    expect(screen.getByRole('button', { name: /8切り/ })).toBeTruthy();
+  });
+
+  it('同時発動は 1 ボレーにまとめ、件数バッジで示す', async () => {
+    const user = userEvent.setup();
+    useScreenStore.setState({ current: 'game' });
+    render(<App />);
+
+    const play = screen.getByRole('button', { name: 'えらんだカードを出す' });
+    await user.click(screen.getByRole('button', { name: 'クラブの3' }));
+
+    // 見本は 単発 → 初登場 → 同時 3 件 の順に再生する。
+    await user.click(play);
+    await user.click(screen.getByRole('button', { name: '演出をとばす' }));
+    await user.click(screen.getByRole('button', { name: 'ダイヤの4' }));
+    await user.click(play);
+    await user.click(screen.getByRole('button', { name: '演出をとばす' }));
+    await user.click(screen.getByRole('button', { name: 'スペードの6' }));
+    await user.click(play);
+
+    expect(screen.getByText('革命返し')).toBeTruthy();
+    expect(screen.getByText('スペ3返し')).toBeTruthy();
+    expect(screen.getByLabelText('3件同時発動')).toBeTruthy();
+  });
+
   it('セットリザルトの高評価は「済み」表記に変わる(色だけに頼らない)', async () => {
     const user = userEvent.setup();
     useScreenStore.setState({ current: 'setResult' });

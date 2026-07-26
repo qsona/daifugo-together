@@ -5,10 +5,11 @@
  */
 
 import type { CardView } from '../components/Card';
-import type { LogEntry } from '../components/Log';
+import type { FieldStack } from '../components/FieldArea';
 import type { MemberView } from '../components/MemberList';
 import type { SeatView } from '../components/PlayerSeat';
 import type { RankView } from '../components/RankRow';
+import type { RuleActivation } from '../components/RuleCutIn';
 import type { FiredRuleVote } from '../screens/SetResultScreen';
 
 export const DEMO_MEMBERS: readonly MemberView[] = [
@@ -45,16 +46,28 @@ export const DEMO_SEATS: readonly SeatView[] = [
   },
 ];
 
-export const DEMO_FIELD: readonly CardView[] = [
-  { id: 'field-d8', suit: 'diamond', rank: '8' },
+/** 場の札山。プレイヤーごとに、その場で出した札が古い順に積まれている。 */
+export const DEMO_FIELD_STACKS: readonly FieldStack[] = [
+  {
+    playerName: 'プレイヤーB',
+    isSelf: false,
+    plays: [
+      [
+        { id: 'f-s5', suit: 'spade', rank: '5' },
+        { id: 'f-h5', suit: 'heart', rank: '5' },
+      ],
+    ],
+  },
+  {
+    playerName: 'プレイヤーC',
+    isSelf: false,
+    plays: [[{ id: 'f-d8', suit: 'diamond', rank: '8' }]],
+  },
+  { playerName: 'プレイヤーD', isSelf: false, plays: [] },
+  { playerName: 'あなた', isSelf: true, plays: [] },
 ];
 
-export const DEMO_LOG: readonly LogEntry[] = [
-  { id: 'l1', kind: 'play', text: 'プレイヤーB: ♠5 ♥5 を出した' },
-  { id: 'l2', kind: 'play', text: 'プレイヤーC: ♦8 を出した' },
-  { id: 'l3', kind: 'ruleFired', text: 'ルール発動「8切り」 場が流れた' },
-  { id: 'l4', kind: 'play', text: 'あなたの番です' },
-];
+export const DEMO_LEAD_PLAYER = 'プレイヤーC';
 
 export const DEMO_HAND: readonly CardView[] = [
   { id: 'h-c3', suit: 'club', rank: '3' },
@@ -81,6 +94,27 @@ export const DEMO_SET_RANKS: readonly RankView[] = [
   { place: 2, name: 'プレイヤーB', kind: 'ai', title: '富豪' },
   { place: 3, name: 'プレイヤーC', kind: 'human', title: '貧民' },
   { place: 4, name: 'プレイヤーD', kind: 'ai', title: '大貧民' },
+];
+
+/**
+ * カットインの見本。プレイのたびに順に再生して、
+ * 単発 / 初登場 / 同時発動の 3 パターンを確認できるようにしてある。
+ */
+export const DEMO_ACTIVATION_VOLLEYS: readonly (readonly RuleActivation[])[] = [
+  [{ ruleId: 'r-8giri', name: '8切り', isFirstSeen: false }],
+  [
+    {
+      ruleId: 'r-shinkansen',
+      name: '新幹線',
+      effectLabel: '次の人を飛ばす',
+      isFirstSeen: true,
+    },
+  ],
+  [
+    { ruleId: 'r-kakumei', name: '革命返し', isFirstSeen: false },
+    { ruleId: 'r-spe3', name: 'スペ3返し', isFirstSeen: false },
+    { ruleId: 'r-miyakoochi', name: '都落ち', isFirstSeen: true },
+  ],
 ];
 
 export const DEMO_FIRED_RULES: readonly FiredRuleVote[] = [
