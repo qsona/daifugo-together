@@ -2,6 +2,7 @@ import { resolve } from 'node:path';
 
 import { createAppServer } from './app-server.js';
 import { SqlitePersistence } from './persistence.js';
+import { ProposalSubmissionService } from './proposal/submission.js';
 import { RoomManager } from './room/manager.js';
 
 function errorFields(error: unknown): Record<string, unknown> {
@@ -35,6 +36,7 @@ const persistence = new SqlitePersistence(
 const app = createAppServer({
   webDistDir: resolve(process.env.WEB_DIST_DIR ?? 'packages/web/dist'),
   checkDatabase: () => persistence.checkHealth(),
+  proposals: new ProposalSubmissionService(persistence.proposals),
   gateway: {
     rooms: new RoomManager(persistence.roomManagerOptions()),
     sessions: persistence.sessions,

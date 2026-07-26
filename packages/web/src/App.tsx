@@ -30,10 +30,42 @@ import {
 } from './multiplayer/client';
 import { ConnectionStatus } from './multiplayer/ConnectionStatus';
 import { PlaySheet } from './screens/PlaySheet';
+import { getBrowserProposalClient, type ProposalApi } from './proposal/client';
+import { ProposalFormScreen } from './screens/ProposalFormScreen';
 import { SetResultScreen } from './screens/SetResultScreen';
 import { TitleScreen } from './screens/TitleScreen';
 import { WaitingRoomScreen } from './screens/WaitingRoomScreen';
 import { useScreenStore } from './store/screen';
+
+const DEMO_PROPOSAL_API: ProposalApi = {
+  submit: async (request) => ({
+    outcome: 'accepted',
+    proposal: {
+      id: 'demo-proposal',
+      kind: request.kind,
+      prefectureCode:
+        request.kind === 'local' &&
+        typeof request.prefectureCode === 'string' &&
+        request.prefectureCode.length > 0
+          ? (request.prefectureCode as '11')
+          : null,
+      prefectureName:
+        request.kind === 'local' && request.prefectureCode === '11'
+          ? '埼玉県'
+          : null,
+      name: request.name,
+      body: request.body,
+      status: 'screening',
+      reason: null,
+      releasedRuleId: null,
+      popularity: null,
+      priorityRank: null,
+      unread: true,
+      createdAt: Date.now(),
+      statusChangedAt: Date.now(),
+    },
+  }),
+};
 
 /**
  * フェーズ 1 の画面の組み立て。
@@ -101,8 +133,7 @@ function DemoApp() {
             onPlay={() => {
               setIsChoosingRoom(true);
             }}
-            // フェーズ 2 の画面(6・8・7・あそびかた)は E5/E11 が足す。
-            onPropose={() => undefined}
+            onPropose={() => go('proposal')}
             onEncyclopedia={() => undefined}
             onMyProposals={() => undefined}
             onHowToPlay={() => undefined}
@@ -123,6 +154,11 @@ function DemoApp() {
             />
           )}
         </>
+      );
+
+    case 'proposal':
+      return (
+        <ProposalFormScreen api={DEMO_PROPOSAL_API} onBack={() => go('menu')} />
       );
 
     case 'waitingRoom':
@@ -576,11 +612,19 @@ function ConnectedApp({ client }: { client: MultiplayerClient }) {
   if (current === 'title') {
     return show(<TitleScreen onStart={() => go('menu')} />);
   }
+  if (current === 'proposal') {
+    return show(
+      <ProposalFormScreen
+        api={getBrowserProposalClient()}
+        onBack={() => go('menu')}
+      />,
+    );
+  }
   return show(
     <>
       <MenuScreen
         onPlay={() => setIsChoosingRoom(true)}
-        onPropose={() => undefined}
+        onPropose={() => go('proposal')}
         onEncyclopedia={() => undefined}
         onMyProposals={() => undefined}
         onHowToPlay={() => undefined}

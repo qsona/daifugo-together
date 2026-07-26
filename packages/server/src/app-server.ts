@@ -22,6 +22,7 @@ import type {
   ServerToClientEvents,
   SocketData,
 } from './room/protocol.js';
+import type { ProposalSubmissionPort } from './proposal/submission.js';
 
 const CONTENT_TYPES: Record<string, string> = {
   '.css': 'text/css; charset=utf-8',
@@ -37,6 +38,7 @@ export interface AppServerOptions {
   webDistDir: string;
   gateway?: RoomSocketGatewayOptions;
   checkDatabase?: () => boolean;
+  proposals?: ProposalSubmissionPort;
 }
 
 export interface AppServer {
@@ -106,8 +108,78 @@ function createStaticHandler(webDistDir: string) {
   };
 }
 
+function bearerToken(request: IncomingMessage): string | null {
+  const authorization = request.headers.authorization;
+  if (!authorization?.startsWith('Bearer ')) return null;
+  const token = authorization.slice('Bearer '.length).trim();
+  return token.length > 0 ? token : null;
+}
+
+function clientIp(request: IncomingMessage): string {
+  const flyClientIp = request.headers['fly-client-ip'];
+  return typeof flyClientIp === 'string'
+    ? flyClientIp
+    : (request.socket.remoteAddress ?? 'unknown');
+}
+
+async function readJsonBody(request: IncomingMessage): Promise<unknown> {
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of request) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    size += buffer.length;
+    if (size > 8 * 1024) throw new Error('request_too_large');
+    chunks.push(buffer);
+  }
+  return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+}
+
+function writeJson(
+  response: ServerResponse,
+  status: number,
+  body: unknown,
+): void {
+  response.statusCode = status;
+  response.setHeader('content-type', 'application/json; charset=utf-8');
+  response.setHeader('cache-control', 'no-store');
+  response.end(JSON.stringify(body));
+}
+
 export function createAppServer(options: AppServerOptions): AppServer {
   let draining = false;
+  const handleProposal = async (
+    request: IncomingMessage,
+    response: ServerResponse,
+  ): Promise<boolean> => {
+    const pathname = new URL(request.url ?? '/', 'http://localhost').pathname;
+    if (pathname !== '/api/proposals') return false;
+    if (request.method !== 'POST') {
+      response.setHeader('allow', 'POST');
+      writeJson(response, 405, { error: 'method_not_allowed' });
+      return true;
+    }
+    if (!options.proposals) {
+      writeJson(response, 503, { error: 'proposal_service_unavailable' });
+      return true;
+    }
+    let body: unknown;
+    try {
+      body = await readJsonBody(request);
+    } catch (error) {
+      writeJson(response, error instanceof SyntaxError ? 400 : 413, {
+        error:
+          error instanceof SyntaxError ? 'invalid_json' : 'request_too_large',
+      });
+      return true;
+    }
+    const result = await options.proposals.submit({
+      token: bearerToken(request),
+      ip: clientIp(request),
+      body,
+    });
+    writeJson(response, result.status, result.body);
+    return true;
+  };
   const handleHealth = (
     request: IncomingMessage,
     response: ServerResponse,
@@ -154,12 +226,16 @@ export function createAppServer(options: AppServerOptions): AppServer {
       response.end();
       return;
     }
-    void createStaticHandler(options.webDistDir)(request, response).catch(
-      () => {
+    void handleProposal(request, response)
+      .then((handled) => {
+        if (!handled) {
+          return createStaticHandler(options.webDistDir)(request, response);
+        }
+      })
+      .catch(() => {
         if (!response.headersSent) response.statusCode = 500;
         response.end();
-      },
-    );
+      });
   });
   const io = new Server<
     ClientToServerEvents,

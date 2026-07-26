@@ -3,8 +3,45 @@
 ## 現在
 
 - **フェーズ 1 完了(2026-07-27)**: TS-02・E1・E2・E3・E4 は main に統合済み、E13 は本番デプロイと動作検証(DP-01・DP-03)まで完了(`https://daifugo-together.fly.dev/`)。残りは DP-02 の仕上げ(GitHub Environment `production` + `FLY_API_TOKEN` 登録と初回 CD 実行確認)のみ
-- 次にやること: **フェーズ 2 着手**(implementation-workorder.md「フェーズ 2 の進行順」参照)。先行する開発者判断: E07 設計書レビュー / A-4(codex 実行方式)/ C-1・C-9 / 上記 DP-02 の権限作業
+- **フェーズ 2 / E5 プロセス1 実装中**: RP-01・RP-02 の縦切り実装とローカル検証が完了。次に独立 GPT-5.6 Sol の方向性レビューを受け、プロセス2で受け入れ条件を仕上げる。RP-03 は CX-02 依存のため E7 後に戻る
 - E1〜E3 の実装記録は本書末尾の「並行進行」節、E13 は「E13」節。E4 の未解消の開発者判断は「詰まっている点」に残っている(1〜4・7・8・11)
+
+## フェーズ 2: E5 ルール提案受付(RP-01・RP-02)
+
+### プロセス1
+
+- 状態: 縦切り実装完了、方向性レビュー待ち
+- ブランチ: `codex/e5-rule-proposal`
+- ユーザーストーリーの確認:
+  - `packages/web/src/screens/ProposalFormScreen.test.tsx` で、画面6からローカル区分・任意の都道府県・名前・本文を入力して送信し、「審査中」が表示されることを確認
+  - `packages/server/src/proposal/proposal.test.ts` で、匿名セッショントークン付き `POST /api/proposals` → `proposals(status='screening')` 保存 → E7 用の古い順キュー取得までを実 HTTP で確認
+  - `packages/core/src/proposal/proposal.test.ts` で、47 都道府県マスタ・NFC 正規化・12 文字の名前上限・original+都道府県拒否を確認
+
+#### 実装した方向
+
+- 共有契約・都道府県マスタ・正規化/検証は `packages/core/src/proposal/`、SQLite の提案リポジトリと送信パイプラインは `packages/server/src/proposal/`、画面6と HTTP クライアントは `packages/web/src/` に配置した
+- E6 の検査は `ProposalScreeningGate` として差し替え可能にし、pass/block/検査不能(503)を表現した。E6 未実装の現在は pass-through。検査結果の確定 callback は proposal INSERT と同じ SQLite transaction 内で呼ばれる
+- 専用キューテーブルは作らず、`status='screening' ORDER BY created_at,id` を E7 のキューとした
+- 既存の Socket.IO 匿名セッショントークンを HTTP の Bearer token として再利用する。新しい認証基盤は追加しない
+- RP-03 の画面7・一覧 API・既読通知は CX-02 後に実装する。現在は送信した 1 件の「審査中」を画面6内で確認できる
+
+#### 置いた仮定(方向性レビューで裁定)
+
+| # | 仮定した内容 | なぜそう決めたか | 出典 | 覆ったときの影響範囲 |
+|---|---|---|---|---|
+| E5-P1-1 | ルール名上限は **12 文字**、本文は 400 文字 | 後発の RuleCutIn のリボン制約が名前40文字の仮値と衝突しており、作業指示が RP-01 実装時の確定を求めるため | decision-log E-14 / C-3、E04 | core の定数・検証テスト・画面カウンタ |
+| E5-P1-2 | レート制限は E6 提供値(ユーザー5件/時・20件/日、IP 20件/時)を、単一プロセスのメモリ内 sliding window で始める | 値は E06 §5.2 で供給済み。Fly 1台構成では共有ストアは過剰で、再起動時にカウンタが消える弱点は初期運用で許容できると判断 | E06 §5.2、E12 §3/§4.5 | `ProposalRateLimiter`。永続/複数台化する場合は port 化して DB/外部ストアへ差し替え |
+| E5-P1-3 | C-5 は E05 の「リトライ可能 failed も部分ユニーク索引に含める」方式を暫定採用する | E7 レビューまでは仮定で進めてよいと作業指示に明記。E5 の重複抑止を現在の設計どおり実装できる | decision-log C-5、E05 §2.1〜2.3 | SQLite index predicate、重複検索、transition の retry guard |
+| E5-P1-4 | HTTP 認証は `Authorization: Bearer <Socket.IOで発行済みの匿名token>` とする | E12 は同じ匿名ID/トークンをブラウザに保持する前提。URL/query に token を載せず、Socket.IO と HTTP で本人性を統一できる | E12 §4.9、既存 `room/session.ts` | Web client と API の token 抽出。Cookie 化する場合は CSRF 対策を含む変更 |
+
+#### プロセス2に回したもの
+
+| ストーリー | 内容 | 理由 |
+|---|---|---|
+| RP-01 | 全バリデーション境界、不可視文字、コードポイント、重複/並行 INSERT、認証・停止・レート・検査の全ゲート順、block/503、リクエスト境界の回帰テスト | プロセス1は正常系の縦切りを優先 |
+| RP-01 | `transitionProposal` の許可表・冪等性・patch 不変条件・リトライ上限と、終端後/枠切れ後の再提案 | E7 に渡す状態機械を受け入れ条件まで仕上げるため |
+| RP-02 | 47コード全件、01〜47外、local/original×県あり/なし、DB CHECK、永続 round-trip の網羅 | エッジケースの網羅はプロセス2 |
+| RP-01 / RP-02 | 375px 実描画、メニューからの実導線、送信エラー/二重送信中の操作、デザイントークン検査 | UI の仕上げと目視検証はプロセス2 |
 
 ### 開発者レビューの反映(2026-07-26・プロセス2 のあと)
 

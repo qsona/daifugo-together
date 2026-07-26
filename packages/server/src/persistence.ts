@@ -23,6 +23,7 @@ import type {
   SessionStoreOptions,
 } from './room/session.js';
 import type { RoomAction, RoomState, RoomTransition } from './room/types.js';
+import { ProposalRepository } from './proposal/repository.js';
 
 const users = sqliteTable('users', {
   userId: text('user_id').primaryKey(),
@@ -169,6 +170,7 @@ export class SqlitePersistence implements RoomPersistencePort {
   readonly #sqlite: Database.Database;
   readonly #db: DrizzleDatabase;
   readonly sessions: SqliteSessionStore;
+  readonly proposals: ProposalRepository;
 
   constructor(path: string, sessionOptions: SessionStoreOptions = {}) {
     if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
@@ -195,8 +197,44 @@ export class SqlitePersistence implements RoomPersistencePort {
         result_json TEXT NOT NULL,
         created_at INTEGER NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS proposals (
+        id TEXT PRIMARY KEY,
+        author_id TEXT NOT NULL REFERENCES users(user_id),
+        kind TEXT NOT NULL CHECK (kind IN ('local', 'original')),
+        prefecture_code TEXT
+          CHECK (
+            prefecture_code IS NULL
+            OR prefecture_code GLOB '[0-4][0-9]'
+          ),
+        name TEXT NOT NULL,
+        body TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'screening'
+          CHECK (
+            status IN (
+              'screening', 'implementing', 'released', 'rejected', 'failed'
+            )
+          ),
+        reason_code TEXT,
+        reason_text TEXT,
+        rule_id TEXT,
+        attempt_count INTEGER NOT NULL DEFAULT 0,
+        content_hash TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        status_changed_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        CHECK (kind = 'local' OR prefecture_code IS NULL)
+      );
+      CREATE INDEX IF NOT EXISTS idx_proposals_author
+        ON proposals(author_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_proposals_status
+        ON proposals(status, created_at);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_proposals_inflight_dedupe
+        ON proposals(author_id, content_hash)
+        WHERE status IN ('screening', 'implementing')
+          OR (status = 'failed' AND attempt_count = 0);
     `);
     this.sessions = new SqliteSessionStore(this.#db, sessionOptions);
+    this.proposals = new ProposalRepository(this.#sqlite);
   }
 
   roomManagerOptions(): Pick<RoomManagerOptions, 'persistence'> {
