@@ -270,6 +270,58 @@ describe('GE-05 set progression', () => {
     });
   });
 
+  it('onGameStartだけで終局したゲームを即座に結果へ積む', () => {
+    const ruleEntry: RuleChainEntry = {
+      ruleId: 'r0201-start-finish',
+      name: '開幕順位',
+      position: 0,
+      priority: {
+        popularityScore: 0,
+        activatedAt: '2026-07-26T00:00:00.000Z',
+        ruleId: 'r0201-start-finish',
+      },
+      bundleHash: 'fixture',
+      contractVersion: 1,
+    };
+    const module: RuleModule = {
+      meta: {
+        ruleId: ruleEntry.ruleId,
+        name: ruleEntry.name,
+        description: 'finish on start fixture',
+        kind: 'original',
+        proposalId: 'fixture',
+        contractVersion: 1,
+        messages: {},
+      },
+      hooks: {
+        onGameStart: () => [
+          { type: 'forceRank', player: 'p1', rank: 1 },
+          { type: 'forceRank', player: 'p2', rank: 2 },
+          { type: 'forceRank', player: 'p3', rank: 3 },
+        ],
+      },
+    };
+    const port = createInProcessRuleChainPort([module]);
+
+    const state = startSet(
+      {
+        setId: 'start-finish',
+        config: { gamesPerSet: 3, interimAutoAdvanceMs: 0 },
+        members,
+        ruleChain: [ruleEntry],
+        setSeed: 'start-finish-seed',
+      },
+      port,
+    );
+
+    expect(state.phase).toEqual({ name: 'interimResult', gameIndex: 0 });
+    expect(state.currentGame?.public.phase).toBe('finished');
+    expect(state.results).toHaveLength(1);
+    expect(
+      state.results[0]?.standings.map((result) => result.standing),
+    ).toEqual([1, 2, 3, 4]);
+  });
+
   it('順位点を合計し、同点は最終戦順位で決める', () => {
     const results = [
       {

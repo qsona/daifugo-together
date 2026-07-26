@@ -15,5 +15,6 @@ export * from './rules/in-process.js';
 export * from './set/scoring.js';
 export * from './set/set-reducer.js';
 export * from './set/types.js';
+export * from './sim/api.js';
 export * from './sim/simulate.js';
 export * from './snapshot/snapshot.js';

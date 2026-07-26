@@ -193,10 +193,10 @@ TS-02 から継続で未解決のもの:
 
 ## 並行進行: E1 ゲームエンジン
 
-- 状態: GE-02・GE-03・GE-05・GE-04 のプロセス2実装完了。独立 GPT-5.6 Sol 完了レビュー待ち。
+- 状態: GE-02・GE-03・GE-05・GE-04 のプロセス2実装完了。独立 GPT-5.6 Sol 完了レビューの Major 5 件を修正し、再レビュー待ち。
 - プロセス1: `8c38c3d`（リベース前 `a3e98a1`）
 - プロセス2: `841745a`
-- 検証: Node 26.5.0 / pnpm 11.17.0 / TypeScript 6.0.3 で `pnpm verify` 成功。E1 core は 10 files / 42 tests、統合リポジトリ全体は 13 files / 78 tests。format・lint・design lint・typecheck・build 成功。
+- 検証: Node 26.5.0 / pnpm 11.17.0 / TypeScript 6.0.3 で `pnpm verify` 成功。統合リポジトリ全体は 14 files / 84 tests。format・lint・design lint・typecheck・build 成功。
 
 ### 完了内容
 
@@ -208,6 +208,8 @@ TS-02 から継続で未解決のもの:
 | GE-04 | 全Effect語彙、優先度・競合解決、resolutionログ、全フック、KVクォータ、4 fixtureの全16部分集合、シミュレーション |
 
 プロセス1の独立 GPT-5.6 Sol レビューは `GO_WITH_FIXES`。指摘された権威状態の可変参照、ルール間で共有された RNG/KV、合法手フェイルセーフの不一致、未接続フック、B-4 のアクションログ境界をすべて反映した。
+
+プロセス2の独立 GPT-5.6 Sol 完了レビューでは、(1) E2向け `SimulationApi` 未公開、(2) `moveCards` でactiveの手札が0枚になった後の順位未確定、(3) field→同一fieldの全札移動によるカード消失、(4) `onGameStart` だけで終局したゲームがSet側で進まない、(5) `afterFieldClear` でactiveが1人以下になった後に終局しない、の5件を再現。すべて修正し、最小再現を回帰テストへ追加した。
 
 ### E1で置いた仮定
 
@@ -225,3 +227,4 @@ TS-02 から継続で未解決のもの:
 - E01の旧節に54枚・14/14/13/13が残るが、同文書の確定版と decision-log A-3 はジョーカーなし52枚・13枚ずつ。実装は確定版に従った。
 - E01 §3.4の一部に次戦先手を前戦大貧民とする旧BR-11が残る。実装は確定版どおり毎ゲームのダイヤ3保持者。
 - 空のfieldを移動先にする `moveCards` は、所有者 `by` の決定規則が契約にない。現在は例外を投げず棄却し、resolutionログへ理由を残す。
+- E01 §2.12 の `createSimulationApi(chain, port)` だけでは、§2.2で分離された必須 `GameConfig`（gameSeed・seats・gameIndex）と `PlayerSnapshot` 用のセット文脈を復元できない。実装は `createSimulationApi({ config, snapshotContext, runtime })` とし、静的入力をfactoryで固定する形に読み替えた。E2はこの公開面を使用する。

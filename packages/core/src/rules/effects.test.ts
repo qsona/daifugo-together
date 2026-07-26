@@ -412,6 +412,109 @@ describe('GE-04 effect pipeline and lifecycle hooks', () => {
     expect(transition.state.public.turn).toBe('p1');
   });
 
+  it('afterFieldClearの退場でactiveが1人になったらその場で終局する', () => {
+    const ruleEntry = entry('r0108-field-clear-finish');
+    const module: RuleModule = {
+      meta: {
+        ruleId: ruleEntry.ruleId,
+        name: ruleEntry.name,
+        description: 'finish after field clear',
+        kind: 'original',
+        proposalId: 'fixture',
+        contractVersion: 1,
+        messages: {},
+      },
+      hooks: {
+        afterPlay: () => [
+          { type: 'skipTurns', player: 'p2', count: 1 },
+          { type: 'skipTurns', player: 'p3', count: 1 },
+          { type: 'skipTurns', player: 'p4', count: 1 },
+        ],
+        afterFieldClear: () => [
+          { type: 'forceRank', player: 'p2', rank: 2 },
+          { type: 'forceRank', player: 'p3', rank: 3 },
+          { type: 'forceRank', player: 'p4', rank: 4 },
+        ],
+      },
+    };
+    const config: GameConfig = {
+      gameIndex: 0,
+      seats,
+      gameSeed: 'field-clear-finish',
+      ruleChain: [ruleEntry],
+    };
+    const started = startGame(config).state;
+    const state: GameState = {
+      ...started,
+      public: { ...started.public, turn: 'p1' },
+    };
+    const card = state.players.p1?.hand[0];
+    if (!card) {
+      throw new Error('Expected p1 card');
+    }
+
+    const transition = reduceGame(
+      config,
+      state,
+      { type: 'play', player: 'p1', cards: [card.id] },
+      runtime(module),
+    );
+
+    expect(transition.state.public.phase).toBe('finished');
+    expect(transition.state.public.turn).toBeNull();
+    expect(transition.state.players.p1?.standing).toBe(1);
+    expect(transition.events.at(-1)?.type).toBe('gameEnded');
+  });
+
+  it('onGameStartのmoveCardsで手札が0枚になったactiveへ順位を付ける', () => {
+    const ruleEntry = entry('r0109-start-empty-hand');
+    const module: RuleModule = {
+      meta: {
+        ruleId: ruleEntry.ruleId,
+        name: ruleEntry.name,
+        description: 'empty hand on start',
+        kind: 'original',
+        proposalId: 'fixture',
+        contractVersion: 1,
+        messages: {},
+      },
+      hooks: {
+        onGameStart: (context) => {
+          const player = context.game.turn;
+          return player
+            ? [
+                {
+                  type: 'moveCards',
+                  from: { kind: 'hand', player },
+                  to: { kind: 'discard' },
+                  cards: { kind: 'all' },
+                },
+              ]
+            : [];
+        },
+      },
+    };
+    const config: GameConfig = {
+      gameIndex: 0,
+      seats,
+      gameSeed: 'start-empty-hand',
+      ruleChain: [ruleEntry],
+    };
+
+    const transition = startGame(config, runtime(module));
+    const emptied = seats.find(
+      (player) => transition.state.players[player]?.hand.length === 0,
+    );
+
+    expect(emptied).toBeDefined();
+    expect(transition.state.players[emptied!]).toMatchObject({
+      status: 'finished',
+      standing: 1,
+    });
+    expect(transition.state.public.phase).toBe('awaitingPlay');
+    expect(transition.state.public.turn).not.toBe(emptied);
+  });
+
   it('KVクォータ超過をEffect拒否として記録し、既存メモリを保つ', () => {
     const ruleEntry = entry('r0106-memory-quota');
     const module: RuleModule = {
@@ -557,6 +660,70 @@ describe('GE-04 effect pipeline and lifecycle hooks', () => {
     ];
     expect(allCards).toHaveLength(52);
     expect(new Set(allCards.map((card) => card.id))).toHaveLength(52);
+  });
+
+  it('fieldから同じfieldへの全札moveCardsを棄却してカードを保つ', () => {
+    const ruleEntry = entry('r0110-same-field-move');
+    const module: RuleModule = {
+      meta: {
+        ruleId: ruleEntry.ruleId,
+        name: ruleEntry.name,
+        description: 'same field move',
+        kind: 'original',
+        proposalId: 'fixture',
+        contractVersion: 1,
+        messages: {},
+      },
+      hooks: {
+        afterPlay: () => [
+          {
+            type: 'moveCards',
+            from: { kind: 'field' },
+            to: { kind: 'field' },
+            cards: { kind: 'all' },
+          },
+        ],
+      },
+    };
+    const config: GameConfig = {
+      gameIndex: 0,
+      seats,
+      gameSeed: 'same-field-move',
+      ruleChain: [ruleEntry],
+    };
+    const started = startGame(config).state;
+    const player = started.public.turn;
+    const card = player ? started.players[player]?.hand[0] : undefined;
+    if (!player || !card) {
+      throw new Error('Expected opening play');
+    }
+
+    const transition = reduceGame(
+      config,
+      started,
+      { type: 'play', player, cards: [card.id] },
+      runtime(module),
+    );
+    const allCards = [
+      ...Object.values(transition.state.players).flatMap(
+        (candidate) => candidate.hand,
+      ),
+      ...(transition.state.public.field.current?.play.cards ?? []),
+      ...transition.state.public.discard,
+      ...transition.state.private.excluded,
+    ];
+
+    expect(transition.state.public.field.current?.play.cards).toContainEqual(
+      card,
+    );
+    expect(allCards).toHaveLength(52);
+    expect(new Set(allCards.map((candidate) => candidate.id))).toHaveLength(52);
+    expect(transition.events).toContainEqual(
+      expect.objectContaining({
+        type: 'effectRejected',
+        detail: { applied: false, reason: 'same-zone' },
+      }),
+    );
   });
 
   it('権威フックだけが呼出し回数を進め、ルールごとのKVだけを公開する', () => {

@@ -27,7 +27,7 @@ import type {
   Zone,
 } from '../rules/contract.js';
 import type { Play } from '../play/play.js';
-import { forceStanding } from './standing.js';
+import { finishPlayer, forceStanding } from './standing.js';
 
 const MEMORY_MAX_KEYS = 32;
 const MEMORY_MAX_VALUE_BYTES = 1024;
@@ -253,17 +253,6 @@ function applyMoveCards(
   events: PublicGameEvent[];
   detail: JsonValue;
 } {
-  const resolvedIds = new Set(resolvedCards);
-  const selected = cardsInZone(state, effect.from).filter((card) =>
-    resolvedIds.has(card.id),
-  );
-  if (selected.length === 0) {
-    return {
-      state,
-      events: [],
-      detail: { applied: false, reason: 'no-matching-cards' },
-    };
-  }
   if (
     (effect.from.kind === 'hand' &&
       state.players[effect.from.player] === undefined) ||
@@ -273,6 +262,28 @@ function applyMoveCards(
       state,
       events: [],
       detail: { applied: false, reason: 'unknown-player' },
+    };
+  }
+  if (
+    effect.from.kind === effect.to.kind &&
+    (effect.from.kind !== 'hand' ||
+      (effect.to.kind === 'hand' && effect.from.player === effect.to.player))
+  ) {
+    return {
+      state,
+      events: [],
+      detail: { applied: false, reason: 'same-zone' },
+    };
+  }
+  const resolvedIds = new Set(resolvedCards);
+  const selected = cardsInZone(state, effect.from).filter((card) =>
+    resolvedIds.has(card.id),
+  );
+  if (selected.length === 0) {
+    return {
+      state,
+      events: [],
+      detail: { applied: false, reason: 'no-matching-cards' },
     };
   }
   if (effect.to.kind === 'field' && !state.public.field.current) {
@@ -587,6 +598,33 @@ export function executeEffectHook(
       }
       case 'announce':
         break;
+    }
+  }
+
+  for (const failedWinner of batch.entries) {
+    if (failedWinner.resolution.status !== 'rejected') {
+      continue;
+    }
+    for (const entry of batch.entries) {
+      if (
+        entry.resolution.status === 'deduped' &&
+        entry.resolution.winnerRuleId === failedWinner.ruleId &&
+        entry.conflictKey === failedWinner.conflictKey
+      ) {
+        entry.resolution = {
+          status: 'rejected',
+          winnerRuleId: failedWinner.ruleId,
+        };
+      }
+    }
+  }
+
+  for (const playerId of config.seats) {
+    const player = nextState.players[playerId];
+    if (player?.status === 'active' && player.hand.length === 0) {
+      const finished = finishPlayer(nextState, playerId);
+      nextState = finished.state;
+      events.push(finished.event);
     }
   }
 

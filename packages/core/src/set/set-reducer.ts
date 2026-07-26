@@ -11,6 +11,7 @@ import {
   type RuleRuntime,
 } from '../rules/chain.js';
 import type { RuleChainEntry } from '../rules/contract.js';
+import type { GameTransition } from '../game/types.js';
 import { scoreSet } from './scoring.js';
 import type {
   SetAction,
@@ -70,6 +71,47 @@ function gameResult(state: SetState, gameIndex: number): GameResult {
   };
 }
 
+function setEndedEvent(
+  outcome: NonNullable<SetState['outcome']>,
+): SetEndedEvent {
+  return {
+    type: 'setEnded',
+    totals: outcome.standings,
+    completion: outcome.completion,
+    gamesPlayed: outcome.gamesPlayed,
+  };
+}
+
+function integrateStartedGame(
+  state: SetState,
+  gameIndex: number,
+  started: GameTransition,
+): SetState {
+  let nextState: SetState = {
+    ...state,
+    phase: { name: 'gameInProgress', gameIndex },
+    currentGame: started.state,
+    setMemory: started.setMemory ?? state.setMemory,
+  };
+  if (started.state.public.phase !== 'finished') {
+    return nextState;
+  }
+  const results = [...state.results, gameResult(nextState, gameIndex)];
+  if (results.length < state.config.gamesPerSet) {
+    return {
+      ...nextState,
+      results,
+      phase: { name: 'interimResult', gameIndex },
+    };
+  }
+  nextState = { ...nextState, results };
+  return {
+    ...nextState,
+    phase: { name: 'setResult' },
+    outcome: scoreSet(state.setId, nextState, 'completed'),
+  };
+}
+
 export function startSet(
   input: StartSetInput,
   port: RuleChainPort = NO_RULE_CHAIN_PORT,
@@ -97,11 +139,7 @@ export function startSet(
     draining: false,
   };
   const game = startGame(gameConfig(state, 0), runtime(state, port));
-  return {
-    ...state,
-    currentGame: game.state,
-    setMemory: game.setMemory ?? state.setMemory,
-  };
+  return integrateStartedGame(state, 0, game);
 }
 
 function finishDrainedSet(state: SetState): SetTransition {
@@ -114,12 +152,6 @@ function finishDrainedSet(state: SetState): SetTransition {
     };
   }
   const outcome = scoreSet(state.setId, state, 'drained');
-  const event: SetEndedEvent = {
-    type: 'setEnded',
-    totals: outcome.standings,
-    completion: outcome.completion,
-    gamesPlayed: outcome.gamesPlayed,
-  };
   return {
     state: {
       ...state,
@@ -127,7 +159,7 @@ function finishDrainedSet(state: SetState): SetTransition {
       phase: { name: 'setResult' },
       outcome,
     },
-    events: [event],
+    events: [setEndedEvent(outcome)],
     rejections: [],
     acceptedAction: { type: 'requestDrain' },
   };
@@ -151,14 +183,13 @@ function advance(state: SetState, port: RuleChainPort): SetTransition {
     gameConfig(state, nextIndex),
     runtime(state, port),
   );
+  const nextState = integrateStartedGame(state, nextIndex, nextGame);
   return {
-    state: {
-      ...state,
-      phase: { name: 'gameInProgress', gameIndex: nextIndex },
-      currentGame: nextGame.state,
-      setMemory: nextGame.setMemory ?? state.setMemory,
-    },
-    events: nextGame.events,
+    state: nextState,
+    events:
+      nextState.phase.name === 'setResult' && nextState.outcome
+        ? [...nextGame.events, setEndedEvent(nextState.outcome)]
+        : nextGame.events,
     rejections: [],
     acceptedAction: { type: 'advance' },
   };
@@ -261,15 +292,7 @@ export function reduceSet(
     state: nextState,
     events:
       nextState.phase.name === 'setResult' && nextState.outcome
-        ? [
-            ...transition.events,
-            {
-              type: 'setEnded',
-              totals: nextState.outcome.standings,
-              completion: nextState.outcome.completion,
-              gamesPlayed: nextState.outcome.gamesPlayed,
-            },
-          ]
+        ? [...transition.events, setEndedEvent(nextState.outcome)]
         : transition.events,
     rejections: [],
     acceptedAction: action,

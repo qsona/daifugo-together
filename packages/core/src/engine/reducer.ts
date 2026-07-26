@@ -250,6 +250,13 @@ function clearFieldWithHook(
     runtime,
     'afterFieldClear',
   );
+  if (activePlayers(config, hook.state).length <= 1) {
+    return {
+      state: appendEvents(hook.state, hook.events),
+      events: [...cleared.events, ...hook.events],
+      setMemory: hook.setMemory,
+    };
+  }
   const current = hook.state.public.turn;
   const firstLeader =
     current && hook.state.players[current]?.status === 'active'
@@ -384,6 +391,18 @@ function reducePass(
     });
     return {
       state: finished.state,
+      events: [passEvent, ...advanced.events, ...finished.events],
+      rejections: [],
+      setMemory: finished.setMemory,
+    };
+  }
+  if (activePlayers(config, advanced.state).length <= 1) {
+    const finished = finishWithHook(config, advanced.state, {
+      ...runtime,
+      setMemory: advanced.setMemory,
+    });
+    return {
+      state: appendEvents(finished.state, finished.events),
       events: [passEvent, ...advanced.events, ...finished.events],
       rejections: [],
       setMemory: finished.setMemory,
@@ -587,6 +606,18 @@ function reducePlay(
     });
     return {
       state: finished.state,
+      events: [...events, ...finished.events],
+      rejections: [],
+      setMemory: finished.setMemory,
+    };
+  }
+  if (activePlayers(config, advanced.state).length <= 1) {
+    const finished = finishWithHook(config, advanced.state, {
+      ...runtime,
+      setMemory: advanced.setMemory,
+    });
+    return {
+      state: appendEvents(finished.state, finished.events),
       events: [...events, ...finished.events],
       rejections: [],
       setMemory: finished.setMemory,
