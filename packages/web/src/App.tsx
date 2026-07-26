@@ -1,14 +1,14 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 
 import type { RuleVote, SetFunRating } from './screens/SetResultScreen';
 import {
+  DEMO_ACTIVATION_VOLLEYS,
   DEMO_ACTIVE_RULE_COUNT,
-  DEMO_FIELD,
   DEMO_FIRED_RULES,
   DEMO_GAME_RANKS,
   DEMO_HAND,
   DEMO_INVITE_CODE,
-  DEMO_LOG,
+  DEMO_LEAD_SEAT,
   DEMO_MEMBERS,
   DEMO_SEATS,
   DEMO_SET_RANKS,
@@ -16,7 +16,7 @@ import {
 import { GameResultScreen } from './screens/GameResultScreen';
 import { GameScreen } from './screens/GameScreen';
 import { MenuScreen } from './screens/MenuScreen';
-import { RoomEntryScreen } from './screens/RoomEntryScreen';
+import { PlaySheet } from './screens/PlaySheet';
 import { SetResultScreen } from './screens/SetResultScreen';
 import { TitleScreen } from './screens/TitleScreen';
 import { WaitingRoomScreen } from './screens/WaitingRoomScreen';
@@ -34,6 +34,30 @@ export function App() {
   const [selectedCardIds, setSelectedCardIds] = useState<readonly string[]>([]);
   const [funRating, setFunRating] = useState<SetFunRating | null>(null);
   const [ruleVotes, setRuleVotes] = useState(DEMO_FIRED_RULES);
+  /** 見本のカットインを順に再生するための位置。null は再生していない状態。 */
+  const [isChoosingRoom, setIsChoosingRoom] = useState(false);
+  const [volleyIndex, setVolleyIndex] = useState<number | null>(null);
+  const [lastVolleyIndex, setLastVolleyIndex] = useState<number | null>(null);
+
+  const activations =
+    volleyIndex === null ? [] : (DEMO_ACTIVATION_VOLLEYS[volleyIndex] ?? []);
+  const lastVolley =
+    lastVolleyIndex === null
+      ? null
+      : (DEMO_ACTIVATION_VOLLEYS[lastVolleyIndex] ?? null);
+
+  const playNextVolley = () => {
+    const next =
+      lastVolleyIndex === null
+        ? 0
+        : (lastVolleyIndex + 1) % DEMO_ACTIVATION_VOLLEYS.length;
+    setVolleyIndex(next);
+    setLastVolleyIndex(next);
+  };
+
+  const finishCutIn = useCallback(() => {
+    setVolleyIndex(null);
+  }, []);
 
   const toggleCard = (id: string) => {
     setSelectedCardIds((ids) =>
@@ -59,31 +83,33 @@ export function App() {
 
     case 'menu':
       return (
-        <MenuScreen
-          onPlay={() => {
-            go('roomEntry');
-          }}
-          // フェーズ 2 の画面(6・8・7・あそびかた)は E5/E11 が足す。
-          onPropose={() => undefined}
-          onEncyclopedia={() => undefined}
-          onMyProposals={() => undefined}
-          onHowToPlay={() => undefined}
-        />
-      );
-
-    case 'roomEntry':
-      return (
-        <RoomEntryScreen
-          onBack={() => {
-            go('menu');
-          }}
-          onCreate={() => {
-            go('waitingRoom');
-          }}
-          onJoin={() => {
-            go('waitingRoom');
-          }}
-        />
+        <>
+          <MenuScreen
+            onPlay={() => {
+              setIsChoosingRoom(true);
+            }}
+            // フェーズ 2 の画面(6・8・7・あそびかた)は E5/E11 が足す。
+            onPropose={() => undefined}
+            onEncyclopedia={() => undefined}
+            onMyProposals={() => undefined}
+            onHowToPlay={() => undefined}
+          />
+          {isChoosingRoom && (
+            <PlaySheet
+              onCreate={() => {
+                setIsChoosingRoom(false);
+                go('waitingRoom');
+              }}
+              onJoin={() => {
+                setIsChoosingRoom(false);
+                go('waitingRoom');
+              }}
+              onClose={() => {
+                setIsChoosingRoom(false);
+              }}
+            />
+          )}
+        </>
       );
 
     case 'waitingRoom':
@@ -93,7 +119,7 @@ export function App() {
           inviteCode={DEMO_INVITE_CODE}
           activeRuleCount={DEMO_ACTIVE_RULE_COUNT}
           onBack={() => {
-            go('roomEntry');
+            go('menu');
           }}
           onCopyInvite={() => undefined}
           onViewRules={() => undefined}
@@ -106,12 +132,17 @@ export function App() {
     case 'game':
       return (
         <GameScreen
-          progressLabel="第1戦(3巡目)"
+          gameLabel="第1戦"
           activeRuleCount={DEMO_ACTIVE_RULE_COUNT}
           seats={DEMO_SEATS}
-          field={DEMO_FIELD}
-          firedRule={{ name: '8切り', effect: '場が流れます' }}
-          log={DEMO_LOG}
+          leadSeatName={DEMO_LEAD_SEAT}
+          activations={activations}
+          onCutInDone={finishCutIn}
+          lastActivation={
+            lastVolley && lastVolley[0]
+              ? { name: lastVolley[0].name, count: lastVolley.length }
+              : null
+          }
           hand={DEMO_HAND}
           selectedCardIds={selectedCardIds}
           isMyTurn
@@ -119,7 +150,8 @@ export function App() {
           onToggleCard={toggleCard}
           onPlay={() => {
             setSelectedCardIds([]);
-            go('gameResult');
+            // 見本のため、カードを出すたびにカットインの 3 パターンを順に再生する。
+            playNextVolley();
           }}
           onPass={() => {
             go('gameResult');
@@ -134,6 +166,7 @@ export function App() {
           progressLabel="セット 1 / 3 戦"
           ranks={DEMO_GAME_RANKS}
           nextLabel="第2戦へ"
+          autoAdvanceMs={5000}
           onNext={() => {
             go('setResult');
           }}

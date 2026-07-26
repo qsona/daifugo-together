@@ -1,0 +1,36 @@
+/*
+ * 自動で進むボタン。DS-02 追加。
+ * 「(5 秒後に自動で進む)」という文の代わりに、残り時間をバーで見せる
+ * (UI文言ガイド 原則 3)。縁を一周するリングは残量が読み取りにくかったので、
+ * 左から減る素直なインジケータにしている。
+ */
+
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.track {
+  height: 8px;
+  border: var(--border-control) solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--color-cream-200);
+  overflow: hidden;
+}
+
+.fill {
+  height: 100%;
+  background: var(--color-gold-400);
+  transform-origin: left center;
+  animation: deplete linear forwards;
+}
+
+@keyframes deplete {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 
 import { Card } from './Card';
 import type { CardView } from './Card';
@@ -12,7 +12,12 @@ type HandTrayProps = {
   actions?: ReactNode;
 };
 
-/** ワイヤー画面 3 の手札。横スクロールで全枚数を収める。 */
+/**
+ * ワイヤー画面 3 の手札。
+ * 横スクロールはしない。実際の手札と同じく左から重ね、枚数が増えるほど
+ * 重なりを深くして必ず画面幅に収める。見えているのは各札の左端の帯だけだが、
+ * ランクとスートはそこに置いてある(Card の index)。
+ */
 export function HandTray({
   cards,
   selectedIds,
@@ -21,13 +26,12 @@ export function HandTray({
 }: HandTrayProps) {
   return (
     <section className={styles.tray} aria-label="あなたの手札">
-      <div className={styles.head}>
-        <span>あなたの手札</span>
-        <span>{cards.length}枚</span>
-      </div>
-      <ul className={styles.cards}>
+      <ul
+        className={styles.cards}
+        style={{ '--count': cards.length } as CSSProperties}
+      >
         {cards.map((card) => (
-          <li key={card.id}>
+          <li key={card.id} className={styles.slot}>
             <Card
               card={card}
               selected={selectedIds.includes(card.id)}

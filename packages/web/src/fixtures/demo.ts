@@ -5,10 +5,10 @@
  */
 
 import type { CardView } from '../components/Card';
-import type { LogEntry } from '../components/Log';
 import type { MemberView } from '../components/MemberList';
-import type { SeatView } from '../components/PlayerSeat';
 import type { RankView } from '../components/RankRow';
+import type { RuleActivation } from '../components/RuleCutIn';
+import type { TableSeat } from '../components/Table';
 import type { FiredRuleVote } from '../screens/SetResultScreen';
 
 export const DEMO_MEMBERS: readonly MemberView[] = [
@@ -21,40 +21,51 @@ export const DEMO_MEMBERS: readonly MemberView[] = [
 export const DEMO_INVITE_CODE = 'ABCD-1234';
 export const DEMO_ACTIVE_RULE_COUNT = 31;
 
-export const DEMO_SEATS: readonly SeatView[] = [
+/**
+ * 卓。自分を先頭に、手番が回る順(時計回り)で 4 人。
+ * 各席が「席の情報」と「その人がこの場に出した札」の両方を持つ。
+ */
+export const DEMO_SEATS: readonly TableSeat[] = [
+  {
+    name: 'あなた',
+    isSelf: true,
+    handCount: 10,
+    isCurrentTurn: false,
+    hasPassed: false,
+    plays: [],
+  },
   {
     name: 'プレイヤーB',
-    kind: 'ai',
+    isSelf: false,
     handCount: 8,
     isCurrentTurn: false,
     hasPassed: false,
+    plays: [
+      [
+        { id: 'f-s5', suit: 'spade', rank: '5' },
+        { id: 'f-h5', suit: 'heart', rank: '5' },
+      ],
+    ],
   },
   {
     name: 'プレイヤーC',
-    kind: 'human',
+    isSelf: false,
     handCount: 6,
     isCurrentTurn: true,
     hasPassed: false,
+    plays: [[{ id: 'f-d8', suit: 'diamond', rank: '8' }]],
   },
   {
     name: 'プレイヤーD',
-    kind: 'ai',
+    isSelf: false,
     handCount: 11,
     isCurrentTurn: false,
     hasPassed: true,
+    plays: [],
   },
 ];
 
-export const DEMO_FIELD: readonly CardView[] = [
-  { id: 'field-d8', suit: 'diamond', rank: '8' },
-];
-
-export const DEMO_LOG: readonly LogEntry[] = [
-  { id: 'l1', kind: 'play', text: 'プレイヤーB: ♠5 ♥5 を出した' },
-  { id: 'l2', kind: 'play', text: 'プレイヤーC: ♦8 を出した' },
-  { id: 'l3', kind: 'ruleFired', text: 'ルール発動「8切り」 場が流れた' },
-  { id: 'l4', kind: 'play', text: 'あなたの番です' },
-];
+export const DEMO_LEAD_SEAT = 'プレイヤーC';
 
 export const DEMO_HAND: readonly CardView[] = [
   { id: 'h-c3', suit: 'club', rank: '3' },
@@ -76,11 +87,57 @@ export const DEMO_GAME_RANKS: readonly RankView[] = [
   { place: 4, name: 'プレイヤーD', kind: 'ai', title: '大貧民' },
 ];
 
+/** セットリザルトは 3 戦の推移込み。「総合結果である」ことをデータ自身が語る。 */
 export const DEMO_SET_RANKS: readonly RankView[] = [
-  { place: 1, name: 'あなた', kind: 'human', title: '大富豪' },
-  { place: 2, name: 'プレイヤーB', kind: 'ai', title: '富豪' },
-  { place: 3, name: 'プレイヤーC', kind: 'human', title: '貧民' },
-  { place: 4, name: 'プレイヤーD', kind: 'ai', title: '大貧民' },
+  {
+    place: 1,
+    name: 'あなた',
+    kind: 'human',
+    title: '大富豪',
+    history: [1, 1, 2],
+  },
+  {
+    place: 2,
+    name: 'プレイヤーB',
+    kind: 'ai',
+    title: '富豪',
+    history: [2, 3, 1],
+  },
+  {
+    place: 3,
+    name: 'プレイヤーC',
+    kind: 'human',
+    title: '貧民',
+    history: [3, 2, 3],
+  },
+  {
+    place: 4,
+    name: 'プレイヤーD',
+    kind: 'ai',
+    title: '大貧民',
+    history: [4, 4, 4],
+  },
+];
+
+/**
+ * カットインの見本。プレイのたびに順に再生して、
+ * 単発 / 初登場 / 同時発動の 3 パターンを確認できるようにしてある。
+ */
+export const DEMO_ACTIVATION_VOLLEYS: readonly (readonly RuleActivation[])[] = [
+  [{ ruleId: 'r-8giri', name: '8切り', isFirstSeen: false }],
+  [
+    {
+      ruleId: 'r-shinkansen',
+      name: '新幹線',
+      effectLabel: '次の人を飛ばす',
+      isFirstSeen: true,
+    },
+  ],
+  [
+    { ruleId: 'r-kakumei', name: '革命返し', isFirstSeen: false },
+    { ruleId: 'r-spe3', name: 'スペ3返し', isFirstSeen: false },
+    { ruleId: 'r-miyakoochi', name: '都落ち', isFirstSeen: true },
+  ],
 ];
 
 export const DEMO_FIRED_RULES: readonly FiredRuleVote[] = [

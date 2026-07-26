@@ -1,6 +1,5 @@
 import { AppBar } from '../components/AppBar';
-import { Button } from '../components/Button';
-import { Callout } from '../components/Callout';
+import { CountdownButton } from '../components/CountdownButton';
 import { RankRows } from '../components/RankRow';
 import type { RankView } from '../components/RankRow';
 
@@ -12,8 +11,9 @@ type GameResultScreenProps = {
   /** 「セット 1 / 3 戦」。 */
   progressLabel: string;
   ranks: readonly RankView[];
-  /** 「第2戦へ(5 秒後に自動で進む)」。 */
   nextLabel: string;
+  /** 自動で次戦へ進むまでの時間。押せば即進む。 */
+  autoAdvanceMs: number;
   onNext: () => void;
 };
 
@@ -26,22 +26,24 @@ export function GameResultScreen({
   progressLabel,
   ranks,
   nextLabel,
+  autoAdvanceMs,
   onNext,
 }: GameResultScreenProps) {
   return (
     <div className={screen.screen}>
       <AppBar title={title} action={{ label: progressLabel }} />
       <main className={screen.body}>
-        <h2 className={screen.sectionTitle}>{title}の順位</h2>
+        {/*
+         * 見出しは AppBar と重複するので置かない。
+         * 「同じメンバーで続く」「評価はあとでまとめて」はどちらも予告で、
+         * 次戦が始まれば分かる・評価画面に着けば分かる(UI文言ガイド 原則 4)。
+         */}
         <RankRows ranks={ranks} />
-        <Callout>同じメンバーのまま、まもなく次の戦がはじまります。</Callout>
         <div className={screen.footer}>
-          <Button variant="primary" block onClick={onNext}>
+          {/* 「5 秒後に自動で進む」という文の代わりに、縁のリングが残り時間を見せる。 */}
+          <CountdownButton durationMs={autoAdvanceMs} onActivate={onNext}>
             {nextLabel}
-          </Button>
-          <Callout>
-            評価はセットの最後(3 戦目のあと)にまとめて行います。
-          </Callout>
+          </CountdownButton>
         </div>
       </main>
     </div>

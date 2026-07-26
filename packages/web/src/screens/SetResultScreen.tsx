@@ -1,9 +1,8 @@
 import { AppBar } from '../components/AppBar';
 import { Button } from '../components/Button';
-import { Callout } from '../components/Callout';
+import { MoodPicker } from '../components/MoodPicker';
 import { RankRows } from '../components/RankRow';
 import type { RankView } from '../components/RankRow';
-import { SegmentedControl } from '../components/SegmentedControl';
 import { VoteButton } from '../components/VoteButton';
 
 import styles from './SetResultScreen.module.css';
@@ -45,15 +44,15 @@ export function SetResultScreen({
 }: SetResultScreenProps) {
   return (
     <div className={screen.screen}>
-      <AppBar title="セットリザルト(全3戦)" />
+      <AppBar title="セットリザルト" />
       <main className={screen.body}>
-        <h2 className={screen.sectionTitle}>3 戦の総合結果</h2>
+        {/* 見出しは AppBar と順位行が語っているので置かない。 */}
         <RankRows ranks={ranks} />
 
-        <h2 className={screen.sectionTitle}>このセットはおもしろかった?</h2>
-        <SegmentedControl
+        {/* この画面に残す唯一の文。問いなので消せない。 */}
+        <h2 className={screen.sectionTitle}>おもしろかった?</h2>
+        <MoodPicker
           label="このセットはおもしろかった?"
-          size="mini"
           value={funRating}
           onChange={onChangeFunRating}
           options={[
@@ -63,12 +62,11 @@ export function SetResultScreen({
           ]}
         />
 
-        <h2 className={screen.sectionTitle}>
-          このセットで発動したルールを評価
-        </h2>
-        <p className={styles.hint}>
-          よかったルールには高評価、つまらなかったルールには低評価。
-        </p>
+        {/*
+         * 「を評価」は 高評価/低評価 ボタンが並んでいる時点で自明なので名詞だけにする。
+         * 使い方のヒント文は置かない(操作対象の上流の説明は読まれない。原則 1)。
+         */}
+        <h2 className={screen.sectionTitle}>発動したルール</h2>
         <ul className={styles.ruleVotes}>
           {firedRules.map((rule) => (
             <li key={rule.ruleId} className={styles.ruleVote}>
@@ -90,13 +88,18 @@ export function SetResultScreen({
             </li>
           ))}
         </ul>
-        <Callout>
-          対象はこのセットで発動したルールのみ。低評価が集まったルールは排除されます。
-        </Callout>
+        {/*
+         * 「低評価が集まると排除される」の置き場は図鑑の「排除済み」行とあそびかた。
+         * まだ起きていない結果をここで予告しない(原則 4)。
+         */}
 
         <div className={screen.footer}>
+          {/*
+           * 評価はボタンを押した時点で送信済み(押した状態が残ることが確認そのもの)。
+           * だから CTA は次の行動だけを言う。1 ボタン 1 動作。
+           */}
           <Button variant="primary" block onClick={onPlayAgain}>
-            評価を送信してもう1セットあそぶ
+            もう1セットあそぶ
           </Button>
           <Button block onClick={onHome}>
             ホームへ

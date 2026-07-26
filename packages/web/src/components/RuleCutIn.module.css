@@ -1,0 +1,182 @@
+/* ============================================================
+   インゲーム部品: ルール発動カットイン(DS-02 追加)
+
+   設計の芯: **ルール名は文字で堂々と、効果は盤面で。**
+   提案ルールの名前は事前に分からないので文字でしか伝えられない。
+   だからカットインの文字はルール名 1 語に全振りし、
+   「発動した」ことは赤リボンの造形が、
+   効果は直後の盤面アニメーション(場が掃ける等)が伝える。
+   ============================================================ */
+
+.layer {
+  position: fixed;
+  inset-inline: 0;
+  /* 卓の上に重ねる。相手席の手番表示と手札・ボタンは覆わない。 */
+  top: 26%;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  /* 進行を止めない。タップはスキップ用に下のボタンだけが拾う。 */
+  pointer-events: none;
+}
+
+.skip {
+  position: fixed;
+  inset: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+/* 赤リボン = 2A のコピーリボンの継承。「発動した」の記号。 */
+.ribbon {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  max-width: 92%;
+  padding: var(--space-2) var(--space-8);
+  background: var(--color-red-500);
+  border: var(--border-heavy) solid var(--color-border-strong);
+  box-shadow: var(--shadow-hard-m);
+  animation: sweep var(--duration-slow) var(--easing-pop) backwards;
+}
+
+/* リボンの折返し(左右の三角の欠き)。 */
+.ribbon::before,
+.ribbon::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 18px;
+  background: var(--color-red-700);
+}
+
+.ribbon::before {
+  left: 0;
+  clip-path: polygon(0 0, 100% 0, 0 50%, 100% 100%, 0 100%);
+}
+
+.ribbon::after {
+  right: 0;
+  clip-path: polygon(100% 0, 0 0, 100% 50%, 0 100%, 100% 100%);
+}
+
+/* 段重ね: 2 枚目以降は傾けて重ねる。傾けてよいのは脇役だけ、の造形文法に沿う。 */
+.stacked {
+  margin-top: calc(var(--space-3) * -1);
+}
+
+.tiltLeft {
+  transform: rotate(-3deg);
+}
+
+.tiltRight {
+  transform: rotate(3deg);
+}
+
+/* ルール名。カットインの文字はここに全振りする。 */
+.name {
+  font-size: var(--font-size-display);
+  font-weight: var(--font-weight-heavy);
+  letter-spacing: var(--letter-spacing-wide);
+  line-height: var(--line-height-display);
+  color: var(--color-cream-100);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stacked .name {
+  font-size: var(--font-size-title-l);
+}
+
+/*
+ * 効果ラベルは従。盤面の変化で伝わらない効果
+ * (「次の 5 は 2 扱い」など状態差分が絵に出ないもの)のためだけの逃げ道。
+ */
+.effect {
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-cream-100);
+  white-space: nowrap;
+}
+
+/* 初登場のルールだけ、金の NEW RULE 面を審判が掲げる変種にする。 */
+.newRule {
+  background: var(--color-gold-400);
+}
+
+.newRule .name,
+.newRule .effect {
+  color: var(--color-warning-ink);
+}
+
+.newBadge {
+  position: absolute;
+  top: calc(var(--space-4) * -1);
+  left: var(--space-5);
+  font-size: var(--font-size-micro);
+  font-weight: var(--font-weight-heavy);
+  letter-spacing: var(--letter-spacing-cta);
+  color: var(--color-warning-ink);
+  background: var(--color-cream-100);
+  border: var(--border-control) solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  padding: 1px 10px;
+}
+
+/* 同時発動の連発バッジ。数字だけで「入り乱れている」を伝える。 */
+.comboBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--color-gold-400);
+  border: var(--border-heavy) solid var(--color-border-strong);
+  box-shadow: var(--shadow-hard-m);
+  font-size: var(--font-size-title-l);
+  font-weight: var(--font-weight-heavy);
+  color: var(--color-warning-ink);
+  animation: pop var(--duration-base) var(--easing-pop) backwards;
+}
+
+@keyframes sweep {
+  from {
+    transform: translateX(-120%);
+    opacity: 0;
+  }
+}
+
+@keyframes pop {
+  from {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+}
+
+/* 動きを減らす設定では、走り込みをやめてフェードだけにする。 */
+@media (prefers-reduced-motion: reduce) {
+  .ribbon,
+  .comboBadge {
+    animation-name: fade;
+  }
+
+  .tiltLeft,
+  .tiltRight {
+    transform: none;
+  }
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}

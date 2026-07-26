@@ -1,0 +1,165 @@
+/* ============================================================
+   インゲーム部品: 卓(席と場を統合)
+
+   相手席の行と場を別々に持たず、1 つの卓にまとめる。
+   4 人を菱形(上につぶれた楕円)に置くので、時計回りの順番が位置で分かる。
+   出した札は各自の山に重なり、卓の中心へ寄る。
+   ============================================================ */
+
+.table {
+  position: relative;
+  /* 手札を下端に固定した残りを卓が使う。菱形が縦に伸びて息をする。 */
+  flex: 1;
+  min-height: 232px;
+  background: var(--color-green-600);
+  border: var(--border-bold) solid var(--color-border-strong);
+  border-radius: var(--radius-l);
+  box-shadow: var(--shadow-hard-s);
+  padding: var(--space-2);
+}
+
+/*
+ * 席を並べる菱形。卓の高さいっぱいに引き伸ばすと縦長になってしまうので、
+ * 菱形自体は一定の高さに保ち、卓の中で縦中央に置く。
+ * 緑は画面いっぱいに広がり(没入感)、菱形は「上につぶれた」形のままになる。
+ */
+.diamond {
+  position: absolute;
+  inset-inline: var(--space-2);
+  top: 50%;
+  transform: translateY(-50%);
+  height: 296px;
+}
+
+/* 時計回りの流れ。破線の輪と 4 つの三角だけで、文字を使わずに順番を示す。 */
+.flow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.seat {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* 上下は中央、左右は縦中央。山が中心を向くように並び順を変える。 */
+.top {
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.bottom {
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  flex-direction: column-reverse;
+}
+
+.left {
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  align-items: flex-end;
+}
+
+.right {
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  align-items: flex-start;
+}
+
+/* 名前と残り枚数。卓の上なのでクリーム地の小さなピルにする。 */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  max-width: 132px;
+  padding: 1px var(--space-2);
+  background: var(--color-cream-100);
+  border: var(--border-control) solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  font-size: var(--font-size-micro);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+}
+
+.name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.count {
+  color: var(--color-text-secondary);
+}
+
+/* 手番。金の縁 + 拡大なので、色だけに頼っていない。 */
+.turn .chip {
+  background: var(--color-warning-bg);
+  border-width: var(--border-bold);
+  transform: scale(1.08);
+}
+
+/* パスした席は沈める。色だけでは「休み」と読めないので短い状態語を添える。 */
+.passed .chip {
+  background: var(--color-navy-100);
+  color: var(--color-text-secondary);
+}
+
+.pass {
+  color: var(--color-text-secondary);
+}
+
+.pile {
+  position: relative;
+  display: flex;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  min-height: 66px;
+}
+
+/* 同じ人の 2 枚目以降は自分の山に重ねる。 */
+.pile > li + li {
+  margin-left: -30px;
+}
+
+/* いま超えるべき最新のプレイ。金の縁で示す。 */
+.lead .pile > li:last-child {
+  outline: var(--border-heavy) solid var(--color-gold-400);
+  outline-offset: -1px;
+  border-radius: var(--radius-s);
+}
+
+/* まだ出していない席。 */
+.empty {
+  width: 46px;
+  height: 66px;
+  border: var(--border-control) dashed var(--color-green-500);
+  border-radius: var(--radius-s);
+}
+
+/* 場が流れる。全員の山が中心へ吸い込まれて消える。 */
+.flushing .pile {
+  animation: flush var(--duration-slow) var(--easing-exit) forwards;
+}
+
+@keyframes flush {
+  to {
+    transform: scale(0.7);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .turn .chip {
+    transform: none;
+  }
+}

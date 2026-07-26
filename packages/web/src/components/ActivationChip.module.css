@@ -1,0 +1,46 @@
+/*
+ * インゲーム部品: 発動チップ(DS-02 追加)
+ * カットインが引いたあと、直近に発動したルール名だけが場の隅に残る。
+ * ワイヤー画面 3 の「ログにもルール発動を残し、あとから確認できるようにする」を、
+ * 文字の実況ログではなくこの 1 チップで満たす。
+ */
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  align-self: flex-start;
+  max-width: 100%;
+  padding: var(--space-1) var(--space-3);
+  background: var(--color-cream-100);
+  border: var(--border-control) solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-hard-s);
+  font-family: inherit;
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+
+/* 金の点 = 直前に発動したことの印(金=注意・強調)。 */
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--color-gold-400);
+  border: var(--border-control) solid var(--color-border-strong);
+}
+
+.name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.count {
+  font-size: var(--font-size-micro);
+  color: var(--color-text-secondary);
+}

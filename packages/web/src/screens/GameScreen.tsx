@@ -1,25 +1,29 @@
+import { ActivationChip } from '../components/ActivationChip';
 import { AppBar } from '../components/AppBar';
 import { Button } from '../components/Button';
 import type { CardView } from '../components/Card';
-import { FieldArea } from '../components/FieldArea';
 import { HandTray } from '../components/HandTray';
-import { Log } from '../components/Log';
-import type { LogEntry } from '../components/Log';
-import { PlayerSeats } from '../components/PlayerSeat';
-import type { SeatView } from '../components/PlayerSeat';
-import { Toast } from '../components/Toast';
+import { RuleCutIn } from '../components/RuleCutIn';
+import type { RuleActivation } from '../components/RuleCutIn';
+import { Table } from '../components/Table';
+import type { TableSeat } from '../components/Table';
 
 import screen from './screen.module.css';
 
 type GameScreenProps = {
-  /** セット内の何戦目か + 巡目。 */
-  progressLabel: string;
+  /** セット内の何戦目か。巡目は誰の判断にも使われないので出さない。 */
+  gameLabel: string;
   activeRuleCount: number;
-  seats: readonly SeatView[];
-  field: readonly CardView[];
-  /** 直近のルール発動。無ければバナーを出さない。 */
-  firedRule: { name: string; effect: string } | null;
-  log: readonly LogEntry[];
+  /** 自分を先頭に、手番が回る順(時計回り)で 4 人。席と場は卓に統合した。 */
+  seats: readonly TableSeat[];
+  /** いま超えるべきプレイの持ち主。場が流れていれば null。 */
+  leadSeatName: string | null;
+  isFlushing?: boolean;
+  /** 再生中のカットイン。空なら出さない。 */
+  activations: readonly RuleActivation[];
+  onCutInDone: () => void;
+  /** カットインが引いたあとに残る直近の発動。 */
+  lastActivation: { name: string; count: number } | null;
   hand: readonly CardView[];
   selectedCardIds: readonly string[];
   isMyTurn: boolean;
@@ -31,16 +35,19 @@ type GameScreenProps = {
 
 /**
  * 画面 3: 対戦画面。
- * 状態と合法手の判定はエンジン/サーバの関心なので、この画面は props をそのまま描くだけ。
- * ルール発動の強調は金(2A の役割「金=注意・強調」)へ写像する。
+ *
+ * 文字の実況ログは置かない。「誰が何を出したか」は場の札山が常時見せ、
+ * 「何が起きたか」はカットインと盤面のアニメーションが見せる。
  */
 export function GameScreen({
-  progressLabel,
+  gameLabel,
   activeRuleCount,
   seats,
-  field,
-  firedRule,
-  log,
+  leadSeatName,
+  isFlushing,
+  activations,
+  onCutInDone,
+  lastActivation,
   hand,
   selectedCardIds,
   isMyTurn,
@@ -52,22 +59,26 @@ export function GameScreen({
   return (
     <div className={screen.screen}>
       <AppBar
-        title={progressLabel}
+        title={gameLabel}
         action={{
           label: `有効ルール ${String(activeRuleCount)}`,
           onClick: onViewRules,
         }}
       />
       <main className={screen.body}>
-        <PlayerSeats seats={seats} />
-        <FieldArea cards={field} />
-        {/* 出すのはルール名と効果だけ(ラフな体験 §4.5)。人気度・都道府県はここでは出さない。 */}
-        {firedRule && (
-          <Toast variant="warn">
-            ルール発動!「{firedRule.name}」— {firedRule.effect}
-          </Toast>
+        <Table
+          seats={seats}
+          leadSeatName={leadSeatName}
+          {...(isFlushing === undefined ? {} : { isFlushing })}
+        />
+        {/* チップはカットインが引いたあとの痕跡なので、再生中は出さない。 */}
+        {lastActivation && activations.length === 0 && (
+          <ActivationChip
+            name={lastActivation.name}
+            count={lastActivation.count}
+            onOpen={onViewRules}
+          />
         )}
-        <Log entries={log} />
         <HandTray
           cards={hand}
           selectedIds={selectedCardIds}
@@ -88,6 +99,7 @@ export function GameScreen({
           }
         />
       </main>
+      <RuleCutIn activations={activations} onDone={onCutInDone} />
     </div>
   );
 }

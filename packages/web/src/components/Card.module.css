@@ -6,13 +6,10 @@
 
 .card {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  width: 56px;
-  height: 80px;
+  width: 52px;
+  height: 76px;
   flex-shrink: 0;
-  padding: var(--space-1) 6px;
+  padding: 0;
   background: var(--color-white);
   border: var(--border-bold) solid var(--color-border-strong);
   border-radius: var(--radius-s);
@@ -23,13 +20,23 @@
   cursor: default;
 }
 
+/* 左上の隅にランクとスートを縦に積む。重なっても読める帯。 */
+.index {
+  position: absolute;
+  top: 3px;
+  left: 5px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 0.95;
+}
+
 .rank {
-  font-size: var(--font-size-title-m);
+  font-size: var(--font-size-title-s);
 }
 
 .suit {
-  align-self: flex-end;
-  font-size: var(--font-size-title-m);
+  font-size: var(--font-size-caption);
 }
 
 /* ♥♦ は KV のブランド赤、♠♣ は共通アウトラインの紺。 */
@@ -48,28 +55,21 @@
     box-shadow var(--duration-fast) var(--easing-standard);
 }
 
-/* 選択は「持ち上がる」で示す。色だけに頼らないよう金の縁も足す。 */
+/*
+ * 選択は「持ち上がる」で示す(位置の変化なので色に頼っていない)。
+ * 金の縁を足し、重なりの中で前面に出す。
+ */
 .selected {
-  transform: translateY(-12px);
+  transform: translateY(-14px);
   border-color: var(--color-gold-400);
   box-shadow: var(--shadow-hard-m);
-}
-
-.selected::after {
-  content: '選択中';
-  position: absolute;
-  inset-inline: 0;
-  bottom: -18px;
-  text-align: center;
-  font-size: var(--font-size-micro);
-  font-weight: var(--font-weight-bold);
-  color: var(--color-text-primary);
+  z-index: 1;
 }
 
 /* 場札は少し小さく、伏せ札は面をクリームに。 */
 .small {
-  width: 44px;
-  height: 62px;
+  width: 46px;
+  height: 66px;
 }
 
 .facedown {
