@@ -385,6 +385,43 @@ function resolutionEvent(
   };
 }
 
+function publicCardIds(state: GameState): Set<CardId> {
+  const ids = new Set<CardId>(
+    state.public.field.current?.play.cards.map((card) => card.id) ?? [],
+  );
+  for (const event of state.public.history) {
+    if (event.type === 'played') {
+      for (const card of event.play.cards) {
+        ids.add(card.id);
+      }
+    }
+    if (event.type === 'cardsMoved') {
+      for (const cardId of event.cardIds ?? []) {
+        ids.add(cardId);
+      }
+    }
+  }
+  return ids;
+}
+
+function announceLeaksPrivateCard(
+  state: GameState,
+  effect: Extract<Effect, { type: 'announce' }>,
+): boolean {
+  const publicIds = publicCardIds(state);
+  const privateIds = [
+    ...Object.values(state.players).flatMap((player) => player.hand),
+    ...state.private.excluded,
+  ]
+    .map((card) => card.id)
+    .filter((cardId) => !publicIds.has(cardId));
+  const text = [
+    effect.messageKey,
+    ...Object.entries(effect.params ?? {}).flat(),
+  ].join('\n');
+  return privateIds.some((cardId) => text.includes(cardId));
+}
+
 export function executeEffectHook(
   config: GameConfig,
   state: GameState,
@@ -393,6 +430,14 @@ export function executeEffectHook(
   argument?: Play | Standings,
   strength: StrengthOrder = BASE_STRENGTH_ORDER,
 ): EffectHookResult {
+  if (config.ruleChain.length === 0) {
+    return {
+      state,
+      setMemory: runtime.setMemory,
+      events: [],
+      clearRequested: false,
+    };
+  }
   const invocation = prepareRuleInvocation(state, config.ruleChain, hook, true);
   const context = buildRuleContext(
     config,
@@ -597,6 +642,16 @@ export function executeEffectHook(
         break;
       }
       case 'announce':
+        if (announceLeaksPrivateCard(invocation.state, entry.effect)) {
+          entry.resolution = {
+            status: 'rejected',
+            winnerRuleId: entry.ruleId,
+          };
+          details.set(index, {
+            applied: false,
+            reason: 'private-card-reference',
+          });
+        }
         break;
     }
   }

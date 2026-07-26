@@ -28,7 +28,7 @@ interface RuleContextFactory {
 
 const factories = new WeakMap<RuleContext, RuleContextFactory>();
 
-function deepFreeze<T>(value: T): DeepReadonly<T> {
+export function deepFreeze<T>(value: T): DeepReadonly<T> {
   if (value !== null && typeof value === 'object') {
     for (const nested of Object.values(value)) {
       deepFreeze(nested);
@@ -38,7 +38,7 @@ function deepFreeze<T>(value: T): DeepReadonly<T> {
   return value as DeepReadonly<T>;
 }
 
-function detachedFrozen<T>(value: T): DeepReadonly<T> {
+export function detachedFrozen<T>(value: T): DeepReadonly<T> {
   return deepFreeze(structuredClone(value));
 }
 

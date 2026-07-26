@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { simulate } from './simulate.js';
+import { simulate, summarizeFailsafes } from './simulate.js';
 
 describe('E1 simulation harness', () => {
   it('random-legalボットで複数セットを不変条件違反なく完走する', () => {
@@ -18,7 +18,29 @@ describe('E1 simulation harness', () => {
     expect(first.completed).toBe(5);
     expect(first.invariantViolations).toEqual([]);
     expect(first.failsafeActivations).toBe(0);
+    expect(first.turnLimitActivations).toBe(0);
     expect(first.avgTurnsPerGame).toBeGreaterThan(0);
     expect(second).toEqual(first);
+  });
+
+  it('turnLimitを通常のリード手詰まりfailsafeと分ける', () => {
+    expect(
+      summarizeFailsafes([
+        {
+          type: 'failsafe',
+          reason: 'leadNoLegalMove',
+          relatedRuleIds: [],
+        },
+        {
+          type: 'failsafe',
+          reason: 'turnLimit',
+          relatedRuleIds: ['r1002-endless-return'],
+        },
+      ]),
+    ).toEqual({
+      total: 2,
+      leadNoLegalMove: 1,
+      turnLimit: 1,
+    });
   });
 });

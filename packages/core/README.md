@@ -17,4 +17,4 @@ I/O を持たない大富豪ゲームエンジンと共有型を提供するパ�
 - `simulate`: random-legal 対局と不変条件レポート
 - `createReplayInit` / `replaySet`: 受理済みアクション列の再実行
 
-`createSimulationApi` は静的な `GameConfig`、セット表示用の `SnapshotContext`、任意の `RuleRuntime` を一つの入力として固定し、各プレイアウト状態を引数に取ります。照会は渡された複製状態だけを扱い、権威状態の RNG・`hookCalls`・発動記録を進めません。
+`createSimulationApi` は静的な `GameConfig`、セット表示用の `SnapshotContext`、任意の `RuleRuntime` を一つの入力として固定します。各プレイアウトは `SimulationPosition { state, setMemory }` でゲーム状態とsetスコープKVを一緒に運びます。照会は渡された複製positionだけを扱い、権威状態の RNG・`hookCalls`・発動記録を進めません。

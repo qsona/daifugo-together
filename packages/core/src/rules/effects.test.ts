@@ -780,4 +780,72 @@ describe('GE-04 effect pipeline and lifecycle hooks', () => {
       transition.state.private.hookCalls[`${ruleEntry.ruleId}:afterPlay`],
     ).toBe(1);
   });
+
+  it('announceのmessageKey・paramsから非公開カードIDを配信しない', () => {
+    const ruleEntry = entry('r0111-private-announce');
+    let leakedCardId = '';
+    const module: RuleModule = {
+      meta: {
+        ruleId: ruleEntry.ruleId,
+        name: ruleEntry.name,
+        description: 'private announce probe',
+        kind: 'original',
+        proposalId: 'fixture',
+        contractVersion: 1,
+        messages: {},
+      },
+      hooks: {
+        afterPlay: (context) => {
+          leakedCardId =
+            context.game.players.find(
+              (candidate) => candidate.id !== context.game.turn,
+            )?.hand[0]?.id ?? '';
+          return [
+            {
+              type: 'announce',
+              messageKey: 'probe',
+              params: { card: leakedCardId },
+            },
+          ];
+        },
+      },
+    };
+    const config: GameConfig = {
+      gameIndex: 0,
+      seats,
+      gameSeed: 'private-announce',
+      ruleChain: [ruleEntry],
+    };
+    const started = startGame(config).state;
+    const player = started.public.turn;
+    const card = player ? started.players[player]?.hand[0] : undefined;
+    if (!player || !card) {
+      throw new Error('Expected opening play');
+    }
+
+    const transition = reduceGame(
+      config,
+      started,
+      { type: 'play', player, cards: [card.id] },
+      runtime(module),
+    );
+
+    expect(leakedCardId).not.toBe('');
+    expect(JSON.stringify(transition.state.public.history)).not.toContain(
+      leakedCardId,
+    );
+    expect(transition.events.some((event) => event.type === 'ruleFired')).toBe(
+      false,
+    );
+    expect(transition.events).toContainEqual(
+      expect.objectContaining({
+        type: 'effectRejected',
+        ruleId: ruleEntry.ruleId,
+        detail: {
+          applied: false,
+          reason: 'private-card-reference',
+        },
+      }),
+    );
+  });
 });

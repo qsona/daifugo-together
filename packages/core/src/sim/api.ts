@@ -5,6 +5,7 @@ import type {
   PlayerId,
   PlayerSnapshot,
   PublicGameEvent,
+  RuleMemory,
   SnapshotContext,
 } from '../game/types.js';
 import { TITLE_BY_STANDING } from '../game/types.js';
@@ -23,17 +24,23 @@ export interface CreateSimulationApiInput {
   runtime?: RuleRuntime;
 }
 
+export interface SimulationPosition {
+  state: GameState;
+  setMemory: RuleMemory;
+}
+
 export interface SimulationApi {
-  enumerateLegalPlays(state: GameState, player: PlayerId): Play[];
+  createPosition(state: GameState, setMemory?: RuleMemory): SimulationPosition;
+  enumerateLegalPlays(position: SimulationPosition, player: PlayerId): Play[];
   applyPlay(
-    state: GameState,
+    position: SimulationPosition,
     action: GameAction,
-  ): { state: GameState; events: PublicGameEvent[] };
-  isTerminal(state: GameState): Standings | null;
-  getEffectiveStrengthOrder(state: GameState): StrengthOrder;
-  getPlayerView(state: GameState, player: PlayerId): PlayerSnapshot;
-  fallbackPlay(state: GameState, player: PlayerId): GameAction;
-  serialize(state: GameState): string;
+  ): { position: SimulationPosition; events: PublicGameEvent[] };
+  isTerminal(position: SimulationPosition): Standings | null;
+  getEffectiveStrengthOrder(position: SimulationPosition): StrengthOrder;
+  getPlayerView(position: SimulationPosition, player: PlayerId): PlayerSnapshot;
+  fallbackPlay(position: SimulationPosition, player: PlayerId): GameAction;
+  serialize(position: SimulationPosition): string;
 }
 
 function publicEvents(
@@ -75,8 +82,15 @@ export function createSimulationApi(
   const config = structuredClone(input.config);
   const snapshotContext = structuredClone(input.snapshotContext);
   const runtime = input.runtime ?? noRuleRuntime();
+  const initialSetMemory = structuredClone(runtime.setMemory);
 
-  const effectiveStrength = (state: GameState): StrengthOrder => {
+  const runtimeFor = (position: SimulationPosition): RuleRuntime => ({
+    ...runtime,
+    setMemory: position.setMemory,
+  });
+
+  const effectiveStrength = (position: SimulationPosition): StrengthOrder => {
+    const { state } = position;
     const invocation = prepareRuleInvocation(
       state,
       config.ruleChain,
@@ -87,7 +101,7 @@ export function createSimulationApi(
       config,
       invocation.state,
       BASE_STRENGTH_ORDER,
-      runtime,
+      runtimeFor(position),
       {
         hook: 'modifyStrength',
         invocationIndices: invocation.invocationIndices,
@@ -101,12 +115,29 @@ export function createSimulationApi(
   };
 
   return {
-    enumerateLegalPlays(state, player) {
-      return enumerateLegalPlays(config, state, player, runtime);
+    createPosition(state, setMemory = initialSetMemory) {
+      return {
+        state: structuredClone(state),
+        setMemory: structuredClone(setMemory),
+      };
     },
 
-    applyPlay(state, action) {
-      const transition = reduceGame(config, state, action, runtime);
+    enumerateLegalPlays(position, player) {
+      return enumerateLegalPlays(
+        config,
+        position.state,
+        player,
+        runtimeFor(position),
+      );
+    },
+
+    applyPlay(position, action) {
+      const transition = reduceGame(
+        config,
+        position.state,
+        action,
+        runtimeFor(position),
+      );
       if (transition.rejections.length > 0) {
         throw new Error(
           `Simulation action was rejected: ${JSON.stringify(
@@ -115,30 +146,34 @@ export function createSimulationApi(
         );
       }
       return {
-        state: transition.state,
+        position: {
+          state: transition.state,
+          setMemory: transition.setMemory ?? position.setMemory,
+        },
         events: publicEvents(transition.events),
       };
     },
 
-    isTerminal(state) {
-      return terminalStandings(config, state);
+    isTerminal(position) {
+      return terminalStandings(config, position.state);
     },
 
-    getEffectiveStrengthOrder(state) {
-      return effectiveStrength(state);
+    getEffectiveStrengthOrder(position) {
+      return effectiveStrength(position);
     },
 
-    getPlayerView(state, player) {
+    getPlayerView(position, player) {
       return buildPlayerSnapshot(
         config,
-        state,
+        position.state,
         snapshotContext,
         player,
-        runtime,
+        runtimeFor(position),
       );
     },
 
-    fallbackPlay(state, player) {
+    fallbackPlay(position, player) {
+      const { state } = position;
       if (
         state.public.phase !== 'awaitingPlay' ||
         state.public.turn !== player
@@ -148,16 +183,20 @@ export function createSimulationApi(
       if (state.public.field.current) {
         return { type: 'pass', player };
       }
-      const ranking = effectiveStrength(state).ranking;
+      const ranking = effectiveStrength(position).ranking;
       const rankIndex = new Map(ranking.map((rank, index) => [rank, index]));
-      const fallback = enumerateLegalPlays(config, state, player, runtime)
-        .filter((play) => play.kind === 'single')
-        .sort(
-          (left, right) =>
-            (rankIndex.get(left.repRank) ?? Number.MAX_SAFE_INTEGER) -
-              (rankIndex.get(right.repRank) ?? Number.MAX_SAFE_INTEGER) ||
-            left.cards[0]!.id.localeCompare(right.cards[0]!.id),
-        )[0];
+      const fallback = enumerateLegalPlays(
+        config,
+        state,
+        player,
+        runtimeFor(position),
+      ).sort(
+        (left, right) =>
+          (rankIndex.get(left.repRank) ?? Number.MAX_SAFE_INTEGER) -
+            (rankIndex.get(right.repRank) ?? Number.MAX_SAFE_INTEGER) ||
+          right.count - left.count ||
+          left.cards[0]!.id.localeCompare(right.cards[0]!.id),
+      )[0];
       if (!fallback) {
         throw new Error('No fallback play is available on lead');
       }
@@ -168,8 +207,8 @@ export function createSimulationApi(
       };
     },
 
-    serialize(state) {
-      return JSON.stringify(state);
+    serialize(position) {
+      return JSON.stringify(position);
     },
   };
 }

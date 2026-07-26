@@ -1,7 +1,11 @@
 import type { Card } from '../cards/card.js';
 import type { GameConfig, GameState } from '../game/types.js';
 import { buildRuleContext, prepareRuleInvocation } from '../rules/context.js';
-import { noRuleRuntime, type RuleRuntime } from '../rules/chain.js';
+import {
+  NO_RULE_CHAIN_PORT,
+  noRuleRuntime,
+  type RuleRuntime,
+} from '../rules/chain.js';
 import type { Legality } from '../rules/contract.js';
 import { compareRanks, BASE_STRENGTH_ORDER } from './strength.js';
 import type { Play } from './play.js';
@@ -76,6 +80,19 @@ export function evaluateCandidates(
   influenced: string[];
   failsafeActivated: boolean;
 } {
+  if (config.ruleChain.length === 0 && runtime.port === NO_RULE_CHAIN_PORT) {
+    const base = plays.map((play) =>
+      baseLegality(state, play, BASE_STRENGTH_ORDER),
+    );
+    return {
+      state,
+      plays: plays.filter((_play, index) => base[index]?.legal === true),
+      results: base,
+      baseResults: base,
+      influenced: [],
+      failsafeActivated: false,
+    };
+  }
   const strengthInvocation = prepareRuleInvocation(
     state,
     config.ruleChain,

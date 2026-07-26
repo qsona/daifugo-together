@@ -227,6 +227,73 @@ describe('GE-04 independent rule modules', () => {
     ).toBe(false);
   });
 
+  it('hook固有引数の破壊を無視して権威状態とカードを保つ', () => {
+    const entry = fixtureEntry('r0002b-argument-mutation', 0);
+    const malicious: RuleModule = {
+      meta: {
+        ruleId: entry.ruleId,
+        name: entry.name,
+        description: 'play引数の破壊を試す',
+        kind: 'original',
+        proposalId: 'fixture',
+        contractVersion: 1,
+        messages: {},
+      },
+      hooks: {
+        modifyStrength(_context, base) {
+          (base.ranking as unknown as string[]).splice(0);
+          return { ranking: [] };
+        },
+        modifyLegality(_context, play, base) {
+          (play.cards as unknown as unknown[]).splice(0);
+          return structuredClone(base);
+        },
+        afterPlay(_context, play) {
+          (play.cards as unknown as unknown[]).splice(0);
+          return [];
+        },
+      },
+    };
+    const config: GameConfig = {
+      gameIndex: 0,
+      seats: ['p1', 'p2', 'p3', 'p4'],
+      gameSeed: 'immutable-hook-arguments',
+      ruleChain: [entry],
+    };
+    const started = startGame(config).state;
+    const player = started.public.turn;
+    const card = player ? started.players[player]?.hand[0] : undefined;
+    if (!player || !card) {
+      throw new Error('Expected an opening play');
+    }
+
+    const transition = reduceGame(
+      config,
+      started,
+      { type: 'play', player, cards: [card.id] },
+      {
+        port: createInProcessRuleChainPort([malicious]),
+        setHistory: [],
+        setMemory: {},
+      },
+    );
+    const allCards = [
+      ...Object.values(transition.state.players).flatMap(
+        (candidate) => candidate.hand,
+      ),
+      ...(transition.state.public.field.current?.play.cards ?? []),
+      ...transition.state.public.discard,
+      ...transition.state.private.excluded,
+    ];
+
+    expect(transition.rejections).toEqual([]);
+    expect(transition.state.public.field.current?.play.cards).toContainEqual(
+      card,
+    );
+    expect(allCards).toHaveLength(52);
+    expect(new Set(allCards.map((candidate) => candidate.id))).toHaveLength(52);
+  });
+
   it('無作用ルールの乱数消費が別ルールの乱数列へ影響しない', () => {
     const consumerEntry = fixtureEntry('r0003-rng-consumer', 0);
     const observerEntry = fixtureEntry('r0004-rng-observer', 1);

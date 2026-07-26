@@ -3,12 +3,14 @@ import type { Play } from '../play/play.js';
 import type { StrengthOrder } from '../play/strength.js';
 import type { RuleChainPort } from './chain.js';
 import type {
+  Effect,
   Legality,
   RuleChainEntry,
   RuleContext,
   RuleModule,
+  Standings,
 } from './contract.js';
-import { contextForRule } from './context.js';
+import { contextForRule, detachedFrozen } from './context.js';
 
 function changed(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) !== JSON.stringify(right);
@@ -16,6 +18,10 @@ function changed(left: unknown, right: unknown): boolean {
 
 function lowToHigh(entries: RuleChainEntry[]): RuleChainEntry[] {
   return [...entries].sort((left, right) => right.position - left.position);
+}
+
+function detachedClone<T>(value: T): T {
+  return structuredClone(value);
 }
 
 export function createInProcessRuleChainPort(
@@ -43,8 +49,17 @@ export function createInProcessRuleChainPort(
           if (!before) {
             return;
           }
-          const after = hook(ruleContext, play, before);
-          results[index] = after;
+          let after: Legality;
+          try {
+            after = hook(
+              ruleContext,
+              detachedFrozen(play),
+              detachedFrozen(before),
+            );
+          } catch {
+            return;
+          }
+          results[index] = detachedClone(after);
           if (changed(before, after)) {
             influenced.add(entry.ruleId);
           }
@@ -65,7 +80,18 @@ export function createInProcessRuleChainPort(
         if (!hook) {
           continue;
         }
-        const next = hook(contextForRule(context, entry.ruleId), result);
+        let next: StrengthOrder;
+        try {
+          const returned = hook(
+            contextForRule(context, entry.ruleId),
+            detachedFrozen(result),
+          );
+          next = {
+            ranking: [...returned.ranking],
+          };
+        } catch {
+          continue;
+        }
         if (changed(result, next)) {
           influenced.add(entry.ruleId);
         }
@@ -84,34 +110,44 @@ export function createInProcessRuleChainPort(
             return [];
           }
           const ruleContext = contextForRule(context, entry.ruleId);
-          if (hookName === 'afterPlay') {
+          try {
+            if (hookName === 'afterPlay') {
+              return [
+                {
+                  ruleId: entry.ruleId,
+                  effects: detachedClone(
+                    hooks.afterPlay?.(
+                      ruleContext,
+                      detachedFrozen(argument as Play),
+                    ) ?? [],
+                  ),
+                },
+              ];
+            }
+            if (hookName === 'onGameEnd') {
+              return [
+                {
+                  ruleId: entry.ruleId,
+                  effects: detachedClone(
+                    hooks.onGameEnd?.(
+                      ruleContext,
+                      detachedFrozen(argument as Standings),
+                    ) ?? [],
+                  ),
+                },
+              ];
+            }
             return [
               {
                 ruleId: entry.ruleId,
-                effects: hooks.afterPlay?.(ruleContext, argument as Play) ?? [],
+                effects: detachedClone(
+                  (hooks[hookName]?.(ruleContext) ?? []) as Effect[],
+                ),
               },
             ];
+          } catch {
+            return [];
           }
-          if (hookName === 'onGameEnd') {
-            return [
-              {
-                ruleId: entry.ruleId,
-                effects:
-                  hooks.onGameEnd?.(
-                    ruleContext,
-                    argument as Parameters<
-                      NonNullable<typeof hooks.onGameEnd>
-                    >[1],
-                  ) ?? [],
-              },
-            ];
-          }
-          return [
-            {
-              ruleId: entry.ruleId,
-              effects: hooks[hookName]?.(ruleContext) ?? [],
-            },
-          ];
         });
     },
   };

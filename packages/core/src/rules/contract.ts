@@ -70,12 +70,19 @@ export interface Standings {
  * A module must return Effects instead of mutating this context.
  */
 export interface RuleHooks {
-  modifyLegality(context: RuleContext, play: Play, base: Legality): Legality;
-  modifyStrength(context: RuleContext, base: StrengthOrder): StrengthOrder;
-  afterPlay(context: RuleContext, play: Play): Effect[];
+  modifyLegality(
+    context: RuleContext,
+    play: DeepReadonly<Play>,
+    base: DeepReadonly<Legality>,
+  ): Legality;
+  modifyStrength(
+    context: RuleContext,
+    base: DeepReadonly<StrengthOrder>,
+  ): DeepReadonly<StrengthOrder>;
+  afterPlay(context: RuleContext, play: DeepReadonly<Play>): Effect[];
   afterFieldClear(context: RuleContext): Effect[];
   onGameStart(context: RuleContext): Effect[];
-  onGameEnd(context: RuleContext, standings: Standings): Effect[];
+  onGameEnd(context: RuleContext, standings: DeepReadonly<Standings>): Effect[];
 }
 
 export interface RuleContext {

@@ -1,5 +1,5 @@
 import { reduceSet, startSet } from '../set/set-reducer.js';
-import type { SetAction, SetState } from '../set/types.js';
+import type { SetAction, SetState, SetTransition } from '../set/types.js';
 import {
   NO_RULE_CHAIN_PORT,
   type RuleChainPort,
@@ -25,8 +25,27 @@ export interface SimReport {
     detail: string;
   }[];
   failsafeActivations: number;
+  leadNoLegalMoveActivations: number;
+  turnLimitActivations: number;
   avgTurnsPerGame: number;
   ruleFiredCounts: Record<string, number>;
+}
+
+export function summarizeFailsafes(
+  events: readonly SetTransition['events'][number][],
+): {
+  total: number;
+  leadNoLegalMove: number;
+  turnLimit: number;
+} {
+  const failsafes = events.filter((event) => event.type === 'failsafe');
+  return {
+    total: failsafes.length,
+    leadNoLegalMove: failsafes.filter(
+      (event) => event.reason === 'leadNoLegalMove',
+    ).length,
+    turnLimit: failsafes.filter((event) => event.reason === 'turnLimit').length,
+  };
 }
 
 function gameConfig(state: SetState) {
@@ -114,11 +133,6 @@ function invariantProblems(state: SetState): string[] {
   ) {
     problems.push('active-turn');
   }
-  if (
-    JSON.stringify(JSON.parse(JSON.stringify(state))) !== JSON.stringify(state)
-  ) {
-    problems.push('json-roundtrip');
-  }
   return problems;
 }
 
@@ -134,6 +148,8 @@ export function simulate(options: SimulateOptions): SimReport {
   let completedGames = 0;
   let totalTurns = 0;
   let failsafeActivations = 0;
+  let leadNoLegalMoveActivations = 0;
+  let turnLimitActivations = 0;
 
   for (let setIndex = 0; setIndex < options.games; setIndex += 1) {
     let state = startSet(
@@ -156,9 +172,17 @@ export function simulate(options: SimulateOptions): SimReport {
       const selected = chooseAction(state, port, rng);
       rng = selected.rng;
       const transition = reduceSet(state, selected.action, port);
-      failsafeActivations += transition.events.filter(
-        (event) => event.type === 'failsafe',
-      ).length;
+      const failsafes = summarizeFailsafes(transition.events);
+      failsafeActivations += failsafes.total;
+      leadNoLegalMoveActivations += failsafes.leadNoLegalMove;
+      turnLimitActivations += failsafes.turnLimit;
+      if (failsafes.turnLimit > 0) {
+        invariantViolations.push({
+          game: setIndex,
+          invariant: 'forced-termination',
+          detail: `turnLimit activations=${failsafes.turnLimit}, action=${actions}`,
+        });
+      }
       if (transition.rejections.length > 0) {
         invariantViolations.push({
           game: setIndex,
@@ -186,6 +210,14 @@ export function simulate(options: SimulateOptions): SimReport {
       actions += 1;
     }
     if (state.phase.name === 'setResult') {
+      const serialized = JSON.stringify(state);
+      if (JSON.stringify(JSON.parse(serialized)) !== serialized) {
+        invariantViolations.push({
+          game: setIndex,
+          invariant: 'json-roundtrip',
+          detail: 'set result is not JSON round-trip stable',
+        });
+      }
       completed += 1;
     } else if (actions >= 10_000) {
       invariantViolations.push({
@@ -199,6 +231,8 @@ export function simulate(options: SimulateOptions): SimReport {
     completed,
     invariantViolations,
     failsafeActivations,
+    leadNoLegalMoveActivations,
+    turnLimitActivations,
     avgTurnsPerGame: completedGames === 0 ? 0 : totalTurns / completedGames,
     ruleFiredCounts,
   };
