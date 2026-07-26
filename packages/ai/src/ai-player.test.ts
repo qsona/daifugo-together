@@ -435,4 +435,98 @@ describe('AI-01', () => {
       await pool.close();
     }
   });
+
+  it('探索例外をheuristicへ落とし、workerを次の着手に再利用する', async () => {
+    const config: GameConfig = {
+      gameIndex: 0,
+      seats,
+      gameSeed: 'ai-search-error',
+      ruleChain: [],
+    };
+    const state = startGame(config).state;
+    const player = state.public.turn!;
+    const context: SnapshotContext = {
+      setId: 'ai-search-error',
+      setPhase: { name: 'gameInProgress', gameIndex: 0 },
+      members: seats.map((id) => ({
+        id,
+        displayName: id,
+        isAI: true,
+      })),
+      setResults: [],
+    };
+    const base = {
+      view: buildPlayerSnapshot(config, state, context, player),
+      legalPlays: enumerateLegalPlays(config, state, player),
+      budget: { softMs: 1, hardMs: 500, maxPlayouts: 1, sliceMs: 1 },
+      difficulty: NORMAL_DIFFICULTY,
+    };
+    const pool = new AiWorkerPool(
+      new URL('./test-fixtures/pool-worker.js', import.meta.url),
+    );
+    const ai = createAiPlayer({ pool });
+    try {
+      const failed = await ai.decideMove({ ...base, seed: 'error' });
+      const recovered = await ai.decideMove({ ...base, seed: 'delay:0' });
+
+      expect(failed.usedFallback).toBe('heuristic');
+      expect(
+        base.legalPlays.some((play) => sameCandidate(play, failed.play)),
+      ).toBe(true);
+      expect(recovered.usedFallback).toBe('none');
+    } finally {
+      await ai.close();
+      await pool.close();
+    }
+  });
+
+  it('worker crashと再生成を12回繰り返しても待機ジョブを失わない', async () => {
+    const config: GameConfig = {
+      gameIndex: 0,
+      seats,
+      gameSeed: 'ai-worker-stress',
+      ruleChain: [],
+    };
+    const state = startGame(config).state;
+    const player = state.public.turn!;
+    const context: SnapshotContext = {
+      setId: 'ai-worker-stress',
+      setPhase: { name: 'gameInProgress', gameIndex: 0 },
+      members: seats.map((id) => ({
+        id,
+        displayName: id,
+        isAI: true,
+      })),
+      setResults: [],
+    };
+    const base = {
+      view: buildPlayerSnapshot(config, state, context, player),
+      legalPlays: enumerateLegalPlays(config, state, player),
+      budget: { softMs: 1, hardMs: 1_000, maxPlayouts: 1, sliceMs: 1 },
+      difficulty: NORMAL_DIFFICULTY,
+    };
+    const pool = new AiWorkerPool(
+      new URL('./test-fixtures/pool-worker.js', import.meta.url),
+    );
+    const ai = createAiPlayer({ pool });
+    try {
+      for (let cycle = 0; cycle < 12; cycle += 1) {
+        const crashed = ai.decideMove({
+          ...base,
+          seed: 'exit-0',
+        });
+        const queued = ai.decideMove({
+          ...base,
+          seed: 'delay:0',
+        });
+        const [fallback, recovered] = await Promise.all([crashed, queued]);
+
+        expect(fallback.usedFallback).toBe('heuristic');
+        expect(recovered.usedFallback).toBe('none');
+      }
+    } finally {
+      await ai.close();
+      await pool.close();
+    }
+  }, 20_000);
 });

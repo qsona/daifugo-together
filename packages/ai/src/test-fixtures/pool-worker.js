@@ -28,6 +28,14 @@ parentPort.on('message', (message) => {
   if (message.payload.seed === 'exit-0') {
     process.exit(0);
   }
+  if (message.payload.seed === 'error') {
+    parentPort.postMessage({
+      kind: 'error',
+      id: message.id,
+      error: 'injected search failure',
+    });
+    return;
+  }
   const delay = message.payload.seed.startsWith('delay:')
     ? Number(message.payload.seed.slice('delay:'.length))
     : 0;
