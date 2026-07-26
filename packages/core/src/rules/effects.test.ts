@@ -819,21 +819,40 @@ describe('GE-04 effect pipeline and lifecycle hooks', () => {
     const started = startGame(config).state;
     const player = started.public.turn;
     const card = player ? started.players[player]?.hand[0] : undefined;
-    if (!player || !card) {
+    const privateCard = Object.values(started.players).find(
+      (candidate) => candidate.id !== player,
+    )?.hand[0];
+    if (!player || !card || !privateCard) {
       throw new Error('Expected opening play');
     }
+    const stateWithPriorDisclosure: GameState = {
+      ...started,
+      public: {
+        ...started.public,
+        history: [
+          ...started.public.history,
+          {
+            type: 'played',
+            player,
+            play: {
+              kind: 'single',
+              cards: [privateCard],
+              count: 1,
+              repRank: privateCard.rank,
+            },
+          },
+        ],
+      },
+    };
 
     const transition = reduceGame(
       config,
-      started,
+      stateWithPriorDisclosure,
       { type: 'play', player, cards: [card.id] },
       runtime(module),
     );
 
-    expect(leakedCardId).not.toBe('');
-    expect(JSON.stringify(transition.state.public.history)).not.toContain(
-      leakedCardId,
-    );
+    expect(leakedCardId).toBe(privateCard.id);
     expect(transition.events.some((event) => event.type === 'ruleFired')).toBe(
       false,
     );

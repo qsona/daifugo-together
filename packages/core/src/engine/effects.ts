@@ -385,36 +385,14 @@ function resolutionEvent(
   };
 }
 
-function publicCardIds(state: GameState): Set<CardId> {
-  const ids = new Set<CardId>(
-    state.public.field.current?.play.cards.map((card) => card.id) ?? [],
-  );
-  for (const event of state.public.history) {
-    if (event.type === 'played') {
-      for (const card of event.play.cards) {
-        ids.add(card.id);
-      }
-    }
-    if (event.type === 'cardsMoved') {
-      for (const cardId of event.cardIds ?? []) {
-        ids.add(cardId);
-      }
-    }
-  }
-  return ids;
-}
-
 function announceLeaksPrivateCard(
   state: GameState,
   effect: Extract<Effect, { type: 'announce' }>,
 ): boolean {
-  const publicIds = publicCardIds(state);
   const privateIds = [
     ...Object.values(state.players).flatMap((player) => player.hand),
     ...state.private.excluded,
-  ]
-    .map((card) => card.id)
-    .filter((cardId) => !publicIds.has(cardId));
+  ].map((card) => card.id);
   const text = [
     effect.messageKey,
     ...Object.entries(effect.params ?? {}).flat(),

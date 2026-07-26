@@ -294,6 +294,53 @@ describe('GE-04 independent rule modules', () => {
     expect(new Set(allCards.map((candidate) => candidate.id))).toHaveLength(52);
   });
 
+  it('modifyLegality返値の複製中に例外が起きても基本進行を続ける', () => {
+    const entry = fixtureEntry('r0002c-legality-getter', 0);
+    const malicious: RuleModule = {
+      meta: {
+        ruleId: entry.ruleId,
+        name: entry.name,
+        description: '返値getterから例外を投げる',
+        kind: 'original',
+        proposalId: 'fixture',
+        contractVersion: 1,
+        messages: {},
+      },
+      hooks: {
+        modifyLegality: () => ({
+          get legal(): true {
+            throw new Error('getter escaped');
+          },
+        }),
+      },
+    };
+    const config: GameConfig = {
+      gameIndex: 0,
+      seats: ['p1', 'p2', 'p3', 'p4'],
+      gameSeed: 'legality-return-isolation',
+      ruleChain: [entry],
+    };
+    const started = startGame(config).state;
+    const player = started.public.turn;
+    const card = player ? started.players[player]?.hand[0] : undefined;
+    if (!player || !card) {
+      throw new Error('Expected an opening play');
+    }
+
+    expect(() =>
+      reduceGame(
+        config,
+        started,
+        { type: 'play', player, cards: [card.id] },
+        {
+          port: createInProcessRuleChainPort([malicious]),
+          setHistory: [],
+          setMemory: {},
+        },
+      ),
+    ).not.toThrow();
+  });
+
   it('無作用ルールの乱数消費が別ルールの乱数列へ影響しない', () => {
     const consumerEntry = fixtureEntry('r0003-rng-consumer', 0);
     const observerEntry = fixtureEntry('r0004-rng-observer', 1);

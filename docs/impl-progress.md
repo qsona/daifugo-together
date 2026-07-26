@@ -193,7 +193,7 @@ TS-02 から継続で未解決のもの:
 
 ## 並行進行: E1 ゲームエンジン
 
-- 状態: GE-02・GE-03・GE-05・GE-04 のプロセス2実装完了。2回目の独立 GPT-5.6 Sol 完了レビューで追加された Major 5 件も修正し、再々レビュー待ち。
+- 状態: GE-02・GE-03・GE-05・GE-04 のプロセス2実装完了。3回目の独立 GPT-5.6 Sol 完了レビューで追加された Major 2 件も修正し、再レビュー待ち。
 - プロセス1: `8c38c3d`（リベース前 `a3e98a1`）
 - プロセス2: `841745a`
 - 検証: Node 26.5.0 / pnpm 11.17.0 / TypeScript 6.0.3 で `pnpm verify` 成功。統合リポジトリ全体は 14 files / 89 tests。format・lint・design lint・typecheck・build 成功。ルールなし200セットは0.53秒、違反0・failsafe 0。
@@ -212,6 +212,8 @@ TS-02 から継続で未解決のもの:
 プロセス2の独立 GPT-5.6 Sol 完了レビューでは、(1) E2向け `SimulationApi` 未公開、(2) `moveCards` でactiveの手札が0枚になった後の順位未確定、(3) field→同一fieldの全札移動によるカード消失、(4) `onGameStart` だけで終局したゲームがSet側で進まない、(5) `afterFieldClear` でactiveが1人以下になった後に終局しない、の5件を再現。すべて修正し、最小再現を回帰テストへ追加した。
 
 2回目の独立レビューでは、(1) hook固有引数の可変参照、(2) `announce.params` への非公開カードID混入、(3) `SimulationApi` がset KVを次手へ引き継がない、(4) fallbackが単騎だけを仮定、(5) `turnLimit` failsafeをシミュレーション違反にしない、の5件を再現。hook引数の複製・deep freezeと例外隔離、非公開カード参照announceの棄却、`SimulationPosition { state, setMemory }` の明示的な状態包絡、全合法手からのfallback、failsafe種別集計とforced-termination違反化で修正した。あわせてルールなし経路の不要なcontext構築と各手のJSON全量往復を除き、200セット実測を37.42秒（レビュー値）から0.53秒へ短縮した。
+
+3回目の独立レビューでは、(1) 過去に公開されたカードを非公開手札へ戻すと、そのIDを`announce`に再掲できる、(2) `modifyLegality`返値の複製時にgetterが投げた例外がルール境界を抜ける、の2件を再現。現在hand/excludedにあるカードIDは公開履歴にかかわらず常に非公開参照として棄却し、フック返値の複製・比較・採用を同じ例外境界内へ移した。両方の最小再現を回帰テストへ追加した。
 
 ### E1で置いた仮定
 

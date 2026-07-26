@@ -49,19 +49,17 @@ export function createInProcessRuleChainPort(
           if (!before) {
             return;
           }
-          let after: Legality;
           try {
-            after = hook(
-              ruleContext,
-              detachedFrozen(play),
-              detachedFrozen(before),
+            const after = detachedClone(
+              hook(ruleContext, detachedFrozen(play), detachedFrozen(before)),
             );
+            const wasChanged = changed(before, after);
+            results[index] = after;
+            if (wasChanged) {
+              influenced.add(entry.ruleId);
+            }
           } catch {
             return;
-          }
-          results[index] = detachedClone(after);
-          if (changed(before, after)) {
-            influenced.add(entry.ruleId);
           }
         });
       }
