@@ -1,0 +1,65 @@
+/* design-system.html §5-11 待機画面のメンバースロット */
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.slot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  background: var(--color-bg-surface);
+  border: var(--border-control) solid var(--color-border-strong);
+  border-radius: var(--radius-m);
+  padding: var(--space-2) var(--space-3);
+  min-height: var(--size-tap-min);
+}
+
+.avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--color-blue-100);
+  border: var(--border-control) solid var(--color-border-strong);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.name {
+  flex: 1;
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-body);
+  min-width: 0;
+}
+
+.role {
+  display: block;
+  font-size: var(--font-size-micro);
+  font-weight: var(--font-weight-regular);
+  color: var(--color-text-secondary);
+}
+
+/* 空き枠は破線+淡色で「まだ埋まっていないが開始できる」ことを示す。 */
+.empty {
+  border-style: dashed;
+  border-color: var(--color-navy-300);
+  background: var(--color-bg-subtle);
+}
+
+.empty .name {
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-regular);
+}
+
+.empty .avatar {
+  background: var(--color-navy-100);
+  border-style: dashed;
+  border-color: var(--color-navy-300);
+}

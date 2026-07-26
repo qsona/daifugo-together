@@ -1,0 +1,64 @@
+/* design-system.html §5-1 ボタン */
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--size-control);
+  padding: 0 var(--space-5);
+  border: var(--border-bold) solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--color-action-secondary-bg);
+  color: var(--color-text-primary);
+  font-family: inherit;
+  font-size: var(--font-size-title-s);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-cta);
+  line-height: 1.2;
+  box-shadow: var(--shadow-hard-m);
+  cursor: pointer;
+  transition:
+    transform var(--duration-fast) var(--easing-standard),
+    box-shadow var(--duration-fast) var(--easing-standard),
+    background-color var(--duration-fast) var(--easing-standard);
+}
+
+.primary {
+  background: var(--color-action-primary);
+  color: var(--color-text-on-fill);
+}
+
+.block {
+  display: flex;
+  width: 100%;
+}
+
+.small {
+  min-height: var(--size-control-s);
+  padding: 0 var(--space-4);
+  font-size: 13px;
+  box-shadow: var(--shadow-hard-s);
+}
+
+.button:active {
+  transform: translateY(3px);
+  box-shadow: none;
+}
+
+.primary:active {
+  background: var(--color-action-primary-pressed);
+}
+
+.button:not(.primary):active {
+  background: var(--color-cream-200);
+}
+
+.button:disabled {
+  background: var(--color-navy-100);
+  color: var(--color-text-disabled);
+  border-color: var(--color-navy-200);
+  box-shadow: none;
+  cursor: not-allowed;
+  transform: none;
+}

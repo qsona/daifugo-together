@@ -1,0 +1,38 @@
+/* design-system.html §5-12 招待コード表示(切符モチーフ) */
+
+.invite {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  background: var(--color-cream-100);
+  border: var(--border-bold) solid var(--color-border-strong);
+  border-radius: var(--radius-l);
+  padding: var(--space-3) var(--space-4);
+  box-shadow: var(--shadow-hard-s);
+  position: relative;
+}
+
+/* KV のタップ導線の「切符」の気配を継承する金の破線内枠。 */
+.invite::before {
+  content: '';
+  position: absolute;
+  inset: 5px;
+  border: var(--border-control) dashed var(--color-gold-400);
+  border-radius: calc(var(--radius-l) - 5px);
+  pointer-events: none;
+}
+
+.code {
+  flex: 1;
+  font-size: var(--font-size-title-m);
+  font-weight: var(--font-weight-heavy);
+  letter-spacing: 0.12em;
+}
+
+.label {
+  display: block;
+  font-size: var(--font-size-micro);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-secondary);
+  letter-spacing: var(--letter-spacing-normal);
+}

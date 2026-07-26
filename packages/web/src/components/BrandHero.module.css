@@ -1,0 +1,49 @@
+/* ロゴ(小)+ 放射光 + ガーランド。design-system.html §6 画面1b の適用例。 */
+
+.hero {
+  position: relative;
+  background: repeating-conic-gradient(
+    from 8deg at 50% 118%,
+    var(--color-blue-500) 0deg 11deg,
+    var(--color-blue-400) 11deg 22deg
+  );
+  border: var(--border-bold) solid var(--color-border-strong);
+  border-radius: var(--radius-l);
+  overflow: hidden;
+  padding: var(--space-4) var(--space-3) var(--space-5);
+  text-align: center;
+}
+
+.garland {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 6px;
+  margin-bottom: 6px;
+  border-top: var(--border-bold) solid var(--color-navy-800);
+}
+
+.flag {
+  width: 16px;
+  height: 13px;
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+}
+
+.logo {
+  width: 78%;
+  max-width: 270px;
+  display: block;
+  margin: 0 auto;
+}
+
+/* 丘。画面下端に敷いて 2A の世界観を続ける。 */
+.hill {
+  margin-top: auto;
+  margin-inline: calc(var(--space-3) * -1);
+  margin-bottom: calc(var(--space-3) * -1);
+  line-height: 0;
+}
+
+.hillSvg {
+  display: block;
+  width: 100%;
+}

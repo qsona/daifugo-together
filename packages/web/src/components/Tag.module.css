@@ -1,0 +1,56 @@
+/* design-system.html §5-5 タグ */
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: var(--font-size-micro);
+  font-weight: var(--font-weight-bold);
+  border-radius: var(--radius-s);
+  padding: 2px 8px;
+  white-space: nowrap;
+  border: var(--border-control) solid transparent;
+  line-height: 1.5;
+}
+
+.pref {
+  background: var(--color-bg-surface);
+  border-color: var(--color-border-control);
+  color: var(--color-text-secondary);
+}
+
+.local {
+  background: var(--color-category-local-bg);
+  border-color: var(--color-category-local-text);
+  color: var(--color-category-local-text);
+}
+
+.original {
+  background: var(--color-category-original-bg);
+  border-color: var(--color-category-original-text);
+  color: var(--color-category-original-text);
+}
+
+.active {
+  background: var(--color-status-active-bg);
+  border-color: var(--color-status-active-bg);
+  color: var(--color-status-active-text);
+}
+
+.removed {
+  background: var(--color-status-removed-bg);
+  border-color: var(--color-navy-200);
+  color: var(--color-status-removed-text);
+}
+
+.human {
+  background: var(--color-status-active-bg);
+  border-color: var(--color-status-active-bg);
+  color: var(--color-status-active-text);
+}
+
+.ai {
+  background: var(--color-bg-surface);
+  border-color: var(--color-border-control);
+  color: var(--color-text-secondary);
+}

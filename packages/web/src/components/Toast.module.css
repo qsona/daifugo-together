@@ -1,0 +1,33 @@
+/* design-system.html §5-13 トースト */
+
+.toast {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: var(--color-bg-inverse);
+  color: var(--color-text-on-fill);
+  border-radius: var(--radius-pill);
+  padding: 10px var(--space-5);
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-bold);
+  box-shadow: var(--shadow-soft);
+}
+
+.icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ok {
+  background: var(--color-green-500);
+}
+
+/* ルール発動・イエローカード相当の強調は金(2A の役割「金=注意・強調」)。 */
+.warn {
+  background: var(--color-gold-400);
+}

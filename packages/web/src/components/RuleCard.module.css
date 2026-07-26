@@ -1,0 +1,104 @@
+/* design-system.html §5-7 ルールカード(図鑑行) / §5-8 ルール行(対局用シンプル) */
+
+.rule {
+  display: flex;
+  gap: var(--space-3);
+  background: var(--color-bg-surface);
+  border: var(--border-bold) solid var(--color-border-strong);
+  border-radius: var(--radius-l);
+  padding: var(--space-3);
+  box-shadow: var(--shadow-hard-s);
+}
+
+.rank {
+  width: 40px;
+  flex-shrink: 0;
+  align-self: flex-start;
+  background: var(--color-cream-100);
+  border: var(--border-control) solid var(--color-border-strong);
+  border-radius: var(--radius-s);
+  text-align: center;
+  padding: 3px 0 4px;
+}
+
+.rankValue {
+  display: block;
+  font-size: var(--font-size-title-m);
+  font-weight: var(--font-weight-heavy);
+  line-height: 1.1;
+}
+
+.rankLabel {
+  font-size: 9px;
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-secondary);
+}
+
+.main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.name {
+  font-size: var(--font-size-title-s);
+  font-weight: var(--font-weight-heavy);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin: 0;
+}
+
+.description {
+  font-size: var(--font-size-micro);
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+/* 排除済みは打ち消し線+淡色面で図鑑に残す。 */
+.removed {
+  background: var(--color-cream-50);
+  border-color: var(--color-navy-200);
+  box-shadow: none;
+}
+
+.removed .name {
+  color: var(--color-text-secondary);
+  text-decoration: line-through;
+  text-decoration-thickness: 2px;
+}
+
+.removed .rank {
+  background: var(--color-navy-100);
+  border-color: var(--color-navy-200);
+  color: var(--color-text-secondary);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* 待機画面・対局中はルール名だけ(数値を出さない)。 */
+.slim {
+  background: var(--color-bg-surface);
+  border: var(--border-control) solid var(--color-border-strong);
+  border-radius: var(--radius-m);
+  padding: 10px var(--space-4);
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-bold);
+}

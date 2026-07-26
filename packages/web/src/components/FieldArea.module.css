@@ -1,0 +1,36 @@
+/* インゲーム部品: 場 */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  /* 卓の地は KV の丘の緑。カードの白と紺輪郭が最も映える。 */
+  background: var(--color-green-600);
+  border: var(--border-bold) solid var(--color-border-strong);
+  border-radius: var(--radius-l);
+  box-shadow: var(--shadow-hard-s);
+  padding: var(--space-4) var(--space-3);
+  min-height: 120px;
+  justify-content: center;
+}
+
+.label {
+  font-size: var(--font-size-micro);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-on-fill);
+}
+
+.cards {
+  display: flex;
+  gap: var(--space-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.empty {
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-on-fill);
+}

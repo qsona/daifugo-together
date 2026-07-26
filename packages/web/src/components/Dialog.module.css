@@ -1,0 +1,123 @@
+/* design-system.html §5-14 イエローカードモーダル */
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background: var(--color-overlay);
+  padding: var(--space-5) var(--space-4);
+}
+
+.dialog {
+  background: var(--color-bg-surface);
+  border: var(--border-heavy) solid var(--color-border-strong);
+  border-radius: var(--radius-l);
+  box-shadow: var(--shadow-hard-l);
+  padding: var(--space-5) var(--space-4);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-width: 320px;
+  animation: pop var(--duration-slow) var(--easing-pop);
+}
+
+@keyframes pop {
+  from {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.cards {
+  display: flex;
+  justify-content: center;
+  padding-top: var(--space-1);
+}
+
+/* 傾き ±8〜9° は KV の審判が掲げるカードの継承。 */
+.yellowCard {
+  width: 56px;
+  height: 80px;
+  display: inline-block;
+  background: var(--color-warning-bg);
+  border: var(--border-heavy) solid var(--color-border-strong);
+  border-radius: var(--radius-s);
+  transform: rotate(-8deg);
+  box-shadow: var(--shadow-hard-s);
+}
+
+.yellowCardSecond {
+  transform: rotate(9deg);
+  margin-left: -28px;
+}
+
+.title {
+  font-size: 20px;
+  font-weight: var(--font-weight-heavy);
+  letter-spacing: var(--letter-spacing-wide);
+  margin: 0;
+}
+
+.body {
+  font-size: var(--font-size-caption);
+  text-align: left;
+  line-height: var(--line-height-body);
+  margin: 0;
+}
+
+.sub {
+  font-size: var(--font-size-micro);
+  text-align: left;
+  color: var(--color-text-secondary);
+  line-height: var(--line-height-caption);
+  margin: 0;
+}
+
+.slots {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-micro);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-secondary);
+}
+
+.slot {
+  width: 24px;
+  height: 34px;
+  border: var(--border-control) dashed var(--color-navy-300);
+  border-radius: 4px;
+  background: var(--color-bg-surface);
+}
+
+.slotFilled {
+  background: var(--color-warning-bg);
+  border: var(--border-control) solid var(--color-border-strong);
+}
+
+.stopBox {
+  text-align: left;
+  background: var(--color-bg-subtle);
+  border: var(--border-control) solid var(--color-border-subtle);
+  border-radius: var(--radius-m);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-micro);
+  color: var(--color-text-secondary);
+  line-height: var(--line-height-caption);
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: center;
+}

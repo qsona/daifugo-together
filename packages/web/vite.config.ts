@@ -8,7 +8,10 @@ import { defineConfig } from 'vitest/config';
  * コピーを作らず alias で直接参照することで、正本とアプリの二重管理を構造的に防ぐ。
  */
 const designDir = fileURLToPath(new URL('../../docs/design', import.meta.url));
-const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
+/** pnpm はワークスペース直下の node_modules に実体を置くので、dev サーバーから読める必要がある。 */
+const workspaceModules = fileURLToPath(
+  new URL('../../node_modules', import.meta.url),
+);
 
 export default defineConfig({
   plugins: [react()],
@@ -18,8 +21,11 @@ export default defineConfig({
     },
   },
   server: {
-    // vite root(packages/web)の外にある docs/design を dev サーバーから読めるようにする。
-    fs: { allow: [repoRoot] },
+    /*
+     * vite root(packages/web)の外を dev サーバーに開ける範囲。
+     * 既定はワークスペース全体なので、必要な 2 つに絞っている。
+     */
+    fs: { allow: ['.', designDir, workspaceModules] },
   },
   test: {
     name: 'web',

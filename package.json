@@ -12,9 +12,10 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint . --max-warnings 0",
+    "lint:design": "node scripts/check-design-tokens.mjs && node scripts/check-key-visual.mjs",
     "test": "vitest run",
     "typecheck": "pnpm --recursive --if-present run typecheck",
-    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+    "verify": "pnpm format:check && pnpm lint && pnpm lint:design && pnpm typecheck && pnpm test && pnpm build"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",
@@ -23,6 +24,7 @@
     "eslint-config-prettier": "^10.0.0",
     "globals": "^16.0.0",
     "prettier": "^3.0.0",
+    "sharp": "^0.35.3",
     "typescript": "^5.0.0",
     "typescript-eslint": "^8.0.0",
     "vitest": "^4.1.10"

@@ -41,6 +41,10 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      # デザイントークン準拠とキービジュアル SVG の自己完結性(E04 §2.3(3)・§4)
+      - name: Lint design tokens and key visual
+        run: pnpm lint:design
+
       - name: Type-check
         run: pnpm typecheck
 

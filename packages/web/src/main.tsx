@@ -1,7 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
-// デザイントークンの正本を最初に読み込む(以後の CSS はすべて var(--…) 経由で参照する)。
+// デザイントークンの正本を読み込む(以後の CSS はすべて var(--…) 経由で参照する)。
 import '@design/design-tokens.css';
 import './styles/global.css';
 
@@ -17,3 +17,6 @@ createRoot(container).render(
     <App />
   </StrictMode>,
 );
+
+// Web フォントの宣言は重いので初回描画の経路から外す(詳細は styles/fonts.ts)。
+void import('./styles/fonts');

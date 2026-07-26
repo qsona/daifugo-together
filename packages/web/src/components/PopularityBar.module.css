@@ -1,0 +1,33 @@
+/* design-system.html §5-6 人気度バー */
+
+.popularity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-micro);
+  color: var(--color-text-secondary);
+}
+
+.bar {
+  flex: 1;
+  height: 10px;
+  min-width: 40px;
+  background: var(--color-popularity-track);
+  border: var(--border-control) solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+
+/* 塗りとトラックの色差はコントラスト不足なので、紺の外枠と右端エッジで形を読ませる。 */
+.fill {
+  display: block;
+  height: 100%;
+  background: var(--color-popularity-fill);
+  border-right: var(--border-control) solid var(--color-border-strong);
+}
+
+.value {
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+}

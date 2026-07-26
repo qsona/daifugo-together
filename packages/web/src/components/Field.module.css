@@ -1,0 +1,64 @@
+/* design-system.html §5-4 フォーム部品 */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.label {
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-bold);
+}
+
+/* 必須マークは使わず、任意側に印を付ける。 */
+.optional {
+  font-weight: var(--font-weight-regular);
+  color: var(--color-text-secondary);
+}
+
+.control {
+  width: 100%;
+  min-height: var(--size-control);
+  border: var(--border-control) solid var(--color-border-control);
+  border-radius: var(--radius-m);
+  background: var(--color-bg-surface);
+  font-family: inherit;
+  font-size: var(--font-size-body);
+  color: var(--color-text-primary);
+  padding: 10px var(--space-3);
+}
+
+.control::placeholder {
+  color: var(--color-text-secondary);
+  opacity: 1;
+}
+
+.textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.control:focus-visible {
+  border-color: var(--color-focus-ring);
+  border-width: var(--border-bold);
+  outline: var(--focus-ring-width) solid
+    color-mix(in srgb, var(--color-focus-ring) 30%, transparent);
+  outline-offset: 1px;
+}
+
+.invalid {
+  border-color: var(--color-red-600);
+  border-width: var(--border-bold);
+}
+
+.caption {
+  font-size: var(--font-size-micro);
+  color: var(--color-text-secondary);
+  line-height: var(--line-height-caption);
+}
+
+.error {
+  color: var(--color-text-danger);
+  font-weight: var(--font-weight-bold);
+}

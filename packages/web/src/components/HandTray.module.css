@@ -1,0 +1,47 @@
+/* インゲーム部品: 手札(横スクロール・選択) */
+
+.tray {
+  background: var(--color-bg-surface);
+  border: var(--border-bold) solid var(--color-border-strong);
+  border-radius: var(--radius-l);
+  box-shadow: var(--shadow-hard-s);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-size: var(--font-size-micro);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-secondary);
+}
+
+/* 意図どおり横スクロールで収める(縦に折り返さない)。 */
+.cards {
+  display: flex;
+  gap: var(--space-2);
+  overflow-x: auto;
+  /* 選択で持ち上がる分と「選択中」ラベルの分の逃げ。 */
+  padding: var(--space-3) var(--space-1) var(--space-5);
+  list-style: none;
+  margin: 0;
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* パスは文言なりの幅、主 CTA が残りを取る(長い文言を折り返させない)。 */
+.actions > * {
+  flex: 1;
+}
+
+.actions > *:first-child {
+  flex: 0 0 auto;
+}

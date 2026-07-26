@@ -1,0 +1,50 @@
+/* 全画面共通のレイアウト骨格。見た目の値はすべてトークン経由。 */
+
+.screen {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--color-bg-app);
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  padding-left: max(var(--space-3), env(safe-area-inset-left));
+  padding-right: max(var(--space-3), env(safe-area-inset-right));
+  /* 下端の部品はベタ落ち影を持つので、影の分だけ余分に逃がす。 */
+  padding-bottom: var(--space-5);
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.sectionTitle {
+  margin: 0;
+  font-size: var(--font-size-title-m);
+  font-weight: var(--font-weight-heavy);
+  letter-spacing: var(--letter-spacing-wide);
+}
+
+.footer {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.row {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.row > * {
+  flex: 1;
+  min-width: 0;
+}

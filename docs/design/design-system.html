@@ -531,6 +531,122 @@ table.spec th { background: var(--color-bg-subtle); white-space: nowrap; }
   font-size: var(--font-size-micro); color: var(--color-text-secondary); line-height: var(--line-height-caption);
 }
 
+/* ============================================================
+   インゲーム部品(DS-02 追加。§5-16)
+   造形は KV 2A の手札の扇: 白面・紺の太輪郭・ベタ落ち影・角丸。
+   ============================================================ */
+
+/* カード */
+.c-card {
+  position: relative;
+  display: inline-flex; flex-direction: column; justify-content: space-between;
+  width: 56px; height: 80px; flex-shrink: 0;
+  padding: var(--space-1) 6px;
+  background: var(--color-white);
+  border: var(--border-bold) solid var(--color-border-strong);
+  border-radius: var(--radius-s);
+  box-shadow: var(--shadow-hard-s);
+  font-weight: var(--font-weight-heavy); line-height: 1;
+  color: var(--color-navy-800);
+}
+.c-card.-red { color: var(--color-red-500); }
+.c-card b { font-size: var(--font-size-title-m); }
+.c-card i { align-self: flex-end; font-size: var(--font-size-title-m); font-style: normal; }
+.c-card.-small { width: 44px; height: 62px; }
+.c-card.is-selected {
+  transform: translateY(-12px);
+  border-color: var(--color-gold-400);
+  box-shadow: var(--shadow-hard-m);
+}
+.c-card.is-selected::after {
+  content: "選択中"; position: absolute; inset-inline: 0; bottom: -18px;
+  text-align: center; font-size: var(--font-size-micro); font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+}
+
+/* 相手席 */
+.c-seats { display: flex; gap: var(--space-2); }
+.c-seat {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; align-items: center; gap: var(--space-1);
+  background: var(--color-bg-surface);
+  border: var(--border-control) solid var(--color-border-strong);
+  border-radius: var(--radius-m); padding: var(--space-2); text-align: center;
+}
+.c-seat.-active { border: var(--border-heavy) solid var(--color-gold-400); box-shadow: var(--shadow-hard-s); }
+.c-seat .nm { font-size: var(--font-size-caption); font-weight: var(--font-weight-bold); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.c-seat .ct { font-size: var(--font-size-micro); color: var(--color-text-secondary); }
+.c-seat .tn {
+  font-size: var(--font-size-micro); font-weight: var(--font-weight-bold);
+  background: var(--color-gold-400); border: var(--border-control) solid var(--color-border-strong);
+  border-radius: var(--radius-pill); padding: 1px 8px;
+}
+
+/* 場 */
+.c-field-area {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-2);
+  background: var(--color-green-600);
+  border: var(--border-bold) solid var(--color-border-strong);
+  border-radius: var(--radius-l); box-shadow: var(--shadow-hard-s);
+  padding: var(--space-4) var(--space-3); min-height: 120px;
+}
+.c-field-area .lb { font-size: var(--font-size-micro); font-weight: var(--font-weight-bold); color: var(--color-text-on-fill); }
+
+/* 実況ログ */
+.c-log {
+  background: var(--color-bg-subtle);
+  border: var(--border-control) solid var(--color-border-subtle);
+  border-radius: var(--radius-m); padding: var(--space-2) var(--space-3);
+  max-height: 96px; overflow-y: auto;
+  display: flex; flex-direction: column; gap: var(--space-1);
+}
+.c-log > div { font-size: var(--font-size-micro); color: var(--color-text-secondary); line-height: var(--line-height-caption); }
+.c-log > div.fired { color: var(--color-text-primary); font-weight: var(--font-weight-bold); }
+
+/* 手札 */
+.c-tray {
+  background: var(--color-bg-surface);
+  border: var(--border-bold) solid var(--color-border-strong);
+  border-radius: var(--radius-l); box-shadow: var(--shadow-hard-s);
+  padding: var(--space-3);
+  display: flex; flex-direction: column; gap: var(--space-2);
+}
+.c-tray .hd { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); font-size: var(--font-size-micro); font-weight: var(--font-weight-bold); color: var(--color-text-secondary); }
+.c-tray .cs { display: flex; gap: var(--space-2); overflow-x: auto; padding: var(--space-3) var(--space-1) var(--space-5); }
+.c-tray .ac { display: flex; gap: var(--space-2); }
+.c-tray .ac > .c-btn { flex: 1; }
+.c-tray .ac > .c-btn:first-child { flex: 0 0 auto; }
+
+/* 順位行 */
+.c-ranks { display: flex; flex-direction: column; gap: var(--space-2); }
+.c-rank {
+  display: flex; align-items: center; gap: var(--space-3);
+  background: var(--color-bg-surface);
+  border: var(--border-bold) solid var(--color-border-strong);
+  border-radius: var(--radius-m); padding: var(--space-2) var(--space-3);
+  box-shadow: var(--shadow-hard-s); min-height: var(--size-tap-min);
+}
+.c-rank.-top { background: var(--color-gold-200); }
+.c-rank .pl {
+  width: 40px; flex-shrink: 0; text-align: center;
+  background: var(--color-cream-100);
+  border: var(--border-control) solid var(--color-border-strong);
+  border-radius: var(--radius-s); padding: 3px 0 4px;
+  font-size: var(--font-size-title-m); font-weight: var(--font-weight-heavy); line-height: 1.1;
+}
+.c-rank .nm { flex: 1; min-width: 0; font-size: var(--font-size-title-s); font-weight: var(--font-weight-bold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.c-rank .tt { font-size: var(--font-size-micro); font-weight: var(--font-weight-bold); color: var(--color-text-secondary); white-space: nowrap; }
+
+/* 注記 */
+.c-callout {
+  display: flex; align-items: center; gap: var(--space-3); text-align: left;
+  background: var(--color-bg-subtle);
+  border: var(--border-control) solid var(--color-border-subtle);
+  border-radius: var(--radius-m); padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-caption); color: var(--color-text-secondary); line-height: var(--line-height-caption);
+}
+.c-callout > p { flex: 1; min-width: 0; }
+
 /* 見本行 */
 .specimen { display: flex; flex-wrap: wrap; gap: var(--space-4); align-items: center; margin-bottom: var(--space-3); }
 .specimen .lbl { width: 100%; font-size: var(--font-size-micro); font-weight: var(--font-weight-bold); color: var(--color-text-secondary); margin-bottom: -6px; }
@@ -1014,6 +1130,88 @@ table.spec th { background: var(--color-bg-subtle); white-space: nowrap; }
         <button class="c-btn" type="button">ルールをていあんする</button>
       </div>
       <div class="note">モチーフはトランプ 2 枚の重なり(キャラクターの吹き出し発言は置かない)。見出し+一文+次の行動、の 3 点構成を守る。</div>
+    </div>
+
+    <h3>5-16. インゲーム部品(DS-02 追加)</h3>
+    <div class="truth" style="margin-bottom:16px;">
+      §5-1〜5-15 はアウトゲーム(対戦画面以外)の部品。ここから下は <b>DS-02 で追加したインゲーム部品</b>(画面3 対戦・画面5a/5b リザルト)で、造形は KV 2A の手札の扇に合わせる: <b>白面・紺の太輪郭・ベタ落ち影・角丸</b>。React 実装は <code>packages/web/src/components/</code>。
+    </div>
+
+    <div class="panel">
+      <div class="specimen">
+        <span class="lbl">カード / 選択中 / 場札(small)</span>
+        <span class="c-card"><b>3</b><i>♣</i></span>
+        <span class="c-card -red"><b>7</b><i>♥</i></span>
+        <span class="c-card is-selected"><b>K</b><i>♠</i></span>
+        <span class="c-card -red -small"><b>8</b><i>♦</i></span>
+      </div>
+      <div class="note">スートの色は ♥♦=red-500(ブランド装飾)、♠♣=navy-800(共通アウトライン)。選択は「持ち上がる」で示し、色だけに頼らないよう金の縁と「選択中」の文字を添える。</div>
+    </div>
+
+    <div class="panel">
+      <div class="specimen">
+        <span class="lbl">相手席(手番=金の太枠。手札の中身は持たず枚数のみ)</span>
+      </div>
+      <div style="max-width:375px;">
+        <div class="c-seats">
+          <div class="c-seat"><span class="nm">プレイヤーB</span><span class="c-tag -ai">AI</span><span class="ct">残り8枚</span></div>
+          <div class="c-seat -active"><span class="nm">プレイヤーC</span><span class="c-tag -human">人間</span><span class="ct">残り6枚</span><span class="tn">手番</span></div>
+          <div class="c-seat"><span class="nm">プレイヤーD</span><span class="c-tag -ai">AI</span><span class="ct">残り11枚</span><span class="ct">パス</span></div>
+        </div>
+      </div>
+      <div class="note">手番の強調は金(役割「金=注意・強調」)。他人の手札は枚数だけを出す(情報漏えいを設計で断つ)。</div>
+    </div>
+
+    <div class="panel">
+      <div class="specimen"><span class="lbl">場 / 実況ログ</span></div>
+      <div style="max-width:375px; display:flex; flex-direction:column; gap:12px;">
+        <div class="c-field-area"><span class="lb">場</span><span class="c-card -red -small"><b>8</b><i>♦</i></span></div>
+        <div class="c-log">
+          <div>プレイヤーB: ♠5 ♥5 を出した</div>
+          <div>プレイヤーC: ♦8 を出した</div>
+          <div class="fired">ルール発動「8切り」 場が流れた</div>
+          <div>あなたの番です</div>
+        </div>
+      </div>
+      <div class="note">卓の地は KV の丘の緑(green-600)。白いカードと紺輪郭が最も映える。ログのルール発動行だけ紺の太字にし、演出そのものはトースト(§5-13 の warn)で出す。</div>
+    </div>
+
+    <div class="panel">
+      <div class="specimen"><span class="lbl">手札(横スクロール・選択)</span></div>
+      <div style="max-width:375px;">
+        <div class="c-tray">
+          <div class="hd"><span>あなたの手札</span><span>10枚</span></div>
+          <div class="cs">
+            <span class="c-card"><b>3</b><i>♣</i></span>
+            <span class="c-card -red"><b>4</b><i>♦</i></span>
+            <span class="c-card"><b>6</b><i>♠</i></span>
+            <span class="c-card -red"><b>7</b><i>♥</i></span>
+            <span class="c-card -red"><b>9</b><i>♥</i></span>
+          </div>
+          <div class="ac"><button class="c-btn" type="button">パス</button><button class="c-btn -primary" type="button">えらんだカードを出す</button></div>
+        </div>
+      </div>
+      <div class="note">枚数が増えても縦に折り返さず横スクロールで収める。パスは文言なりの幅、主 CTA が残りを取る。</div>
+    </div>
+
+    <div class="panel">
+      <div class="specimen"><span class="lbl">順位行(1 位だけ祝祭の金)</span></div>
+      <div style="max-width:375px;">
+        <div class="c-ranks">
+          <div class="c-rank -top"><span class="pl">1</span><span class="nm">あなた</span><span class="tt">大富豪</span><span class="c-tag -human">人間</span></div>
+          <div class="c-rank"><span class="pl">2</span><span class="nm">プレイヤーB</span><span class="tt">富豪</span><span class="c-tag -ai">AI</span></div>
+          <div class="c-rank"><span class="pl">4</span><span class="nm">プレイヤーD</span><span class="tt">大貧民</span><span class="c-tag -ai">AI</span></div>
+        </div>
+      </div>
+      <div class="note">優先度バッジ(§5-7)と同じ枠付き数字を順位に流用する。1 位のみ gold-200 の淡い金を敷き、賑やかさを一段だけ足す。</div>
+    </div>
+
+    <div class="panel">
+      <div class="specimen"><span class="lbl">注記(Callout)</span></div>
+      <div style="max-width:375px;">
+        <div class="c-callout"><p>31 件・すべての卓に適用(変更不可)</p><button class="c-btn -small" type="button">一覧を見る</button></div>
+      </div>
+      <div class="note">画面に添える一文。強調色は使わず地の説明として淡く出す(§5-14 の停止告知ボックスと同じ文法)。右端に小さな導線を置ける。</div>
     </div>
   </section>
 

@@ -1,0 +1,45 @@
+/* design-system.html §5-10 高評価 / 低評価ボタン */
+
+.vote {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: var(--size-control-s);
+  padding: 0 var(--space-4);
+  border: var(--border-bold) solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: var(--font-weight-bold);
+  cursor: pointer;
+  box-shadow: var(--shadow-hard-s);
+  transition: transform var(--duration-fast) var(--easing-standard);
+}
+
+.icon {
+  flex-shrink: 0;
+}
+
+.iconDown {
+  transform: rotate(180deg);
+}
+
+.on {
+  box-shadow: none;
+  transform: translateY(2px);
+}
+
+.up.on {
+  background: var(--color-green-700);
+  border-color: var(--color-green-700);
+  color: var(--color-text-on-fill);
+}
+
+.down.on {
+  background: var(--color-red-600);
+  border-color: var(--color-red-600);
+  color: var(--color-text-on-fill);
+}

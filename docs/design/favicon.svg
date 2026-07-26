@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <title>みんなでつくろう 大富豪 ファビコン(2A 由来の赤・金・緑の 3 色意匠)</title>
+  <!--
+    key-visual-2a.svg の「大=赤 / 富=金 / 豪=緑」の 3 色と、共通アウトラインの紺を
+    16〜32px でも潰れない抽象意匠に落としたもの。漢字 1 文字は縮小で潰れるため採らない。
+    フォントに依存しないので端末差で見えが変わらない。
+  -->
+  <rect width="64" height="64" rx="14" fill="#2B6FC2"/>
+  <!-- 放射光(2A の空の文法) -->
+  <g fill="#4585D4">
+    <polygon points="32,64 -20,10 -4,2"/>
+    <polygon points="32,64 6,-6 22,-8"/>
+    <polygon points="32,64 42,-8 58,-6"/>
+    <polygon points="32,64 68,2 84,10"/>
+  </g>
+  <!-- 3 枚の札(赤・金・緑)。傾きは 2A の手札の扇の継承 -->
+  <g stroke="#1C2447" stroke-width="4" stroke-linejoin="round">
+    <rect x="8" y="20" width="20" height="30" rx="4" fill="#E14B3B" transform="rotate(-14 18 35)"/>
+    <rect x="36" y="20" width="20" height="30" rx="4" fill="#2FA36B" transform="rotate(14 46 35)"/>
+    <rect x="22" y="16" width="20" height="32" rx="4" fill="#FFC53D"/>
+  </g>
+</svg>

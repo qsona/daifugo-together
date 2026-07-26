@@ -1,0 +1,49 @@
+/* design-system.html §5-15 空状態 */
+
+.empty {
+  text-align: center;
+  padding: var(--space-8) var(--space-4);
+}
+
+/* モチーフはトランプ 2 枚の重なり(キャラクターの吹き出し発言は置かない)。 */
+.art {
+  display: inline-block;
+  position: relative;
+  width: 72px;
+  height: 64px;
+  margin-bottom: var(--space-3);
+}
+
+.art i {
+  position: absolute;
+  width: 40px;
+  height: 56px;
+  background: var(--color-bg-surface);
+  border: var(--border-bold) solid var(--color-border-strong);
+  border-radius: var(--radius-s);
+}
+
+.art i:first-child {
+  left: 4px;
+  top: 6px;
+  transform: rotate(-10deg);
+  background: var(--color-cream-100);
+}
+
+.art i:last-child {
+  right: 4px;
+  top: 0;
+  transform: rotate(8deg);
+}
+
+.title {
+  font-size: var(--font-size-title-s);
+  font-weight: var(--font-weight-heavy);
+  margin: 0 0 var(--space-1);
+}
+
+.body {
+  font-size: var(--font-size-caption);
+  color: var(--color-text-secondary);
+  margin: 0 0 var(--space-4);
+}

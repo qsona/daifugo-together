@@ -1,0 +1,39 @@
+/* design-system.html §5-3 セグメントコントロール */
+
+.segmented {
+  display: flex;
+  border: var(--border-bold) solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+  background: var(--color-bg-surface);
+}
+
+.option {
+  flex: 1;
+  text-align: center;
+  padding: 11px 6px;
+  border: none;
+  border-right: var(--border-control) solid var(--color-border-strong);
+  background: transparent;
+  font-family: inherit;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.option:last-child {
+  border-right: none;
+}
+
+/* 選択は中立の紺で統一する(区分の色分けはタグとカードが担う)。 */
+.selected {
+  background: var(--color-action-selected);
+  color: var(--color-text-on-fill);
+}
+
+.mini .option {
+  padding: 7px 6px;
+  font-size: var(--font-size-caption);
+}

@@ -7,8 +7,29 @@
       name="viewport"
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
+    <!--
+      CSS 変数が使えない唯一の色指定。--color-bg-brand の実値と一致していることは
+      scripts/check-design-tokens.mjs が CI で照合する。
+    -->
     <meta name="theme-color" content="#2B6FC2" />
+
     <title>みんなでつくろう 大富豪</title>
+    <meta name="description" content="毎日どこかで、新ルール。" />
+
+    <!-- 2A から派生生成した事前生成物(scripts/generate-design-images.mjs) -->
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon-180.png" />
+
+    <!--
+      OGP。og:image はスクレイパの都合で絶対 URL が要るため、
+      デプロイ先が決まった時点(E12)で絶対 URL に差し替える。
+    -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="みんなでつくろう 大富豪" />
+    <meta property="og:description" content="毎日どこかで、新ルール。" />
+    <meta property="og:image" content="/ogp.png" />
+    <meta name="twitter:card" content="summary_large_image" />
   </head>
   <body>
     <div id="root"></div>

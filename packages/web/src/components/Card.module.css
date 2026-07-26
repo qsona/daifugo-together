@@ -1,0 +1,77 @@
+/* ============================================================
+   インゲーム部品: トランプ札
+   デザインシステム成果物はアウトゲーム専用のため、DS-02 が新規に定義する。
+   造形は KV 2A の手札の扇に合わせる: 白面・紺の太輪郭・ベタ落ち影・角丸。
+   ============================================================ */
+
+.card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  width: 56px;
+  height: 80px;
+  flex-shrink: 0;
+  padding: var(--space-1) 6px;
+  background: var(--color-white);
+  border: var(--border-bold) solid var(--color-border-strong);
+  border-radius: var(--radius-s);
+  box-shadow: var(--shadow-hard-s);
+  font-family: inherit;
+  font-weight: var(--font-weight-heavy);
+  line-height: 1;
+  cursor: default;
+}
+
+.rank {
+  font-size: var(--font-size-title-m);
+}
+
+.suit {
+  align-self: flex-end;
+  font-size: var(--font-size-title-m);
+}
+
+/* ♥♦ は KV のブランド赤、♠♣ は共通アウトラインの紺。 */
+.red {
+  color: var(--color-red-500);
+}
+
+.black {
+  color: var(--color-navy-800);
+}
+
+.selectable {
+  cursor: pointer;
+  transition:
+    transform var(--duration-fast) var(--easing-standard),
+    box-shadow var(--duration-fast) var(--easing-standard);
+}
+
+/* 選択は「持ち上がる」で示す。色だけに頼らないよう金の縁も足す。 */
+.selected {
+  transform: translateY(-12px);
+  border-color: var(--color-gold-400);
+  box-shadow: var(--shadow-hard-m);
+}
+
+.selected::after {
+  content: '選択中';
+  position: absolute;
+  inset-inline: 0;
+  bottom: -18px;
+  text-align: center;
+  font-size: var(--font-size-micro);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+}
+
+/* 場札は少し小さく、伏せ札は面をクリームに。 */
+.small {
+  width: 44px;
+  height: 62px;
+}
+
+.facedown {
+  background: var(--color-cream-200);
+}
