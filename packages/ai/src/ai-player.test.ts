@@ -214,6 +214,14 @@ describe('AI-01', () => {
       expect(first.usedFallback).toBe('none');
       expect(first.stats?.playouts).toBe(8);
       expect(first.stats?.workerThread).toBe(true);
+      expect(first.stats?.candidates.length).toBeLessThanOrEqual(4);
+      expect(
+        Math.max(
+          ...(first.stats?.candidates.map((candidate) => candidate.visits) ?? [
+            0,
+          ]),
+        ),
+      ).toBeGreaterThan(1);
       expect(second.play).toEqual(first.play);
       expect(second.stats).toEqual(first.stats);
     } finally {
@@ -273,6 +281,52 @@ describe('AI-01', () => {
       expect(recovered.stats?.workerThread).toBe(true);
     } finally {
       await ai.close();
+    }
+  });
+
+  it('progress受信後のhard timeoutをpartial-searchとして返す', async () => {
+    const config: GameConfig = {
+      gameIndex: 0,
+      seats,
+      gameSeed: 'ai-partial-search',
+      ruleChain: [],
+    };
+    const state = startGame(config).state;
+    const player = state.public.turn!;
+    const context: SnapshotContext = {
+      setId: 'ai-partial-search',
+      setPhase: { name: 'gameInProgress', gameIndex: 0 },
+      members: seats.map((id) => ({
+        id,
+        displayName: id,
+        isAI: true,
+      })),
+      setResults: [],
+    };
+    const pool = new AiWorkerPool(
+      new URL('./test-fixtures/partial-worker.js', import.meta.url),
+    );
+    const ai = createAiPlayer({ pool });
+    try {
+      const decision = await ai.decideMove({
+        view: buildPlayerSnapshot(config, state, context, player),
+        legalPlays: enumerateLegalPlays(config, state, player),
+        budget: {
+          softMs: 50,
+          hardMs: 20,
+          maxPlayouts: 2_000,
+          sliceMs: 10,
+        },
+        seed: 'partial-search-seed',
+        difficulty: NORMAL_DIFFICULTY,
+      });
+
+      expect(decision.usedFallback).toBe('partial-search');
+      expect(decision.stats?.playouts).toBe(1);
+      expect(decision.stats?.workerThread).toBe(true);
+    } finally {
+      await ai.close();
+      await pool.close();
     }
   });
 });

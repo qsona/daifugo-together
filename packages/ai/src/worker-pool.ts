@@ -29,7 +29,9 @@ export class AiWorkerPool {
   private active: ActiveJob | null = null;
   private readonly queue: QueuedJob[] = [];
 
-  constructor() {
+  constructor(
+    private readonly workerUrl = new URL('./worker-entry.js', import.meta.url),
+  ) {
     this.spawnWorker();
   }
 
@@ -68,7 +70,7 @@ export class AiWorkerPool {
     if (this.closed || this.worker) {
       return;
     }
-    const worker = new Worker(new URL('./worker-entry.js', import.meta.url), {
+    const worker = new Worker(this.workerUrl, {
       name: 'daifugo-ai-1',
     });
     this.worker = worker;

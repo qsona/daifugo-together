@@ -316,9 +316,10 @@ function search(payload, onProgress) {
   );
   const softLimit = Math.max(1, Math.floor(payload.budget.softMs / 6));
   const target = Math.max(1, Math.min(scaled, softLimit));
+  const revisitCap = Math.max(1, Math.floor(target / 2));
   const candidates = sortWeakFirst(payload.legalPlays, strength).slice(
     0,
-    Math.min(payload.config.rootCandidateCap, target),
+    Math.min(payload.config.rootCandidateCap, revisitCap),
   );
   const stats = candidates.map((play) => ({
     play,
@@ -330,6 +331,7 @@ function search(payload, onProgress) {
     Math.min(payload.config.playoutBatchSize, target),
   );
   let completed = 0;
+  let lastProgressAt = performance.now();
   for (; completed < target; completed += 1) {
     const candidateIndex = selectUcb(
       stats,
@@ -347,8 +349,14 @@ function search(payload, onProgress) {
     stats[candidateIndex].visits += 1;
     stats[candidateIndex].reward += reward;
     const count = completed + 1;
-    if (count === 1 || count % progressBatch === 0) {
+    const now = performance.now();
+    if (
+      count === 1 ||
+      count % progressBatch === 0 ||
+      now - lastProgressAt >= payload.budget.sliceMs
+    ) {
       onProgress(response(stats, payload, count, false));
+      lastProgressAt = now;
     }
   }
   return response(stats, payload, completed, completed === target);
