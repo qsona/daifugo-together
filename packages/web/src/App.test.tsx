@@ -94,11 +94,11 @@ describe('DS-02: フェーズ 1 の主要画面が 1 本の導線でつながる
     // 「あそぶ」は画面を挟まず二択のシートを開き、つくるなら待機画面へ直行する。
     expect(
       screen.getByRole('dialog', {
-        name: 'ルームをつくるか、招待コードではいる',
+        name: 'じぶんの部屋をつくるか、友だちの部屋にはいる',
       }),
     ).toBeTruthy();
     await user.click(
-      screen.getByRole('button', { name: '4人でルームをつくる' }),
+      screen.getByRole('button', { name: 'じぶんの部屋をつくる' }),
     );
 
     // 画面 2b: 招待コードと有効ルール件数。

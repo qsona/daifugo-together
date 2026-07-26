@@ -24,7 +24,10 @@ export function PlaySheet({ onCreate, onJoin, onClose }: PlaySheetProps) {
   const [isJoining, setIsJoining] = useState(false);
 
   return (
-    <ChoiceSheet label="ルームをつくるか、招待コードではいる" onClose={onClose}>
+    <ChoiceSheet
+      label="じぶんの部屋をつくるか、友だちの部屋にはいる"
+      onClose={onClose}
+    >
       {isJoining ? (
         <>
           <InputField
@@ -60,9 +63,13 @@ export function PlaySheet({ onCreate, onJoin, onClose }: PlaySheetProps) {
         </>
       ) : (
         <>
-          {/* 人数は選べないので、説明文にせず CTA に畳み込む。 */}
+          {/*
+           * 2 つの選択肢は「じぶん / 友だち」「つくる / はいる」で対比させる。
+           * どちらを押すかは「コードをもらっているか」で決まるので、
+           * 人数(4 人固定)はここで意識させる情報ではない。
+           */}
           <Button variant="primary" block onClick={onCreate}>
-            4人でルームをつくる
+            じぶんの部屋をつくる
           </Button>
           <Button
             block
@@ -70,7 +77,7 @@ export function PlaySheet({ onCreate, onJoin, onClose }: PlaySheetProps) {
               setIsJoining(true);
             }}
           >
-            招待コードではいる
+            友だちの部屋にはいる
           </Button>
         </>
       )}
