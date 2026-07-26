@@ -11,7 +11,7 @@
     "build": "pnpm --recursive --if-present run build",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "lint": "eslint . --max-warnings 0",
+    "lint": "eslint . --max-warnings 0 && node scripts/check-ai-boundaries.mjs",
     "lint:design": "node scripts/check-design-tokens.mjs && node scripts/check-key-visual.mjs",
     "test": "pnpm --filter @daifugo/core build && vitest run",
     "pretypecheck": "pnpm --filter @daifugo/core build",

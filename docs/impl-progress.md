@@ -254,7 +254,7 @@ TS-02 から継続で未解決のもの:
 
 ## 並行進行: E2 対戦AI
 
-- 状態: AI-01 プロセス1の縦断実装完了。3回の独立 GPT-5.6 Sol 方向性レビュー指摘を反映し、最終方向性レビュー `GO`。プロセス2へ進む。
+- 状態: AI-01 プロセス1の縦断実装完了。3回の独立 GPT-5.6 Sol 方向性レビュー指摘を反映し、最終方向性レビュー `GO`。プロセス2では非LLM・非ネットワーク境界のCI検査から着手。
 - 検証: Node 26.5.0 / pnpm 11.17.0 / TypeScript 6.0.3。統合リポジトリ全体 15 files / 92 tests、format・lint・design lint・typecheck・build 成功。
 - ユーザーストーリー確認: `packages/ai/src/ai-player.test.ts` の「1人+AI 3人で3ゲームのセットを拒否なく完走する」で、人間席1・AI席3の3ゲームセットを実際の E1 reducer に通し、全着手の rejection 0、結果3件、`completion=completed` を確認。
 
@@ -285,6 +285,8 @@ TS-02 から継続で未解決のもの:
 - TS-03実測に基づくpool本数、playouts/ms、root cap、batch size、cutoffの較正と200ms上限の性能試験。
 - 非LLM・非ネットワーク依存をCIで機械検査するルール。
 - 提案ルールを含むworker境界。`RuleRuntime.port` は関数を含みstructured clone不能なので直接渡さず、serializableなルールID・設定・setHistory・公開可能memoryを送り、worker側で同じbundleをimportしてruntimeを再構成する。決定化factoryもcore側へ寄せる。これはAI-02境界だが、AI-01レビューで着手条件として確認済み。
+
+プロセス2着手として `scripts/check-ai-boundaries.mjs` を `pnpm lint` に接続し、`packages/ai` の LLM SDK・HTTP/ネットワーク組込み・直接ネットワークAPIを機械的に拒否するようにした。違反 fixture を拒否するメタテストも追加した。
 
 ### E2で見つけた設計書の不整合
 

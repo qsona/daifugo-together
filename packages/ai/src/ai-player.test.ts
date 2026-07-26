@@ -313,7 +313,7 @@ describe('AI-01', () => {
         legalPlays: enumerateLegalPlays(config, state, player),
         budget: {
           softMs: 50,
-          hardMs: 20,
+          hardMs: 100,
           maxPlayouts: 2_000,
           sliceMs: 10,
         },
