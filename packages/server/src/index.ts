@@ -1,4 +1,6 @@
 export * from './ai-turn.js';
+export * from './app-server.js';
+export * from './persistence.js';
 export * from './room/manager.js';
 export * from './room/protocol.js';
 export * from './room/rate-limit.js';

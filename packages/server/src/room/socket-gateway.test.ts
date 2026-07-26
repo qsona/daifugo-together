@@ -394,6 +394,53 @@ describe('Socket.IO room gateway', () => {
     await expect(closed).resolves.toEqual({ reason: 'abandoned' });
   });
 
+  it('drain開始後は新規roomを拒否し、進行中roomの終了まで待つ', async () => {
+    const harness = await createHarness({
+      timers: {
+        setTimer: () => ({ fake: true }),
+        clearTimer: () => {},
+      },
+    });
+    const owner = await connect(harness);
+    const newcomer = await connect(harness);
+    await emitAck<'room:create', { roomId: string; inviteCode: string }>(
+      owner.client,
+      'room:create',
+      {},
+    );
+    await emitAck<'room:start', Record<string, never>>(
+      owner.client,
+      'room:start',
+      {},
+    );
+
+    let drained = false;
+    const drain = harness.gateway.beginDrain().then(() => {
+      drained = true;
+    });
+    await Promise.resolve();
+    expect(drained).toBe(false);
+    await expect(
+      emitAck<'room:create', { roomId: string; inviteCode: string }>(
+        newcomer.client,
+        'room:create',
+        {},
+      ),
+    ).resolves.toEqual({
+      ok: false,
+      code: 'INTERNAL',
+      message: 'server is draining',
+    });
+
+    await emitAck<'room:leave', Record<string, never>>(
+      owner.client,
+      'room:leave',
+      {},
+    );
+    await drain;
+    expect(drained).toBe(true);
+  });
+
   it('同一IPのjoin総当たりを設定上限で拒否する', async () => {
     const harness = await createHarness({
       joinRateLimit: { maxAttempts: 2, windowMs: 60_000 },

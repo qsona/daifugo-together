@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import type { Card, CardId } from './cards/card.js';
+import type { Card } from './cards/card.js';
 import type { Play } from './play/play.js';
 import type { Standing, Title } from './game/types.js';
 
@@ -129,7 +129,7 @@ export interface MultiplayerGameView {
   history: PublicPlayView[];
   previousResults: GameResultView[];
   yourHand: Card[];
-  legalPlays?: CardId[][];
+  legalMoves: Play[] | null;
 }
 
 export interface SetResultView {

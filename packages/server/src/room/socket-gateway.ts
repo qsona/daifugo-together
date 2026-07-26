@@ -29,7 +29,7 @@ import type {
   RoomCloseReason,
 } from './protocol.js';
 import { FixedWindowRateLimiter } from './rate-limit.js';
-import { InMemorySessionStore } from './session.js';
+import { InMemorySessionStore, type SessionStore } from './session.js';
 import {
   RoomLifecycleTimerCoordinator,
   RoomTimerCoordinator,
@@ -54,7 +54,7 @@ type RoomSocket = Socket<
 
 export interface RoomSocketGatewayOptions {
   rooms?: RoomManager;
-  sessions?: InMemorySessionStore;
+  sessions?: SessionStore;
   now?: () => number;
   createSetSeed?: () => string;
   ai?: AiPlayer;
@@ -68,12 +68,14 @@ export interface RoomSocketGatewayOptions {
     maxAttempts: number;
     windowMs: number;
   };
+  sweepIntervalMs?: number;
   onError?: (error: unknown) => void;
 }
 
 export interface RoomSocketGateway {
   rooms: RoomManager;
-  sessions: InMemorySessionStore;
+  sessions: SessionStore;
+  beginDrain(): Promise<void>;
   close(): void;
 }
 
@@ -122,9 +124,15 @@ export function attachRoomSocketGateway(
   const activeByUser = new Map<string, RoomSocket>();
   const ai = options.ai ?? createAiPlayer();
   const ownsAi = options.ai === undefined;
+  let draining = false;
+  let drainPromise: Promise<void> | undefined;
+  let resolveDrain: (() => void) | undefined;
   const joinRateLimiter = new FixedWindowRateLimiter(
     options.joinRateLimit ?? { maxAttempts: 10, windowMs: 60_000 },
   );
+  const ruleViewOptions = options.rulePort
+    ? { rulePort: options.rulePort }
+    : {};
 
   const report = (error: unknown): void => {
     try {
@@ -145,10 +153,23 @@ export function attachRoomSocketGateway(
         continue;
       }
       try {
-        target.emit('room:state', viewFor(state, member.memberId));
+        target.emit(
+          'room:state',
+          viewFor(state, member.memberId, ruleViewOptions),
+        );
       } catch (error) {
         report(error);
       }
+    }
+  };
+
+  const settleDrainIfReady = (): void => {
+    if (
+      draining &&
+      !rooms.roomIds().some((roomId) => rooms.get(roomId)?.phase === 'playing')
+    ) {
+      resolveDrain?.();
+      resolveDrain = undefined;
     }
   };
 
@@ -159,15 +180,16 @@ export function attachRoomSocketGateway(
   ): void => {
     if (transition.state.phase !== 'closed') {
       emitState(transition.state);
-      return;
-    }
-    for (const member of previous.members) {
-      if (member.userId) {
-        activeByUser.get(member.userId)?.emit('room:closed', {
-          reason: closeReason,
-        });
+    } else {
+      for (const member of previous.members) {
+        if (member.userId) {
+          activeByUser.get(member.userId)?.emit('room:closed', {
+            reason: closeReason,
+          });
+        }
       }
     }
+    settleDrainIfReady();
   };
   const lifecycleTimers = new RoomLifecycleTimerCoordinator(rooms, {
     ...options.timers,
@@ -249,6 +271,20 @@ export function attachRoomSocketGateway(
     phaseTimers.sync(transition.state);
     lifecycleTimers.sync(transition.state);
   };
+  const sweepTimer = setInterval(() => {
+    try {
+      for (const result of rooms.sweep(now(), createSetSeed)) {
+        publishTransition(
+          result.previous,
+          result.transition,
+          result.closeReason,
+        );
+      }
+    } catch (error) {
+      report(error);
+    }
+  }, options.sweepIntervalMs ?? 60_000);
+  sweepTimer.unref();
 
   const handleUnexpected = <T>(
     error: unknown,
@@ -285,6 +321,7 @@ export function attachRoomSocketGateway(
       room: membership
         ? viewFor(membership.room, membership.member.memberId, {
             reconnect: true,
+            ...ruleViewOptions,
           })
         : null,
     });
@@ -293,6 +330,10 @@ export function attachRoomSocketGateway(
       try {
         if (!clientPayloadSchemas['room:create'].safeParse(payload).success) {
           safeAck(ack, failure('BAD_PAYLOAD'));
+          return;
+        }
+        if (draining) {
+          safeAck(ack, failure('INTERNAL', 'server is draining'));
           return;
         }
         const created = rooms.create(session);
@@ -316,6 +357,10 @@ export function attachRoomSocketGateway(
 
     socket.on('room:join', (payload, ack) => {
       try {
+        if (draining) {
+          safeAck(ack, failure('INTERNAL', 'server is draining'));
+          return;
+        }
         if (!joinRateLimiter.allow(socket.handshake.address, now())) {
           safeAck(ack, failure('RATE_LIMITED'));
           return;
@@ -384,6 +429,10 @@ export function attachRoomSocketGateway(
           safeAck(ack, failure('BAD_PAYLOAD'));
           return;
         }
+        if (draining) {
+          safeAck(ack, failure('INTERNAL', 'server is draining'));
+          return;
+        }
         const current = rooms.findByUser(session.userId);
         if (!current) {
           safeAck(ack, failure('NOT_IN_ROOM'));
@@ -411,6 +460,10 @@ export function attachRoomSocketGateway(
       try {
         if (!clientPayloadSchemas['room:continue'].safeParse(payload).success) {
           safeAck(ack, failure('BAD_PAYLOAD'));
+          return;
+        }
+        if (draining) {
+          safeAck(ack, failure('INTERNAL', 'server is draining'));
           return;
         }
         const current = rooms.findByUser(session.userId);
@@ -512,6 +565,7 @@ export function attachRoomSocketGateway(
           'room:state',
           viewFor(current.room, current.member.memberId, {
             reconnect: true,
+            ...ruleViewOptions,
           }),
         );
         safeAck(ack, { ok: true, value: {} });
@@ -581,7 +635,28 @@ export function attachRoomSocketGateway(
   return {
     rooms,
     sessions,
+    beginDrain() {
+      if (drainPromise) return drainPromise;
+      draining = true;
+      drainPromise = new Promise<void>((resolve) => {
+        resolveDrain = resolve;
+      });
+      for (const roomId of rooms.roomIds()) {
+        const previous = rooms.get(roomId);
+        if (previous?.phase !== 'playing') continue;
+        const transition = rooms.apply(roomId, {
+          type: 'requestDrain',
+          now: now(),
+        });
+        if (transition?.accepted) {
+          publishTransition(previous, transition);
+        }
+      }
+      settleDrainIfReady();
+      return drainPromise;
+    },
     close() {
+      clearInterval(sweepTimer);
       phaseTimers.close();
       lifecycleTimers.close();
       if (ownsAi) {

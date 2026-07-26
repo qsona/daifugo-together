@@ -13,6 +13,7 @@
     "format:check": "prettier --check .",
     "lint": "eslint . --max-warnings 0 && node scripts/check-ai-boundaries.mjs",
     "lint:design": "node scripts/check-design-tokens.mjs && node scripts/check-key-visual.mjs",
+    "start": "pnpm --filter @daifugo/server start",
     "test": "pnpm --filter @daifugo/ai... build && vitest run",
     "pretypecheck": "pnpm --filter @daifugo/core build",
     "typecheck": "pnpm --recursive --if-present run typecheck",

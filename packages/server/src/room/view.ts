@@ -1,7 +1,10 @@
 import {
+  buildPlayerSnapshot,
+  NO_RULE_CHAIN_PORT,
   sortCards,
   type GameResult,
   type PublicGameEvent,
+  type RuleChainPort,
 } from '@daifugo/core';
 
 import type {
@@ -162,6 +165,7 @@ function gameView(
   state: RoomState,
   memberId: string,
   seats: ReadonlyMap<string, SeatId>,
+  rulePort: RuleChainPort,
 ): GameView | null {
   const engine = state.engine;
   const game = engine?.currentGame;
@@ -169,6 +173,29 @@ function gameView(
     return null;
   }
   const current = game.public.field.current;
+  const gameIndex =
+    engine.phase.name === 'setResult' ? 0 : engine.phase.gameIndex;
+  const playerSnapshot = buildPlayerSnapshot(
+    {
+      gameIndex,
+      seats: engine.members.map((member) => member.id),
+      gameSeed: `${engine.setSeed}:${gameIndex}`,
+      ruleChain: engine.ruleChain,
+    },
+    game,
+    {
+      setId: engine.setId,
+      setPhase: engine.phase,
+      members: engine.members,
+      setResults: engine.results,
+    },
+    memberId,
+    {
+      port: rulePort,
+      setHistory: engine.results,
+      setMemory: engine.setMemory,
+    },
+  );
   return {
     gameNo:
       engine.phase.name === 'setResult'
@@ -193,6 +220,7 @@ function gameView(
     history: game.public.history.map((event) => historyView(event, seats)),
     previousResults: engine.results.map((result) => resultView(result, seats)),
     yourHand: sortCards(game.players[memberId]?.hand ?? []),
+    legalMoves: playerSnapshot.legalMoves,
   };
 }
 
@@ -223,7 +251,7 @@ function setResultView(state: RoomState): SetResultView | null {
 export function viewFor(
   state: RoomState,
   memberId: string,
-  options: { reconnect?: boolean } = {},
+  options: { reconnect?: boolean; rulePort?: RuleChainPort } = {},
 ): PlayerRoomView {
   if (state.phase === 'closed') {
     throw new Error('Cannot create a view for a closed room');
@@ -250,7 +278,12 @@ export function viewFor(
       ruleId: rule.ruleId,
       name: rule.name,
     })),
-    game: gameView(state, memberId, seats),
+    game: gameView(
+      state,
+      memberId,
+      seats,
+      options.rulePort ?? NO_RULE_CHAIN_PORT,
+    ),
     setResult: setResultView(state),
     events: options.reconnect ? [] : structuredClone(state.lastEvents),
   });

@@ -6,13 +6,18 @@ export interface AnonymousSession {
   displayName: string;
 }
 
+export interface SessionStore {
+  resolve(presentedToken: unknown): AnonymousSession;
+  rename(userToken: string, displayName: string): boolean;
+}
+
 export interface SessionStoreOptions {
   createUserId?: () => string;
   createToken?: () => string;
   createDisplayName?: (sequence: number) => string;
 }
 
-export class InMemorySessionStore {
+export class InMemorySessionStore implements SessionStore {
   readonly #byToken = new Map<string, AnonymousSession>();
   readonly #createUserId: () => string;
   readonly #createToken: () => string;

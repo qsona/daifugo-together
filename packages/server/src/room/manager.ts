@@ -27,6 +27,15 @@ export interface RoomManagerOptions {
   randomIndex?: (maxExclusive: number) => number;
   availableRules?: () => RuleChainEntry[];
   reducer?: RoomReducerOptions;
+  persistence?: RoomPersistencePort;
+}
+
+export interface RoomPersistencePort {
+  commit(
+    previous: RoomState,
+    action: RoomAction,
+    transition: RoomTransition,
+  ): void;
 }
 
 export type RoomManagerErrorCode =
@@ -42,6 +51,12 @@ export type RoomManagerResult<T> =
 export interface RoomMembership {
   room: RoomState;
   member: RoomMember;
+}
+
+export interface RoomSweepResult {
+  previous: RoomState;
+  transition: RoomTransition;
+  closeReason?: 'lobbyExpired' | 'abandoned' | 'setEndedNoContinue';
 }
 
 export function normalizeInviteCode(input: string): string {
@@ -62,6 +77,7 @@ export class RoomManager {
     randomIndex: (maxExclusive: number) => number;
     availableRules: (() => RuleChainEntry[]) | undefined;
     reducer: RoomReducerOptions | undefined;
+    persistence: RoomPersistencePort | undefined;
   };
 
   constructor(options: RoomManagerOptions = {}) {
@@ -72,11 +88,16 @@ export class RoomManager {
       randomIndex: options.randomIndex ?? randomInt,
       availableRules: options.availableRules,
       reducer: options.reducer,
+      persistence: options.persistence,
     };
   }
 
   get size(): number {
     return this.#rooms.size;
+  }
+
+  roomIds(): string[] {
+    return [...this.#rooms.keys()];
   }
 
   get(roomId: string): RoomState | undefined {
@@ -99,6 +120,100 @@ export class RoomManager {
       return undefined;
     }
     return { room, member };
+  }
+
+  sweep(
+    now: number,
+    createSetSeed: () => string = randomUUID,
+  ): RoomSweepResult[] {
+    const results: RoomSweepResult[] = [];
+    for (const roomId of this.roomIds()) {
+      let room = this.#rooms.get(roomId);
+      if (!room) continue;
+      if (room.phase === 'waiting' && room.lobbyExpiresAt <= now) {
+        const transition = this.apply(roomId, {
+          type: 'expireRoom',
+          reason: 'lobbyExpired',
+          expectedAt: room.lobbyExpiresAt,
+          now,
+        });
+        if (transition?.accepted) {
+          results.push({
+            previous: room,
+            transition,
+            closeReason: 'lobbyExpired',
+          });
+        }
+        continue;
+      }
+      while (room?.phase === 'waiting') {
+        const expired = room.members
+          .filter(
+            (member) =>
+              !member.isAI &&
+              !member.connected &&
+              member.waitingDisconnectExpiresAt !== null &&
+              member.waitingDisconnectExpiresAt <= now,
+          )
+          .sort(
+            (left, right) =>
+              left.waitingDisconnectExpiresAt! -
+              right.waitingDisconnectExpiresAt!,
+          )[0];
+        if (!expired?.waitingDisconnectExpiresAt) break;
+        const previous = room;
+        const transition = this.apply(roomId, {
+          type: 'expireWaitingMember',
+          memberId: expired.memberId,
+          expectedAt: expired.waitingDisconnectExpiresAt,
+          now,
+          setSeed: createSetSeed(),
+        });
+        if (!transition?.accepted) break;
+        results.push({ previous, transition });
+        room = this.#rooms.get(roomId);
+      }
+      room = this.#rooms.get(roomId);
+      if (
+        room?.phase === 'playing' &&
+        room.abandonAt !== null &&
+        room.abandonAt <= now
+      ) {
+        const transition = this.apply(roomId, {
+          type: 'expireRoom',
+          reason: 'abandoned',
+          expectedAt: room.abandonAt,
+          now,
+        });
+        if (transition?.accepted) {
+          results.push({
+            previous: room,
+            transition,
+            closeReason: 'abandoned',
+          });
+        }
+      } else if (
+        room?.phase === 'setResult' &&
+        room.setRespondBy !== null &&
+        room.setRespondBy <= now
+      ) {
+        const transition = this.apply(roomId, {
+          type: 'expireSetResult',
+          now,
+          setSeed: createSetSeed(),
+        });
+        if (transition?.accepted) {
+          results.push({
+            previous: room,
+            transition,
+            ...(transition.state.phase === 'closed'
+              ? { closeReason: 'setEndedNoContinue' as const }
+              : {}),
+          });
+        }
+      }
+    }
+    return results;
   }
 
   create(user: RoomUser): RoomManagerResult<RoomMembership> {
@@ -189,6 +304,7 @@ export class RoomManager {
     if (!transition.accepted) {
       return transition;
     }
+    this.#options.persistence?.commit(room, effectiveAction, transition);
     this.#rooms.set(roomId, transition.state);
     if (action.type === 'leave') {
       const leaving = room.members.find(

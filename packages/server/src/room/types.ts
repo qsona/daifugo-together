@@ -116,6 +116,7 @@ export type RoomAction =
       now: number;
       expectedAt: number;
     }
+  | { type: 'requestDrain'; now: number }
   | {
       type: 'play';
       memberId: string;

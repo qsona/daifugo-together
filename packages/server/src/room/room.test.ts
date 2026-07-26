@@ -140,6 +140,24 @@ function finishSet(initial: RoomState): {
 }
 
 describe('pure room reducer', () => {
+  it('drain要求は進行中ゲームを完走させ、新しいゲームを開始せずsetResultへ移る', () => {
+    const state = start(fourHumanRoom());
+    const drained = reduceRoom(state, {
+      type: 'requestDrain',
+      now: 2_000,
+    });
+
+    expect(drained.accepted).toBe(true);
+    expect(drained.state.phase).toBe('playing');
+    expect(drained.state.engine?.draining).toBe(true);
+    expect(drained.state.turnDeadlineAt).toBe(state.turnDeadlineAt);
+
+    const finished = finishSet(drained.state).state;
+    expect(finished.phase).toBe('setResult');
+    expect(finished.engine?.results).toHaveLength(1);
+    expect(finished.setRespondBy).not.toBeNull();
+  });
+
   it('参加を直列化し、4人上限・重複・ホスト権限を強制する', () => {
     const state = fourHumanRoom();
     expect(state.v).toBe(4);

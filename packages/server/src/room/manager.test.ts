@@ -15,6 +15,25 @@ function manager() {
 }
 
 describe('RoomManager indexes', () => {
+  it('定期sweepで期限切れロビーを閉じ、全indexを解放する', () => {
+    const rooms = manager();
+    const created = rooms.create({
+      userId: 'user-sweep',
+      displayName: '期限切れ',
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+
+    expect(rooms.sweep(created.value.room.lobbyExpiresAt - 1)).toEqual([]);
+    const results = rooms.sweep(created.value.room.lobbyExpiresAt);
+
+    expect(results).toHaveLength(1);
+    expect(results[0]?.closeReason).toBe('lobbyExpired');
+    expect(results[0]?.transition.state.phase).toBe('closed');
+    expect(rooms.size).toBe(0);
+    expect(rooms.findByUser('user-sweep')).toBeUndefined();
+  });
+
   it('招待コードを正規化し、作成・参加・1ユーザー1部屋を同期的に管理する', () => {
     const rooms = manager();
     const created = rooms.create({

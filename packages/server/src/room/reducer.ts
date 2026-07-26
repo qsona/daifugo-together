@@ -974,6 +974,52 @@ function advanceIntermission(
   );
 }
 
+function requestDrain(
+  state: RoomState,
+  action: Extract<RoomAction, { type: 'requestDrain' }>,
+  options: RoomReducerOptions,
+): RoomTransition {
+  if (state.phase !== 'playing' || !state.engine) {
+    return rejected(state, 'NOT_PLAYING');
+  }
+  const transition = reduceSet(
+    state.engine,
+    { type: 'requestDrain' },
+    options.rulePort,
+  );
+  if (
+    transition.rejections.length > 0 ||
+    transition.acceptedAction === undefined
+  ) {
+    return rejected(state, 'INVALID_SET_PHASE');
+  }
+  const settlement = settleMembersAtSetResult(state.members, transition.state);
+  const phase = phaseAfterSettlement(transition.state, settlement.members);
+  return committed(
+    state,
+    {
+      phase,
+      members: settlement.members,
+      engine: transition.state,
+      turnDeadlineAt: phase === 'playing' ? state.turnDeadlineAt : null,
+      setRespondBy:
+        phase === 'setResult'
+          ? action.now +
+            (options.setResultTimeoutMs ?? DEFAULT_SET_RESULT_TIMEOUT_MS)
+          : null,
+      abandonAt: phase === 'playing' ? state.abandonAt : null,
+    },
+    [
+      ...publicEngineEvents(
+        state.members,
+        state.fixedRules ?? [],
+        transition.events,
+      ),
+      ...memberLeftEvents(settlement.removedMemberIds),
+    ],
+  );
+}
+
 export function reduceRoom(
   state: RoomState,
   action: RoomAction,
@@ -1005,5 +1051,7 @@ export function reduceRoom(
       return gameAction(state, action, options);
     case 'advanceIntermission':
       return advanceIntermission(state, action, options);
+    case 'requestDrain':
+      return requestDrain(state, action, options);
   }
 }

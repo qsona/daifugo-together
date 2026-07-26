@@ -15,6 +15,7 @@ type WaitingRoomScreenProps = {
   onCopyInvite: () => void;
   onViewRules: () => void;
   onStart: () => void;
+  canStart?: boolean;
 };
 
 /**
@@ -29,6 +30,7 @@ export function WaitingRoomScreen({
   onCopyInvite,
   onViewRules,
   onStart,
+  canStart = true,
 }: WaitingRoomScreenProps) {
   const humanCount = members.filter((member) => member.kind === 'human').length;
 
@@ -58,8 +60,13 @@ export function WaitingRoomScreen({
         </div>
 
         <div className={screen.footer}>
-          <Button variant="primary" block onClick={onStart}>
-            開始する
+          <Button
+            variant="primary"
+            block
+            disabled={!canStart}
+            onClick={onStart}
+          >
+            {canStart ? '開始する' : 'ホストの開始を待っています'}
           </Button>
         </div>
       </main>

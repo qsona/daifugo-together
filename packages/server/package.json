@@ -13,14 +13,18 @@
     "prebuild": "pnpm --filter @daifugo/ai... build",
     "build": "tsc -p tsconfig.build.json",
     "pretypecheck": "pnpm --filter @daifugo/ai... build",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "start": "node dist/bin.js"
   },
   "dependencies": {
     "@daifugo/ai": "workspace:*",
     "@daifugo/core": "workspace:*",
+    "better-sqlite3": "13.0.1",
+    "drizzle-orm": "0.45.2",
     "socket.io": "^4.8.3"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "7.6.13",
     "@types/node": "^26.0.0",
     "socket.io-client": "^4.8.3"
   }
