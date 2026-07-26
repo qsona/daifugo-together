@@ -254,8 +254,8 @@ TS-02 から継続で未解決のもの:
 
 ## 並行進行: E2 対戦AI
 
-- 状態: AI-01 プロセス2実装完了。3回の独立 GPT-5.6 Sol 方向性レビュー指摘を反映し、最終方向性レビュー `GO`。完了レビュー待ち。
-- 検証: Node 26.5.0 / pnpm 11.17.0 / TypeScript 6.0.3。統合リポジトリ全体 17 files / 121 tests、format・lint・design lint・typecheck・build 成功。専用 `pnpm validate:ai` は500セット・1,500ゲーム完走、rejection 0、不正手0、fallback 0、random-legal 3席に対する平均報酬0.6847。lockfile再解決後の `pnpm outdated` は、ユーザー指定で固定したTypeScript（current/wanted 6.0.3、latest 7.0.2）以外0件。`@types/node` は26.1.1。
+- 状態: AI-01 完了、main `25317dc` へ反映済み。独立 GPT-5.6 Sol 完了レビューで同期 throw の境界漏れを検出・修正し、別コンテキストの再レビュー `GO`。main 検証で発見した clean checkout の宣言生成順も修正し、さらに別の独立レビューで全 `dist` 欠落条件から `GO`。
+- 検証: Node 26.5.0 / pnpm 11.17.0 / TypeScript 6.0.3。正規リポジトリは 17 files / 122 tests、format・lint・design lint・typecheck・build 成功。専用 `pnpm validate:ai` は500セット・1,500ゲーム完走、rejection 0、不正手0、fallback 0、random-legal 3席に対する平均報酬0.6847。lockfile再解決後の `pnpm outdated` は、ユーザー指定で固定したTypeScript（current/wanted 6.0.3、latest 7.0.2）以外0件。`@types/node` は26.1.1。main のローカル実行では ignored の `.claude/worktrees` 内テストも Vitest が拾ったため20 files / 153 testsとなったが、tracked test filesはレビューcloneと同じ17件。
 - ユーザーストーリー確認: `packages/ai/src/ai-player.test.ts` の「1人+AI 3人で3ゲームのセットを拒否なく完走する」で、人間席1・AI席3の3ゲームセットを実際の E1 reducer に通し、全着手の rejection 0、結果3件、`completion=completed` を確認。
 
 ### プロセス1で実装した方向
@@ -297,3 +297,30 @@ TS-02 から継続で未解決のもの:
 - 冒頭改訂ノートは探索を `worker_threads` 1〜2本で実行すると決定済みだが、§3.1(d)・§4.4・§6-5には「初期はホスト直列、兆候が出たらworkerへ移行」という旧記述が残る。実装は改訂ノートを正とした。
 - `AiDecision.play: Play` はpassを表現できない一方、§3.1(b)は合法手0件をパス強制としてAIの即決対象に含める。プロセス1ではAI呼出前にゲームループが強制passすることで契約を変えずに成立させた。
 - §4.4は`playoutBatchSize`をisolateへの一括送信単位、`sliceMs`をホスト側のyield間隔としている。改訂ノートに従い探索全体をworkerへ移したため、実装ではそれぞれ親へpartial統計を送る反復数・経過時間の上限に読み替えた。UCB1統計自体はworker内で毎反復更新するため、バッチ分古い統計にはならない。
+
+---
+
+## 並行進行: E3 マルチプレイ
+
+- 状態: MP-01/MP-02 のプロセス1。Socket.IO 層の前に、Coreをホストする純粋Room reducer・閲覧者別snapshot・RoomManager indexを実装した。ブランチ `codex/e3-multiplayer-process1`、main `25317dc` へrebase済み。
+- コミット: `9c4ff46`（Room authority/view）、`3c351f3`（切断・離脱時の席/controller維持）、`2762261`（RoomManagerと招待index）。
+- 検証: Node 26.5.0 / pnpm 11.17.0 / TypeScript 6.0.3。`pnpm verify` 成功、19 files / 137 tests。E3純粋層は15 testsで、3ゲーム完走・全着手の`v`/`turnSeq`増加・全snapshotの他人手札ID非出現を確認。
+- 依存: npm registry の `latest` を確認して `socket.io` / `socket.io-client` 4.8.3 を導入した。導入後の `pnpm outdated --format json` は、ユーザー指定で固定したTypeScript 6.0.3（registry latest 7.0.2）以外0件。
+
+### プロセス1で完了したもの
+
+- `RoomState` の `waiting` / `playing` / `setResult` / `closed`、単調増加する `v` とゲーム・セットをまたいでリセットしない `turnSeq`。
+- 人間1〜4人から不足分だけAIを補充し、席の所有と `controller: human | ai` を分離。開始時に切断中の人間も人間数へ含め、その席をAI代行にする。
+- play/passを「現在手番の席 → `turnSeq`一致 → Core合法性」の順で同期検証し、受理時だけ`v`と`turnSeq`を1増加。拒否では同一state参照を返す。
+- 対局中の切断では席を保持してAI代行、復帰でhumanへ戻す。明示離脱は`departed`として不可逆にし、セット終了までは席と手札を維持する。待機中のホスト離脱は参加順で移譲する。
+- `viewFor` を単一allow-list境界にし、本人の手札だけを含める。他人は枚数のみ。`userId`・token・Core private/KV/RNG・Effect内部表現・合法手一覧は配信型へ入れない。復帰snapshotは常に`events: []`。
+- `RoomManager` の `Map<roomId, RoomState>`、invite→room、user→room index。招待コード正規化、1ユーザー1部屋、満員/対局中参加拒否、部屋破棄時の条件付きindex削除。
+
+### E3で置いた仮定・次工程
+
+| 仮定・残作業 | 根拠 | 次工程 |
+|---|---|---|
+| Room reducerとviewをSocket.IOより先に固定する | E03 §3.1(e)がSocket層を薄い変換に限定 | typed event/ack、実Socket.IO in-process統合test |
+| AI補充member IDと暫定表示名はserver生成 | E03 §3.2で機械名を暫定許容 | E4のトーン確定後に名前プールを差替え |
+| E2の0.4〜1.2秒は探索adapter側の既定のまま維持し、E3の最終ペーシングは0.8〜2.5秒をRoom timer側で上書きする | E02の較正値とE03 §2.1/§3.2の値が不一致。Epic順では後段のE3 UX仕様を統合時の正とする | TimerBag・AI手番scheduler。設計書自体は変更しない |
+| `setRespondBy`・人間手番deadline・intermissionは状態に予約済みだが、タイマー駆動は未接続 | timer callbackも予約時`turnSeq`を再検証する必要がある | fake timersで本人playとの競合、AI連続手番0.8秒以上を検証 |
