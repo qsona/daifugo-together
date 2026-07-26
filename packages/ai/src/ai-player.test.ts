@@ -329,4 +329,110 @@ describe('AI-01', () => {
       await pool.close();
     }
   });
+
+  it('キュー待ち時間をhard deadlineに含める', async () => {
+    const config: GameConfig = {
+      gameIndex: 0,
+      seats,
+      gameSeed: 'ai-queue-deadline',
+      ruleChain: [],
+    };
+    const state = startGame(config).state;
+    const player = state.public.turn!;
+    const context: SnapshotContext = {
+      setId: 'ai-queue-deadline',
+      setPhase: { name: 'gameInProgress', gameIndex: 0 },
+      members: seats.map((id) => ({
+        id,
+        displayName: id,
+        isAI: true,
+      })),
+      setResults: [],
+    };
+    const base = {
+      view: buildPlayerSnapshot(config, state, context, player),
+      legalPlays: enumerateLegalPlays(config, state, player),
+      difficulty: NORMAL_DIFFICULTY,
+    };
+    const pool = new AiWorkerPool(
+      new URL('./test-fixtures/pool-worker.js', import.meta.url),
+    );
+    const ai = createAiPlayer({ pool });
+    try {
+      await ai.decideMove({
+        ...base,
+        seed: 'delay:0',
+        budget: { softMs: 1, hardMs: 200, maxPlayouts: 1, sliceMs: 1 },
+      });
+      const blocking = ai.decideMove({
+        ...base,
+        seed: 'delay:80',
+        budget: { softMs: 1, hardMs: 200, maxPlayouts: 1, sliceMs: 1 },
+      });
+      const startedAt = performance.now();
+      const queued = await ai.decideMove({
+        ...base,
+        seed: 'delay:0',
+        budget: { softMs: 1, hardMs: 20, maxPlayouts: 1, sliceMs: 1 },
+      });
+      const elapsed = performance.now() - startedAt;
+
+      expect(queued.usedFallback).toBe('heuristic');
+      expect(elapsed).toBeLessThan(60);
+      await blocking;
+    } finally {
+      await ai.close();
+      await pool.close();
+    }
+  });
+
+  it('workerがcode 0で予期せず終了しても次ジョブを続行する', async () => {
+    const config: GameConfig = {
+      gameIndex: 0,
+      seats,
+      gameSeed: 'ai-code-zero-exit',
+      ruleChain: [],
+    };
+    const state = startGame(config).state;
+    const player = state.public.turn!;
+    const context: SnapshotContext = {
+      setId: 'ai-code-zero-exit',
+      setPhase: { name: 'gameInProgress', gameIndex: 0 },
+      members: seats.map((id) => ({
+        id,
+        displayName: id,
+        isAI: true,
+      })),
+      setResults: [],
+    };
+    const base = {
+      view: buildPlayerSnapshot(config, state, context, player),
+      legalPlays: enumerateLegalPlays(config, state, player),
+      difficulty: NORMAL_DIFFICULTY,
+    };
+    const pool = new AiWorkerPool(
+      new URL('./test-fixtures/pool-worker.js', import.meta.url),
+    );
+    const ai = createAiPlayer({ pool });
+    try {
+      const exited = ai.decideMove({
+        ...base,
+        seed: 'exit-0',
+        budget: { softMs: 1, hardMs: 200, maxPlayouts: 1, sliceMs: 1 },
+      });
+      const next = ai.decideMove({
+        ...base,
+        seed: 'delay:0',
+        budget: { softMs: 1, hardMs: 200, maxPlayouts: 1, sliceMs: 1 },
+      });
+      const [failed, recovered] = await Promise.all([exited, next]);
+
+      expect(failed.usedFallback).toBe('heuristic');
+      expect(recovered.usedFallback).toBe('none');
+      expect(recovered.stats?.workerThread).toBe(true);
+    } finally {
+      await ai.close();
+      await pool.close();
+    }
+  });
 });

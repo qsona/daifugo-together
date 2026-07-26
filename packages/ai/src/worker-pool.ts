@@ -10,13 +10,14 @@ import type {
 interface QueuedJob {
   id: number;
   payload: SearchRequest;
-  thinkMs: number;
+  deadlineAt: number;
+  timer: NodeJS.Timeout;
   resolve(value: SearchResponse): void;
   reject(error: Error): void;
 }
 
 interface ActiveJob extends QueuedJob {
-  timer: NodeJS.Timeout;
+  worker: Worker;
   latest: SearchResponse | null;
 }
 
@@ -42,7 +43,19 @@ export class AiWorkerPool {
     const id = this.nextId;
     this.nextId += 1;
     return new Promise((resolve, reject) => {
-      this.queue.push({ id, payload, thinkMs, resolve, reject });
+      const timeoutMs = Math.max(0, thinkMs);
+      const job: QueuedJob = {
+        id,
+        payload,
+        deadlineAt: Date.now() + timeoutMs,
+        timer: undefined as unknown as NodeJS.Timeout,
+        resolve,
+        reject,
+      };
+      job.timer = setTimeout(() => {
+        this.expire(job, thinkMs);
+      }, timeoutMs);
+      this.queue.push(job);
       this.pump();
     });
   }
@@ -56,6 +69,7 @@ export class AiWorkerPool {
       this.active = null;
     }
     for (const job of this.queue.splice(0)) {
+      clearTimeout(job.timer);
       job.reject(error);
     }
     const worker = this.worker;
@@ -114,12 +128,13 @@ export class AiWorkerPool {
       if (this.worker !== worker) {
         return;
       }
-      if (code !== 0) {
-        this.failActive(new Error(`AI worker exited with code ${code}`));
-      }
+      this.failActive(
+        new Error(`AI worker exited unexpectedly with code ${code}`),
+      );
       this.worker = null;
       this.ready = false;
       this.spawnWorker();
+      this.pump();
     });
   }
 
@@ -131,22 +146,17 @@ export class AiWorkerPool {
     if (!job) {
       return;
     }
+    if (job.deadlineAt <= Date.now()) {
+      clearTimeout(job.timer);
+      job.reject(new Error('AI worker deadline expired in queue'));
+      this.pump();
+      return;
+    }
     const worker = this.worker;
     const active: ActiveJob = {
       ...job,
+      worker,
       latest: null,
-      timer: setTimeout(() => {
-        if (this.active !== active) {
-          return;
-        }
-        this.active = null;
-        if (active.latest) {
-          active.resolve({ ...active.latest, completed: false });
-        } else {
-          active.reject(new Error(`AI worker exceeded ${active.thinkMs}ms`));
-        }
-        this.replaceWorker(worker);
-      }, job.thinkMs),
     };
     this.active = active;
     worker.postMessage({
@@ -162,6 +172,29 @@ export class AiWorkerPool {
     clearTimeout(this.active.timer);
     this.active.reject(error);
     this.active = null;
+  }
+
+  private expire(job: QueuedJob, thinkMs: number): void {
+    if (this.active?.id === job.id) {
+      const active = this.active;
+      this.active = null;
+      if (active.latest) {
+        active.resolve({ ...active.latest, completed: false });
+      } else {
+        active.reject(new Error(`AI worker exceeded ${thinkMs}ms`));
+      }
+      this.replaceWorker(active.worker);
+      return;
+    }
+    const queuedIndex = this.queue.findIndex(
+      (candidate) => candidate.id === job.id,
+    );
+    if (queuedIndex < 0) {
+      return;
+    }
+    this.queue.splice(queuedIndex, 1);
+    job.reject(new Error(`AI worker exceeded ${thinkMs}ms in queue`));
+    this.pump();
   }
 
   private replaceWorker(worker: Worker): void {

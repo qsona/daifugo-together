@@ -254,8 +254,8 @@ TS-02 から継続で未解決のもの:
 
 ## 並行進行: E2 対戦AI
 
-- 状態: AI-01 プロセス1の縦断実装完了。2回の独立 GPT-5.6 Sol 方向性レビュー `GO_WITH_FIXES` のworker予算・世代管理・partial-search・UCB1再訪指摘を反映し、再レビュー待ち。
-- 検証: Node 26.5.0 / pnpm 11.17.0 / TypeScript 6.0.3。統合リポジトリ全体 15 files / 89 tests、format・lint・design lint・typecheck・build 成功。
+- 状態: AI-01 プロセス1の縦断実装完了。3回の独立 GPT-5.6 Sol 方向性レビュー `GO_WITH_FIXES` のworker予算・世代管理・partial-search・UCB1再訪・キュー期限指摘を反映し、再レビュー待ち。
+- 検証: Node 26.5.0 / pnpm 11.17.0 / TypeScript 6.0.3。統合リポジトリ全体 15 files / 92 tests、format・lint・design lint・typecheck・build 成功。
 - ユーザーストーリー確認: `packages/ai/src/ai-player.test.ts` の「1人+AI 3人で3ゲームのセットを拒否なく完走する」で、人間席1・AI席3の3ゲームセットを実際の E1 reducer に通し、全着手の rejection 0、結果3件、`completion=completed` を確認。
 
 ### プロセス1で実装した方向
@@ -264,6 +264,7 @@ TS-02 から継続で未解決のもの:
 - 観測済みカードを除く52枚を、相手の公開残枚数に従ってseed付きで一様再配布する決定化。
 - 深さ1のルートUCB1、打ち切り付きロールアウト、順位報酬 `[1, 2/3, 1/3, 0]`、同一入力・seedの決定性。
 - Node標準 `worker_threads` の起動時warm-up・FIFO・1本再利用プールで探索。反復途中の統計を親へ送り、hard timeout時はpartial-search、統計0件なら最弱合法手へフォールバック。終了した旧workerの通知は新世代のジョブへ影響しない。
+- hard deadlineはキュー投入時から計測し、待機中に期限切れなら即座にfallbackする。workerが終了コード0を含め予期せず終了した場合もactiveを必ずsettleし、次世代workerで待機ジョブを続行する。
 - 既定8プレイアウトではルート候補を最大4件に絞り、少なくとも1回はUCB1の再訪選択が起こるようにした。`playoutBatchSize`はworkerから親へ進捗統計を送る最大反復間隔、`sliceMs`は進捗送信の最大経過時間として使い、hard timeout時に新しいpartial結果を回収する。
 - 外部AI API・HTTP・DB依存なし。合法手0件の強制パスはゲームループ側が即時処理する。
 
