@@ -172,9 +172,7 @@ export function validateProposal(
 
   const rawPrefecture = record.prefectureCode;
   const prefectureCode =
-    rawPrefecture === undefined ||
-    rawPrefecture === null ||
-    rawPrefecture === ''
+    rawPrefecture === undefined || rawPrefecture === null
       ? null
       : typeof rawPrefecture === 'string' && isPrefectureCode(rawPrefecture)
         ? rawPrefecture

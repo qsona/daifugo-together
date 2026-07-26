@@ -28,6 +28,10 @@ const ERROR_MESSAGES: Record<ProposalValidationError['code'], string> = {
   newline_not_allowed: 'ルール名は1行で入力してください',
 };
 
+function clampCodePoints(value: string, maximum: number): string {
+  return Array.from(value).slice(0, maximum).join('');
+}
+
 export function ProposalFormScreen({
   api,
   onBack,
@@ -147,7 +151,11 @@ export function ProposalFormScreen({
               placeholder="例: 8切り"
               maxLength={PROPOSAL_NAME_MAX_LENGTH * 2}
               aria-invalid={fieldError('name') !== null}
-              onChange={(event) => setName(event.target.value)}
+              onChange={(event) =>
+                setName(
+                  clampCodePoints(event.target.value, PROPOSAL_NAME_MAX_LENGTH),
+                )
+              }
             />
             {fieldError('name') && (
               <span className={styles.error}>{fieldError('name')}</span>
@@ -166,8 +174,13 @@ export function ProposalFormScreen({
               aria-label="ルールの内容"
               value={body}
               placeholder="例: 8を出すと場が流れて、出した人からもう一度はじまる。"
+              maxLength={PROPOSAL_BODY_MAX_LENGTH * 2}
               aria-invalid={fieldError('body') !== null}
-              onChange={(event) => setBody(event.target.value)}
+              onChange={(event) =>
+                setBody(
+                  clampCodePoints(event.target.value, PROPOSAL_BODY_MAX_LENGTH),
+                )
+              }
             />
             {fieldError('body') && (
               <span className={styles.error}>{fieldError('body')}</span>
@@ -191,7 +204,7 @@ export function ProposalFormScreen({
             </Button>
           )}
           <Callout>
-            都道府県は、その土地で遊んでいた記録として残ります。
+            提案はAIが審査します。不正な命令はイエローカードの対象です。都道府県は遊んでいた記録として残ります。
           </Callout>
         </form>
       </main>

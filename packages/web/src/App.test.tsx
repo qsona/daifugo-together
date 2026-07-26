@@ -395,6 +395,38 @@ describe('DS-02: フェーズ 1 の主要画面が 1 本の導線でつながる
   });
 });
 
+describe('RP-01: メニューからルール提案へ進む', () => {
+  beforeEach(() => {
+    useScreenStore.setState({ current: 'title' });
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('タイトル→メニュー→画面6を一本の導線で開き、戻れる', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: /はじめる/ }));
+    await user.click(
+      screen.getByRole('button', { name: 'ルールをていあんする' }),
+    );
+
+    expect(
+      screen.getByRole('heading', { name: 'ルールをていあんする' }),
+    ).toBeTruthy();
+    expect(
+      screen
+        .getByRole('radio', { name: 'ローカルルール' })
+        .getAttribute('aria-checked'),
+    ).toBe('true');
+
+    await user.click(screen.getByRole('button', { name: 'もどる' }));
+    expect(screen.getByRole('button', { name: 'あそぶ' })).toBeTruthy();
+  });
+});
+
 describe('MP-04: タイムアウト代行後の選択状態', () => {
   it('自席のturnTimeoutで全選択を消し、通常更新でも手札にないIDを除く', () => {
     const base = {

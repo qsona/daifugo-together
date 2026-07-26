@@ -3,15 +3,16 @@
 ## 現在
 
 - **フェーズ 1 完了(2026-07-27)**: TS-02・E1・E2・E3・E4 は main に統合済み、E13 は本番デプロイと動作検証(DP-01・DP-03)まで完了(`https://daifugo-together.fly.dev/`)。残りは DP-02 の仕上げ(GitHub Environment `production` + `FLY_API_TOKEN` 登録と初回 CD 実行確認)のみ
-- **フェーズ 2 / E5 プロセス1 実装中**: RP-01・RP-02 の縦切り実装とローカル検証が完了。次に独立 GPT-5.6 Sol の方向性レビューを受け、プロセス2で受け入れ条件を仕上げる。RP-03 は CX-02 依存のため E7 後に戻る
+- **フェーズ 2 / E5 プロセス2 完了レビュー待ち**: RP-01・RP-02 の受け入れ条件を実装し、プロセス1の独立 GPT-5.6 Sol レビュー(`GO_WITH_FIXES`)の指摘も反映済み。RP-03 は CX-02 依存のため E7 後に戻る
 - E1〜E3 の実装記録は本書末尾の「並行進行」節、E13 は「E13」節。E4 の未解消の開発者判断は「詰まっている点」に残っている(1〜4・7・8・11)
 
 ## フェーズ 2: E5 ルール提案受付(RP-01・RP-02)
 
 ### プロセス1
 
-- 状態: 縦切り実装完了、方向性レビュー待ち
+- 状態: 縦切り実装・方向性レビュー完了
 - ブランチ: `codex/e5-rule-proposal`
+- コミット: `0ae4450`
 - ユーザーストーリーの確認:
   - `packages/web/src/screens/ProposalFormScreen.test.tsx` で、画面6からローカル区分・任意の都道府県・名前・本文を入力して送信し、「審査中」が表示されることを確認
   - `packages/server/src/proposal/proposal.test.ts` で、匿名セッショントークン付き `POST /api/proposals` → `proposals(status='screening')` 保存 → E7 用の古い順キュー取得までを実 HTTP で確認
@@ -25,23 +26,39 @@
 - 既存の Socket.IO 匿名セッショントークンを HTTP の Bearer token として再利用する。新しい認証基盤は追加しない
 - RP-03 の画面7・一覧 API・既読通知は CX-02 後に実装する。現在は送信した 1 件の「審査中」を画面6内で確認できる
 
-#### 置いた仮定(方向性レビューで裁定)
+#### 置いた仮定と方向性レビューの裁定
 
-| # | 仮定した内容 | なぜそう決めたか | 出典 | 覆ったときの影響範囲 |
-|---|---|---|---|---|
-| E5-P1-1 | ルール名上限は **12 文字**、本文は 400 文字 | 後発の RuleCutIn のリボン制約が名前40文字の仮値と衝突しており、作業指示が RP-01 実装時の確定を求めるため | decision-log E-14 / C-3、E04 | core の定数・検証テスト・画面カウンタ |
-| E5-P1-2 | レート制限は E6 提供値(ユーザー5件/時・20件/日、IP 20件/時)を、単一プロセスのメモリ内 sliding window で始める | 値は E06 §5.2 で供給済み。Fly 1台構成では共有ストアは過剰で、再起動時にカウンタが消える弱点は初期運用で許容できると判断 | E06 §5.2、E12 §3/§4.5 | `ProposalRateLimiter`。永続/複数台化する場合は port 化して DB/外部ストアへ差し替え |
-| E5-P1-3 | C-5 は E05 の「リトライ可能 failed も部分ユニーク索引に含める」方式を暫定採用する | E7 レビューまでは仮定で進めてよいと作業指示に明記。E5 の重複抑止を現在の設計どおり実装できる | decision-log C-5、E05 §2.1〜2.3 | SQLite index predicate、重複検索、transition の retry guard |
-| E5-P1-4 | HTTP 認証は `Authorization: Bearer <Socket.IOで発行済みの匿名token>` とする | E12 は同じ匿名ID/トークンをブラウザに保持する前提。URL/query に token を載せず、Socket.IO と HTTP で本人性を統一できる | E12 §4.9、既存 `room/session.ts` | Web client と API の token 抽出。Cookie 化する場合は CSRF 対策を含む変更 |
+| # | 仮定した内容 | 裁定 | 理由・影響 |
+|---|---|---|---|
+| E5-P1-1 | ルール名上限は **12 文字**、本文は 400 文字 | **採用** | decision-log E-14 と RuleCutIn の表示制約を正とする。core 定数・画面カウンタ・境界テストへ反映済み |
+| E5-P1-2 | E6 の値(ユーザー5件/時・20件/日、IP 20件/時)をメモリ内 sliding window で実装 | **採用(初期構成限定)** | E12 の単一プロセス構成では妥当。再起動で履歴が消える弱点を明記し、`ProposalRateLimitPort` で永続ストアへ交換可能にした |
+| E5-P1-3 | C-5 は E05 の「リトライ可能 failed も部分ユニーク索引に含める」方式を暫定採用 | **要人間判断** | E05 と E07 のモデルが食い違う。decision-log の状態は変えず、E7 レビューまで E05 契約を暫定実装した。索引 predicate・重複検索・retry guard が裁定時の変更範囲 |
+| E5-P1-4 | HTTP 認証は `Authorization: Bearer <Socket.IOで発行済みの匿名token>` | **採用** | 既存の匿名本人性を URL に露出せず HTTP と Socket.IO で共有できる。Cookie 化時は Web client/API と CSRF 対策が変更範囲 |
 
-#### プロセス2に回したもの
+#### プロセス1レビューの結果と反映
 
-| ストーリー | 内容 | 理由 |
-|---|---|---|
-| RP-01 | 全バリデーション境界、不可視文字、コードポイント、重複/並行 INSERT、認証・停止・レート・検査の全ゲート順、block/503、リクエスト境界の回帰テスト | プロセス1は正常系の縦切りを優先 |
-| RP-01 | `transitionProposal` の許可表・冪等性・patch 不変条件・リトライ上限と、終端後/枠切れ後の再提案 | E7 に渡す状態機械を受け入れ条件まで仕上げるため |
-| RP-02 | 47コード全件、01〜47外、local/original×県あり/なし、DB CHECK、永続 round-trip の網羅 | エッジケースの網羅はプロセス2 |
-| RP-01 / RP-02 | 375px 実描画、メニューからの実導線、送信エラー/二重送信中の操作、デザイントークン検査 | UI の仕上げと目視検証はプロセス2 |
+- 独立 GPT-5.6 Sol の判定: **GO_WITH_FIXES**
+- `pnpm verify` はレビュアー環境でも成功(32 files / 216 tests)
+- Important: E6 導入前に保存された検査証跡のない `screening` 行が、そのまま E7 キューへ流れ得る構造だった
+  - 対応: `ProposalRepository.queue()` に `ProposalQueueQualification` の注入を必須化した。E7 は E6 所有の検査証跡と照合して得た ID だけを受け取れる。旧行は再検査で資格を付けるまで空振りする
+  - 回帰テスト: 資格なしの旧行がキューに出ず、明示的に資格 ID を返した後だけ出ることを確認
+
+#### プロセス2で仕上げたもの
+
+| ストーリー | 完了内容 |
+|---|---|
+| RP-01 入力 | 12/400 コードポイント境界、名前の改行拒否、C0/DEL/ゼロ幅/bidi 制御文字除去、CRLF・tab 正規化、NFC 保存と NFKC+case+空白の重複キーを検証 |
+| RP-01 受付 | 認証→停止→レート→検証→重複→E6検査→transaction 保存の順序、soft/card/503、8KiB HTTP 上限、不正 JSON、並行 UNIQUE 競合、投稿者別重複を検証 |
+| RP-01 状態 | E05 の許可遷移・冪等性・終端 patch 不変条件、failed の暫定1回 retry、rejected/released/枠切れ failed 後の再提案を実装・検証 |
+| RP-02 | 47 都道府県全件と範囲外、local の県あり/なし、original+県のアプリ/DB 二重拒否、多言語・絵文字 ZWJ・改行の SQLite round-trip を検証 |
+| RP-01 / RP-02 UI | タイトル→メニュー→提案画面、original 切替時の県入力消去、local の県未選択送信、同一セッショントークンの Bearer 利用、送信中 disable を検証 |
+
+#### プロセス2の検証
+
+- 対象テスト: **6 files / 60 tests 成功**
+- 実ブラウザ: 375×812 でタイトル→メニュー→提案画面を操作し、横スクロールなし(`innerWidth=scrollWidth=375`)・全入力の判読性・original 切替で都道府県入力が消えることを確認
+- 全体の `pnpm verify`: **34 files / 244 tests 成功**。format / lint / design lint / typecheck / 全 package build も成功
+- 独立完了レビューは、この節を含むプロセス2コミットに対して実施する
 
 ### 開発者レビューの反映(2026-07-26・プロセス2 のあと)
 
@@ -249,6 +266,7 @@ TS-02 の仮定 4 件は `decision-log.md` §G に裁定記録として移った
 9. **`og:image` の絶対 URL**(仮定 17)。デプロイ先が決まったら差し替えが要る。→ **解消**: E13 で本番 URL(`https://daifugo-together.fly.dev/`)の絶対 URL へ確定済み(本書 E13 節)。
 10. **Git remote が無いため GitHub Actions 上での CI 実行は未確認**(TS-02 から継続)。ローカルの `pnpm verify` 相当までは確認済み。→ **解消**: リポジトリを GitHub(public、A-2)へ公開済みで、CI は GitHub Actions 上で実行されている(実行速度差の吸収 `a48448f`)。
 11. **実機のノッチ/ホームインジケータでの見え** は未確認(E04 §3.1(d) のとおり持ち越し)。ブラウザでは `env(safe-area-inset-*)` が 0 になるため、セーフエリアの効きそのものは検証できていない。
+12. **decision-log C-5 の failed リトライモデルは要人間判断。** E05 は `failed → implementing` を1回だけ許可し、その間は同一内容を重複扱いにする一方、E07 は implementing 内部の再試行を示唆している。E7 レビューでどちらを正とするか決める必要がある。E5 は契約を変えず前者を暫定実装しており、裁定時の変更範囲は `idx_proposals_inflight_dedupe`、`findInflight`、`transitionProposal` と対応テスト。
 
 TS-02 から継続で未解決のもの:
 

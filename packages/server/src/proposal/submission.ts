@@ -58,11 +58,17 @@ export interface ProposalSubmissionPort {
 
 type RateRecord = { userHour: number[]; userDay: number[] };
 
+export interface ProposalRateLimitPort {
+  consume(userId: string, ip: string, now: number): boolean;
+}
+
 export class ProposalRateLimiter {
   readonly #byUser = new Map<string, RateRecord>();
   readonly #byIp = new Map<string, number[]>();
+  #lastSweepAt = Number.NEGATIVE_INFINITY;
 
   consume(userId: string, ip: string, now: number): boolean {
+    this.#sweep(now);
     const record = this.#byUser.get(userId) ?? {
       userHour: [],
       userDay: [],
@@ -88,6 +94,23 @@ export class ProposalRateLimiter {
     this.#byIp.set(ip, ipHour);
     return true;
   }
+
+  #sweep(now: number): void {
+    if (now - this.#lastSweepAt < HOUR_MS) return;
+    this.#lastSweepAt = now;
+    for (const [userId, record] of this.#byUser) {
+      record.userHour = record.userHour.filter((at) => at > now - HOUR_MS);
+      record.userDay = record.userDay.filter((at) => at > now - DAY_MS);
+      if (record.userHour.length === 0 && record.userDay.length === 0) {
+        this.#byUser.delete(userId);
+      }
+    }
+    for (const [ip, attempts] of this.#byIp) {
+      const current = attempts.filter((at) => at > now - HOUR_MS);
+      if (current.length === 0) this.#byIp.delete(ip);
+      else this.#byIp.set(ip, current);
+    }
+  }
 }
 
 const PASS_THROUGH_GATE: ProposalScreeningGate = {
@@ -97,7 +120,7 @@ const PASS_THROUGH_GATE: ProposalScreeningGate = {
 export class ProposalSubmissionService implements ProposalSubmissionPort {
   readonly #repository: ProposalRepository;
   readonly #screening: ProposalScreeningGate;
-  readonly #rateLimiter: ProposalRateLimiter;
+  readonly #rateLimiter: ProposalRateLimitPort;
   readonly #now: () => number;
   readonly #createId: (now: number) => string;
 
@@ -105,7 +128,7 @@ export class ProposalSubmissionService implements ProposalSubmissionPort {
     repository: ProposalRepository,
     options: {
       screening?: ProposalScreeningGate;
-      rateLimiter?: ProposalRateLimiter;
+      rateLimiter?: ProposalRateLimitPort;
       now?: () => number;
       createId?: (now: number) => string;
     } = {},

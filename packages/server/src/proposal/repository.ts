@@ -39,6 +39,35 @@ export interface ProposalQueueItem {
   createdAt: number;
 }
 
+export interface StoredProposal extends ProposalQueueItem {
+  status: ProposalStatus;
+  reasonCode: string | null;
+  reasonText: string | null;
+  ruleId: string | null;
+  attemptCount: number;
+  statusChangedAt: number;
+  updatedAt: number;
+}
+
+export interface ProposalTransitionPatch {
+  reasonCode?: string;
+  reasonText?: string;
+  ruleId?: string;
+}
+
+export type ProposalTransitionResult = 'transitioned' | 'noop' | 'forbidden';
+
+/**
+ * E7 が処理してよい提案 ID だけを返す資格境界。
+ *
+ * E6 導入前に保存された screening 行には検査証跡がない。E7 は E6 の
+ * proposalChecks を照合する実装を必ず注入し、未検査行を空振りさせる。
+ * 引数を必須にすることで「照合を忘れて全 screening を処理」を表現不能にする。
+ */
+export interface ProposalQueueQualification {
+  eligibleIds(candidates: readonly ProposalQueueItem[]): ReadonlySet<string>;
+}
+
 export interface CreateStoredProposalOptions {
   authorId: string;
   proposal: NormalizedProposal;
@@ -101,6 +130,54 @@ function toListItem(row: ProposalRow): ProposalListItem {
     createdAt: row.created_at,
     statusChangedAt: row.status_changed_at,
   };
+}
+
+function toStoredProposal(row: ProposalRow): StoredProposal {
+  return {
+    id: row.id,
+    authorId: row.author_id,
+    kind: row.kind,
+    prefectureCode: row.prefecture_code,
+    name: row.name,
+    body: row.body,
+    createdAt: row.created_at,
+    status: row.status,
+    reasonCode: row.reason_code,
+    reasonText: row.reason_text,
+    ruleId: row.rule_id,
+    attemptCount: row.attempt_count,
+    statusChangedAt: row.status_changed_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+const ALLOWED_TRANSITIONS = new Set([
+  'screening:implementing',
+  'screening:rejected',
+  'implementing:released',
+  'implementing:failed',
+  'failed:implementing',
+]);
+
+function validPatch(
+  to: ProposalStatus,
+  patch: ProposalTransitionPatch,
+): boolean {
+  const hasAnyReasonField =
+    patch.reasonCode !== undefined || patch.reasonText !== undefined;
+  const hasRuleIdField = patch.ruleId !== undefined;
+  const hasReason =
+    typeof patch.reasonCode === 'string' &&
+    patch.reasonCode.trim().length > 0 &&
+    typeof patch.reasonText === 'string' &&
+    patch.reasonText.trim().length > 0;
+  const hasRuleId =
+    typeof patch.ruleId === 'string' && patch.ruleId.trim().length > 0;
+  if (to === 'rejected' || to === 'failed') {
+    return hasReason && !hasRuleIdField;
+  }
+  if (to === 'released') return hasRuleId && !hasAnyReasonField;
+  return !hasAnyReasonField && !hasRuleIdField;
 }
 
 export class ProposalRepository {
@@ -178,21 +255,71 @@ export class ProposalRepository {
     return toListItem(transaction());
   }
 
+  findById(id: string): StoredProposal | null {
+    const row = this.#sqlite
+      .prepare('SELECT * FROM proposals WHERE id = ?')
+      .get(id) as ProposalRow | undefined;
+    return row ? toStoredProposal(row) : null;
+  }
+
+  transitionProposal(
+    id: string,
+    from: ProposalStatus,
+    to: ProposalStatus,
+    patch: ProposalTransitionPatch = {},
+    now = Date.now(),
+  ): ProposalTransitionResult {
+    if (!ALLOWED_TRANSITIONS.has(`${from}:${to}`) || !validPatch(to, patch)) {
+      return 'forbidden';
+    }
+    const retry = from === 'failed' && to === 'implementing';
+    const terminalReason = to === 'rejected' || to === 'failed';
+    const released = to === 'released';
+    const result = this.#sqlite
+      .prepare(
+        `UPDATE proposals
+         SET status = ?,
+             status_changed_at = ?,
+             updated_at = ?,
+             attempt_count = attempt_count + ?,
+             reason_code = ?,
+             reason_text = ?,
+             rule_id = ?
+         WHERE id = ? AND status = ?
+           AND (? = 0 OR attempt_count = 0)`,
+      )
+      .run(
+        to,
+        now,
+        now,
+        retry ? 1 : 0,
+        terminalReason ? patch.reasonCode!.trim() : null,
+        terminalReason ? patch.reasonText!.trim() : null,
+        released ? patch.ruleId!.trim() : null,
+        id,
+        from,
+        retry ? 1 : 0,
+      );
+    return result.changes === 1 ? 'transitioned' : 'noop';
+  }
+
   commitBlocked(commitInspection: () => void): void {
     this.#sqlite.transaction(commitInspection)();
   }
 
-  queue(limit = 100): ProposalQueueItem[] {
-    return (
+  queue(
+    qualification: ProposalQueueQualification,
+    limit = 100,
+  ): ProposalQueueItem[] {
+    const candidates = (
       this.#sqlite
         .prepare(
           `SELECT id, author_id, kind, prefecture_code, name, body, created_at
            FROM proposals
            WHERE status = 'screening'
-           ORDER BY created_at ASC, id ASC
-           LIMIT ?`,
+           ORDER BY created_at ASC, id ASC`,
         )
-        .all(limit) as Array<{
+        .all() as Array<{
         id: string;
         author_id: string;
         kind: ProposalKind;
@@ -210,5 +337,9 @@ export class ProposalRepository {
       body: row.body,
       createdAt: row.created_at,
     }));
+    const eligible = qualification.eligibleIds(candidates);
+    return candidates
+      .filter((candidate) => eligible.has(candidate.id))
+      .slice(0, limit);
   }
 }
