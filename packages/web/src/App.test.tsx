@@ -1,6 +1,6 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from './App';
 import { useScreenStore } from './store/screen';
@@ -145,6 +145,51 @@ describe('DS-02: フェーズ 1 の主要画面が 1 本の導線でつながる
       }
 
       unmount();
+    }
+  });
+
+  it('セット評価は顔で選ばせ、文言はアクセシブル名に残す', async () => {
+    const user = userEvent.setup();
+    useScreenStore.setState({ current: 'setResult' });
+    render(<App />);
+
+    const fun = screen.getByRole('radio', { name: 'おもしろかった' });
+    // 顔だけを出し、選択肢の文字は画面に置かない。
+    expect(fun.textContent).toBe('');
+    expect(fun.getAttribute('aria-checked')).toBe('false');
+
+    await user.click(fun);
+    expect(fun.getAttribute('aria-checked')).toBe('true');
+  });
+
+  it('セットの総合であることを見出しではなく順位推移が語る', () => {
+    useScreenStore.setState({ current: 'setResult' });
+    render(<App />);
+
+    expect(screen.queryByRole('heading', { name: /総合結果/ })).toBeNull();
+    expect(screen.getByText('1→1→2')).toBeTruthy();
+    expect(screen.getByText('4→4→4')).toBeTruthy();
+  });
+
+  it('ゲーム間リザルトは待っていても次戦へ進む(文で予告しない)', () => {
+    vi.useFakeTimers();
+    try {
+      useScreenStore.setState({ current: 'gameResult' });
+      render(<App />);
+
+      expect(screen.getByRole('button', { name: '第2戦へ' })).toBeTruthy();
+      expect(screen.queryByText(/自動で進む/)).toBeNull();
+
+      act(() => {
+        vi.advanceTimersByTime(5000);
+      });
+
+      expect(screen.queryByRole('button', { name: '第2戦へ' })).toBeNull();
+      expect(
+        screen.getByRole('radiogroup', { name: 'このセットはおもしろかった?' }),
+      ).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
     }
   });
 

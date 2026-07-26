@@ -1,0 +1,68 @@
+/*
+ * セット評価(顔 3 つ)。DS-02 追加。
+ * 3 段階の主観評価は文字ラベルより絵のほうが速く読める
+ * (空港の顔ボタン端末と同じ文法)。文言は aria-label に残す。
+ */
+
+.picker {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-6);
+}
+
+.face {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  padding: 0;
+  border: var(--border-heavy) solid var(--color-border-strong);
+  border-radius: 50%;
+  background: var(--color-cream-100);
+  box-shadow: var(--shadow-hard-m);
+  cursor: pointer;
+  transition:
+    transform var(--duration-fast) var(--easing-standard),
+    box-shadow var(--duration-fast) var(--easing-standard),
+    background-color var(--duration-fast) var(--easing-standard);
+}
+
+.face:active {
+  transform: translateY(3px);
+  box-shadow: none;
+}
+
+/*
+ * 選択は中立の紺で示す(design-system.html §5-3 と同じ規律)。
+ * 色相ではなく明度の反転 + 拡大なので、色だけに頼っていない。
+ */
+.selected {
+  background: var(--color-action-selected);
+  transform: scale(1.12);
+  animation: pop var(--duration-base) var(--easing-pop);
+}
+
+.selected:active {
+  transform: scale(1.12) translateY(3px);
+}
+
+.ink {
+  stroke: var(--color-navy-800);
+}
+
+.selected .ink {
+  stroke: var(--color-cream-100);
+}
+
+@keyframes pop {
+  from {
+    transform: scale(0.85);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .selected {
+    animation: none;
+  }
+}

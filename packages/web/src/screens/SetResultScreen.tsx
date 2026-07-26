@@ -1,8 +1,8 @@
 import { AppBar } from '../components/AppBar';
 import { Button } from '../components/Button';
+import { MoodPicker } from '../components/MoodPicker';
 import { RankRows } from '../components/RankRow';
 import type { RankView } from '../components/RankRow';
-import { SegmentedControl } from '../components/SegmentedControl';
 import { VoteButton } from '../components/VoteButton';
 
 import styles from './SetResultScreen.module.css';
@@ -51,9 +51,8 @@ export function SetResultScreen({
 
         {/* この画面に残す唯一の文。問いなので消せない。 */}
         <h2 className={screen.sectionTitle}>おもしろかった?</h2>
-        <SegmentedControl
+        <MoodPicker
           label="このセットはおもしろかった?"
-          size="mini"
           value={funRating}
           onChange={onChangeFunRating}
           options={[

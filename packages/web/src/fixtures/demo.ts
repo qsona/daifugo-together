@@ -89,11 +89,36 @@ export const DEMO_GAME_RANKS: readonly RankView[] = [
   { place: 4, name: 'プレイヤーD', kind: 'ai', title: '大貧民' },
 ];
 
+/** セットリザルトは 3 戦の推移込み。「総合結果である」ことをデータ自身が語る。 */
 export const DEMO_SET_RANKS: readonly RankView[] = [
-  { place: 1, name: 'あなた', kind: 'human', title: '大富豪' },
-  { place: 2, name: 'プレイヤーB', kind: 'ai', title: '富豪' },
-  { place: 3, name: 'プレイヤーC', kind: 'human', title: '貧民' },
-  { place: 4, name: 'プレイヤーD', kind: 'ai', title: '大貧民' },
+  {
+    place: 1,
+    name: 'あなた',
+    kind: 'human',
+    title: '大富豪',
+    history: [1, 1, 2],
+  },
+  {
+    place: 2,
+    name: 'プレイヤーB',
+    kind: 'ai',
+    title: '富豪',
+    history: [2, 3, 1],
+  },
+  {
+    place: 3,
+    name: 'プレイヤーC',
+    kind: 'human',
+    title: '貧民',
+    history: [3, 2, 3],
+  },
+  {
+    place: 4,
+    name: 'プレイヤーD',
+    kind: 'ai',
+    title: '大貧民',
+    history: [4, 4, 4],
+  },
 ];
 
 /**

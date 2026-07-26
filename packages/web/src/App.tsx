@@ -165,6 +165,7 @@ export function App() {
           progressLabel="セット 1 / 3 戦"
           ranks={DEMO_GAME_RANKS}
           nextLabel="第2戦へ"
+          autoAdvanceMs={5000}
           onNext={() => {
             go('setResult');
           }}

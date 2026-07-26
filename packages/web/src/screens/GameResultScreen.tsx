@@ -1,5 +1,5 @@
 import { AppBar } from '../components/AppBar';
-import { Button } from '../components/Button';
+import { CountdownButton } from '../components/CountdownButton';
 import { RankRows } from '../components/RankRow';
 import type { RankView } from '../components/RankRow';
 
@@ -11,8 +11,9 @@ type GameResultScreenProps = {
   /** 「セット 1 / 3 戦」。 */
   progressLabel: string;
   ranks: readonly RankView[];
-  /** 「第2戦へ(5 秒後に自動で進む)」。 */
   nextLabel: string;
+  /** 自動で次戦へ進むまでの時間。押せば即進む。 */
+  autoAdvanceMs: number;
   onNext: () => void;
 };
 
@@ -25,6 +26,7 @@ export function GameResultScreen({
   progressLabel,
   ranks,
   nextLabel,
+  autoAdvanceMs,
   onNext,
 }: GameResultScreenProps) {
   return (
@@ -38,9 +40,10 @@ export function GameResultScreen({
          */}
         <RankRows ranks={ranks} />
         <div className={screen.footer}>
-          <Button variant="primary" block onClick={onNext}>
+          {/* 「5 秒後に自動で進む」という文の代わりに、縁のリングが残り時間を見せる。 */}
+          <CountdownButton durationMs={autoAdvanceMs} onActivate={onNext}>
             {nextLabel}
-          </Button>
+          </CountdownButton>
         </div>
       </main>
     </div>

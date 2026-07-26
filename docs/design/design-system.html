@@ -679,6 +679,27 @@ table.spec th { background: var(--color-bg-subtle); white-space: nowrap; }
   font-size: var(--font-size-title-m); font-weight: var(--font-weight-heavy); line-height: 1.1;
 }
 .c-rank .nm { flex: 1; min-width: 0; font-size: var(--font-size-title-s); font-weight: var(--font-weight-bold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.c-rank .nm small { display: block; font-size: var(--font-size-micro); font-weight: var(--font-weight-bold); color: var(--color-text-secondary); letter-spacing: var(--letter-spacing-wide); }
+
+/* セット評価(顔 3 つ) */
+.c-mood { display: flex; justify-content: center; gap: var(--space-6); }
+.c-mood .face {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 64px; height: 64px;
+  border: var(--border-heavy) solid var(--color-border-strong);
+  border-radius: 50%; background: var(--color-cream-100);
+  box-shadow: var(--shadow-hard-m); cursor: pointer;
+}
+.c-mood .face.is-on { background: var(--color-action-selected); transform: scale(1.12); }
+
+/* 自動で進むボタン */
+.c-count { position: relative; display: flex; }
+.c-count > .c-btn { flex: 1; }
+.c-count .ring { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.c-count .ring rect {
+  fill: none; stroke: var(--color-gold-400); stroke-width: 4;
+  stroke-dasharray: 100; stroke-dashoffset: 35; vector-effect: non-scaling-stroke;
+}
 .c-rank .tt { font-size: var(--font-size-micro); font-weight: var(--font-weight-bold); color: var(--color-text-secondary); white-space: nowrap; }
 
 /* 注記 */
@@ -1259,15 +1280,34 @@ table.spec th { background: var(--color-bg-subtle); white-space: nowrap; }
     </div>
 
     <div class="panel">
-      <div class="specimen"><span class="lbl">順位行(1 位だけ祝祭の金)</span></div>
+      <div class="specimen"><span class="lbl">順位行(1 位だけ祝祭の金 / セットリザルトは推移付き)</span></div>
       <div style="max-width:375px;">
         <div class="c-ranks">
-          <div class="c-rank -top"><span class="pl">1</span><span class="nm">あなた</span><span class="tt">大富豪</span><span class="c-tag -human">人間</span></div>
-          <div class="c-rank"><span class="pl">2</span><span class="nm">プレイヤーB</span><span class="tt">富豪</span><span class="c-tag -ai">AI</span></div>
-          <div class="c-rank"><span class="pl">4</span><span class="nm">プレイヤーD</span><span class="tt">大貧民</span><span class="c-tag -ai">AI</span></div>
+          <div class="c-rank -top"><span class="pl">1</span><span class="nm">あなた<small>1→1→2</small></span><span class="tt">大富豪</span><span class="c-tag -human">人間</span></div>
+          <div class="c-rank"><span class="pl">2</span><span class="nm">プレイヤーB<small>2→3→1</small></span><span class="tt">富豪</span><span class="c-tag -ai">AI</span></div>
+          <div class="c-rank"><span class="pl">4</span><span class="nm">プレイヤーD<small>4→4→4</small></span><span class="tt">大貧民</span><span class="c-tag -ai">AI</span></div>
         </div>
       </div>
-      <div class="note">優先度バッジ(§5-7)と同じ枠付き数字を順位に流用する。1 位のみ gold-200 の淡い金を敷き、賑やかさを一段だけ足す。</div>
+      <div class="note">優先度バッジ(§5-7)と同じ枠付き数字を順位に流用する。1 位のみ gold-200 の淡い金を敷き、賑やかさを一段だけ足す。<b>セットリザルトでは各戦の推移を添える</b> — 「3 戦の総合結果」という見出しを書く代わりに、<code>1→1→2</code> という書式そのものに語らせる(ラベルは最後の手段)。ゲーム間リザルト(1 戦分)では推移を出さない。</div>
+    </div>
+
+    <div class="panel">
+      <div class="specimen"><span class="lbl">セット評価(顔 3 つ)/ 自動で進むボタン</span></div>
+      <div style="max-width:375px; display:flex; flex-direction:column; gap:20px;">
+        <div class="c-mood">
+          <span class="face"><svg width="32" height="32" viewBox="0 0 32 32"><g stroke="var(--color-navy-800)" stroke-width="3" stroke-linecap="round" fill="none"><path d="M11 12 V14"/><path d="M21 12 V14"/><path d="M9 18 Q16 25 23 18"/></g></svg></span>
+          <span class="face is-on"><svg width="32" height="32" viewBox="0 0 32 32"><g stroke="var(--color-cream-100)" stroke-width="3" stroke-linecap="round" fill="none"><path d="M11 12 V14"/><path d="M21 12 V14"/><path d="M10 19 H22"/></g></svg></span>
+          <span class="face"><svg width="32" height="32" viewBox="0 0 32 32"><g stroke="var(--color-navy-800)" stroke-width="3" stroke-linecap="round" fill="none"><path d="M11 12 V14"/><path d="M21 12 V14"/><path d="M9 22 Q16 15 23 22"/></g></svg></span>
+        </div>
+        <div class="c-count">
+          <button class="c-btn -primary -block" type="button">第2戦へ</button>
+          <svg class="ring" viewBox="0 0 100 100" preserveAspectRatio="none"><rect x="1" y="1" width="98" height="98" rx="49" pathLength="100"/></svg>
+        </div>
+      </div>
+      <div class="note">
+        <b>顔 3 つ</b>: 3 段階の主観評価は文字ラベルより絵のほうが速く読める。選択は中立の紺で示し(§5-3 と同じ規律)、明度の反転 + 拡大なので色相だけに頼っていない。文言(おもしろかった / ふつう / つまらなかった)は <code>aria-label</code> に残す。口の形だけで 3 段階を読ませ、眉や記号は足さない。<br>
+        <b>自動で進むボタン</b>: 「(5 秒後に自動で進む)」という文の代わりに、縁を一周する金のリングが残り時間を見せる。押せば即進む。
+      </div>
     </div>
 
     <div class="panel">

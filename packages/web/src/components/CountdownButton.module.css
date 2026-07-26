@@ -1,0 +1,41 @@
+/*
+ * 自動で進むボタン。DS-02 追加。
+ * 「(5 秒後に自動で進む)」という文の代わりに、縁を一周する減っていくリングで
+ * 残り時間を見せる(UI文言ガイド 原則 3)。
+ */
+
+.wrap {
+  position: relative;
+  display: flex;
+}
+
+.wrap > button {
+  flex: 1;
+}
+
+.ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.track {
+  fill: none;
+  stroke: var(--color-gold-400);
+  stroke-width: 4;
+  /* pathLength=100 なので dash の単位は「一周の %」。 */
+  stroke-dasharray: 100;
+  vector-effect: non-scaling-stroke;
+  animation: deplete linear forwards;
+}
+
+@keyframes deplete {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: 100;
+  }
+}
