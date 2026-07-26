@@ -341,6 +341,52 @@ describe('GE-04 independent rule modules', () => {
     ).not.toThrow();
   });
 
+  it('modifyLegalityが不正な形状を返しても基本進行を続ける', () => {
+    const entry = fixtureEntry('r0002d-invalid-legality', 0);
+    const invalid: RuleModule = {
+      meta: {
+        ruleId: entry.ruleId,
+        name: entry.name,
+        description: '不正な合法性を返す',
+        kind: 'original',
+        proposalId: 'fixture',
+        contractVersion: 1,
+        messages: {},
+      },
+      hooks: {
+        modifyLegality: () => null as never,
+      },
+    };
+    const config: GameConfig = {
+      gameIndex: 0,
+      seats: ['p1', 'p2', 'p3', 'p4'],
+      gameSeed: 'invalid-legality-return',
+      ruleChain: [entry],
+    };
+    const started = startGame(config).state;
+    const player = started.public.turn;
+    const card = player ? started.players[player]?.hand[0] : undefined;
+    if (!player || !card) {
+      throw new Error('Expected an opening play');
+    }
+
+    const transition = reduceGame(
+      config,
+      started,
+      { type: 'play', player, cards: [card.id] },
+      {
+        port: createInProcessRuleChainPort([invalid]),
+        setHistory: [],
+        setMemory: {},
+      },
+    );
+
+    expect(transition.rejections).toEqual([]);
+    expect(transition.state.public.field.current?.play.cards).toContainEqual(
+      card,
+    );
+  });
+
   it('無作用ルールの乱数消費が別ルールの乱数列へ影響しない', () => {
     const consumerEntry = fixtureEntry('r0003-rng-consumer', 0);
     const observerEntry = fixtureEntry('r0004-rng-observer', 1);

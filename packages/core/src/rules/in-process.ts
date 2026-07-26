@@ -24,6 +24,19 @@ function detachedClone<T>(value: T): T {
   return structuredClone(value);
 }
 
+function isLegality(value: unknown): value is Legality {
+  if (typeof value !== 'object' || value === null || !('legal' in value)) {
+    return false;
+  }
+  if (value.legal === true) {
+    return true;
+  }
+  if (value.legal !== false) {
+    return false;
+  }
+  return !('reasonKey' in value) || typeof value.reasonKey === 'string';
+}
+
 export function createInProcessRuleChainPort(
   modules: readonly RuleModule[],
 ): RuleChainPort {
@@ -53,6 +66,9 @@ export function createInProcessRuleChainPort(
             const after = detachedClone(
               hook(ruleContext, detachedFrozen(play), detachedFrozen(before)),
             );
+            if (!isLegality(after)) {
+              return;
+            }
             const wasChanged = changed(before, after);
             results[index] = after;
             if (wasChanged) {
