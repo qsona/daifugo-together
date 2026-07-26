@@ -423,27 +423,78 @@ function isJsonValue(value: unknown): value is JsonValue {
   return Object.values(value).every(isJsonValue);
 }
 
-function effectPayloadValid(effect: Effect): boolean {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function zoneValid(value: unknown): boolean {
+  if (!isRecord(value)) {
+    return false;
+  }
+  if (value.kind === 'field' || value.kind === 'discard') {
+    return true;
+  }
+  return value.kind === 'hand' && typeof value.player === 'string';
+}
+
+function selectorValid(value: unknown): boolean {
+  if (!isRecord(value)) {
+    return false;
+  }
+  switch (value.kind) {
+    case 'specific':
+      return (
+        Array.isArray(value.cardIds) &&
+        value.cardIds.every((cardId) => typeof cardId === 'string')
+      );
+    case 'byRank':
+      return typeof value.rank === 'string';
+    case 'random':
+      return (
+        typeof value.count === 'number' &&
+        Number.isInteger(value.count) &&
+        Number.isFinite(value.count) &&
+        value.count >= 0
+      );
+    case 'all':
+      return true;
+    default:
+      return false;
+  }
+}
+
+function effectPayloadValid(effect: unknown): effect is Effect {
+  if (!isRecord(effect) || typeof effect.type !== 'string') {
+    return false;
+  }
   switch (effect.type) {
     case 'clearField':
     case 'reverseTurnOrder':
       return true;
     case 'skipTurns':
-      return Number.isFinite(effect.count) && Number.isInteger(effect.count);
+      return (
+        typeof effect.player === 'string' &&
+        typeof effect.count === 'number' &&
+        Number.isFinite(effect.count) &&
+        Number.isInteger(effect.count)
+      );
     case 'forceRank':
       return (
-        Number.isInteger(effect.rank) && effect.rank >= 1 && effect.rank <= 4
+        typeof effect.player === 'string' &&
+        typeof effect.rank === 'number' &&
+        Number.isInteger(effect.rank) &&
+        effect.rank >= 1 &&
+        effect.rank <= 4
       );
     case 'moveCards':
       return (
-        (effect.cards.kind !== 'random' ||
-          (Number.isInteger(effect.cards.count) &&
-            Number.isFinite(effect.cards.count))) &&
-        (effect.cards.kind !== 'specific' ||
-          effect.cards.cardIds.every((cardId) => typeof cardId === 'string'))
+        zoneValid(effect.from) &&
+        zoneValid(effect.to) &&
+        selectorValid(effect.cards)
       );
     case 'setMemory':
       return (
+        (effect.scope === 'game' || effect.scope === 'set') &&
         typeof effect.key === 'string' &&
         effect.key.length > 0 &&
         isJsonValue(effect.value)
@@ -451,10 +502,14 @@ function effectPayloadValid(effect: Effect): boolean {
     case 'announce':
       return (
         typeof effect.messageKey === 'string' &&
-        Object.values(effect.params ?? {}).every(
-          (value) => typeof value === 'string',
-        )
+        (effect.params === undefined ||
+          (isRecord(effect.params) &&
+            Object.values(effect.params).every(
+              (value) => typeof value === 'string',
+            )))
       );
+    default:
+      return false;
   }
 }
 
@@ -496,22 +551,25 @@ export function executeEffectHook(
       if (position === undefined) {
         return [];
       }
-      return effects.map((effect, effectIndex) => ({
-        ruleId,
-        position,
-        effectIndex,
-        effect,
-        ...(effect.type === 'moveCards' && effectPayloadValid(effect)
-          ? {
-              resolvedCards: resolveCardSelector(
-                invocation.state,
-                effect.from,
-                effect.cards,
-                contextForRule(context, ruleId).rng,
-              ),
-            }
-          : {}),
-      }));
+      return effects.map((effect, effectIndex) => {
+        const valid = effectPayloadValid(effect);
+        return {
+          ruleId,
+          position,
+          effectIndex,
+          effect,
+          ...(valid && effect.type === 'moveCards'
+            ? {
+                resolvedCards: resolveCardSelector(
+                  invocation.state,
+                  effect.from,
+                  effect.cards,
+                  contextForRule(context, ruleId).rng,
+                ),
+              }
+            : {}),
+        };
+      });
     })
     .filter((emission) => {
       const allowed =

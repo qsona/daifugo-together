@@ -993,4 +993,136 @@ describe('GE-04 effect pipeline and lifecycle hooks', () => {
       ),
     ).toHaveLength(4);
   });
+
+  it('不正なEffect形状・scope・paramsを例外なく棄却する', () => {
+    const ruleEntry = entry('r0114-invalid-shapes');
+    const module: RuleModule = {
+      meta: {
+        ruleId: ruleEntry.ruleId,
+        name: ruleEntry.name,
+        description: 'invalid effect shapes',
+        kind: 'original',
+        proposalId: 'fixture',
+        contractVersion: 1,
+        messages: {},
+      },
+      hooks: {
+        onGameStart: () =>
+          [
+            {
+              type: 'moveCards',
+              to: { kind: 'discard' },
+              cards: { kind: 'all' },
+            },
+            {
+              type: 'setMemory',
+              scope: 'bogus',
+              key: 'bad',
+              value: true,
+            },
+            {
+              type: 'announce',
+              messageKey: 'bad',
+              params: null,
+            },
+          ] as never,
+      },
+    };
+    const config: GameConfig = {
+      gameIndex: 0,
+      seats,
+      gameSeed: 'invalid-effect-shapes',
+      ruleChain: [ruleEntry],
+    };
+
+    const started = startGame(config, runtime(module));
+
+    expect(started.state.public.phase).toBe('awaitingPlay');
+    expect(
+      started.events.filter(
+        (event) =>
+          event.type === 'effectRejected' &&
+          event.detail &&
+          typeof event.detail === 'object' &&
+          !Array.isArray(event.detail) &&
+          event.detail.reason === 'invalid-payload',
+      ),
+    ).toHaveLength(3);
+    expect(started.state.public.history).not.toContainEqual(
+      expect.objectContaining({ type: 'ruleFired' }),
+    );
+  });
+
+  it('Effect配列でないhook返値を無作用として隔離する', () => {
+    const ruleEntry = entry('r0115-non-array-effects');
+    const module: RuleModule = {
+      meta: {
+        ruleId: ruleEntry.ruleId,
+        name: ruleEntry.name,
+        description: 'non-array effect result',
+        kind: 'original',
+        proposalId: 'fixture',
+        contractVersion: 1,
+        messages: {},
+      },
+      hooks: {
+        onGameStart: () => ({ type: 'reverseTurnOrder' }) as never,
+      },
+    };
+    const config: GameConfig = {
+      gameIndex: 0,
+      seats,
+      gameSeed: 'non-array-effects',
+      ruleChain: [ruleEntry],
+    };
+
+    expect(() => startGame(config, runtime(module))).not.toThrow();
+  });
+
+  it('onGameStartのskipTurnsを第1手番前に消化する', () => {
+    const ruleEntry = entry('r0116-opening-skip');
+    let skipped = '';
+    const module: RuleModule = {
+      meta: {
+        ruleId: ruleEntry.ruleId,
+        name: ruleEntry.name,
+        description: 'opening skip',
+        kind: 'original',
+        proposalId: 'fixture',
+        contractVersion: 1,
+        messages: {},
+      },
+      hooks: {
+        onGameStart: (context) => {
+          skipped = context.game.turn ?? '';
+          return [{ type: 'skipTurns', player: skipped, count: 1 }];
+        },
+      },
+    };
+    const config: GameConfig = {
+      gameIndex: 0,
+      seats,
+      gameSeed: 'opening-skip',
+      ruleChain: [ruleEntry],
+    };
+
+    const started = startGame(config, runtime(module));
+    const card = started.state.players[skipped]?.hand[0];
+    if (!card) {
+      throw new Error('Expected skipped player card');
+    }
+    const attempted = reduceGame(
+      config,
+      started.state,
+      { type: 'play', player: skipped, cards: [card.id] },
+      runtime(module),
+    );
+
+    expect(started.state.public.turn).not.toBe(skipped);
+    expect(started.state.players[skipped]?.skipCount).toBe(0);
+    expect(started.events).toContainEqual({ type: 'passed', player: skipped });
+    expect(attempted.rejections).toContainEqual(
+      expect.objectContaining({ code: 'NOT_YOUR_TURN' }),
+    );
+  });
 });

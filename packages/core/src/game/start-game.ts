@@ -99,6 +99,60 @@ function nextActiveFrom(
   return undefined;
 }
 
+function resolveOpeningTurn(
+  config: GameConfig,
+  initialState: GameState,
+): { state: GameState; events: PublicGameEvent[] } {
+  let state = initialState;
+  let candidate = state.public.turn;
+  const events: PublicGameEvent[] = [];
+  for (let consumed = 0; consumed <= 1000; consumed += 1) {
+    if (!candidate) {
+      return { state, events };
+    }
+    const player = state.players[candidate];
+    if (!player || player.status !== 'active') {
+      candidate = nextActiveFrom(config, state, candidate) ?? null;
+      continue;
+    }
+    if (player.skipCount <= 0) {
+      if (candidate !== state.public.turn) {
+        const event: PublicGameEvent = {
+          type: 'turnChanged',
+          player: candidate,
+        };
+        events.push(event);
+        state = {
+          ...state,
+          public: {
+            ...state.public,
+            turn: candidate,
+          },
+        };
+      }
+      return { state, events };
+    }
+    const event: PublicGameEvent = { type: 'passed', player: candidate };
+    events.push(event);
+    state = {
+      ...state,
+      public: {
+        ...state.public,
+        turnCount: state.public.turnCount + 1,
+      },
+      players: {
+        ...state.players,
+        [candidate]: {
+          ...player,
+          skipCount: player.skipCount - 1,
+        },
+      },
+    };
+    candidate = nextActiveFrom(config, state, candidate) ?? null;
+  }
+  throw new Error('Opening skip resolution exceeded the turn safety bound');
+}
+
 export function startGame(
   config: GameConfig,
   runtime: RuleRuntime = noRuleRuntime(),
@@ -179,26 +233,9 @@ export function startGame(
       setMemory: endHook.setMemory,
     };
   }
-  if (
-    nextState.public.turn &&
-    nextState.players[nextState.public.turn]?.status !== 'active'
-  ) {
-    const next = nextActiveFrom(config, nextState, nextState.public.turn);
-    if (next) {
-      const turnEvent: PublicGameEvent = {
-        type: 'turnChanged',
-        player: next,
-      };
-      events.push(turnEvent);
-      nextState = appendPublicEvents(
-        {
-          ...nextState,
-          public: { ...nextState.public, turn: next },
-        },
-        [turnEvent],
-      );
-    }
-  }
+  const opening = resolveOpeningTurn(config, nextState);
+  nextState = appendPublicEvents(opening.state, opening.events);
+  events.push(...opening.events);
   return {
     state: nextState,
     events,

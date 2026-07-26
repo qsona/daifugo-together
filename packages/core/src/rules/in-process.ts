@@ -24,6 +24,11 @@ function detachedClone<T>(value: T): T {
   return structuredClone(value);
 }
 
+function detachedEffectList(value: unknown): Effect[] {
+  const cloned = detachedClone(value);
+  return Array.isArray(cloned) ? (cloned as Effect[]) : [];
+}
+
 function isLegality(value: unknown): value is Legality {
   if (typeof value !== 'object' || value === null || !('legal' in value)) {
     return false;
@@ -129,7 +134,7 @@ export function createInProcessRuleChainPort(
               return [
                 {
                   ruleId: entry.ruleId,
-                  effects: detachedClone(
+                  effects: detachedEffectList(
                     hooks.afterPlay?.(
                       ruleContext,
                       detachedFrozen(argument as Play),
@@ -142,7 +147,7 @@ export function createInProcessRuleChainPort(
               return [
                 {
                   ruleId: entry.ruleId,
-                  effects: detachedClone(
+                  effects: detachedEffectList(
                     hooks.onGameEnd?.(
                       ruleContext,
                       detachedFrozen(argument as Standings),
@@ -154,8 +159,8 @@ export function createInProcessRuleChainPort(
             return [
               {
                 ruleId: entry.ruleId,
-                effects: detachedClone(
-                  (hooks[hookName]?.(ruleContext) ?? []) as Effect[],
+                effects: detachedEffectList(
+                  hooks[hookName]?.(ruleContext) ?? [],
                 ),
               },
             ];

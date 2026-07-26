@@ -193,7 +193,7 @@ TS-02 から継続で未解決のもの:
 
 ## 並行進行: E1 ゲームエンジン
 
-- 状態: GE-02・GE-03・GE-05・GE-04 のプロセス2実装完了。4回目の独立 GPT-5.6 Sol 完了レビューで追加された Major 5 件も修正し、再レビュー待ち。
+- 状態: GE-02・GE-03・GE-05・GE-04 のプロセス2実装完了。5回目の独立 GPT-5.6 Sol 完了レビューで追加された P1 2件・P2 1件も修正し、再レビュー待ち。
 - プロセス1: `8c38c3d`（リベース前 `a3e98a1`）
 - プロセス2: `841745a`
 - 検証: Node 26.5.0 / pnpm 11.17.0 / TypeScript 6.0.3 で `pnpm verify` 成功。統合リポジトリ全体は 14 files / 89 tests。format・lint・design lint・typecheck・build 成功。ルールなし200セットは0.53秒、違反0・failsafe 0。
@@ -216,6 +216,8 @@ TS-02 から継続で未解決のもの:
 3回目の独立レビューでは、(1) 過去に公開されたカードを非公開手札へ戻すと、そのIDを`announce`に再掲できる、(2) `modifyLegality`返値の複製時にgetterが投げた例外がルール境界を抜ける、の2件を再現。現在hand/excludedにあるカードIDは公開履歴にかかわらず常に非公開参照として棄却し、フック返値の複製・形状検証・比較・採用を同じ例外境界内へ移した。getter例外と不正形状を含む最小再現を回帰テストへ追加した。
 
 4回目の独立レビューでは、(1) 同一Effectバッチ内で公開領域から手札へ戻したカードIDを後続announceで公開できる、(2) `skipTurns.count=NaN`がスキップ解決を停止させる、(3) `PlayerSnapshot`のネスト参照から権威状態を変更できる、(4) `startSet`では初回`onGameStart`のEffect解決ログを取得できない、(5) E09所有の`PriorityKey`正準型と公開型が不一致、の5件を再現。announceは全状態Effect適用後の最終状態で検査し、Effect payloadを有限整数・JSON値等のruntime境界で棄却し、snapshot全体をdeep cloneした。初回イベントを返す`startSetTransition`を追加し、`startSet`は状態だけを得る便宜APIとして維持した。PriorityKeyはE09どおり`{ score, activatedAt: epochMs, ruleId }`へ統一した。各最小再現を回帰テストへ追加した。
+
+5回目の独立レビューでは、(1) 欠落zone・不正scope・null params・非配列返値などEffect全体のruntime形状検証不足、(2) `onGameStart`の`skipTurns`を第1手番前に消化しない、(3) `ruleId`比較がE09のコード単位辞書順でなくlocale依存、を再現。Effect配列と判別可能ユニオンを`unknown`境界から例外安全に検証し、開始直後にも通常同等のskip/非active手番解決を通し、比較関数をE09掲載どおり`<`/`>`へ統一した。各最小再現を回帰テストへ追加した。
 
 ### E1で置いた仮定
 

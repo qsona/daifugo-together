@@ -30,11 +30,13 @@ export interface ResolvedBatch {
 }
 
 export function comparePriority(left: PriorityKey, right: PriorityKey): number {
-  return (
-    right.score - left.score ||
-    left.activatedAt - right.activatedAt ||
-    left.ruleId.localeCompare(right.ruleId)
-  );
+  if (left.score !== right.score) {
+    return right.score - left.score;
+  }
+  if (left.activatedAt !== right.activatedAt) {
+    return left.activatedAt - right.activatedAt;
+  }
+  return left.ruleId < right.ruleId ? -1 : left.ruleId > right.ruleId ? 1 : 0;
 }
 
 export function sortRuleChain(

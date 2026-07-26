@@ -73,6 +73,26 @@ describe('effect priority and conflict resolution', () => {
     expect(sorted.map((entry) => entry.position)).toEqual([0, 1, 2]);
   });
 
+  it('ruleId同点判定はlocaleに依存しないコード単位辞書順にする', () => {
+    const priority = {
+      score: 0,
+      activatedAt: Date.parse('2026-01-01T00:00:00.000Z'),
+    };
+    const entries: RuleChainEntry[] = ['a_b', 'a-b'].map((ruleId) => ({
+      ruleId,
+      name: ruleId,
+      position: 0,
+      priority: { ...priority, ruleId },
+      bundleHash: ruleId,
+      contractVersion: 1,
+    }));
+
+    expect(sortRuleChain(entries).map((entry) => entry.ruleId)).toEqual([
+      'a-b',
+      'a_b',
+    ]);
+  });
+
   it('競合は最高優先を採用し、敗者のannounceを抑制する', () => {
     const batch = resolveEffectBatch('afterPlay', [
       emission('r-high', 0, 0, {
