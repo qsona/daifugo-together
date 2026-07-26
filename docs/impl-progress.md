@@ -320,9 +320,9 @@ TS-02 から継続で未解決のもの:
 
 ## 並行進行: E3 マルチプレイ
 
-- 状態: MP-01/MP-02 プロセス2実装完了、独立 GPT-5.6 Sol の初回完了レビュー指摘を反映し再レビュー待ち。ブラウザ UI → typed Socket.IO → Room → Core/E2 AI → 閲覧者別snapshotの実運用導線、同一origin SPA配信、SQLite永続化、SIGTERM drainingまで接続した。ブランチ `codex/e3-multiplayer-process1` は最新main UIを取り込み済み。
-- コミット: `9c4ff46`（Room authority/view）、`3c351f3`（切断・離脱時の席/controller維持）、`2762261`（RoomManagerと招待index）、`5a477a9`（set境界・continue・参照分離）、`4cbc612`（Socket.IO gateway）、`36121c4`（phase timer）、`7af9818`（AI手番）、`0db35e5`（lifecycle/protocol）、`85dbdfd`（受入不変条件）、`f37817a`（実運用縦導線・永続化・draining）、`6d99369`（完了レビュー指摘）。
-- 検証: Node 26.5.0 / pnpm 11.17.0 / TypeScript 6.0.3。`pnpm verify` 成功（format / lint / design lint / typecheck / **28 files・190 tests** / 6 packages build）。純粋層3ゲーム完走、実HTTP/Socket.IO server/client、ブラウザclient state、1人+AI 3席のSocket→Room→Core→AI scheduler縦断完走を確認した。
+- 状態: MP-01/MP-02 プロセス2実装完了、独立 GPT-5.6 Sol の再レビュー指摘まで反映し最終再レビュー待ち。ブラウザ UI → typed Socket.IO → Room → Core/E2 AI → 閲覧者別snapshotの実運用導線、同一origin SPA配信、SQLite永続化、SIGTERM drainingまで接続した。ブランチ `codex/e3-multiplayer-process1` は最新main UIを取り込み済み。
+- コミット: `9c4ff46`（Room authority/view）、`3c351f3`（切断・離脱時の席/controller維持）、`2762261`（RoomManagerと招待index）、`5a477a9`（set境界・continue・参照分離）、`4cbc612`（Socket.IO gateway）、`36121c4`（phase timer）、`7af9818`（AI手番）、`0db35e5`（lifecycle/protocol）、`85dbdfd`（受入不変条件）、`f37817a`（実運用縦導線・永続化・draining）、`6d99369`（初回完了レビュー指摘）、`391f7a3`（再レビュー指摘）。
+- 検証: Node 26.5.0 / pnpm 11.17.0 / TypeScript 6.0.3。`pnpm verify` 成功（format / lint / design lint / typecheck / **28 files・191 tests** / 6 packages build）。純粋層3ゲーム完走、実HTTP/Socket.IO server/client、ブラウザclient state、1人+AI 3席のSocket→Room→Core→AI scheduler縦断完走を確認した。
 - 依存: npm registry の `latest` を再確認し、`socket.io` / `socket.io-client` 4.8.3、`zod` 4.4.3、`better-sqlite3` 13.0.1、`drizzle-orm` 0.45.2、`@types/better-sqlite3` 7.6.13を導入した。`pnpm outdated --format json` は、ユーザー指定で固定したTypeScript 6.0.3（registry latest 7.0.2）以外0件。
 
 ### プロセス1で完了したもの
@@ -352,6 +352,8 @@ TS-02 から継続で未解決のもの:
 - E1契約どおり`legalMoves: Play[] | null`を本人snapshotへ載せ、ルールchainの合法性変更をUI操作可否まで反映した。
 
 初回の独立 GPT-5.6 Sol 完了レビューは **NO-GO**。再接続時に`room:state`が`session:ready`より先着して復帰イベントを再生し得る点、本番setResultにE8未導入の評価デモを表示する点、補充AIの「考え中」表示条件が成立しない点を検出した。未初期化socketを通常broadcast対象から外し、`session:ready`を必ず最初のsnapshotにした。評価UIはE8導入まで本番だけ隠し、補充AIは現在手番を根拠に「考え中」を表示する。あわせてSQLiteのセット結果と長いreplay連番を実完走で回帰化した。
+
+次の独立 GPT-5.6 Sol 再レビューも **NO-GO**。`continue`以外の`leave` / `expireSetResult`で次セットが始まるとReplayInitが欠ける点と、継続回答後に未回答者を表示しない点を検出した。ReplayInitの判定をaction名でなく`setId`変更へ統一し、`leave`による次セット開始をSQLite実DBで回帰化した。画面は本人の`wantsNextSet`回答後に未回答者名を表示し、二重回答を無効化する。
 
 ### E3で置いた仮定・次工程
 
