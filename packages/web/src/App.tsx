@@ -1,6 +1,6 @@
 import type { PlayerRoomView } from '@daifugo/core';
 import type { ReactNode } from 'react';
-import { useCallback, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 
 import type { CardView } from './components/Card';
 import type { MemberView as MemberListView } from './components/MemberList';
@@ -180,7 +180,8 @@ function DemoApp() {
           progressLabel="セット 1 / 3 戦"
           ranks={DEMO_GAME_RANKS}
           nextLabel="第2戦へ"
-          autoAdvanceMs={5000}
+          autoAdvanceMs={15_000}
+          autoAdvanceAt={Date.now() + 15_000}
           onNext={() => {
             go('setResult');
           }}
@@ -382,6 +383,20 @@ function setRanks(room: PlayerRoomView): RankView[] {
     });
 }
 
+export function reconcileSelectedCardIds(
+  selected: readonly string[],
+  room: PlayerRoomView | null,
+): readonly string[] {
+  if (selected.length === 0) return selected;
+  const timedOutSelf = room?.events.some(
+    (event) => event.t === 'turnTimeout' && event.seat === room.you.seatId,
+  );
+  if (timedOutSelf || room?.game?.status !== 'playing') return [];
+  const handIds = new Set(room.game.yourHand.map((card) => card.id));
+  const existing = selected.filter((id) => handIds.has(id));
+  return existing.length === selected.length ? selected : existing;
+}
+
 function ConnectedApp({ client }: { client: MultiplayerClient }) {
   const current = useScreenStore((state) => state.current);
   const go = useScreenStore((state) => state.go);
@@ -395,6 +410,11 @@ function ConnectedApp({ client }: { client: MultiplayerClient }) {
   const [funRating, setFunRating] = useState<SetFunRating | null>(null);
   const [ruleVotes, setRuleVotes] = useState(DEMO_FIRED_RULES);
   const room = state.room;
+
+  useEffect(() => {
+    setSelectedCardIds((selected) => reconcileSelectedCardIds(selected, room));
+  }, [room]);
+
   const invoke = (operation: Promise<unknown>) => {
     void operation.catch(() => undefined);
   };
@@ -492,13 +512,15 @@ function ConnectedApp({ client }: { client: MultiplayerClient }) {
 
   if (room?.phase === 'playing' && room.game?.status === 'intermission') {
     const nextGame = room.game.gameNo + 1;
+    const intermission = room.game.intermission;
     return show(
       <GameResultScreen
         title={`第${String(room.game.gameNo)}戦 おわり`}
         progressLabel={`セット ${String(room.game.gameNo)} / 3 戦`}
         ranks={gameRanks(room)}
         nextLabel={`第${String(nextGame)}戦へ`}
-        autoAdvanceMs={5000}
+        autoAdvanceMs={intermission?.durationMs ?? 15_000}
+        autoAdvanceAt={intermission?.endsAt ?? Date.now() + 15_000}
         onNext={() => {
           invoke(client.sync());
         }}

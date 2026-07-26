@@ -72,6 +72,15 @@ describe('T1: あがりの認知', () => {
     expect(screen.getByText('あなたが2位であがり!')).toBeTruthy();
   });
 
+  it('同じ更新で複数人があがったときは最新の1件だけを告知する', () => {
+    const { rerender } = render(game([]));
+
+    rerender(game([FINISH_B, FINISH_SELF]));
+
+    expect(screen.getByText('あなたが2位であがり!')).toBeTruthy();
+    expect(screen.queryByText('プレイヤーBが1位であがり!')).toBeNull();
+  });
+
   /*
    * 再接続では全量スナップショットが届き、履歴の playerFinished がまとめて入る。
    * 告知は「初回描画時点の件数」を基準に増分だけを出すので、
@@ -81,5 +90,31 @@ describe('T1: あがりの認知', () => {
     render(game([FINISH_B, FINISH_SELF]));
 
     expect(screen.queryByText(/であがり/)).toBeNull();
+  });
+});
+
+describe('DS-04: 手番残り時間バー', () => {
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+  });
+
+  it('残り時間をテキスト本文ではなく左基点のバーで示す', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    render(<GameScreen {...game([]).props} turnDeadlineAt={61_000} />);
+
+    const timer = screen.getByRole('timer', { name: '手番 残り60秒' });
+    expect(timer.textContent).toBe('');
+    expect(
+      timer
+        .querySelector<HTMLElement>('[style]')
+        ?.style.getPropertyValue('--turn-remaining'),
+    ).toBe('1');
+
+    act(() => {
+      vi.advanceTimersByTime(51_000);
+    });
+    expect(screen.getByRole('timer', { name: '手番 残り9秒' })).toBeTruthy();
   });
 });

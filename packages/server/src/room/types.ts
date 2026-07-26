@@ -62,6 +62,7 @@ export interface RoomState {
   nextEventSeq: number;
   setNo: number;
   turnDeadlineAt: number | null;
+  intermissionEndsAt: number | null;
   setRespondBy: number | null;
   lobbyExpiresAt: number;
   abandonAt: number | null;

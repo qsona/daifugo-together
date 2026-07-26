@@ -75,6 +75,51 @@ function setResult(base: RoomState, respondBy: number): RoomState {
 }
 
 describe('RoomTimerCoordinator', () => {
+  it('ゲーム間リザルトをサーバー確定時刻まで待ち、再syncで15秒へ戻さない', () => {
+    const started = reduceRoom(
+      state(),
+      {
+        type: 'start',
+        memberId: 'member-1',
+        now: 1_000,
+        setSeed: 'intermission-timer-set',
+      },
+      { random: () => 0.999_999 },
+    ).state;
+    const intermission: RoomState = {
+      ...started,
+      engine: {
+        ...started.engine!,
+        phase: { name: 'interimResult', gameIndex: 0 },
+      },
+      intermissionEndsAt: 16_000,
+      turnDeadlineAt: null,
+    };
+    const room = authority(intermission);
+    const timers: FakeTimer[] = [];
+    let now = 5_000;
+    const coordinator = new RoomTimerCoordinator(room.api, {
+      now: () => now,
+      setTimer: (callback, delayMs) => {
+        const timer = { callback, delayMs, cleared: false };
+        timers.push(timer);
+        return timer;
+      },
+    });
+
+    coordinator.sync(intermission);
+    expect(timers[0]?.delayMs).toBe(11_000);
+    now = 9_000;
+    coordinator.sync(intermission);
+    expect(timers).toHaveLength(1);
+
+    now = 16_000;
+    timers[0]?.callback();
+    expect(room.actions).toEqual([
+      { type: 'advanceIntermission', now: 16_000 },
+    ]);
+  });
+
   it('同じsetResultへ再syncしても期限を延長せず、1回だけexpireする', () => {
     const timers: FakeTimer[] = [];
     const transitions: RoomTransition[] = [];

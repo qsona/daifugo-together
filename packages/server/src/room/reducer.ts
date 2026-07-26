@@ -21,7 +21,7 @@ import type {
 } from './types.js';
 
 const DEFAULT_GAMES_PER_SET = 3;
-const DEFAULT_INTERIM_MS = 5_000;
+const DEFAULT_INTERIM_MS = 15_000;
 const DEFAULT_SET_RESULT_TIMEOUT_MS = 120_000;
 const DEFAULT_TURN_LIMIT_MS = 60_000;
 const DEFAULT_DISCONNECTED_TURN_LIMIT_MS = 15_000;
@@ -60,6 +60,7 @@ export function createRoomState(input: CreateRoomInput): RoomState {
     nextEventSeq: 1,
     setNo: 0,
     turnDeadlineAt: null,
+    intermissionEndsAt: null,
     setRespondBy: null,
     lobbyExpiresAt: input.now + (input.lobbyTtlMs ?? DEFAULT_LOBBY_TTL_MS),
     abandonAt: null,
@@ -363,6 +364,10 @@ function startSet(
         input.now,
         options,
       ),
+      intermissionEndsAt:
+        started.state.phase.name === 'interimResult'
+          ? input.now + started.state.config.interimAutoAdvanceMs
+          : null,
       abandonAt: null,
       setRespondBy:
         phase === 'setResult'
@@ -565,6 +570,7 @@ function leave(
       {
         phase: humansRemain ? state.phase : 'closed',
         members,
+        intermissionEndsAt: humansRemain ? state.intermissionEndsAt : null,
         abandonAt:
           humansRemain && !connectedHumansRemain
             ? action.now +
@@ -628,6 +634,7 @@ function leave(
     {
       phase: humansRemain ? state.phase : 'closed',
       members: withHost,
+      intermissionEndsAt: humansRemain ? state.intermissionEndsAt : null,
     },
     events,
   );
@@ -659,7 +666,11 @@ function expireSetResult(
   );
   const events = memberLeftEvents(removedIds);
   if (continuing.length === 0) {
-    return committed(state, { phase: 'closed', members: [] }, events);
+    return committed(
+      state,
+      { phase: 'closed', members: [], intermissionEndsAt: null },
+      events,
+    );
   }
   return startSet(
     { ...state, members: continuing },
@@ -727,6 +738,7 @@ function expireRoom(
       phase: 'closed',
       members: [],
       turnDeadlineAt: null,
+      intermissionEndsAt: null,
       setRespondBy: null,
       abandonAt: null,
     },
@@ -905,6 +917,10 @@ function gameAction(
         action.now,
         options,
       ),
+      intermissionEndsAt:
+        transition.state.phase.name === 'interimResult'
+          ? action.now + transition.state.config.interimAutoAdvanceMs
+          : null,
       setRespondBy:
         phase === 'setResult'
           ? action.now +
@@ -963,6 +979,7 @@ function advanceIntermission(
         action.now,
         options,
       ),
+      intermissionEndsAt: null,
       setRespondBy:
         phase === 'setResult'
           ? action.now +
@@ -1002,6 +1019,10 @@ function requestDrain(
       members: settlement.members,
       engine: transition.state,
       turnDeadlineAt: phase === 'playing' ? state.turnDeadlineAt : null,
+      intermissionEndsAt:
+        transition.state.phase.name === 'interimResult'
+          ? state.intermissionEndsAt
+          : null,
       setRespondBy:
         phase === 'setResult'
           ? action.now +

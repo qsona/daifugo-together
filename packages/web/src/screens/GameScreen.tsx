@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import { useEffect, useRef, useState } from 'react';
 
 import { ActivationChip } from '../components/ActivationChip';
@@ -10,6 +11,7 @@ import type { RuleActivation } from '../components/RuleCutIn';
 import { Table } from '../components/Table';
 import type { TableSeat } from '../components/Table';
 import { Toast } from '../components/Toast';
+import { cx } from '../lib/cx';
 
 import styles from './GameScreen.module.css';
 import screen from './screen.module.css';
@@ -146,6 +148,8 @@ export function GameScreen({
 
 /**
  * 「前回描画時より あがり が増えた」ときだけ、増えた最後の 1 件を数秒告知する。
+ * 1 回の更新に複数件が含まれる場合も最新だけを出す。復帰直後に古い告知を
+ * 連続再生して現在の盤面を隠さないための DS-05 の方針。
  *
  * 再演出を防いでいるのは「同一戦の history は単調増加」という性質。
  * 一過性の切断→復帰では GameScreen は unmount されず、全量スナップショットでも
@@ -180,16 +184,35 @@ function useFinishNotice(finishes: readonly SeatFinish[]): SeatFinish | null {
 }
 
 function TurnCountdown({ deadlineAt }: { deadlineAt: number }) {
-  const [remaining, setRemaining] = useState(() =>
-    Math.max(0, Math.ceil((deadlineAt - Date.now()) / 1000)),
+  const [remainingMs, setRemainingMs] = useState(() =>
+    Math.max(0, deadlineAt - Date.now()),
   );
   useEffect(() => {
     const update = () => {
-      setRemaining(Math.max(0, Math.ceil((deadlineAt - Date.now()) / 1000)));
+      setRemainingMs(Math.max(0, deadlineAt - Date.now()));
     };
     update();
-    const timer = window.setInterval(update, 250);
+    const timer = window.setInterval(update, 100);
     return () => window.clearInterval(timer);
   }, [deadlineAt]);
-  return <p role="timer">残り {remaining} 秒</p>;
+
+  const remainingSeconds = Math.ceil(remainingMs / 1000);
+  const fraction = Math.min(1, remainingMs / 60_000);
+  return (
+    <div
+      className={cx(
+        styles.turnCountdown,
+        remainingMs <= 10_000 && styles.turnCountdownUrgent,
+      )}
+      role="timer"
+      aria-label={`手番 残り${String(remainingSeconds)}秒`}
+    >
+      <div className={styles.turnCountdownTrack} aria-hidden="true">
+        <div
+          className={styles.turnCountdownFill}
+          style={{ '--turn-remaining': fraction } as CSSProperties}
+        />
+      </div>
+    </div>
+  );
 }

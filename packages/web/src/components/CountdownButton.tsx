@@ -1,12 +1,14 @@
 import { useEffect } from 'react';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 
 import { Button } from './Button';
 import styles from './CountdownButton.module.css';
 
 type CountdownButtonProps = {
-  /** 残り時間。経過したら onActivate を自分で呼ぶ。 */
+  /** タイマー全体の時間。バーの全量に使う。 */
   durationMs: number;
+  /** サーバーが確定した終了時刻。経過したら onActivate を呼ぶ。 */
+  deadlineAt: number;
   onActivate: () => void;
   children: ReactNode;
 };
@@ -17,15 +19,20 @@ type CountdownButtonProps = {
  */
 export function CountdownButton({
   durationMs,
+  deadlineAt,
   onActivate,
   children,
 }: CountdownButtonProps) {
+  const remainingMs = Math.max(0, deadlineAt - Date.now());
+  const startScale =
+    durationMs <= 0 ? 0 : Math.min(1, remainingMs / durationMs);
+
   useEffect(() => {
-    const timer = setTimeout(onActivate, durationMs);
+    const timer = setTimeout(onActivate, Math.max(0, deadlineAt - Date.now()));
     return () => {
       clearTimeout(timer);
     };
-  }, [durationMs, onActivate]);
+  }, [deadlineAt, onActivate]);
 
   return (
     <div className={styles.wrap}>
@@ -35,7 +42,12 @@ export function CountdownButton({
       <div className={styles.track} aria-hidden="true">
         <div
           className={styles.fill}
-          style={{ animationDuration: `${String(durationMs)}ms` }}
+          style={
+            {
+              '--countdown-start': startScale,
+              animationDuration: `${String(remainingMs)}ms`,
+            } as CSSProperties
+          }
         />
       </div>
     </div>

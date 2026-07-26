@@ -236,6 +236,25 @@ describe('pure room reducer', () => {
     },
   );
 
+  it('ゲーム間リザルトの既定15秒と同じ終了時刻をsnapshotへ載せる', () => {
+    const started = start(room());
+    expect(started.engine?.config.interimAutoAdvanceMs).toBe(15_000);
+
+    const intermission: RoomState = {
+      ...started,
+      engine: {
+        ...started.engine!,
+        phase: { name: 'interimResult', gameIndex: 0 },
+      },
+      intermissionEndsAt: 42_000,
+      turnDeadlineAt: null,
+    };
+    expect(viewFor(intermission, 'member-1').game?.intermission).toEqual({
+      durationMs: 15_000,
+      endsAt: 42_000,
+    });
+  });
+
   it('待機中のホスト離脱で参加順に移譲し、最後の人間離脱で閉じる', () => {
     const joined = join(room(), 2);
     const hostLeft = reduceRoom(joined, {

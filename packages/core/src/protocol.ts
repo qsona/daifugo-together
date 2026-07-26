@@ -117,6 +117,14 @@ export interface GameResultView {
 export interface MultiplayerGameView {
   gameNo: number;
   status: 'playing' | 'intermission';
+  /**
+   * ゲーム間リザルトの全員共通タイマー。
+   * サーバーが確定した終了時刻を配ることで、途中参加・再接続でも表示と遷移を揃える。
+   */
+  intermission: {
+    durationMs: number;
+    endsAt: number;
+  } | null;
   field: {
     cards: Card[];
     playedBySeat: SeatId | null;

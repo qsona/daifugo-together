@@ -57,13 +57,12 @@
 
 /*
  * 選択は「持ち上がる」で示す(位置の変化なので色に頼っていない)。
- * 金の縁を足し、重なりの中で前面に出す。
+ * 金の縁を足す。後続の札はこの札より前面に描き、その左上表記を隠さない。
  */
 .selected {
   transform: translateY(-14px);
   border-color: var(--color-gold-400);
   box-shadow: var(--shadow-hard-m);
-  z-index: 1;
 }
 
 /* 場札は少し小さく、伏せ札は面をクリームに。 */

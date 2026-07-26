@@ -28,7 +28,7 @@
 
 @keyframes deplete {
   from {
-    transform: scaleX(1);
+    transform: scaleX(var(--countdown-start, 1));
   }
   to {
     transform: scaleX(0);

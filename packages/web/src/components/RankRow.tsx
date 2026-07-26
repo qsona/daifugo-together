@@ -42,11 +42,12 @@ export function RankRows({ ranks }: { ranks: readonly RankView[] }) {
           {rank.totalPoints !== undefined && (
             /* 得点は数字だけで足りる。「合計」「今回」の見出し語は置かない。 */
             <span className={styles.score}>
-              {rank.gainedPoints !== undefined && (
-                <small className={styles.gain}>
-                  +{String(rank.gainedPoints)}
-                </small>
-              )}
+              {rank.gainedPoints !== undefined &&
+                rank.gainedPoints !== rank.totalPoints && (
+                  <small className={styles.gain}>
+                    +{String(rank.gainedPoints)}
+                  </small>
+                )}
               {String(rank.totalPoints)}点
             </span>
           )}

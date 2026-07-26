@@ -2,7 +2,7 @@ import { act, cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { App } from './App';
+import { App, reconcileSelectedCardIds } from './App';
 import { useScreenStore } from './store/screen';
 
 const KEY_VISUAL_NAME = /毎日どこかで、新ルール。/;
@@ -185,8 +185,8 @@ describe('DS-02: フェーズ 1 の主要画面が 1 本の導線でつながる
     useScreenStore.setState({ current: 'gameResult' });
     render(<App />);
 
-    // 5a: この戦で得た点と、その時点の累計。
-    expect(screen.getByText('+5')).toBeTruthy();
+    // 5a: 第1戦では今回点と累計が同値なので、累計だけを出す。
+    expect(screen.queryByText('+5')).toBeNull();
     expect(screen.getByText('5点')).toBeTruthy();
   });
 
@@ -200,7 +200,12 @@ describe('DS-02: フェーズ 1 の主要画面が 1 本の導線でつながる
       expect(screen.queryByText(/自動で進む/)).toBeNull();
 
       act(() => {
-        vi.advanceTimersByTime(5000);
+        vi.advanceTimersByTime(14_999);
+      });
+      expect(screen.getByRole('button', { name: '第2戦へ' })).toBeTruthy();
+
+      act(() => {
+        vi.advanceTimersByTime(1);
       });
 
       expect(screen.queryByRole('button', { name: '第2戦へ' })).toBeNull();
@@ -236,6 +241,20 @@ describe('DS-02: フェーズ 1 の主要画面が 1 本の導線でつながる
     await user.click(screen.getByRole('button', { name: 'クラブの3' }));
 
     expect(play.hasAttribute('disabled')).toBe(false);
+  });
+
+  it('隣接するカードを続けて選択できる', async () => {
+    const user = userEvent.setup();
+    useScreenStore.setState({ current: 'game' });
+    render(<App />);
+
+    const first = screen.getByRole('button', { name: 'クラブの3' });
+    const second = screen.getByRole('button', { name: 'ダイヤの4' });
+    await user.click(first);
+    await user.click(second);
+
+    expect(first.getAttribute('aria-pressed')).toBe('true');
+    expect(second.getAttribute('aria-pressed')).toBe('true');
   });
 
   it('卓は席と場が統合され、各自の札山が見える(実況ログを置かない)', () => {
@@ -373,5 +392,41 @@ describe('DS-02: フェーズ 1 の主要画面が 1 本の導線でつながる
     expect(screen.getAllByRole('button', { name: '高評価済み' })).toHaveLength(
       1,
     );
+  });
+});
+
+describe('MP-04: タイムアウト代行後の選択状態', () => {
+  it('自席のturnTimeoutで全選択を消し、通常更新でも手札にないIDを除く', () => {
+    const base = {
+      v: 2,
+      roomId: 'room-1',
+      inviteCode: 'ABCD-2345',
+      phase: 'playing',
+      members: [],
+      you: { memberId: 'member-1', seatId: 0 },
+      activeRules: [],
+      game: {
+        gameNo: 1,
+        status: 'playing',
+        intermission: null,
+        field: { cards: [], playedBySeat: null, passedSeats: [] },
+        turn: { seat: 1, turnSeq: 3, deadlineAt: null },
+        history: [],
+        previousResults: [],
+        yourHand: [{ kind: 'natural', id: 'S03', suit: 'spade', rank: '3' }],
+        legalMoves: [],
+      },
+      setResult: null,
+      events: [],
+    } satisfies import('@daifugo/core').PlayerRoomView;
+
+    expect(reconcileSelectedCardIds(['S03', 'missing'], base)).toEqual(['S03']);
+    expect(
+      reconcileSelectedCardIds(['S03', 'missing'], {
+        ...base,
+        v: 3,
+        events: [{ seq: 8, t: 'turnTimeout', seat: 0 }],
+      }),
+    ).toEqual([]);
   });
 });

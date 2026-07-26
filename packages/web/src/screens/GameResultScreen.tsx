@@ -12,8 +12,10 @@ type GameResultScreenProps = {
   progressLabel: string;
   ranks: readonly RankView[];
   nextLabel: string;
-  /** 自動で次戦へ進むまでの時間。押せば即進む。 */
+  /** サーバーが決めた、自動で次戦へ進むまでの総時間。 */
   autoAdvanceMs: number;
+  /** サーバーが決めた自動進行時刻。再接続後もバーの残量を一致させる。 */
+  autoAdvanceAt: number;
   onNext: () => void;
 };
 
@@ -27,6 +29,7 @@ export function GameResultScreen({
   ranks,
   nextLabel,
   autoAdvanceMs,
+  autoAdvanceAt,
   onNext,
 }: GameResultScreenProps) {
   return (
@@ -41,7 +44,11 @@ export function GameResultScreen({
         <RankRows ranks={ranks} />
         <div className={screen.footer}>
           {/* 「5 秒後に自動で進む」という文の代わりに、縁のリングが残り時間を見せる。 */}
-          <CountdownButton durationMs={autoAdvanceMs} onActivate={onNext}>
+          <CountdownButton
+            durationMs={autoAdvanceMs}
+            deadlineAt={autoAdvanceAt}
+            onActivate={onNext}
+          >
             {nextLabel}
           </CountdownButton>
         </div>

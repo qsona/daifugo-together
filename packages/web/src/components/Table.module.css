@@ -170,12 +170,17 @@
 }
 
 /*
- * あがった席は対局から抜けている。名前と札を減光し、
+ * あがった席は対局から抜けている。名前の面と札を減光し、
  * 順位バッジだけを明るく残すので「抜けた」と「何位だったか」が同時に読める。
+ * 名前は navy-600 / navy-100 = 6.16:1 で、WCAG AA を満たす。
  */
-.finished .chip,
+.finished .chip {
+  background: var(--color-navy-100);
+  color: var(--color-text-secondary);
+}
+
 .finished .pile {
-  opacity: 0.55;
+  opacity: 0.65;
 }
 
 .pile {

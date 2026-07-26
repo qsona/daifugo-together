@@ -204,6 +204,13 @@ function gameView(
         ? engine.results.length
         : engine.phase.gameIndex + 1,
     status: engine.phase.name === 'interimResult' ? 'intermission' : 'playing',
+    intermission:
+      engine.phase.name === 'interimResult' && state.intermissionEndsAt !== null
+        ? {
+            durationMs: engine.config.interimAutoAdvanceMs,
+            endsAt: state.intermissionEndsAt,
+          }
+        : null,
     field: {
       cards: current ? sortCards(current.play.cards) : [],
       playedBySeat: current ? requiredSeat(seats, current.by) : null,

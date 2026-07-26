@@ -173,8 +173,13 @@ export class RoomTimerCoordinator {
       state.engine?.phase.name === 'interimResult'
     ) {
       return {
-        fingerprint: `${state.engine.setId}:interim:${state.engine.phase.gameIndex}`,
-        delayMs: state.engine.config.interimAutoAdvanceMs,
+        fingerprint: `${state.engine.setId}:interim:${state.engine.phase.gameIndex}:${String(state.intermissionEndsAt)}`,
+        delayMs: Math.max(
+          0,
+          (state.intermissionEndsAt ??
+            this.#now() + state.engine.config.interimAutoAdvanceMs) -
+            this.#now(),
+        ),
         kind: 'intermission',
       };
     }
