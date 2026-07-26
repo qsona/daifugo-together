@@ -39,6 +39,12 @@
   gap: var(--space-2);
 }
 
+/* 脇道の導線。主 CTA と大きさで区別する。 */
+.inlineAction {
+  display: flex;
+  justify-content: center;
+}
+
 .row {
   display: flex;
   gap: var(--space-2);

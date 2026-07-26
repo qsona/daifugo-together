@@ -1,6 +1,5 @@
 import { AppBar } from '../components/AppBar';
 import { Button } from '../components/Button';
-import { Callout } from '../components/Callout';
 import { InviteCode } from '../components/InviteCode';
 import { MemberList } from '../components/MemberList';
 import type { MemberView } from '../components/MemberList';
@@ -41,30 +40,27 @@ export function WaitingRoomScreen({
         action={{ label: `${String(humanCount)} / 4 人` }}
       />
       <main className={screen.body}>
-        <h2 className={screen.sectionTitle}>参加メンバー(4 人で対戦)</h2>
+        {/*
+         * 見出しはどれも部品自身が語っているので置かない。
+         * 席が 4 つ並んでいること・空席のタグ・InviteCode 内のラベルで足りる
+         * (UI文言ガイド 原則 2・3)。
+         */}
         <MemberList members={members} />
-
-        <h2 className={screen.sectionTitle}>友だちをさそう</h2>
         <InviteCode code={inviteCode} onCopy={onCopyInvite} />
-
-        <h2 className={screen.sectionTitle}>いまのルール</h2>
-        <Callout
-          action={
-            <Button size="small" onClick={onViewRules}>
-              一覧を見る
-            </Button>
-          }
-        >
-          {activeRuleCount} 件・すべての卓に適用(変更不可)
-        </Callout>
+        {/*
+         * ルールセットは選べないので「変更不可」は書かない。対局画面と同じ語彙にする。
+         * 主導線は「開始する」なので、脇道であることが分かる大きさに留める。
+         */}
+        <div className={screen.inlineAction}>
+          <Button size="small" onClick={onViewRules}>
+            有効ルール {activeRuleCount}
+          </Button>
+        </div>
 
         <div className={screen.footer}>
           <Button variant="primary" block onClick={onStart}>
             開始する
           </Button>
-          <Callout>
-            開始した時点で足りない分は AI プレイヤーが入ります。
-          </Callout>
         </div>
       </main>
     </div>

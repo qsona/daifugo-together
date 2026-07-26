@@ -21,8 +21,12 @@ export function HandTray({
 }: HandTrayProps) {
   return (
     <section className={styles.tray} aria-label="あなたの手札">
+      {/*
+       * 「あなたの手札」のラベルは置かない。画面下端で選択できる札の列は
+       * それ自体で自明で、相手席の「残り8枚」と同じ形の枚数だけが要る情報
+       * (UI文言ガイド 原則 2)。支援技術には section の aria-label が伝える。
+       */}
       <div className={styles.head}>
-        <span>あなたの手札</span>
         <span>{cards.length}枚</span>
       </div>
       <ul className={styles.cards}>

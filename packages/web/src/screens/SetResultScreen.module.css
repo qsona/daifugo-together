@@ -26,10 +26,3 @@
   font-size: var(--font-size-body);
   font-weight: var(--font-weight-bold);
 }
-
-.hint {
-  font-size: var(--font-size-caption);
-  color: var(--color-text-secondary);
-  line-height: var(--line-height-caption);
-  margin: 0;
-}

@@ -91,12 +91,16 @@ describe('DS-02: フェーズ 1 の主要画面が 1 本の導線でつながる
     await user.click(screen.getByRole('button', { name: /はじめる/ }));
     await user.click(screen.getByRole('button', { name: 'あそぶ' }));
 
-    // 画面 2a: 4 人固定なので人数選択 UI は置かない。
+    // 画面 2a: 4 人固定なので人数選択 UI は置かず、人数は CTA に畳み込む。
     expect(screen.getByRole('radio', { name: 'ルームをつくる' })).toBeTruthy();
-    await user.click(screen.getByRole('button', { name: 'ルームをつくる' }));
+    expect(screen.queryByText(/枠を決める操作/)).toBeNull();
+    await user.click(
+      screen.getByRole('button', { name: '4人でルームをつくる' }),
+    );
 
     // 画面 2b: 招待コードと有効ルール件数。
     expect(screen.getByText('ABCD-1234')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /有効ルール/ })).toBeTruthy();
     await user.click(screen.getByRole('button', { name: '開始する' }));
 
     // 画面 3: 場・手札・ルール発動。
@@ -114,6 +118,45 @@ describe('DS-02: フェーズ 1 の主要画面が 1 本の導線でつながる
       screen.getByRole('radiogroup', { name: 'このセットはおもしろかった?' }),
     ).toBeTruthy();
     expect(screen.getAllByRole('button', { name: '高評価' })).toHaveLength(3);
+  });
+
+  it('画面に説明文を置かない(UI文言・情報量ガイド)', () => {
+    for (const id of [
+      'roomEntry',
+      'waitingRoom',
+      'game',
+      'gameResult',
+      'setResult',
+    ] as const) {
+      useScreenStore.setState({ current: id });
+      const { unmount } = render(<App />);
+
+      // 使い方・仕組み・予告の説明文はどれも画面に置かない。
+      for (const prose of [
+        /枠を決める操作はありません/,
+        /足りない分は AI プレイヤーが入ります/,
+        /変更不可/,
+        /まもなく次の戦がはじまります/,
+        /評価はセットの最後/,
+        /よかったルールには高評価/,
+        /低評価が集まったルールは排除されます/,
+      ]) {
+        expect(screen.queryByText(prose)).toBeNull();
+      }
+
+      unmount();
+    }
+  });
+
+  it('主 CTA は 1 ボタン 1 動作にする', () => {
+    useScreenStore.setState({ current: 'setResult' });
+    render(<App />);
+
+    // 評価は押した時点で送信済みなので、CTA は次の行動だけを言う。
+    expect(
+      screen.getByRole('button', { name: 'もう1セットあそぶ' }),
+    ).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /評価を送信して/ })).toBeNull();
   });
 
   it('対局画面で手札を選ぶと「出す」が押せるようになる', async () => {

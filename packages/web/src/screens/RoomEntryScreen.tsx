@@ -2,7 +2,6 @@ import { useState } from 'react';
 
 import { AppBar } from '../components/AppBar';
 import { Button } from '../components/Button';
-import { Callout } from '../components/Callout';
 import { InputField } from '../components/Field';
 import { SegmentedControl } from '../components/SegmentedControl';
 
@@ -44,20 +43,19 @@ export function RoomEntryScreen({
 
         {mode === 'create' ? (
           <>
-            <Callout>
-              対戦人数は 4 人。人間/AI
-              の枠を決める操作はありません。開始したとき、足りない分は AI
-              プレイヤーが自動で入ります。
-            </Callout>
+            {/*
+             * 人数選択 UI が無い時点で 4 人固定は自明なので説明文は置かず、
+             * 人数だけを CTA の文言に畳み込む(UI文言ガイド 原則 2)。
+             * AI 自動補充は次の待機画面の空席タグが見せる。
+             */}
             <div className={screen.footer}>
               <Button variant="primary" block onClick={onCreate}>
-                ルームをつくる
+                4人でルームをつくる
               </Button>
             </div>
           </>
         ) : (
           <>
-            <h2 className={screen.sectionTitle}>招待された人は</h2>
             <InputField
               label="招待コード"
               placeholder="例: ABCD-1234"
