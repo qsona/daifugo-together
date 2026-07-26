@@ -13,7 +13,7 @@ import { describe, expect, it } from 'vitest';
 
 import { createAiPlayer } from './ai-player.js';
 import { sameCandidate } from './heuristic.js';
-import { NORMAL_DIFFICULTY } from './types.js';
+import { DEFAULT_THINK_BUDGET, NORMAL_DIFFICULTY } from './types.js';
 import { AiWorkerPool } from './worker-pool.js';
 
 const seats = ['human', 'bot-1', 'bot-2', 'bot-3'];
@@ -178,5 +178,101 @@ describe('AI-01', () => {
     const pool = new AiWorkerPool();
     expect(pool.size).toBe(1);
     await pool.close();
+  });
+
+  it('既定50/200msで探索を完了し、同じseedから同じ手を返す', async () => {
+    const config: GameConfig = {
+      gameIndex: 0,
+      seats,
+      gameSeed: 'ai-default-budget',
+      ruleChain: [],
+    };
+    const state = startGame(config).state;
+    const player = state.public.turn!;
+    const context: SnapshotContext = {
+      setId: 'ai-default-budget',
+      setPhase: { name: 'gameInProgress', gameIndex: 0 },
+      members: seats.map((id) => ({
+        id,
+        displayName: id,
+        isAI: id !== 'human',
+      })),
+      setResults: [],
+    };
+    const input = {
+      view: buildPlayerSnapshot(config, state, context, player),
+      legalPlays: enumerateLegalPlays(config, state, player),
+      budget: DEFAULT_THINK_BUDGET,
+      seed: 'default-budget-seed',
+      difficulty: NORMAL_DIFFICULTY,
+    };
+    const ai = createAiPlayer();
+    try {
+      const first = await ai.decideMove(input);
+      const second = await ai.decideMove(input);
+
+      expect(first.usedFallback).toBe('none');
+      expect(first.stats?.playouts).toBe(8);
+      expect(first.stats?.workerThread).toBe(true);
+      expect(second.play).toEqual(first.play);
+      expect(second.stats).toEqual(first.stats);
+    } finally {
+      await ai.close();
+    }
+  });
+
+  it('timeout後のworker世代交代が待機中の次ジョブを棄却しない', async () => {
+    const config: GameConfig = {
+      gameIndex: 0,
+      seats,
+      gameSeed: 'ai-worker-generation',
+      ruleChain: [],
+    };
+    const state = startGame(config).state;
+    const player = state.public.turn!;
+    const context: SnapshotContext = {
+      setId: 'ai-worker-generation',
+      setPhase: { name: 'gameInProgress', gameIndex: 0 },
+      members: seats.map((id) => ({
+        id,
+        displayName: id,
+        isAI: true,
+      })),
+      setResults: [],
+    };
+    const base = {
+      view: buildPlayerSnapshot(config, state, context, player),
+      legalPlays: enumerateLegalPlays(config, state, player),
+      seed: 'worker-generation-seed',
+      difficulty: NORMAL_DIFFICULTY,
+    };
+    const ai = createAiPlayer();
+    try {
+      const first = ai.decideMove({
+        ...base,
+        budget: {
+          softMs: 1_000,
+          hardMs: 1,
+          maxPlayouts: 1_000,
+          sliceMs: 10,
+        },
+      });
+      const second = ai.decideMove({
+        ...base,
+        budget: {
+          softMs: 1,
+          hardMs: 1_000,
+          maxPlayouts: 1,
+          sliceMs: 1,
+        },
+      });
+      const [timedOut, recovered] = await Promise.all([first, second]);
+
+      expect(['heuristic', 'partial-search']).toContain(timedOut.usedFallback);
+      expect(recovered.usedFallback).toBe('none');
+      expect(recovered.stats?.workerThread).toBe(true);
+    } finally {
+      await ai.close();
+    }
   });
 });

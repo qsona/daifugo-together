@@ -254,8 +254,8 @@ TS-02 から継続で未解決のもの:
 
 ## 並行進行: E2 対戦AI
 
-- 状態: AI-01 プロセス1の縦断実装完了。方向性レビュー待ち。
-- 検証: Node 26.5.0 / pnpm 11.17.0 / TypeScript 6.0.3。統合リポジトリ全体 15 files / 87 tests、lint・typecheck 成功。
+- 状態: AI-01 プロセス1の縦断実装完了。独立 GPT-5.6 Sol 方向性レビュー `GO_WITH_FIXES` のworker予算・世代管理・partial-search指摘を反映し、再レビュー待ち。
+- 検証: Node 26.5.0 / pnpm 11.17.0 / TypeScript 6.0.3。統合リポジトリ全体 15 files / 89 tests、format・lint・design lint・typecheck・build 成功。
 - ユーザーストーリー確認: `packages/ai/src/ai-player.test.ts` の「1人+AI 3人で3ゲームのセットを拒否なく完走する」で、人間席1・AI席3の3ゲームセットを実際の E1 reducer に通し、全着手の rejection 0、結果3件、`completion=completed` を確認。
 
 ### プロセス1で実装した方向
@@ -263,7 +263,7 @@ TS-02 から継続で未解決のもの:
 - AI入力は `PlayerSnapshot` と権威側が列挙した `Play[]` のみ。他人の手札を型・実行時データのどちらでも渡さない。
 - 観測済みカードを除く52枚を、相手の公開残枚数に従ってseed付きで一様再配布する決定化。
 - 深さ1のルートUCB1、打ち切り付きロールアウト、順位報酬 `[1, 2/3, 1/3, 0]`、同一入力・seedの決定性。
-- Node標準 `worker_threads` の再利用プールで探索し、親側hard timeout時は最弱合法手へフォールバック。
+- Node標準 `worker_threads` の起動時warm-up・FIFO・1本再利用プールで探索。反復途中の統計を親へ送り、hard timeout時はpartial-search、統計0件なら最弱合法手へフォールバック。終了した旧workerの通知は新世代のジョブへ影響しない。
 - 外部AI API・HTTP・DB依存なし。合法手0件の強制パスはゲームループ側が即時処理する。
 
 ### E2で置いた仮定
@@ -272,17 +272,17 @@ TS-02 から継続で未解決のもの:
 |---|---|---|
 | B-7確定前はworker poolを1本、既定予算をsoft 50ms / hard 200msとする | E02改訂ノートが1〜2本、decision-log B-7が実測調整可 | `AiWorkerPool`、`ThinkBudget`。TS-03実測後に2本化・予算調整可 |
 | プロセス1は提案ルール0件なので、worker内の決定化状態は空のrule chainで復元する | AI-01はフェーズ1。ルール追従はAI-02（フェーズ2） | `worker-entry.js`。プロセス2ではE1 runtime/configをworker要求へ運ぶ境界を確定する |
-| seed固定時の決定性を優先し、soft予算は壁時計打切りではなく `softMs × 2` を上限反復数へ変換する仮係数とした。hard予算だけ親側壁時計watchdogで強制する | 壁時計打切りは同一入力の探索回数を非決定にする。B-7は未計測 | 探索反復数と強さ。TS-03のplayouts/msで係数を置換する |
+| seed固定時の決定性を優先し、soft予算は壁時計打切りではなく `floor(softMs / 6)` を上限反復数へ変換する暫定係数とした（既定50msで8本） | 初回レビュー実測で旧係数 `softMs × 2` の100本は840〜911msかかり、hard 200msを必ず超えた。8本なら既定期限内に完走する | 探索反復数と強さ。TS-03のplayouts/msで係数を置換する |
 | `legalPlays.length === 0` はAIを呼ばずサーバーゲームループがpassする | E02の `AiDecision.play: Play` はpassを表現できない一方、本文は「0=パス強制」と明記 | E3のAI手番駆動。戦略的passは初版方策の「出せるなら出す」に従い選ばない |
 | 0.4〜1.2秒の演出遅延は探索ライブラリに入れず、着手を表示するserver/web側で入れる | CPU探索とUX待機を分離し、テストと再利用を決定的に保つ | E3/E4統合 |
 
 ### プロセス2に回したもの
 
 - 1,000ゲームの合法性・停止性検証、500セットのrandom-legal基準との強さsmoke。
-- hard timeout、worker crash、探索例外、全サンプル失敗の障害注入とフォールバック階段の網羅。
+- worker crash、探索例外、全サンプル失敗の障害注入。hard timeoutのpartial/heuristic分岐と旧worker終了後の次ジョブ継続はプロセス1で回帰化済み。
 - TS-03実測に基づくpool本数、playouts/ms、root cap、batch size、cutoffの較正と200ms上限の性能試験。
 - 非LLM・非ネットワーク依存をCIで機械検査するルール。
-- 提案ルールを含む `GameConfig` / `RuleRuntime` のworker受け渡し。これはAI-02境界だが、AI-01完了レビューで方向だけ確認する。
+- 提案ルールを含むworker境界。`RuleRuntime.port` は関数を含みstructured clone不能なので直接渡さず、serializableなルールID・設定・setHistory・公開可能memoryを送り、worker側で同じbundleをimportしてruntimeを再構成する。決定化factoryもcore側へ寄せる。これはAI-02境界だが、AI-01レビューで着手条件として確認済み。
 
 ### E2で見つけた設計書の不整合
 

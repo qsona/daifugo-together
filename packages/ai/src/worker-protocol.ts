@@ -27,16 +27,27 @@ export interface WorkerRequest {
   payload: SearchRequest;
 }
 
-export interface WorkerSuccess {
+export interface WorkerReady {
+  kind: 'ready';
+}
+
+export interface WorkerProgress {
+  kind: 'progress';
   id: number;
-  ok: true;
+  value: SearchResponse;
+}
+
+export interface WorkerSuccess {
+  kind: 'result';
+  id: number;
   value: SearchResponse;
 }
 
 export interface WorkerFailure {
+  kind: 'error';
   id: number;
-  ok: false;
   error: string;
 }
 
-export type WorkerResponse = WorkerSuccess | WorkerFailure;
+export type WorkerResponse =
+  WorkerReady | WorkerProgress | WorkerSuccess | WorkerFailure;

@@ -7,86 +7,170 @@ import type {
   WorkerResponse,
 } from './worker-protocol.js';
 
-interface PendingJob {
+interface QueuedJob {
+  id: number;
+  payload: SearchRequest;
+  thinkMs: number;
   resolve(value: SearchResponse): void;
   reject(error: Error): void;
+}
+
+interface ActiveJob extends QueuedJob {
   timer: NodeJS.Timeout;
+  latest: SearchResponse | null;
 }
 
 export class AiWorkerPool {
   readonly size = 1;
   private worker: Worker | null = null;
+  private ready = false;
+  private closed = false;
   private nextId = 1;
-  private readonly pending = new Map<number, PendingJob>();
+  private active: ActiveJob | null = null;
+  private readonly queue: QueuedJob[] = [];
 
-  private ensureWorker(): Worker {
-    if (this.worker) {
-      return this.worker;
-    }
-    const worker = new Worker(new URL('./worker-entry.js', import.meta.url), {
-      name: 'daifugo-ai-1',
-    });
-    worker.on('message', (message: WorkerResponse) => {
-      const job = this.pending.get(message.id);
-      if (!job) {
-        return;
-      }
-      clearTimeout(job.timer);
-      this.pending.delete(message.id);
-      if (message.ok) {
-        job.resolve(message.value);
-      } else {
-        job.reject(new Error(message.error));
-      }
-    });
-    worker.on('error', (error) => {
-      this.rejectAll(error instanceof Error ? error : new Error(String(error)));
-      this.worker = null;
-    });
-    worker.on('exit', (code) => {
-      if (code !== 0) {
-        this.rejectAll(new Error(`AI worker exited with code ${code}`));
-      }
-      if (this.worker === worker) {
-        this.worker = null;
-      }
-    });
-    this.worker = worker;
-    return worker;
+  constructor() {
+    this.spawnWorker();
   }
 
-  run(payload: SearchRequest, timeoutMs: number): Promise<SearchResponse> {
+  run(payload: SearchRequest, thinkMs: number): Promise<SearchResponse> {
+    if (this.closed) {
+      return Promise.reject(new Error('AI worker pool is closed'));
+    }
     const id = this.nextId;
     this.nextId += 1;
-    const worker = this.ensureWorker();
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pending.delete(id);
-        reject(new Error(`AI worker exceeded ${timeoutMs}ms`));
-        void worker.terminate();
-        if (this.worker === worker) {
-          this.worker = null;
-        }
-      }, timeoutMs);
-      this.pending.set(id, { resolve, reject, timer });
-      worker.postMessage({ id, payload } satisfies WorkerRequest);
+      this.queue.push({ id, payload, thinkMs, resolve, reject });
+      this.pump();
     });
   }
 
   async close(): Promise<void> {
+    this.closed = true;
+    const error = new Error('AI worker pool closed');
+    if (this.active) {
+      clearTimeout(this.active.timer);
+      this.active.reject(error);
+      this.active = null;
+    }
+    for (const job of this.queue.splice(0)) {
+      job.reject(error);
+    }
     const worker = this.worker;
     this.worker = null;
+    this.ready = false;
     if (worker) {
       await worker.terminate();
     }
-    this.rejectAll(new Error('AI worker pool closed'));
   }
 
-  private rejectAll(error: Error): void {
-    for (const job of this.pending.values()) {
-      clearTimeout(job.timer);
-      job.reject(error);
+  private spawnWorker(): void {
+    if (this.closed || this.worker) {
+      return;
     }
-    this.pending.clear();
+    const worker = new Worker(new URL('./worker-entry.js', import.meta.url), {
+      name: 'daifugo-ai-1',
+    });
+    this.worker = worker;
+    this.ready = false;
+    worker.on('message', (message: WorkerResponse) => {
+      if (this.worker !== worker) {
+        return;
+      }
+      if (message.kind === 'ready') {
+        this.ready = true;
+        this.pump();
+        return;
+      }
+      const active = this.active;
+      if (!active || active.id !== message.id) {
+        return;
+      }
+      if (message.kind === 'progress') {
+        active.latest = message.value;
+        return;
+      }
+      clearTimeout(active.timer);
+      this.active = null;
+      if (message.kind === 'result') {
+        active.resolve(message.value);
+      } else {
+        active.reject(new Error(message.error));
+      }
+      this.pump();
+    });
+    worker.on('error', (error) => {
+      if (this.worker !== worker) {
+        return;
+      }
+      this.failActive(
+        error instanceof Error ? error : new Error(String(error)),
+      );
+      this.replaceWorker(worker);
+    });
+    worker.on('exit', (code) => {
+      if (this.worker !== worker) {
+        return;
+      }
+      if (code !== 0) {
+        this.failActive(new Error(`AI worker exited with code ${code}`));
+      }
+      this.worker = null;
+      this.ready = false;
+      this.spawnWorker();
+    });
+  }
+
+  private pump(): void {
+    if (this.closed || this.active || !this.worker || !this.ready) {
+      return;
+    }
+    const job = this.queue.shift();
+    if (!job) {
+      return;
+    }
+    const worker = this.worker;
+    const active: ActiveJob = {
+      ...job,
+      latest: null,
+      timer: setTimeout(() => {
+        if (this.active !== active) {
+          return;
+        }
+        this.active = null;
+        if (active.latest) {
+          active.resolve({ ...active.latest, completed: false });
+        } else {
+          active.reject(new Error(`AI worker exceeded ${active.thinkMs}ms`));
+        }
+        this.replaceWorker(worker);
+      }, job.thinkMs),
+    };
+    this.active = active;
+    worker.postMessage({
+      id: job.id,
+      payload: job.payload,
+    } satisfies WorkerRequest);
+  }
+
+  private failActive(error: Error): void {
+    if (!this.active) {
+      return;
+    }
+    clearTimeout(this.active.timer);
+    this.active.reject(error);
+    this.active = null;
+  }
+
+  private replaceWorker(worker: Worker): void {
+    if (this.worker !== worker) {
+      return;
+    }
+    this.worker = null;
+    this.ready = false;
+    void worker.terminate().finally(() => {
+      this.spawnWorker();
+      this.pump();
+    });
   }
 }

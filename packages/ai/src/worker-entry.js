@@ -245,7 +245,7 @@ function selectUcb(stats, total, c) {
   return best;
 }
 
-function finalCandidate(stats) {
+function strongestCandidate(stats) {
   return stats
     .map((entry, index) => ({ ...entry, index }))
     .sort(
@@ -257,7 +257,53 @@ function finalCandidate(stats) {
     )[0];
 }
 
-function search(payload) {
+function finalCandidate(stats, temperature, seed) {
+  if (temperature <= 0.01) {
+    return strongestCandidate(stats);
+  }
+  const weighted = stats.map((entry) =>
+    Math.pow(entry.visits, 1 / temperature),
+  );
+  const total = weighted.reduce((sum, weight) => sum + weight, 0);
+  if (total <= 0) {
+    return strongestCandidate(stats);
+  }
+  const random = core.nextRandom(core.seedRng(`${seed}:final`)).value * total;
+  let cursor = 0;
+  for (let index = 0; index < stats.length; index += 1) {
+    cursor += weighted[index];
+    if (random < cursor) {
+      return { ...stats[index], index };
+    }
+  }
+  return strongestCandidate(stats);
+}
+
+function response(stats, payload, completed, done) {
+  const selected = finalCandidate(
+    stats,
+    payload.difficulty.temperature,
+    payload.seed,
+  );
+  return {
+    play: selected.play,
+    completed: done,
+    stats: {
+      playouts: completed,
+      candidates: stats.map((entry) => ({
+        cardIds: cardIds(entry.play),
+        visits: entry.visits,
+        meanReward: entry.reward / Math.max(1, entry.visits),
+      })),
+      workerThread: true,
+    },
+  };
+}
+
+function search(payload, onProgress) {
+  if (payload.config.maxTreeDepth !== 1) {
+    throw new Error('AI-01 supports maxTreeDepth=1 only');
+  }
   const config = gameConfig(payload.view, payload.seed);
   const api = core.createSimulationApi({
     config,
@@ -265,23 +311,24 @@ function search(payload) {
   });
   const sample = determinize(payload.view, payload.seed, -1);
   const strength = api.getEffectiveStrengthOrder(sample);
+  const scaled = Math.floor(
+    payload.budget.maxPlayouts * payload.difficulty.budgetScale,
+  );
+  const softLimit = Math.max(1, Math.floor(payload.budget.softMs / 6));
+  const target = Math.max(1, Math.min(scaled, softLimit));
   const candidates = sortWeakFirst(payload.legalPlays, strength).slice(
     0,
-    payload.config.rootCandidateCap,
+    Math.min(payload.config.rootCandidateCap, target),
   );
   const stats = candidates.map((play) => ({
     play,
     visits: 0,
     reward: 0,
   }));
-  const scaled = Math.floor(
-    payload.budget.maxPlayouts * payload.difficulty.budgetScale,
+  const progressBatch = Math.max(
+    1,
+    Math.min(payload.config.playoutBatchSize, target),
   );
-  const softLimit = Math.max(
-    stats.length,
-    Math.floor(payload.budget.softMs * 2),
-  );
-  const target = Math.max(1, Math.min(scaled, softLimit));
   let completed = 0;
   for (; completed < target; completed += 1) {
     const candidateIndex = selectUcb(
@@ -299,38 +346,37 @@ function search(payload) {
     );
     stats[candidateIndex].visits += 1;
     stats[candidateIndex].reward += reward;
+    const count = completed + 1;
+    if (count === 1 || count % progressBatch === 0) {
+      onProgress(response(stats, payload, count, false));
+    }
   }
-  const selected = finalCandidate(stats);
-  return {
-    play: selected.play,
-    completed: completed === target,
-    stats: {
-      playouts: completed,
-      candidates: stats.map((entry) => ({
-        cardIds: cardIds(entry.play),
-        visits: entry.visits,
-        meanReward: entry.reward / Math.max(1, entry.visits),
-      })),
-      workerThread: true,
-    },
-  };
+  return response(stats, payload, completed, completed === target);
 }
 
 if (!parentPort) {
   throw new Error('AI worker must run inside worker_threads');
 }
 
+parentPort.postMessage({ kind: 'ready' });
+
 parentPort.on('message', (message) => {
   try {
     parentPort.postMessage({
+      kind: 'result',
       id: message.id,
-      ok: true,
-      value: search(message.payload),
+      value: search(message.payload, (value) => {
+        parentPort.postMessage({
+          kind: 'progress',
+          id: message.id,
+          value,
+        });
+      }),
     });
   } catch (error) {
     parentPort.postMessage({
+      kind: 'error',
       id: message.id,
-      ok: false,
       error:
         error instanceof Error ? (error.stack ?? error.message) : String(error),
     });
