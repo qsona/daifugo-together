@@ -1,0 +1,48 @@
+name: Rule PR diff guard
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
+      - unlabeled
+
+permissions:
+  contents: read
+
+jobs:
+  diff-guard:
+    if: contains(github.event.pull_request.labels.*.name, 'rule-change')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout trusted guard from the base revision
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: trusted-base
+          persist-credentials: false
+
+      - name: Checkout pull request head with history
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          path: pull-request
+          persist-credentials: false
+
+      - name: Fetch the base revision into the pull request repository
+        working-directory: pull-request
+        env:
+          RULE_DIFF_BASE: ${{ github.event.pull_request.base.sha }}
+        run: git fetch --no-tags ../trusted-base "$RULE_DIFF_BASE"
+
+      - name: Check changed paths
+        working-directory: pull-request
+        env:
+          RULE_DIFF_BASE: ${{ github.event.pull_request.base.sha }}
+          RULE_DIFF_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: node ../trusted-base/scripts/check-rule-diff.mjs
