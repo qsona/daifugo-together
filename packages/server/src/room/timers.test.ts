@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { createRoomState, reduceRoom } from './reducer.js';
+import { RoomManager } from './manager.js';
 import {
   RoomLifecycleTimerCoordinator,
   RoomTimerCoordinator,
@@ -362,5 +363,79 @@ describe('RoomTimerCoordinator', () => {
       now: 61_000,
       setSeed: 'lifecycle-seed',
     });
+  });
+
+  it('lobby TTLとabandonで破棄した部屋のtimer・room・indexを残さない', () => {
+    for (const scenario of ['lobbyExpired', 'abandoned'] as const) {
+      let now = 0;
+      let roomSequence = 0;
+      const manager = new RoomManager({
+        now: () => now,
+        createRoomId: () => `${scenario}-room-${++roomSequence}`,
+        createMemberId: () => `${scenario}-member-${++roomSequence}`,
+        randomIndex: () => 0,
+        reducer: {
+          lobbyTtlMs: 100,
+          abandonTimeoutMs: 100,
+          random: () => 0.999_999,
+        },
+      });
+      const created = manager.create({
+        userId: `${scenario}-user`,
+        displayName: 'ホスト',
+      });
+      expect(created.ok).toBe(true);
+      if (!created.ok) continue;
+      const roomId = created.value.room.roomId;
+      const inviteCode = created.value.room.inviteCode;
+      if (scenario === 'abandoned') {
+        now = 10;
+        expect(
+          manager.apply(roomId, {
+            type: 'start',
+            memberId: created.value.member.memberId,
+            now,
+            setSeed: 'abandon-set',
+          })?.accepted,
+        ).toBe(true);
+        now = 20;
+        expect(
+          manager.apply(roomId, {
+            type: 'disconnect',
+            memberId: created.value.member.memberId,
+            now,
+          })?.accepted,
+        ).toBe(true);
+      }
+
+      const timers: FakeTimer[] = [];
+      const coordinator = new RoomLifecycleTimerCoordinator(manager, {
+        now: () => now,
+        setTimer: (callback, delayMs) => {
+          const timer = { callback, delayMs, cleared: false };
+          timers.push(timer);
+          return timer;
+        },
+        clearTimer: (handle) => {
+          (handle as FakeTimer).cleared = true;
+        },
+      });
+      coordinator.sync(manager.get(roomId)!);
+      expect(coordinator.size).toBe(1);
+      now = scenario === 'lobbyExpired' ? 100 : 120;
+      timers[0]!.callback();
+
+      expect(coordinator.size).toBe(0);
+      expect(manager.size).toBe(0);
+      expect(manager.findByUser(`${scenario}-user`)).toBeUndefined();
+      expect(
+        manager.join(inviteCode, {
+          userId: `${scenario}-other`,
+          displayName: '参加者',
+        }),
+      ).toEqual({ ok: false, code: 'ROOM_NOT_FOUND' });
+      timers[0]!.callback();
+      expect(manager.size).toBe(0);
+    }
   });
 });

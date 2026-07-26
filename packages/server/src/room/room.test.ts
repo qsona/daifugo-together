@@ -2,7 +2,7 @@ import { enumerateLegalPlays } from '@daifugo/core';
 import { describe, expect, it } from 'vitest';
 
 import { createRoomState, reduceRoom } from './reducer.js';
-import type { RoomState } from './types.js';
+import type { RoomAction, RoomState } from './types.js';
 import { viewFor } from './view.js';
 
 function room(): RoomState {
@@ -470,6 +470,68 @@ describe('pure room reducer', () => {
     expect(duplicate.state).toBe(accepted.state);
   });
 
+  it('2席playと手番timeoutの三つ巴でも、同じturnSeqを1件だけ適用する', () => {
+    const permutations = [
+      [0, 1, 2],
+      [0, 2, 1],
+      [1, 0, 2],
+      [1, 2, 0],
+      [2, 0, 1],
+      [2, 1, 0],
+    ];
+    for (const order of permutations) {
+      let state = start(fourHumanRoom());
+      const game = state.engine!.currentGame!;
+      const current = game.public.turn!;
+      const other = state.members.find(
+        (member) => member.memberId !== current,
+      )!.memberId;
+      const lead = game.players[current]!.hand.find(
+        (card) => card.id === 'D03',
+      )!;
+      const otherCard = game.players[other]!.hand[0]!;
+      const actions: RoomAction[] = [
+        {
+          type: 'play',
+          memberId: current,
+          turnSeq: state.turnSeq,
+          cards: [lead.id],
+          now: 3_000,
+        },
+        {
+          type: 'play',
+          memberId: other,
+          turnSeq: state.turnSeq,
+          cards: [otherCard.id],
+          now: 3_000,
+        },
+        {
+          type: 'autoAct',
+          memberId: current,
+          turnSeq: state.turnSeq,
+          cards: [lead.id],
+          reason: 'turnTimeout',
+          now: 3_000,
+        },
+      ];
+      let accepted = 0;
+      for (const index of order) {
+        const transition = reduceRoom(state, actions[index]!);
+        if (transition.accepted) accepted += 1;
+        state = transition.state;
+      }
+      expect(accepted).toBe(1);
+      expect(state.turnSeq).toBe(1);
+      const finalGame = state.engine!.currentGame!;
+      const cardCount =
+        Object.values(finalGame.players).reduce(
+          (total, player) => total + player.hand.length,
+          0,
+        ) + (finalGame.public.field.current?.play.cards.length ?? 0);
+      expect(cardCount).toBe(52);
+    }
+  });
+
   it('人間手番の期限を接続状態に合わせ、autoActだけturnTimeoutを公開する', () => {
     const started = start(fourHumanRoom());
     const player = started.engine!.currentGame!.public.turn!;
@@ -780,6 +842,71 @@ describe('pure room reducer', () => {
 });
 
 describe('per-player room view allow-list', () => {
+  it('異なるseedと合法手選択で生成した多数局面でも、他席の手札を漏らさない', () => {
+    for (let sample = 0; sample < 16; sample += 1) {
+      let state = reduceRoom(
+        fourHumanRoom(),
+        {
+          type: 'start',
+          memberId: 'member-1',
+          now: 1_000,
+          setSeed: `leak-property-${sample}`,
+        },
+        {
+          gamesPerSet: 1,
+          random: () => ((sample * 37 + 11) % 101) / 101,
+        },
+      ).state;
+
+      for (let step = 0; step < 400 && state.phase === 'playing'; step += 1) {
+        expectNoOtherHands(state);
+        const engine = state.engine!;
+        if (engine.phase.name === 'interimResult') {
+          state = reduceRoom(state, {
+            type: 'advanceIntermission',
+            now: 2_000 + step,
+          }).state;
+          continue;
+        }
+        if (engine.phase.name !== 'gameInProgress') {
+          throw new Error('Room phase did not follow the set phase');
+        }
+        const game = engine.currentGame!;
+        const memberId = game.public.turn!;
+        const legal = enumerateLegalPlays(
+          {
+            gameIndex: engine.phase.gameIndex,
+            seats: engine.members.map((member) => member.id),
+            gameSeed: `${engine.setSeed}:${engine.phase.gameIndex}`,
+            ruleChain: engine.ruleChain,
+          },
+          game,
+          memberId,
+        );
+        const choice =
+          legal[(sample * 17 + step * 13) % Math.max(legal.length, 1)];
+        state = (
+          choice
+            ? reduceRoom(state, {
+                type: 'play',
+                memberId,
+                turnSeq: state.turnSeq,
+                cards: choice.cards.map((card) => card.id),
+                now: 2_000 + step,
+              })
+            : reduceRoom(state, {
+                type: 'pass',
+                memberId,
+                turnSeq: state.turnSeq,
+                now: 2_000 + step,
+              })
+        ).state;
+      }
+      expect(state.phase).toBe('setResult');
+      expectNoOtherHands(state);
+    }
+  });
+
   it('本人の手札だけを含み、他人のuserId・Core private・内部ルール情報を配信しない', () => {
     const started = start(fourHumanRoom());
     const game = started.engine?.currentGame;

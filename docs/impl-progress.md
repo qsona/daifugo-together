@@ -321,6 +321,7 @@ TS-02 から継続で未解決のもの:
 - `packages/core/src/protocol.ts`へ共有イベント型とzod schemaを置き、全client eventの受信時にstrict検証する。不正形は`BAD_PAYLOAD`、join過多は`RATE_LIMITED`、予期しない例外は`INTERNAL`でackする。zodは確認時latestの4.4.3をexact指定した。
 - fingerprint付きtimerでintermission・setResult・turnを駆動。同じ状態の再syncで期限を延長せず、古いcallbackとAI決定中に進んだ`turnSeq`をno-opにする。AI演出間隔はE3仕様の0.8〜2.5秒をRoom側で持ち、`runAiTurn`内の遅延は0に上書きして二重待機を避ける。
 - waiting切断60秒猶予、lobby TTL 30分、接続中人間0のabandon 5分を別のlifecycle timerで駆動。reconnectで予約を張り替え、部屋破棄時は全timerとindexを解除する。joinはIP単位10回/分のfixed-window制限を持つ。
+- 漏洩回帰は16 seedで生成した多数局面と実Socketで受信した全snapshot/event列を走査する。二席play+timeoutの同一`turnSeq`三つ巴を全順序で確認し、切断中に数手進んだ後の再接続snapshot一致、破棄後timer/room/user/invite indexがゼロになることも固定した。
 
 ### E3で置いた仮定・次工程
 

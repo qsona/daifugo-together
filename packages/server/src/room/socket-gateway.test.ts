@@ -1,6 +1,6 @@
 import { createServer, type Server as HttpServer } from 'node:http';
 
-import { enumerateLegalPlays } from '@daifugo/core';
+import { createDeck, enumerateLegalPlays } from '@daifugo/core';
 import { Server } from 'socket.io';
 import {
   io as createClient,
@@ -22,6 +22,7 @@ import {
   type RoomSocketServer,
 } from './socket-gateway.js';
 import type { PlayerRoomView } from './types.js';
+import { viewFor } from './view.js';
 
 type TestClient = ClientSocket<ServerToClientEvents, ClientToServerEvents>;
 
@@ -49,6 +50,28 @@ function allStrings(value: unknown): string[] {
     ]);
   }
   return [];
+}
+
+function expectNoHiddenCardIds(view: PlayerRoomView): void {
+  const deckIds = new Set(createDeck().map((card) => card.id));
+  const allowed = new Set<string>([
+    ...(view.game?.yourHand.map((card) => card.id) ?? []),
+    ...(view.game?.field.cards.map((card) => card.id) ?? []),
+    ...(view.game?.history.flatMap((event) =>
+      event.t === 'played' ? event.cards.map((card) => card.id) : [],
+    ) ?? []),
+    ...view.events.flatMap((event) =>
+      event.t === 'played' ? event.cards.map((card) => card.id) : [],
+    ),
+  ]);
+  for (const value of allStrings(view)) {
+    if (deckIds.has(value)) {
+      expect(
+        allowed.has(value),
+        `hidden card ${value} leaked at v=${view.v}`,
+      ).toBe(true);
+    }
+  }
 }
 
 async function createHarness(
@@ -243,6 +266,89 @@ describe('Socket.IO room gateway', () => {
     expect(replacement.ready.room?.events).toEqual([]);
   });
 
+  it('切断中に権威状態が数手進んでも、再接続snapshotが最新版と一致する', async () => {
+    let sequence = 0;
+    const rooms = new RoomManager({
+      now: () => 10_000,
+      createRoomId: () => `room-reconnect-${++sequence}`,
+      createMemberId: () => `member-reconnect-${++sequence}`,
+      randomIndex: (max) => sequence++ % max,
+      reducer: { random: () => 0.999_999 },
+    });
+    const harness = await createHarness({
+      rooms,
+      timers: {
+        setTimer: () => ({ fake: true }),
+        clearTimer: () => {},
+      },
+    });
+    const owner = await connect(harness);
+    const guest = await connect(harness);
+    const created = await emitAck<
+      'room:create',
+      { roomId: string; inviteCode: string }
+    >(owner.client, 'room:create', {});
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    await emitAck<'room:join', { roomId: string }>(guest.client, 'room:join', {
+      inviteCode: created.value.inviteCode,
+    });
+    await emitAck<'room:start', Record<string, never>>(
+      owner.client,
+      'room:start',
+      {},
+    );
+
+    const disconnectedState = once<PlayerRoomView>((resolve) =>
+      guest.client.on('room:state', (view) => {
+        const ownerMember = view.members.find(
+          (member) => member.displayName === owner.ready.displayName,
+        );
+        if (ownerMember?.connected === false) resolve(view);
+      }),
+    );
+    owner.client.disconnect();
+    const disconnectedView = await disconnectedState;
+
+    for (let step = 0; step < 3; step += 1) {
+      const state = rooms.get(created.value.roomId)!;
+      const engine = state.engine!;
+      if (engine.phase.name !== 'gameInProgress') {
+        throw new Error('Expected the reconnect fixture to remain in a game');
+      }
+      const memberId = engine.currentGame!.public.turn!;
+      const legal = enumerateLegalPlays(
+        {
+          gameIndex: engine.phase.gameIndex,
+          seats: engine.members.map((member) => member.id),
+          gameSeed: `${engine.setSeed}:${engine.phase.gameIndex}`,
+          ruleChain: engine.ruleChain,
+        },
+        engine.currentGame!,
+        memberId,
+      );
+      const transition = rooms.apply(created.value.roomId, {
+        type: 'autoAct',
+        memberId,
+        turnSeq: state.turnSeq,
+        cards: legal[0]?.cards.map((card) => card.id) ?? null,
+        reason: 'ai',
+        now: 10_001 + step,
+      });
+      expect(transition?.accepted).toBe(true);
+    }
+
+    const replacement = await connect(harness, owner.ready.userToken);
+    const membership = rooms.findByUser(owner.ready.userId)!;
+    expect(replacement.ready.room).toEqual(
+      viewFor(membership.room, membership.member.memberId, {
+        reconnect: true,
+      }),
+    );
+    expect(replacement.ready.room?.events).toEqual([]);
+    expect(replacement.ready.room?.v).toBeGreaterThan(disconnectedView.v);
+  });
+
   it('最後の人間がleaveすると、ackとroom:closedを両方返す', async () => {
     const harness = await createHarness();
     const owner = await connect(harness);
@@ -377,10 +483,10 @@ describe('Socket.IO room gateway', () => {
     expect(created.ok).toBe(true);
     if (!created.ok) return;
 
-    const versions: number[] = [];
+    const receivedViews: PlayerRoomView[] = [];
     const completed = once<PlayerRoomView>((resolve) => {
       owner.client.on('room:state', (view) => {
-        versions.push(view.v);
+        receivedViews.push(view);
         if (view.phase === 'setResult') resolve(view);
       });
     });
@@ -393,9 +499,12 @@ describe('Socket.IO room gateway', () => {
     const result = await completed;
 
     expect(result.setResult?.standings).toHaveLength(4);
+    for (const view of receivedViews) {
+      expectNoHiddenCardIds(view);
+    }
     expect(
-      versions.every(
-        (value, index) => index === 0 || value > versions[index - 1]!,
+      receivedViews.every(
+        (view, index) => index === 0 || view.v > receivedViews[index - 1]!.v,
       ),
     ).toBe(true);
     const authority = rooms.get(created.value.roomId);
