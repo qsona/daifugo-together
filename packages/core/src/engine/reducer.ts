@@ -572,10 +572,7 @@ function reducePlay(
       });
       const finalEvents = [...events, ...cleared.events, ...finished.events];
       return {
-        state: appendEvents(finished.state, [
-          ...cleared.events,
-          ...finished.events,
-        ]),
+        state: appendEvents(finished.state, finished.events),
         events: finalEvents,
         rejections: [],
         setMemory: finished.setMemory,

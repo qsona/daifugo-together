@@ -614,6 +614,7 @@ export function executeEffectHook(
   );
   const invalid: InvalidEffectEmission[] = [];
   const emissions: EffectEmission[] = [];
+  const effectCountByRule = new Map<string, number>();
   const collected: unknown = (() => {
     try {
       return runtime.port.collectEffects(
@@ -640,18 +641,22 @@ export function executeEffectHook(
         continue;
       }
       if (!Array.isArray(collectedEntry.effects)) {
+        const effectIndex = effectCountByRule.get(ruleId) ?? 0;
+        effectCountByRule.set(ruleId, effectIndex + 1);
         invalid.push({
           emission: {
             ruleId,
             position,
-            effectIndex: 0,
+            effectIndex,
             effect: INVALID_EFFECT_EVENT_PAYLOAD,
           },
-          reason: 'invalid-payload',
+          reason: effectIndex >= 8 ? 'effect-limit' : 'invalid-payload',
         });
         continue;
       }
-      collectedEntry.effects.forEach((candidate, effectIndex) => {
+      collectedEntry.effects.forEach((candidate) => {
+        const effectIndex = effectCountByRule.get(ruleId) ?? 0;
+        effectCountByRule.set(ruleId, effectIndex + 1);
         const valid = effectPayloadValid(candidate);
         const effect = valid ? candidate : INVALID_EFFECT_EVENT_PAYLOAD;
         const emission: EffectEmission = {

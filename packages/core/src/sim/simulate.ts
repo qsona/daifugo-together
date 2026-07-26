@@ -1,4 +1,4 @@
-import { reduceSet, startSet } from '../set/set-reducer.js';
+import { reduceSet, startSetTransition } from '../set/set-reducer.js';
 import type { SetAction, SetState, SetTransition } from '../set/types.js';
 import {
   NO_RULE_CHAIN_PORT,
@@ -152,7 +152,7 @@ export function simulate(options: SimulateOptions): SimReport {
   let turnLimitActivations = 0;
 
   for (let setIndex = 0; setIndex < options.games; setIndex += 1) {
-    let state = startSet(
+    const started = startSetTransition(
       {
         setId: `sim-${setIndex}`,
         config: { gamesPerSet: 3, interimAutoAdvanceMs: 0 },
@@ -166,6 +166,18 @@ export function simulate(options: SimulateOptions): SimReport {
       },
       port,
     );
+    let state = started.state;
+    const initialFailsafes = summarizeFailsafes(started.events);
+    failsafeActivations += initialFailsafes.total;
+    leadNoLegalMoveActivations += initialFailsafes.leadNoLegalMove;
+    turnLimitActivations += initialFailsafes.turnLimit;
+    for (const result of state.results) {
+      completedGames += 1;
+      totalTurns += state.currentGame?.public.turnCount ?? 0;
+      for (const ruleId of result.firedRuleIds) {
+        ruleFiredCounts[ruleId] = (ruleFiredCounts[ruleId] ?? 0) + 1;
+      }
+    }
     let actions = 0;
     while (state.phase.name !== 'setResult' && actions < 10_000) {
       const beforeResults = state.results.length;
@@ -200,11 +212,13 @@ export function simulate(options: SimulateOptions): SimReport {
         });
       }
       if (state.results.length > beforeResults) {
-        const result = state.results.at(-1);
-        completedGames += 1;
+        const newResults = state.results.slice(beforeResults);
+        completedGames += newResults.length;
         totalTurns += state.currentGame?.public.turnCount ?? 0;
-        for (const ruleId of result?.firedRuleIds ?? []) {
-          ruleFiredCounts[ruleId] = (ruleFiredCounts[ruleId] ?? 0) + 1;
+        for (const result of newResults) {
+          for (const ruleId of result.firedRuleIds) {
+            ruleFiredCounts[ruleId] = (ruleFiredCounts[ruleId] ?? 0) + 1;
+          }
         }
       }
       actions += 1;

@@ -464,6 +464,18 @@ describe('GE-04 effect pipeline and lifecycle hooks', () => {
     expect(transition.state.public.turn).toBeNull();
     expect(transition.state.players.p1?.standing).toBe(1);
     expect(transition.events.at(-1)?.type).toBe('gameEnded');
+    expect(
+      transition.state.public.history.filter(
+        (event) => event.type === 'fieldCleared',
+      ),
+    ).toHaveLength(1);
+    for (const player of ['p2', 'p3', 'p4']) {
+      expect(
+        transition.state.public.history.filter(
+          (event) => event.type === 'playerRetired' && event.player === player,
+        ),
+      ).toHaveLength(1);
+    }
   });
 
   it('onGameStartのmoveCardsで手札が0枚になったactiveへ順位を付ける', () => {
@@ -1164,8 +1176,52 @@ describe('GE-04 effect pipeline and lifecycle hooks', () => {
     expect(() => JSON.stringify(started)).not.toThrow();
   });
 
+  it('公開RuleChainPortがruleIdを分割してもEffect上限を合算する', () => {
+    const ruleEntry = entry('r0118-duplicate-port-entry');
+    const basePort = createInProcessRuleChainPort([]);
+    const effects = Array.from({ length: 16 }, (_, index) => ({
+      type: 'setMemory' as const,
+      scope: 'game' as const,
+      key: `key-${index}`,
+      value: index,
+    }));
+    const config: GameConfig = {
+      gameIndex: 0,
+      seats,
+      gameSeed: 'duplicate-port-entry',
+      ruleChain: [ruleEntry],
+    };
+    const duplicateRuntime: RuleRuntime = {
+      port: {
+        ...basePort,
+        collectEffects: () => [
+          { ruleId: ruleEntry.ruleId, effects: effects.slice(0, 8) },
+          { ruleId: ruleEntry.ruleId, effects: effects.slice(8) },
+        ],
+      },
+      setHistory: [],
+      setMemory: {},
+    };
+
+    const started = startGame(config, duplicateRuntime);
+
+    expect(
+      Object.keys(started.state.private.memory[ruleEntry.ruleId] ?? {}),
+    ).toHaveLength(8);
+    expect(
+      started.events.filter(
+        (event) =>
+          event.type === 'effectRejected' &&
+          event.detail &&
+          typeof event.detail === 'object' &&
+          !Array.isArray(event.detail) &&
+          event.detail.reason === 'effect-limit',
+      ),
+    ).toHaveLength(8);
+  });
+
   it('onGameStartのskipTurnsを第1手番前に消化する', () => {
-    const ruleEntry = entry('r0118-opening-skip');
+    const ruleEntry = entry('r0119-opening-skip');
     let skipped = '';
     const module: RuleModule = {
       meta: {
