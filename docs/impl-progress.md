@@ -188,3 +188,40 @@ TS-02 から継続で未解決のもの:
 - **E04 §2.1.1 の「`src/assets` へコピー」は、§2.2(3) の「正本を 1 つに保つ」と手段が食い違っている。** 実装では alias 直接参照を採った(仮定 1・プロセス1 で採用裁定済み)。設計書側の記述の更新を提案する。
 - **E04 §1.3 は デザインシステム成果物を「並行作業で構築中」と書いているが、実際は 4 ファイルとも完成済み。** 状態記述の更新を提案する。
 - **`design-system.html` §5-4 のフォーカスリングだけがカタログ内で規約違反(生の色関数)**(仮定 13)。実装は color-mix に置き換えたが、カタログ側は触っていない。デザインシステム成果物側での修正を提案する。
+
+---
+
+## 並行進行: E1 ゲームエンジン
+
+- 状態: GE-02・GE-03・GE-05・GE-04 のプロセス2実装完了。独立 GPT-5.6 Sol 完了レビュー待ち。
+- プロセス1: `8c38c3d`（リベース前 `a3e98a1`）
+- プロセス2: `841745a`
+- 検証: Node 26.5.0 / pnpm 11.17.0 / TypeScript 6.0.3 で `pnpm verify` 成功。E1 core は 10 files / 42 tests、統合リポジトリ全体は 13 files / 78 tests。format・lint・design lint・typecheck・build 成功。
+
+### 完了内容
+
+| ストーリー | プロセス2で仕上げた内容 |
+|---|---|
+| GE-02 | 権威判定と合法手表示の一致、スキップ消化、リード手詰まり保護、1000手強制終局、秘匿走査 |
+| GE-03 | `forceRank` の退場・非公開札隔離・競合時の近傍順位割当、全順位確定 |
+| GE-05 | draining、`setEnded`、set履歴・set KVのゲーム間参照、受理済みアクション追記境界、リプレイ実行器 |
+| GE-04 | 全Effect語彙、優先度・競合解決、resolutionログ、全フック、KVクォータ、4 fixtureの全16部分集合、シミュレーション |
+
+プロセス1の独立 GPT-5.6 Sol レビューは `GO_WITH_FIXES`。指摘された権威状態の可変参照、ルール間で共有された RNG/KV、合法手フェイルセーフの不一致、未接続フック、B-4 のアクションログ境界をすべて反映した。
+
+### E1で置いた仮定
+
+| 仮定 | 根拠 | 影響範囲 |
+|---|---|---|
+| 契約 v1 は choice と `afterPass` を持たない | decision-log B-1 は未決だが E01 が暫定 B を明示 | RuleHooks、E7 の却下分類 |
+| `turnCount > 1000`、KV は 32 keys / 1KB value / 16KB namespace | decision-log B-2 は仮値で着手可 | reducer、Effect適用、simulation |
+| B-4 は core に保存先を持たせず、受理済みアクションの追記ポートとリプレイ型・実行器を提供 | 保存先・保持期間は未決だが、書込み開始点は確定可能 | `set/types.ts`、`replay/replay.ts`。永続実装は server / OP-03 |
+| draining中は進行中ゲームを完走し、ゲーム間なら即時、ゲーム中なら終了直後に既存結果で `setResult` | E01改訂ノート、E12 §4.5 | `requestDrain`、`SetOutcome.completion` |
+| 空のfieldを移動先にする `moveCards` は棄却 | `Zone.field` に `FieldState.current.by` を決める情報がない | `engine/effects.ts`。契約拡張時に見直し |
+| 上書き直前の `field.current` は `discard` へ移す | 最新プレイ1件のFieldStateとカード保存を両立 | reducer、snapshot |
+
+### E1で見つけた設計書の不整合
+
+- E01の旧節に54枚・14/14/13/13が残るが、同文書の確定版と decision-log A-3 はジョーカーなし52枚・13枚ずつ。実装は確定版に従った。
+- E01 §3.4の一部に次戦先手を前戦大貧民とする旧BR-11が残る。実装は確定版どおり毎ゲームのダイヤ3保持者。
+- 空のfieldを移動先にする `moveCards` は、所有者 `by` の決定規則が契約にない。現在は例外を投げず棄却し、resolutionログへ理由を残す。
