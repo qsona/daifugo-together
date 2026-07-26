@@ -4,6 +4,7 @@ import type { GameConfig, GameState } from '../game/types.js';
 import { startGame } from '../game/start-game.js';
 import { reduceGame } from '../engine/reducer.js';
 import { samePlay } from '../play/play.js';
+import { BASE_STRENGTH_ORDER } from '../play/strength.js';
 import { buildPlayerSnapshot } from '../snapshot/snapshot.js';
 import { NO_RULE_CHAIN_PORT, type RuleRuntime } from './chain.js';
 import type { RuleChainEntry, RuleModule } from './contract.js';
@@ -374,10 +375,28 @@ describe('GE-04 independent rule modules', () => {
       setHistory: [],
       setMemory: {},
     };
+    const strengthBefore = [...BASE_STRENGTH_ORDER.ranking];
+    const cardIdBefore = card.id;
+    const mutatingInputRuntime: RuleRuntime = {
+      port: {
+        ...NO_RULE_CHAIN_PORT,
+        modifyStrength: (_entries, _context, base) => {
+          base.ranking.reverse();
+          return { result: base, influenced: [entry.ruleId] };
+        },
+        modifyLegality: (_entries, _context, plays, base) => {
+          plays[0]!.cards[0]!.id = 'CORRUPTED';
+          return { results: base, influenced: [entry.ruleId] };
+        },
+      },
+      setHistory: [],
+      setMemory: {},
+    };
 
     for (const ruleRuntime of [
       invalidStrengthRuntime,
       invalidLegalityRuntime,
+      mutatingInputRuntime,
     ]) {
       const transition = reduceGame(
         config,
@@ -390,6 +409,9 @@ describe('GE-04 independent rule modules', () => {
         card,
       );
     }
+    expect(BASE_STRENGTH_ORDER.ranking).toEqual(strengthBefore);
+    expect(card.id).toBe(cardIdBefore);
+    expect(started.players[player]?.hand[0]?.id).not.toBe('CORRUPTED');
   });
 
   it('modifyLegality返値の複製中に例外が起きても基本進行を続ける', () => {

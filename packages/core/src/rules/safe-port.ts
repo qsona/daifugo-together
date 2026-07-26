@@ -3,6 +3,7 @@ import type { Play } from '../play/play.js';
 import type { StrengthOrder } from '../play/strength.js';
 import type { RuleChainPort } from './chain.js';
 import type { Legality, RuleChainEntry, RuleContext } from './contract.js';
+import { detachedFrozen } from './context.js';
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return (
@@ -93,7 +94,11 @@ export function safeModifyStrength(
   base: StrengthOrder,
 ): { result: StrengthOrder; influenced: string[] } {
   try {
-    const returned: unknown = port.modifyStrength(entries, context, base);
+    const returned: unknown = port.modifyStrength(
+      detachedFrozen(entries) as RuleChainEntry[],
+      context,
+      detachedFrozen(base) as StrengthOrder,
+    );
     if (!isPlainRecord(returned)) {
       return { result: base, influenced: [] };
     }
@@ -115,10 +120,10 @@ export function safeModifyLegality(
 ): { results: Legality[]; influenced: string[] } {
   try {
     const returned: unknown = port.modifyLegality(
-      entries,
+      detachedFrozen(entries) as RuleChainEntry[],
       context,
-      plays,
-      base,
+      detachedFrozen(plays) as Play[],
+      detachedFrozen(base) as Legality[],
     );
     const cloned: unknown = structuredClone(returned);
     if (
