@@ -1,4 +1,9 @@
-import { sortCards, type Card, type CardId } from '../cards/card.js';
+import {
+  CARD_RANKS,
+  sortCards,
+  type Card,
+  type CardId,
+} from '../cards/card.js';
 import type {
   EngineEvent,
   GameConfig,
@@ -412,7 +417,9 @@ function isJsonValue(value: unknown): value is JsonValue {
     return Number.isFinite(value);
   }
   if (Array.isArray(value)) {
-    return value.every(isJsonValue);
+    return Array.from({ length: value.length }, (_, index) =>
+      isJsonValue(value[index]),
+    ).every(Boolean);
   }
   if (
     typeof value !== 'object' ||
@@ -420,11 +427,37 @@ function isJsonValue(value: unknown): value is JsonValue {
   ) {
     return false;
   }
-  return Object.values(value).every(isJsonValue);
+  return (
+    Reflect.ownKeys(value).every((key) => typeof key === 'string') &&
+    Object.values(value).every(isJsonValue)
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  try {
+    return (
+      typeof value === 'object' &&
+      value !== null &&
+      !Array.isArray(value) &&
+      Object.getPrototypeOf(value) === Object.prototype
+    );
+  } catch {
+    return false;
+  }
+}
+
+function hasExactKeys(
+  value: Record<string, unknown>,
+  required: readonly string[],
+  optional: readonly string[] = [],
+): boolean {
+  const allowed = new Set([...required, ...optional]);
+  return (
+    required.every((key) => Object.hasOwn(value, key)) &&
+    Reflect.ownKeys(value).every(
+      (key) => typeof key === 'string' && allowed.has(key),
+    )
+  );
 }
 
 function zoneValid(value: unknown): boolean {
@@ -432,9 +465,13 @@ function zoneValid(value: unknown): boolean {
     return false;
   }
   if (value.kind === 'field' || value.kind === 'discard') {
-    return true;
+    return hasExactKeys(value, ['kind']);
   }
-  return value.kind === 'hand' && typeof value.player === 'string';
+  return (
+    value.kind === 'hand' &&
+    typeof value.player === 'string' &&
+    hasExactKeys(value, ['kind', 'player'])
+  );
 }
 
 function selectorValid(value: unknown): boolean {
@@ -444,73 +481,105 @@ function selectorValid(value: unknown): boolean {
   switch (value.kind) {
     case 'specific':
       return (
+        hasExactKeys(value, ['kind', 'cardIds']) &&
         Array.isArray(value.cardIds) &&
         value.cardIds.every((cardId) => typeof cardId === 'string')
       );
     case 'byRank':
-      return typeof value.rank === 'string';
+      return (
+        hasExactKeys(value, ['kind', 'rank']) &&
+        typeof value.rank === 'string' &&
+        CARD_RANKS.includes(value.rank as (typeof CARD_RANKS)[number])
+      );
     case 'random':
       return (
+        hasExactKeys(value, ['kind', 'count']) &&
         typeof value.count === 'number' &&
         Number.isInteger(value.count) &&
         Number.isFinite(value.count) &&
         value.count >= 0
       );
     case 'all':
-      return true;
+      return hasExactKeys(value, ['kind']);
     default:
       return false;
   }
 }
 
 function effectPayloadValid(effect: unknown): effect is Effect {
-  if (!isRecord(effect) || typeof effect.type !== 'string') {
+  try {
+    if (
+      !isRecord(effect) ||
+      !isJsonValue(effect) ||
+      typeof effect.type !== 'string'
+    ) {
+      return false;
+    }
+    switch (effect.type) {
+      case 'clearField':
+      case 'reverseTurnOrder':
+        return hasExactKeys(effect, ['type']);
+      case 'skipTurns':
+        return (
+          hasExactKeys(effect, ['type', 'player', 'count']) &&
+          typeof effect.player === 'string' &&
+          typeof effect.count === 'number' &&
+          Number.isFinite(effect.count) &&
+          Number.isInteger(effect.count)
+        );
+      case 'forceRank':
+        return (
+          hasExactKeys(effect, ['type', 'player', 'rank']) &&
+          typeof effect.player === 'string' &&
+          typeof effect.rank === 'number' &&
+          Number.isInteger(effect.rank) &&
+          effect.rank >= 1 &&
+          effect.rank <= 4
+        );
+      case 'moveCards':
+        return (
+          hasExactKeys(effect, ['type', 'from', 'to', 'cards']) &&
+          zoneValid(effect.from) &&
+          zoneValid(effect.to) &&
+          selectorValid(effect.cards)
+        );
+      case 'setMemory':
+        return (
+          hasExactKeys(effect, ['type', 'scope', 'key', 'value']) &&
+          (effect.scope === 'game' || effect.scope === 'set') &&
+          typeof effect.key === 'string' &&
+          effect.key.length > 0 &&
+          isJsonValue(effect.value)
+        );
+      case 'announce':
+        return (
+          hasExactKeys(effect, ['type', 'messageKey'], ['params']) &&
+          typeof effect.messageKey === 'string' &&
+          (effect.params === undefined ||
+            (isRecord(effect.params) &&
+              Object.values(effect.params).every(
+                (value) => typeof value === 'string',
+              )))
+        );
+      default:
+        return false;
+    }
+  } catch {
     return false;
   }
-  switch (effect.type) {
-    case 'clearField':
-    case 'reverseTurnOrder':
-      return true;
-    case 'skipTurns':
-      return (
-        typeof effect.player === 'string' &&
-        typeof effect.count === 'number' &&
-        Number.isFinite(effect.count) &&
-        Number.isInteger(effect.count)
-      );
-    case 'forceRank':
-      return (
-        typeof effect.player === 'string' &&
-        typeof effect.rank === 'number' &&
-        Number.isInteger(effect.rank) &&
-        effect.rank >= 1 &&
-        effect.rank <= 4
-      );
-    case 'moveCards':
-      return (
-        zoneValid(effect.from) &&
-        zoneValid(effect.to) &&
-        selectorValid(effect.cards)
-      );
-    case 'setMemory':
-      return (
-        (effect.scope === 'game' || effect.scope === 'set') &&
-        typeof effect.key === 'string' &&
-        effect.key.length > 0 &&
-        isJsonValue(effect.value)
-      );
-    case 'announce':
-      return (
-        typeof effect.messageKey === 'string' &&
-        (effect.params === undefined ||
-          (isRecord(effect.params) &&
-            Object.values(effect.params).every(
-              (value) => typeof value === 'string',
-            )))
-      );
-    default:
-      return false;
-  }
+}
+
+const INVALID_EFFECT_EVENT_PAYLOAD: Effect = {
+  type: 'announce',
+  messageKey: 'engine.invalid-effect-payload',
+};
+
+type InvalidEffectReason =
+  'effect-limit' | 'invalid-payload' | 'hook-not-allowed';
+
+interface InvalidEffectEmission {
+  emission: EffectEmission;
+  reason: InvalidEffectReason;
 }
 
 export function executeEffectHook(
@@ -543,17 +612,49 @@ export function executeEffectHook(
   const positionByRule = new Map(
     config.ruleChain.map((entry) => [entry.ruleId, entry.position]),
   );
-  const invalid: EffectEmission[] = [];
-  const emissions = runtime.port
-    .collectEffects(hook, config.ruleChain, context, argument)
-    .flatMap(({ ruleId, effects }) => {
+  const invalid: InvalidEffectEmission[] = [];
+  const emissions: EffectEmission[] = [];
+  const collected: unknown = (() => {
+    try {
+      return runtime.port.collectEffects(
+        hook,
+        config.ruleChain,
+        context,
+        argument,
+      );
+    } catch {
+      return [];
+    }
+  })();
+  if (Array.isArray(collected)) {
+    for (const collectedEntry of collected) {
+      if (
+        !isRecord(collectedEntry) ||
+        typeof collectedEntry.ruleId !== 'string'
+      ) {
+        continue;
+      }
+      const ruleId = collectedEntry.ruleId;
       const position = positionByRule.get(ruleId);
       if (position === undefined) {
-        return [];
+        continue;
       }
-      return effects.map((effect, effectIndex) => {
-        const valid = effectPayloadValid(effect);
-        return {
+      if (!Array.isArray(collectedEntry.effects)) {
+        invalid.push({
+          emission: {
+            ruleId,
+            position,
+            effectIndex: 0,
+            effect: INVALID_EFFECT_EVENT_PAYLOAD,
+          },
+          reason: 'invalid-payload',
+        });
+        continue;
+      }
+      collectedEntry.effects.forEach((candidate, effectIndex) => {
+        const valid = effectPayloadValid(candidate);
+        const effect = valid ? candidate : INVALID_EFFECT_EVENT_PAYLOAD;
+        const emission: EffectEmission = {
           ruleId,
           position,
           effectIndex,
@@ -569,37 +670,34 @@ export function executeEffectHook(
               }
             : {}),
         };
+        const reason: InvalidEffectReason | null =
+          effectIndex >= 8
+            ? 'effect-limit'
+            : !valid
+              ? 'invalid-payload'
+              : !effectAllowed(hook, effect)
+                ? 'hook-not-allowed'
+                : null;
+        if (reason) {
+          invalid.push({ emission, reason });
+        } else {
+          emissions.push(emission);
+        }
       });
-    })
-    .filter((emission) => {
-      const allowed =
-        emission.effectIndex < 8 &&
-        effectPayloadValid(emission.effect) &&
-        effectAllowed(hook, emission.effect);
-      if (!allowed) {
-        invalid.push(emission);
-      }
-      return allowed;
-    });
+    }
+  }
   const batch = resolveEffectBatch(hook, emissions);
   let nextState = invocation.state;
   let setMemory = runtime.setMemory;
   let clearRequested = false;
-  const events: EngineEvent[] = invalid.map((entry) => ({
+  const events: EngineEvent[] = invalid.map(({ emission, reason }) => ({
     type: 'effectRejected',
     hook,
-    ruleId: entry.ruleId,
-    effect: entry.effect,
+    ruleId: emission.ruleId,
+    effect: emission.effect,
     resolution: 'rejected',
     conflictKey: null,
-    detail: {
-      reason:
-        entry.effectIndex >= 8
-          ? 'effect-limit'
-          : !effectPayloadValid(entry.effect)
-            ? 'invalid-payload'
-            : 'hook-not-allowed',
-    },
+    detail: { reason },
   }));
   const details = new Map<number, JsonValue>();
 

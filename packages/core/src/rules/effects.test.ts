@@ -1079,8 +1079,93 @@ describe('GE-04 effect pipeline and lifecycle hooks', () => {
     expect(() => startGame(config, runtime(module))).not.toThrow();
   });
 
+  it('余剰フィールド・非JSON値・不正rankを適用せずJSON安全に棄却する', () => {
+    const ruleEntry = entry('r0116-json-boundary');
+    const module: RuleModule = {
+      meta: {
+        ruleId: ruleEntry.ruleId,
+        name: ruleEntry.name,
+        description: 'non-JSON effect boundary probe',
+        kind: 'original',
+        proposalId: 'fixture',
+        contractVersion: 1,
+        messages: {},
+      },
+      hooks: {
+        onGameStart: () =>
+          [
+            { type: 'reverseTurnOrder', extra: Number.NaN },
+            { type: 'reverseTurnOrder', extra: Number.POSITIVE_INFINITY },
+            { type: 'reverseTurnOrder', extra: 1n },
+            { type: 'reverseTurnOrder', extra: new Date(0) },
+            { type: 'reverseTurnOrder', extra: new Map([['x', 1]]) },
+            { type: 'reverseTurnOrder', extra: undefined },
+            {
+              type: 'moveCards',
+              from: { kind: 'hand', player: 'p1' },
+              to: { kind: 'discard' },
+              cards: { kind: 'byRank', rank: 'bogus' },
+            },
+          ] as never,
+      },
+    };
+    const config: GameConfig = {
+      gameIndex: 0,
+      seats,
+      gameSeed: 'json-effect-boundary',
+      ruleChain: [ruleEntry],
+    };
+
+    const started = startGame(config, runtime(module));
+
+    expect(started.state.public.direction).toBe(1);
+    expect(
+      started.events.filter(
+        (event) =>
+          event.type === 'effectRejected' &&
+          event.detail &&
+          typeof event.detail === 'object' &&
+          !Array.isArray(event.detail) &&
+          event.detail.reason === 'invalid-payload',
+      ),
+    ).toHaveLength(7);
+    expect(() => JSON.stringify(started)).not.toThrow();
+  });
+
+  it('公開RuleChainPortの非配列effectsを例外なく棄却する', () => {
+    const ruleEntry = entry('r0117-invalid-port-effects');
+    const basePort = createInProcessRuleChainPort([]);
+    const config: GameConfig = {
+      gameIndex: 0,
+      seats,
+      gameSeed: 'invalid-port-effects',
+      ruleChain: [ruleEntry],
+    };
+    const invalidRuntime: RuleRuntime = {
+      port: {
+        ...basePort,
+        collectEffects: () =>
+          [{ ruleId: ruleEntry.ruleId, effects: null }] as never,
+      },
+      setHistory: [],
+      setMemory: {},
+    };
+
+    const started = startGame(config, invalidRuntime);
+
+    expect(started.state.public.phase).toBe('awaitingPlay');
+    expect(started.events).toContainEqual(
+      expect.objectContaining({
+        type: 'effectRejected',
+        ruleId: ruleEntry.ruleId,
+        detail: { reason: 'invalid-payload' },
+      }),
+    );
+    expect(() => JSON.stringify(started)).not.toThrow();
+  });
+
   it('onGameStartのskipTurnsを第1手番前に消化する', () => {
-    const ruleEntry = entry('r0116-opening-skip');
+    const ruleEntry = entry('r0118-opening-skip');
     let skipped = '';
     const module: RuleModule = {
       meta: {
