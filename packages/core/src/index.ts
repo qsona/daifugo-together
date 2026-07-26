@@ -7,6 +7,7 @@ export * from './play/candidates.js';
 export * from './play/play.js';
 export * from './play/strength.js';
 export * from './priority/effects.js';
+export * from './protocol.js';
 export * from './replay/replay.js';
 export * from './rng/rng.js';
 export * from './rules/chain.js';

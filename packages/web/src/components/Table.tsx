@@ -2,6 +2,7 @@ import { cx } from '../lib/cx';
 
 import { Card } from './Card';
 import type { CardView } from './Card';
+import { Tag } from './Tag';
 import styles from './Table.module.css';
 
 /** 卓に着いている 1 人。席の情報と、その人がこの場に出した札をまとめて持つ。 */
@@ -11,6 +12,8 @@ export type TableSeat = {
   handCount: number;
   isCurrentTurn: boolean;
   hasPassed: boolean;
+  kind?: 'human' | 'ai';
+  status?: string;
   /** 各要素が 1 回のプレイ。場が流れるまで自分の山に積み上がる。 */
   plays: readonly (readonly CardView[])[];
 };
@@ -86,6 +89,10 @@ export function Table({ seats, leadSeatName, isFlushing = false }: TableProps) {
                   {seat.isSelf ? 'あなた' : seat.name}
                 </span>
                 <span className={styles.count}>{seat.handCount}</span>
+                {seat.kind === 'ai' && <Tag variant="ai">AI</Tag>}
+                {seat.status && (
+                  <span className={styles.status}>{seat.status}</span>
+                )}
                 {seat.hasPassed && <span className={styles.pass}>パス</span>}
               </span>
               {cards.length === 0 ? (

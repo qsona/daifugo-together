@@ -1,0 +1,22 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: var(--space-5);
+  background: color-mix(in srgb, var(--color-navy-900) 72%, transparent);
+}
+
+.message {
+  margin: 0;
+  max-width: 360px;
+  padding: var(--space-4);
+  color: var(--color-text-on-fill);
+  background: var(--color-bg-inverse);
+  border: var(--border-bold) solid var(--color-cream-100);
+  border-radius: var(--radius-l);
+  box-shadow: var(--shadow-hard-s);
+  font-weight: var(--font-weight-bold);
+  text-align: center;
+}

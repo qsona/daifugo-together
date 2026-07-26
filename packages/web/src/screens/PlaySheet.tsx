@@ -10,6 +10,7 @@ type PlaySheetProps = {
   onCreate: () => void;
   onJoin: (code: string) => void;
   onClose: () => void;
+  error?: string | null;
 };
 
 /**
@@ -19,7 +20,12 @@ type PlaySheetProps = {
  * 情報量の薄い 1 画面のためにタップが 1 回増える。選択肢は 2 つしかないので、
  * その場で開いて決めさせ、「つくる」なら待機画面へ直行する。
  */
-export function PlaySheet({ onCreate, onJoin, onClose }: PlaySheetProps) {
+export function PlaySheet({
+  onCreate,
+  onJoin,
+  onClose,
+  error,
+}: PlaySheetProps) {
   const [code, setCode] = useState('');
   const [isJoining, setIsJoining] = useState(false);
 
@@ -50,6 +56,7 @@ export function PlaySheet({ onCreate, onJoin, onClose }: PlaySheetProps) {
           >
             はいる
           </Button>
+          {error && <p role="alert">{error}</p>}
           <div className={styles.back}>
             <Button
               size="small"
@@ -79,6 +86,7 @@ export function PlaySheet({ onCreate, onJoin, onClose }: PlaySheetProps) {
           >
             友だちの部屋にはいる
           </Button>
+          {error && <p role="alert">{error}</p>}
         </>
       )}
     </ChoiceSheet>

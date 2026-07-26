@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react';
+
 import { ActivationChip } from '../components/ActivationChip';
 import { AppBar } from '../components/AppBar';
 import { Button } from '../components/Button';
@@ -27,6 +29,9 @@ type GameScreenProps = {
   hand: readonly CardView[];
   selectedCardIds: readonly string[];
   isMyTurn: boolean;
+  canPlay?: boolean;
+  canPass?: boolean;
+  turnDeadlineAt?: number | null;
   onViewRules: () => void;
   onToggleCard: (id: string) => void;
   onPlay: () => void;
@@ -51,6 +56,9 @@ export function GameScreen({
   hand,
   selectedCardIds,
   isMyTurn,
+  canPlay,
+  canPass = true,
+  turnDeadlineAt,
   onViewRules,
   onToggleCard,
   onPlay,
@@ -71,6 +79,9 @@ export function GameScreen({
           leadSeatName={leadSeatName}
           {...(isFlushing === undefined ? {} : { isFlushing })}
         />
+        {turnDeadlineAt != null && (
+          <TurnCountdown deadlineAt={turnDeadlineAt} />
+        )}
         {/* チップはカットインが引いたあとの痕跡なので、再生中は出さない。 */}
         {lastActivation && activations.length === 0 && (
           <ActivationChip
@@ -85,12 +96,12 @@ export function GameScreen({
           onToggle={onToggleCard}
           actions={
             <>
-              <Button disabled={!isMyTurn} onClick={onPass}>
+              <Button disabled={!isMyTurn || !canPass} onClick={onPass}>
                 パス
               </Button>
               <Button
                 variant="primary"
-                disabled={!isMyTurn || selectedCardIds.length === 0}
+                disabled={!isMyTurn || !(canPlay ?? selectedCardIds.length > 0)}
                 onClick={onPlay}
               >
                 えらんだカードを出す
@@ -102,4 +113,19 @@ export function GameScreen({
       <RuleCutIn activations={activations} onDone={onCutInDone} />
     </div>
   );
+}
+
+function TurnCountdown({ deadlineAt }: { deadlineAt: number }) {
+  const [remaining, setRemaining] = useState(() =>
+    Math.max(0, Math.ceil((deadlineAt - Date.now()) / 1000)),
+  );
+  useEffect(() => {
+    const update = () => {
+      setRemaining(Math.max(0, Math.ceil((deadlineAt - Date.now()) / 1000)));
+    };
+    update();
+    const timer = window.setInterval(update, 250);
+    return () => window.clearInterval(timer);
+  }, [deadlineAt]);
+  return <p role="timer">残り {remaining} 秒</p>;
 }

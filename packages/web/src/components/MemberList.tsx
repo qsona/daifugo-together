@@ -5,8 +5,8 @@ import styles from './MemberList.module.css';
 
 /** 待機画面の 1 席が表示する内容だけを持つ view-model。 */
 export type MemberView =
-  | { kind: 'human'; name: string; role?: string }
-  | { kind: 'ai'; name: string }
+  | { kind: 'human'; name: string; role?: string; status?: string }
+  | { kind: 'ai'; name: string; status?: string }
   | { kind: 'empty' };
 
 function PersonIcon() {
@@ -40,6 +40,9 @@ export function MemberList({ members }: { members: readonly MemberView[] }) {
             {member.kind === 'empty' ? '(あき)' : member.name}
             {member.kind === 'human' && member.role && (
               <small className={styles.role}>{member.role}</small>
+            )}
+            {member.kind !== 'empty' && member.status && (
+              <small className={styles.role}>{member.status}</small>
             )}
           </span>
           {member.kind === 'human' && <Tag variant="human">人間</Tag>}

@@ -272,8 +272,8 @@ TS-02 から継続で未解決のもの:
 
 ## 並行進行: E2 対戦AI
 
-- 状態: AI-01 プロセス2実装完了。3回の独立 GPT-5.6 Sol 方向性レビュー指摘を反映し、最終方向性レビュー `GO`。完了レビュー待ち。
-- 検証: Node 26.5.0 / pnpm 11.17.0 / TypeScript 6.0.3。統合リポジトリ全体 17 files / 121 tests、format・lint・design lint・typecheck・build 成功。専用 `pnpm validate:ai` は500セット・1,500ゲーム完走、rejection 0、不正手0、fallback 0、random-legal 3席に対する平均報酬0.6847。lockfile再解決後の `pnpm outdated` は、ユーザー指定で固定したTypeScript（current/wanted 6.0.3、latest 7.0.2）以外0件。`@types/node` は26.1.1。
+- 状態: AI-01 完了、main `25317dc` へ反映済み。独立 GPT-5.6 Sol 完了レビューで同期 throw の境界漏れを検出・修正し、別コンテキストの再レビュー `GO`。main 検証で発見した clean checkout の宣言生成順も修正し、さらに別の独立レビューで全 `dist` 欠落条件から `GO`。
+- 検証: Node 26.5.0 / pnpm 11.17.0 / TypeScript 6.0.3。正規リポジトリは 17 files / 122 tests、format・lint・design lint・typecheck・build 成功。専用 `pnpm validate:ai` は500セット・1,500ゲーム完走、rejection 0、不正手0、fallback 0、random-legal 3席に対する平均報酬0.6847。lockfile再解決後の `pnpm outdated` は、ユーザー指定で固定したTypeScript（current/wanted 6.0.3、latest 7.0.2）以外0件。`@types/node` は26.1.1。main のローカル実行では ignored の `.claude/worktrees` 内テストも Vitest が拾ったため20 files / 153 testsとなったが、tracked test filesはレビューcloneと同じ17件。
 - ユーザーストーリー確認: `packages/ai/src/ai-player.test.ts` の「1人+AI 3人で3ゲームのセットを拒否なく完走する」で、人間席1・AI席3の3ゲームセットを実際の E1 reducer に通し、全着手の rejection 0、結果3件、`completion=completed` を確認。
 
 ### プロセス1で実装した方向
@@ -315,3 +315,56 @@ TS-02 から継続で未解決のもの:
 - 冒頭改訂ノートは探索を `worker_threads` 1〜2本で実行すると決定済みだが、§3.1(d)・§4.4・§6-5には「初期はホスト直列、兆候が出たらworkerへ移行」という旧記述が残る。実装は改訂ノートを正とした。
 - `AiDecision.play: Play` はpassを表現できない一方、§3.1(b)は合法手0件をパス強制としてAIの即決対象に含める。プロセス1ではAI呼出前にゲームループが強制passすることで契約を変えずに成立させた。
 - §4.4は`playoutBatchSize`をisolateへの一括送信単位、`sliceMs`をホスト側のyield間隔としている。改訂ノートに従い探索全体をworkerへ移したため、実装ではそれぞれ親へpartial統計を送る反復数・経過時間の上限に読み替えた。UCB1統計自体はworker内で毎反復更新するため、バッチ分古い統計にはならない。
+
+---
+
+## 並行進行: E3 マルチプレイ
+
+- 状態: MP-01/MP-02 プロセス2完了。独立 GPT-5.6 Sol の最終再レビューは **GO（Critical / Important なし）**。ブラウザ UI → typed Socket.IO → Room → Core/E2 AI → 閲覧者別snapshotの実運用導線、同一origin SPA配信、SQLite永続化、SIGTERM drainingまで接続した。
+- コミット: `9c4ff46`（Room authority/view）、`3c351f3`（切断・離脱時の席/controller維持）、`2762261`（RoomManagerと招待index）、`5a477a9`（set境界・continue・参照分離）、`4cbc612`（Socket.IO gateway）、`36121c4`（phase timer）、`7af9818`（AI手番）、`0db35e5`（lifecycle/protocol）、`85dbdfd`（受入不変条件）、`f37817a`（実運用縦導線・永続化・draining）、`6d99369`（初回完了レビュー指摘）、`391f7a3`（再レビュー指摘）。
+- 検証: Node 26.5.0 / pnpm 11.17.0 / TypeScript 6.0.3。`pnpm verify` 成功（format / lint / design lint / typecheck / **28 files・191 tests** / 6 packages build）。純粋層3ゲーム完走、実HTTP/Socket.IO server/client、ブラウザclient state、1人+AI 3席のSocket→Room→Core→AI scheduler縦断完走を確認した。
+- 依存: npm registry の `latest` を再確認し、`socket.io` / `socket.io-client` 4.8.3、`zod` 4.4.3、`better-sqlite3` 13.0.1、`drizzle-orm` 0.45.2、`@types/better-sqlite3` 7.6.13を導入した。`pnpm outdated --format json` は、ユーザー指定で固定したTypeScript 6.0.3（registry latest 7.0.2）以外0件。
+
+### プロセス1で完了したもの
+
+- `RoomState` の `waiting` / `playing` / `setResult` / `closed`、単調増加する `v` とゲーム・セットをまたいでリセットしない `turnSeq`。
+- 人間1〜4人から不足分だけAIを補充し、席の所有と `controller: human | ai` を分離。開始時に切断中の人間も人間数へ含め、その席をAI代行にする。
+- play/passを「現在手番の席 → `turnSeq`一致 → Core合法性」の順で同期検証し、受理時だけ`v`と`turnSeq`を1増加。拒否では同一state参照を返す。
+- 対局中の切断では席を保持してAI代行、復帰でhumanへ戻す。明示離脱は`departed`として不可逆にし、セット終了までは席と手札を維持する。待機中のホスト離脱は参加順で移譲する。
+- `viewFor` を単一allow-list境界にし、本人の手札と本人用の`legalMoves`だけを含める。他人は枚数のみ。`userId`・token・Core private/KV/RNG・Effect内部表現は配信型へ入れない。復帰snapshotは常に`events: []`。
+- `RoomManager` の `Map<roomId, RoomState>`、invite→room、user→room index。招待コード正規化、1ユーザー1部屋、満員/対局中参加拒否、部屋破棄時の条件付きindex削除。
+- setResult到達時に切断者・明示離脱者を除去して`byUser`を即時解放。全残留人間のcontinue、leaveとの競合、120秒期限での無応答除外、AI再補充、新しい`SetState`と最新ルール一覧の再固定。
+- `viewFor`と公開Room eventをCore権威状態からdeep cloneし、gateway内処理からCard参照を変更できないようにした。
+- Socket.IO server/client 4.8.3のtyped event/ack、匿名token、同一tokenの後勝ち接続、再接続時`events: []`の全量snapshot、受信者別state emit。
+- `packages/core/src/protocol.ts`へ共有イベント型とzod schemaを置き、全client eventの受信時にstrict検証する。不正形は`BAD_PAYLOAD`、join過多は`RATE_LIMITED`、予期しない例外は`INTERNAL`でackする。zodは確認時latestの4.4.3をexact指定した。
+- fingerprint付きtimerでintermission・setResult・turnを駆動。同じ状態の再syncで期限を延長せず、古いcallbackとAI決定中に進んだ`turnSeq`をno-opにする。AI演出間隔はE3仕様の0.8〜2.5秒をRoom側で持ち、`runAiTurn`内の遅延は0に上書きして二重待機を避ける。
+- waiting切断60秒猶予、lobby TTL 30分、接続中人間0のabandon 5分を別のlifecycle timerで駆動。reconnectで予約を張り替え、部屋破棄時は全timerとindexを解除する。joinはIP単位10回/分のfixed-window制限を持つ。
+- 漏洩回帰は16 seedで生成した多数局面と実Socketで受信した全snapshot/event列を走査する。二席play+timeoutの同一`turnSeq`三つ巴を全順序で確認し、切断中に数手進んだ後の再接続snapshot一致、破棄後timer/room/user/invite indexがゼロになることも固定した。
+
+### プロセス2で完了したもの
+
+- `packages/web` を共有プロトコルと `socket.io-client` へ接続。匿名tokenをlocalStorageへ保存し、再接続authを更新、古い`v`を破棄、`session:ready`の全量復帰snapshotを描画する。
+- 待機・対局・ゲーム間・セット結果の各画面を`PlayerRoomView`から構成。非ホスト開始無効化、合法手だけのplay、リード時pass無効化、手番残り時間、AI/代行/切断表示、再接続・後勝ち接続overlay、離脱確認、joinエラー表示を接続した。
+- Node HTTP serverからbuilt SPAをfallback付きで配信し、同一originにSocket.IOを接続。ping 10秒 / timeout 8秒 / 受信上限16KBを設定した。
+- SQLite + Drizzleで匿名ユーザー/token/表示名、ReplayInit + 受理アクション、セット結果を同期transactionで永続化。進行中Room stateは設計どおりMapのみ。
+- SIGTERM/SIGINTで新規create/join/start/continueを止め、Core `requestDrain`へ接続。進行中ゲームだけ完走し、途中セット結果へ移った時点でtransportとDBを閉じる。
+- RoomManagerの1分sweepをgatewayへ接続し、lobby TTL、waiting切断猶予、無人playing、setResult無応答をtimer取りこぼし時にも回収する。
+- E1契約どおり`legalMoves: Play[] | null`を本人snapshotへ載せ、ルールchainの合法性変更をUI操作可否まで反映した。
+
+初回の独立 GPT-5.6 Sol 完了レビューは **NO-GO**。再接続時に`room:state`が`session:ready`より先着して復帰イベントを再生し得る点、本番setResultにE8未導入の評価デモを表示する点、補充AIの「考え中」表示条件が成立しない点を検出した。未初期化socketを通常broadcast対象から外し、`session:ready`を必ず最初のsnapshotにした。評価UIはE8導入まで本番だけ隠し、補充AIは現在手番を根拠に「考え中」を表示する。あわせてSQLiteのセット結果と長いreplay連番を実完走で回帰化した。
+
+次の独立 GPT-5.6 Sol 再レビューも **NO-GO**。`continue`以外の`leave` / `expireSetResult`で次セットが始まるとReplayInitが欠ける点と、継続回答後に未回答者を表示しない点を検出した。ReplayInitの判定をaction名でなく`setId`変更へ統一し、`leave`による次セット開始をSQLite実DBで回帰化した。画面は本人の`wantsNextSet`回答後に未回答者名を表示し、二重回答を無効化する。
+
+固定コミット`c7d1b39`に対する3回目の独立 GPT-5.6 Sol 再レビューは **GO（Critical / Important なし）**。上記5点の修正と回帰テスト、E03/E12への整合を確認した。
+
+### E3で置いた仮定・次工程
+
+| 仮定・残作業 | 根拠 | 次工程 |
+|---|---|---|
+| Room reducerとviewをSocket.IOより先に固定する | E03 §3.1(e)がSocket層を薄い変換に限定 | 完了。実Socket.IO in-process統合testを追加 |
+| AI補充member IDと暫定表示名はserver生成 | E03 §3.2で機械名を暫定許容 | E4のトーン確定後に名前プールを差替え |
+| E2の0.4〜1.2秒は探索adapter側の既定のまま維持し、E3の最終ペーシングは0.8〜2.5秒をRoom timer側で上書きする | E02の較正値とE03 §2.1/§3.2の値が不一致。Epic順では後段のE3 UX仕様を統合時の正とする | 完了。Room schedulerが0.8〜2.5秒、AI adapterへは遅延0を注入 |
+| `setRespondBy`・人間手番deadline・intermissionは状態に予約済みだが、タイマー駆動は未接続 | timer callbackも予約時`turnSeq`を再検証する必要がある | 完了。fingerprintと`turnSeq`再検証をfake timerで確認 |
+| waiting切断猶予、lobby TTL、無人対局abandon、join rate limit | E03 §2.1・§2.5・§3.1 | 完了。lifecycle timerとIP単位fixed-window limiterを追加 |
+| 最新Drizzle 0.45.2の公開`.d.ts`とTypeScript 6.0.3の不整合は`skipLibCheck`で隔離し、自前コードのstrict/exactOptionalチェックは維持する | ユーザー要望の最新版とTS 6.0.3 exactを両立するため | `tsconfig.base.json`。Drizzle側の型定義がTS 6で解消されたら解除可能 |
+| SPA配信とSQLiteは同一Nodeプロセス、DB既定パスは`data/daifugo.sqlite`、Web成果物は`packages/web/dist` | E12の単一常駐プロセス + 同一origin + SQLite方針 | 環境変数`DATABASE_PATH` / `WEB_DIST_DIR`でデプロイ時に変更可能 |
