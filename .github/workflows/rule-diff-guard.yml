@@ -19,20 +19,25 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Checkout trusted guard from the base revision
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.pull_request.base.sha }}
           path: trusted-base
           persist-credentials: false
 
       - name: Checkout pull request head with history
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name }}
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
           path: pull-request
           persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: trusted-base/.node-version
 
       - name: Fetch the base revision into the pull request repository
         working-directory: pull-request
