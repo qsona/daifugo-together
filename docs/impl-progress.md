@@ -254,8 +254,8 @@ TS-02 から継続で未解決のもの:
 
 ## 並行進行: E2 対戦AI
 
-- 状態: AI-01 プロセス1の縦断実装完了。3回の独立 GPT-5.6 Sol 方向性レビュー指摘を反映し、最終方向性レビュー `GO`。プロセス2では非LLM・非ネットワーク境界のCI検査から着手。
-- 検証: Node 26.5.0 / pnpm 11.17.0 / TypeScript 6.0.3。統合リポジトリ全体 15 files / 92 tests、format・lint・design lint・typecheck・build 成功。
+- 状態: AI-01 プロセス2実装完了。3回の独立 GPT-5.6 Sol 方向性レビュー指摘を反映し、最終方向性レビュー `GO`。完了レビュー待ち。
+- 検証: Node 26.5.0 / pnpm 11.17.0 / TypeScript 6.0.3。統合リポジトリ全体 17 files / 121 tests、format・lint・design lint・typecheck・build 成功。専用 `pnpm validate:ai` は500セット・1,500ゲーム完走、rejection 0、不正手0、fallback 0、random-legal 3席に対する平均報酬0.6847。lockfile再解決後の `pnpm outdated` は、ユーザー指定で固定したTypeScript（current/wanted 6.0.3、latest 7.0.2）以外0件。`@types/node` は26.1.1。
 - ユーザーストーリー確認: `packages/ai/src/ai-player.test.ts` の「1人+AI 3人で3ゲームのセットを拒否なく完走する」で、人間席1・AI席3の3ゲームセットを実際の E1 reducer に通し、全着手の rejection 0、結果3件、`completion=completed` を確認。
 
 ### プロセス1で実装した方向
@@ -265,30 +265,32 @@ TS-02 から継続で未解決のもの:
 - 深さ1のルートUCB1、打ち切り付きロールアウト、順位報酬 `[1, 2/3, 1/3, 0]`、同一入力・seedの決定性。
 - Node標準 `worker_threads` の起動時warm-up・FIFO・1本再利用プールで探索。反復途中の統計を親へ送り、hard timeout時はpartial-search、統計0件なら最弱合法手へフォールバック。終了した旧workerの通知は新世代のジョブへ影響しない。
 - hard deadlineはキュー投入時から計測し、待機中に期限切れなら即座にfallbackする。workerが終了コード0を含め予期せず終了した場合もactiveを必ずsettleし、次世代workerで待機ジョブを続行する。
-- 既定8プレイアウトではルート候補を最大4件に絞り、少なくとも1回はUCB1の再訪選択が起こるようにした。`playoutBatchSize`はworkerから親へ進捗統計を送る最大反復間隔、`sliceMs`は進捗送信の最大経過時間として使い、hard timeout時に新しいpartial結果を回収する。
+- プロセス1の既定8プレイアウトではルート候補を最大4件に絞り、少なくとも1回はUCB1の再訪選択が起こるようにした。TS-03較正後は既定16プレイアウト・候補上限8・進捗batch 4へ更新した。`playoutBatchSize`はworkerから親へ進捗統計を送る最大反復間隔、`sliceMs`は進捗送信の最大経過時間として使い、hard timeout時に新しいpartial結果を回収する。
 - 外部AI API・HTTP・DB依存なし。合法手0件の強制パスはゲームループ側が即時処理する。
 
 ### E2で置いた仮定
 
 | 仮定 | 根拠 | 影響範囲 |
 |---|---|---|
-| B-7確定前はworker poolを1本、既定予算をsoft 50ms / hard 200msとする | E02改訂ノートが1〜2本、decision-log B-7が実測調整可 | `AiWorkerPool`、`ThinkBudget`。TS-03実測後に2本化・予算調整可 |
+| worker poolは1本、既定予算をsoft 50ms / hard 200msとする | Node 26のTS-03実測では1本でもイベントループを塞がず既定16プレイアウトをp95 40.8ms、最大80.2msで完了。shared-cpu-1xで2本はCPU総量を増やさない | `AiWorkerPool`、`ThinkBudget`。shared-cpu-2xへ移行する場合だけ再較正 |
 | プロセス1は提案ルール0件なので、worker内の決定化状態は空のrule chainで復元する | AI-01はフェーズ1。ルール追従はAI-02（フェーズ2） | `worker-entry.js`。プロセス2ではE1 runtime/configをworker要求へ運ぶ境界を確定する |
-| seed固定時の決定性を優先し、soft予算は壁時計打切りではなく `floor(softMs / 6)` を上限反復数へ変換する暫定係数とした（既定50msで8本） | 初回レビュー実測で旧係数 `softMs × 2` の100本は840〜911msかかり、hard 200msを必ず超えた。8本なら既定期限内に完走する | 探索反復数と強さ。TS-03のplayouts/msで係数を置換する |
+| seed固定時の決定性を優先し、soft予算は壁時計打切りではなく `floor(softMs / 3)` を上限反復数へ変換する（既定50msで16本） | Node 26・cutoff 24のTS-03実測は約0.9 playout/ms。共有CPU・将来ルールのため約3倍の余裕を確保 | 探索反復数と強さ。500セットでもfallback 0、最大80.2ms |
 | `legalPlays.length === 0` はAIを呼ばずサーバーゲームループがpassする | E02の `AiDecision.play: Play` はpassを表現できない一方、本文は「0=パス強制」と明記 | E3のAI手番駆動。戦略的passは初版方策の「出せるなら出す」に従い選ばない |
 | 0.4〜1.2秒の演出遅延は探索ライブラリに入れず、着手を表示するserver/web側で入れる | CPU探索とUX待機を分離し、テストと再利用を決定的に保つ | E3/E4統合 |
 
-### プロセス2に回したもの
+### プロセス2で完了したもの
 
-- 1,000ゲームの合法性・停止性検証、500セットのrandom-legal基準との強さsmoke。
-- worker crash、探索例外、全サンプル失敗の障害注入。hard timeoutのpartial/heuristic分岐と旧worker終了後の次ジョブ継続はプロセス1で回帰化済み。
-- TS-03実測に基づくpool本数、playouts/ms、root cap、batch size、cutoffの較正と200ms上限の性能試験。
+- `scripts/validate-ai.mjs` で500セット・1,500ゲームを実エンジンとworker AIへ通した。rejection 0、不正手0、fallback 0、全セット停止。random-legal 3席に対する平均報酬0.6847（基準0.60）、16,628着手の平均18.2ms・p95 40.8ms・最大80.2ms。
+- worker crash、探索例外、全サンプル失敗の障害注入。hard timeoutのpartial/heuristic分岐、旧worker終了後の次ジョブ継続、12世代連続crash/recoveryを回帰化した。
+- TS-03実測からpool 1本、約0.9 playout/ms、root cap 8、batch 4、cutoff 24、既定16プレイアウトへ較正した。hard 200msに対し正式検証の最大は80.2ms。
 - 非LLM・非ネットワーク依存をCIで機械検査するルール。
-- 提案ルールを含むworker境界。`RuleRuntime.port` は関数を含みstructured clone不能なので直接渡さず、serializableなルールID・設定・setHistory・公開可能memoryを送り、worker側で同じbundleをimportしてruntimeを再構成する。決定化factoryもcore側へ寄せる。これはAI-02境界だが、AI-01レビューで着手条件として確認済み。
+- serverの `runAiTurn` に既定1秒watchdog、例外・不正手時のengine fallback、0.4〜1.2秒の演出遅延、`ai_playouts_per_move`・`ai_fallback_total`・`ai_move_wall_ms` と構造化ログを実装した。AIの探索とUX待機は分離している。
 
 プロセス2着手として `scripts/check-ai-boundaries.mjs` を `pnpm lint` に接続し、`packages/ai` の LLM SDK・HTTP/ネットワーク組込み・直接ネットワークAPIを機械的に拒否するようにした。違反 fixture を拒否するメタテストも追加した。
 
 障害注入は、worker が探索エラーを返した場合の合法 heuristic fallback と同一 worker の次着手再利用、および終了コード 0 の crash → 再生成 → 待機ジョブ継続を12世代連続で確認する stress テストまで追加した。
+
+提案ルールを含むworker境界はAI-02（フェーズ2）へ維持する。`RuleRuntime.port` は関数を含みstructured clone不能なので直接渡さず、serializableなルールID・設定・setHistory・公開可能memoryを送り、worker側で同じbundleをimportしてruntimeを再構成する。決定化factoryもcore側へ寄せる。
 
 ### E2で見つけた設計書の不整合
 

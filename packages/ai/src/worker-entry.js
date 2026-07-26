@@ -11,6 +11,10 @@ const REWARD = new Map([
   [4, 0],
 ]);
 
+// TS-03 (Node 26.5.0): cutoff 24 averaged about 0.9 playout/ms.
+// Keep roughly 3x headroom for shared CPU and active rule overhead.
+const CALIBRATED_MS_PER_PLAYOUT = 3;
+
 function nextRandom(rng) {
   return core.nextRandom(rng);
 }
@@ -316,7 +320,10 @@ function search(payload, onProgress) {
   const scaled = Math.floor(
     payload.budget.maxPlayouts * payload.difficulty.budgetScale,
   );
-  const softLimit = Math.max(1, Math.floor(payload.budget.softMs / 6));
+  const softLimit = Math.max(
+    1,
+    Math.floor(payload.budget.softMs / CALIBRATED_MS_PER_PLAYOUT),
+  );
   const target = Math.max(1, Math.min(scaled, softLimit));
   const revisitCap = Math.max(1, Math.floor(target / 2));
   const candidates = sortWeakFirst(payload.legalPlays, strength).slice(

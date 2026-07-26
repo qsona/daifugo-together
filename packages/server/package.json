@@ -12,5 +12,9 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@daifugo/ai": "workspace:*",
+    "@daifugo/core": "workspace:*"
   }
 }

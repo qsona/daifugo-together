@@ -74,6 +74,6 @@ export const DEFAULT_MCTS_CONFIG: MctsConfig = {
   ucbC: 0.7,
   maxTreeDepth: 1,
   cutoffSteps: 24,
-  rootCandidateCap: 12,
-  playoutBatchSize: 16,
+  rootCandidateCap: 8,
+  playoutBatchSize: 4,
 };

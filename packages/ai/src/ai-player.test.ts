@@ -212,9 +212,9 @@ describe('AI-01', () => {
       const second = await ai.decideMove(input);
 
       expect(first.usedFallback).toBe('none');
-      expect(first.stats?.playouts).toBe(8);
+      expect(first.stats?.playouts).toBe(16);
       expect(first.stats?.workerThread).toBe(true);
-      expect(first.stats?.candidates.length).toBeLessThanOrEqual(4);
+      expect(first.stats?.candidates.length).toBeLessThanOrEqual(8);
       expect(
         Math.max(
           ...(first.stats?.candidates.map((candidate) => candidate.visits) ?? [

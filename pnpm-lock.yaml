@@ -55,7 +55,14 @@ importers:
 
   packages/rules: {}
 
-  packages/server: {}
+  packages/server:
+    dependencies:
+      '@daifugo/ai':
+        specifier: workspace:*
+        version: link:../ai
+      '@daifugo/core':
+        specifier: workspace:*
+        version: link:../core
 
   packages/web:
     dependencies:
