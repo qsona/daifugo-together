@@ -29,7 +29,7 @@ const ERROR_MESSAGES: Record<ProposalValidationError['code'], string> = {
 };
 
 function clampCodePoints(value: string, maximum: number): string {
-  return Array.from(value).slice(0, maximum).join('');
+  return Array.from(value.normalize('NFC')).slice(0, maximum).join('');
 }
 
 export function ProposalFormScreen({

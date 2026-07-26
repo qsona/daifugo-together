@@ -144,6 +144,8 @@ describe('ProposalFormScreen', () => {
 
     expect(Array.from(name.value)).toHaveLength(12);
     expect(Array.from(body.value)).toHaveLength(400);
+    fireEvent.change(name, { target: { value: 'e\u0301'.repeat(12) } });
+    expect(name.value).toBe('é'.repeat(12));
     expect(screen.getByText('12 / 12')).toBeDefined();
     expect(screen.getByText('400 / 400')).toBeDefined();
   });
