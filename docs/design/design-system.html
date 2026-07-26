@@ -597,15 +597,38 @@ table.spec th { background: var(--color-bg-subtle); white-space: nowrap; }
 .c-tseat.-bottom { bottom: 0; left: 50%; transform: translateX(-50%); flex-direction: column-reverse; }
 .c-tseat.-left { left: 0; top: 50%; transform: translateY(-50%); align-items: flex-end; }
 .c-tseat.-right { right: 0; top: 50%; transform: translateY(-50%); align-items: flex-start; }
+/* 名前 / 枚数・順位 / 状態 を 1 チップに詰めず、行と別バッジに分ける。 */
+.c-tseat .info { display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .c-tseat .chip {
-  display: inline-flex; align-items: center; gap: var(--space-1); max-width: 132px;
+  display: inline-flex; align-items: center; gap: var(--space-1); max-width: 140px;
   padding: 1px var(--space-2); background: var(--color-cream-100);
   border: var(--border-control) solid var(--color-border-strong); border-radius: var(--radius-pill);
   font-size: var(--font-size-micro); font-weight: var(--font-weight-bold); white-space: nowrap;
 }
-.c-tseat .chip em { font-style: normal; color: var(--color-text-secondary); }
+.c-tseat .chip .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.c-tseat .meta {
+  display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: var(--space-1);
+  max-width: 140px; font-size: var(--font-size-micro); font-weight: var(--font-weight-bold);
+}
+.c-tseat .meta .ct {
+  padding: 0 var(--space-1); background: var(--color-bg-surface);
+  border: var(--border-control) solid var(--color-border-strong); border-radius: var(--radius-s);
+  white-space: nowrap;
+}
+.c-tseat .meta .st {
+  padding: 0 var(--space-1); background: var(--color-navy-100);
+  border-radius: var(--radius-s); color: var(--color-text-secondary); white-space: nowrap;
+}
+.c-tseat .meta .rk {
+  display: inline-flex; align-items: center; gap: var(--space-1);
+  padding: 0 var(--space-2); background: var(--color-warning-bg);
+  border: var(--border-control) solid var(--color-border-strong); border-radius: var(--radius-pill);
+  color: var(--color-warning-ink); white-space: nowrap;
+}
 .c-tseat.-turn .chip { background: var(--color-warning-bg); border-width: var(--border-bold); transform: scale(1.08); }
 .c-tseat.-passed .chip { background: var(--color-navy-100); color: var(--color-text-secondary); }
+/* あがった席は対局から抜けている。名前と札を減光し、順位バッジだけ明るく残す。 */
+.c-tseat.-finished .chip, .c-tseat.-finished .pile { opacity: 0.55; }
 .c-tseat .pile { display: flex; }
 .c-tseat .pile > .c-card { margin-right: -30px; }
 .c-tseat .pile > .c-card:last-child { margin-right: 0; }
@@ -1235,16 +1258,18 @@ table.spec th { background: var(--color-bg-subtle); white-space: nowrap; }
               <ellipse cx="50" cy="50" rx="26" ry="23" fill="none" stroke="var(--color-green-500)" stroke-width="1" stroke-dasharray="2 3" vector-effect="non-scaling-stroke"/>
               <g fill="var(--color-green-500)"><path d="M50 27 l3 2 l-3 2 z"/><path d="M76 50 l-2 3 l-2 -3 z"/><path d="M50 73 l-3 -2 l3 -2 z"/><path d="M24 50 l2 -3 l2 3 z"/></g>
             </svg>
-            <div class="c-tseat -top -turn -lead"><span class="chip">プレイヤーC <em>6</em></span><span class="pile"><span class="c-card -red -small"><b>8</b><i>♦</i></span></span></div>
-            <div class="c-tseat -left"><span class="chip">プレイヤーB <em>8</em></span><span class="pile"><span class="c-card -small"><b>5</b><i>♠</i></span><span class="c-card -red -small"><b>5</b><i>♥</i></span></span></div>
-            <div class="c-tseat -right -passed"><span class="chip">プレイヤーD <em>11</em> <em>パス</em></span><span class="c-fempty"></span></div>
-            <div class="c-tseat -bottom"><span class="c-fempty"></span><span class="chip">あなた <em>10</em></span></div>
+            <div class="c-tseat -top -turn -lead"><span class="info"><span class="chip"><span class="nm">プレイヤーC</span></span><span class="meta"><span class="ct">6枚</span><span class="st">考え中…</span></span></span><span class="pile"><span class="c-card -red -small"><b>8</b><i>♦</i></span></span></div>
+            <div class="c-tseat -left -finished"><span class="info"><span class="chip"><span class="nm">AIプレイヤー2</span><span class="c-tag -ai">AI</span></span><span class="meta"><span class="rk">1位 大富豪</span></span></span><span class="pile"><span class="c-card -small"><b>9</b><i>♠</i></span><span class="c-card -red -small"><b>9</b><i>♥</i></span></span></div>
+            <div class="c-tseat -right -passed"><span class="info"><span class="chip"><span class="nm">プレイヤーD</span></span><span class="meta"><span class="ct">11枚</span><span class="st">パス</span></span></span><span class="c-fempty"></span></div>
+            <div class="c-tseat -bottom"><span class="c-fempty"></span><span class="info"><span class="chip"><span class="nm">あなた</span></span><span class="meta"><span class="ct">10枚</span></span></span></div>
           </div>
         </div>
       </div>
       <div class="note">
         相手席の行と場を別々に持たず、<b>1 つの卓に統合する</b>。4 人を上につぶれた菱形に置くので、<b>手番が時計回りに回ることが位置で分かる</b>(破線の輪と 4 つの三角が補助。文字は使わない)。卓の地は KV の丘の緑(green-600)で、白い札と紺輪郭が最も映える。<br>
-        出した札は<b>その人の山に重なり</b>、卓の中心を向く。「誰が何を出したか」が常に見えているので、文字の実況ログは置かない(DS-02 で廃止)。いま超えるべき最新プレイだけ金の縁で示す。手番は金のピル + 拡大、パスは沈めた色 + 短い状態語。他人の手札は枚数だけを出す(情報漏えいを設計で断つ)。<br>
+        場に出るのは<b>各席の最新のプレイ 1 回分だけ</b>(同じ場で 2 回目を出したら 1 回目は置き換える。複数枚同時出しは 1 プレイなので全カードを見せる)。「誰がいま何を出しているか」が常に見えているので、文字の実況ログは置かない(DS-02 で廃止)。いま超えるべき最新プレイだけ金の縁で示す。手番は金のピル + 拡大、パスは沈めた色 + 短い状態語。他人の手札は枚数だけを出す(情報漏えいを設計で断つ)。<br>
+        席の情報は<b>1 チップに詰めない</b> — 名前(+AIタグ)/ 残り枚数 / 状態(考え中…・パス・切断中(AI代行))を行と別バッジに分ける。全部を 1 つのピルに入れると「AIプ…」まで名前が削れて誰の席か読めなくなるため。<b>あがった席</b>は枚数の代わりに金の順位バッジ(1位 大富豪)を出し、名前と札を減光して「対局から抜けた」を見せる(順位バッジだけは明るいままなので、抜けたことと何位かが同時に読める)。<br>
+        <b>あがりの瞬間</b>は、席の変化だけだと見落とすので、§5-13 のトースト(warn)を卓の上に 2.6 秒だけ重ねて告知する(<span class="c-toast"><span class="ic -warn"></span>プレイヤーBが1位であがり!</span> / 自分なら「あなた」表記)。進行はブロックしない。告知は<b>「前回描画時よりあがりが増えた」ときだけ</b>出し、初回描画時点の件数は基準として飲む — 再接続で全量スナップショットが届いても、過去のあがりが演出し直されない。<br>
         緑は画面の残り全部に広がるが、<b>菱形自体は一定の高さに保って縦中央に置く</b>(引き伸ばすと菱形が縦長になり「卓を囲む」感じが崩れるため)。場が流れるときは全員の山が中心へ吸い込まれて消え、その動きが 8 切り系ルールの効果表現そのものになる。
       </div>
     </div>

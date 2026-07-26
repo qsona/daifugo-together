@@ -14,7 +14,11 @@ export type TableSeat = {
   hasPassed: boolean;
   kind?: 'human' | 'ai';
   status?: string;
-  /** 各要素が 1 回のプレイ。場が流れるまで自分の山に積み上がる。 */
+  /** あがった順位。null / 未指定なら、まだ対局に残っている。 */
+  finishedRank?: number | null;
+  /** あがったときの称号(大富豪など)。順位バッジに添える。 */
+  finishedTitle?: string;
+  /** 各要素が 1 回のプレイ。場に出るのは最新の 1 回だけ。 */
   plays: readonly (readonly CardView[])[];
 };
 
@@ -33,8 +37,8 @@ type TableProps = {
  * 画面 3 の卓。相手席の行と場を 1 つにまとめたもの。
  *
  * 席を菱形に置くことで、手番が時計回りに回ることを文字なしで示す。
- * 出した札はその人の山に重なるので「誰が何を出したか」が常に見えていて、
- * 文字の実況ログを置かなくてよい。
+ * 各席の場には最新のプレイ 1 回分だけを置く。「誰がいま何を出しているか」が
+ * 常に見えていて、文字の実況ログを置かなくてよい。
  */
 export function Table({ seats, leadSeatName, isFlushing = false }: TableProps) {
   return (
@@ -71,7 +75,18 @@ export function Table({ seats, leadSeatName, isFlushing = false }: TableProps) {
         </svg>
         {seats.map((seat, index) => {
           const position = POSITIONS[index] ?? 'bottom';
-          const cards = seat.plays.flat();
+          // 場に見せるのは最新のプレイ 1 回分だけ。前のプレイは新しいプレイで置き換える
+          // (複数枚同時出しは 1 プレイなので、その全カードを見せる)。
+          const cards = seat.plays.at(-1) ?? [];
+          const displayName = seat.isSelf ? 'あなた' : seat.name;
+          const isFinished = seat.finishedRank != null;
+          // あがった席はもう手番も回らないので、考え中・パスの状態は出さない。
+          const states = isFinished
+            ? []
+            : [
+                ...(seat.status ? [seat.status] : []),
+                ...(seat.hasPassed ? ['パス'] : []),
+              ];
 
           return (
             <div
@@ -81,26 +96,42 @@ export function Table({ seats, leadSeatName, isFlushing = false }: TableProps) {
                 styles[position],
                 seat.isCurrentTurn && styles.turn,
                 seat.hasPassed && styles.passed,
+                isFinished && styles.finished,
                 seat.name === leadSeatName && styles.lead,
               )}
             >
-              <span className={styles.chip}>
-                <span className={styles.name}>
-                  {seat.isSelf ? 'あなた' : seat.name}
+              {/* 名前 / 枚数・順位 / 状態 を 1 つのチップに詰めず、行で分ける。 */}
+              <span className={styles.info}>
+                <span className={styles.chip}>
+                  <span className={styles.name}>{displayName}</span>
+                  {seat.kind === 'ai' && <Tag variant="ai">AI</Tag>}
                 </span>
-                <span className={styles.count}>{seat.handCount}</span>
-                {seat.kind === 'ai' && <Tag variant="ai">AI</Tag>}
-                {seat.status && (
-                  <span className={styles.status}>{seat.status}</span>
-                )}
-                {seat.hasPassed && <span className={styles.pass}>パス</span>}
+                <span className={styles.meta}>
+                  {isFinished ? (
+                    <span className={styles.rank}>
+                      {seat.finishedRank}位
+                      {seat.finishedTitle && (
+                        <span className={styles.title}>
+                          {seat.finishedTitle}
+                        </span>
+                      )}
+                    </span>
+                  ) : (
+                    <span className={styles.count}>{seat.handCount}枚</span>
+                  )}
+                  {states.map((label) => (
+                    <span key={label} className={styles.state}>
+                      {label}
+                    </span>
+                  ))}
+                </span>
               </span>
               {cards.length === 0 ? (
                 <span className={styles.empty} />
               ) : (
                 <ul
                   className={styles.pile}
-                  aria-label={`${seat.isSelf ? 'あなた' : seat.name}が出した札`}
+                  aria-label={`${displayName}が出した札`}
                 >
                   {cards.map((card) => (
                     <li key={card.id}>

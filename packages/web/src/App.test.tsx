@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -173,6 +173,23 @@ describe('DS-02: フェーズ 1 の主要画面が 1 本の導線でつながる
     expect(screen.getByText('4→4→4')).toBeTruthy();
   });
 
+  it('セットリザルトは合計点を、ゲーム間リザルトは今回の点と累計を出す', () => {
+    useScreenStore.setState({ current: 'setResult' });
+    const { unmount } = render(<App />);
+
+    // 5b: 3 戦の合計点(5-3-2-1 の積み上げ)。
+    expect(screen.getByText('13点')).toBeTruthy();
+    expect(screen.getByText('3点')).toBeTruthy();
+    unmount();
+
+    useScreenStore.setState({ current: 'gameResult' });
+    render(<App />);
+
+    // 5a: この戦で得た点と、その時点の累計。
+    expect(screen.getByText('+5')).toBeTruthy();
+    expect(screen.getByText('5点')).toBeTruthy();
+  });
+
   it('ゲーム間リザルトは待っていても次戦へ進む(文で予告しない)', () => {
     vi.useFakeTimers();
     try {
@@ -236,6 +253,47 @@ describe('DS-02: フェーズ 1 の主要画面が 1 本の導線でつながる
     // 文字の実況ログは存在しない。
     expect(screen.queryByRole('list', { name: '実況ログ' })).toBeNull();
     expect(screen.queryByText(/を出した$/)).toBeNull();
+  });
+
+  it('席の場には最新のプレイ 1 回分だけを出す(前のプレイは置き換える)', () => {
+    useScreenStore.setState({ current: 'game' });
+    render(<App />);
+
+    // プレイヤーB は同じ場で 5 のペア → 9 のペアと出している。
+    const pile = screen.getByRole('list', { name: 'プレイヤーBが出した札' });
+    expect(pile.querySelectorAll('li')).toHaveLength(2);
+    expect(screen.getByLabelText('スペードの9')).toBeTruthy();
+    expect(screen.queryByLabelText('スペードの5')).toBeNull();
+  });
+
+  it('あがった席は残り枚数ではなく順位バッジを出す', () => {
+    useScreenStore.setState({ current: 'game' });
+    render(<App />);
+
+    expect(screen.getByText('1位')).toBeTruthy();
+    expect(screen.getByText('大富豪')).toBeTruthy();
+    // 残り枚数はまだ対局に残っている席にだけ出る。
+    expect(screen.getByText('6枚')).toBeTruthy();
+    expect(screen.queryByText('0枚')).toBeNull();
+  });
+
+  it('席の名前は枚数や状態と分かれていて、省略されずに読める', () => {
+    useScreenStore.setState({ current: 'game' });
+    render(<App />);
+
+    // 名前・枚数・状態はそれぞれ別の要素。名前の要素に枚数や状態は混ざらない。
+    const table = within(screen.getByRole('region', { name: '卓' }));
+    expect(table.getByText('プレイヤーC').textContent).toBe('プレイヤーC');
+    expect(table.getByText('考え中…')).toBeTruthy();
+    expect(table.getByText('パス')).toBeTruthy();
+  });
+
+  it('画面を開いた時点の過去のあがりは告知しない(再接続で再演出しない)', () => {
+    useScreenStore.setState({ current: 'game' });
+    render(<App />);
+
+    // 見本の履歴には 1 位のあがりが入っているが、初回描画分は基準として飲む。
+    expect(screen.queryByText(/であがり/)).toBeNull();
   });
 
   it('アプリバーに巡目を出さず、有効ルールへの導線は残す', () => {

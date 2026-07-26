@@ -5,6 +5,17 @@ import {
 } from '../game/types.js';
 import type { SetOutcome, SetState } from './types.js';
 
+/**
+ * 各戦の順位に与える点。4 人固定の確定仕様(1 位から 5-3-2-1)。
+ * 1 位と 2 位の差を大きく取り、セット全体の勝ちを 1 位の数で決めやすくする。
+ */
+export const POINTS_BY_STANDING: Record<Standing, number> = {
+  1: 5,
+  2: 3,
+  3: 2,
+  4: 1,
+};
+
 export function scoreSet(
   setId: string,
   state: Pick<SetState, 'members' | 'ruleChain' | 'results'>,
@@ -25,7 +36,7 @@ export function scoreSet(
       points.set(
         standing.player,
         (points.get(standing.player) ?? 0) +
-          (state.members.length - standing.standing + 1),
+          POINTS_BY_STANDING[standing.standing],
       );
     }
   }

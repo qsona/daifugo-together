@@ -6,6 +6,7 @@ import type { CardView } from './components/Card';
 import type { MemberView as MemberListView } from './components/MemberList';
 import type { RankView } from './components/RankRow';
 import type { TableSeat } from './components/Table';
+import type { SeatFinish } from './screens/GameScreen';
 import type { RuleVote, SetFunRating } from './screens/SetResultScreen';
 import {
   DEMO_ACTIVATION_VOLLEYS,
@@ -17,6 +18,7 @@ import {
   DEMO_LEAD_SEAT,
   DEMO_MEMBERS,
   DEMO_SEATS,
+  DEMO_SEAT_FINISHES,
   DEMO_SET_RANKS,
 } from './fixtures/demo';
 import { GameResultScreen } from './screens/GameResultScreen';
@@ -146,6 +148,7 @@ function DemoApp() {
           gameLabel="第1戦"
           activeRuleCount={DEMO_ACTIVE_RULE_COUNT}
           seats={DEMO_SEATS}
+          finishes={DEMO_SEAT_FINISHES}
           leadSeatName={DEMO_LEAD_SEAT}
           activations={activations}
           onCutInDone={finishCutIn}
@@ -233,6 +236,39 @@ function waitingMembers(room: PlayerRoomView): MemberListView[] {
   return members;
 }
 
+/**
+ * この戦であがった人を、あがった順に。
+ * 履歴は戦ごとなので、`gameStarted` が来たら積み直す。
+ */
+function seatFinishes(room: PlayerRoomView): SeatFinish[] {
+  const game = room.game;
+  if (!game) return [];
+  const bySeat = new Map(
+    room.members.flatMap((member) =>
+      member.seatId === null ? [] : ([[member.seatId, member]] as const),
+    ),
+  );
+  let finishes: SeatFinish[] = [];
+  for (const event of game.history) {
+    if (event.t === 'gameStarted') {
+      finishes = [];
+    } else if (event.t === 'playerFinished') {
+      const member = bySeat.get(event.seat);
+      finishes.push({
+        seat: event.seat,
+        name:
+          member?.memberId === room.you.memberId
+            ? 'あなた'
+            : (member?.displayName ?? `席${String(event.seat + 1)}`),
+        isSelf: member?.memberId === room.you.memberId,
+        rank: event.rank,
+        title: event.title,
+      });
+    }
+  }
+  return finishes;
+}
+
 function tableSeats(room: PlayerRoomView): TableSeat[] {
   const game = room.game;
   if (!game || room.you.seatId === null) return [];
@@ -247,6 +283,9 @@ function tableSeats(room: PlayerRoomView): TableSeat[] {
       ]);
     }
   }
+  const finished = new Map(
+    seatFinishes(room).map((finish) => [finish.seat, finish] as const),
+  );
   const bySeat = new Map(
     room.members.flatMap((member) =>
       member.seatId === null ? [] : ([[member.seatId, member]] as const),
@@ -255,6 +294,7 @@ function tableSeats(room: PlayerRoomView): TableSeat[] {
   return [0, 1, 2, 3].map((offset) => {
     const seat = ((room.you.seatId! + offset) % 4) as 0 | 1 | 2 | 3;
     const member = bySeat.get(seat);
+    const finish = finished.get(seat);
     const status = member?.isAI
       ? game.turn?.seat === seat
         ? '考え中…'
@@ -275,14 +315,28 @@ function tableSeats(room: PlayerRoomView): TableSeat[] {
       hasPassed: game.field.passedSeats.includes(seat),
       kind: member?.isAI ? 'ai' : 'human',
       ...(status ? { status } : {}),
+      // 履歴に playerFinished が無くても、スナップショットの順位だけは拾う。
+      finishedRank: finish?.rank ?? member?.finishedRank ?? null,
+      ...(finish ? { finishedTitle: finish.title } : {}),
       plays: plays.get(seat) ?? [],
     };
   });
 }
 
 function gameRanks(room: PlayerRoomView): RankView[] {
-  const result = room.game?.previousResults.at(-1);
+  const results = room.game?.previousResults ?? [];
+  const result = results.at(-1);
   if (!result) return [];
+  // 累計点はこの戦までの全戦から積む(各戦の点はサーバーが順位点で埋めている)。
+  const cumulative = new Map<number, number>();
+  for (const previous of results) {
+    for (const standing of previous.standings) {
+      cumulative.set(
+        standing.seat,
+        (cumulative.get(standing.seat) ?? 0) + standing.points,
+      );
+    }
+  }
   const bySeat = new Map(
     room.members.flatMap((member) =>
       member.seatId === null ? [] : ([[member.seatId, member]] as const),
@@ -300,6 +354,8 @@ function gameRanks(room: PlayerRoomView): RankView[] {
             : (member?.displayName ?? `席${String(standing.seat + 1)}`),
         kind: member?.isAI ? ('ai' as const) : ('human' as const),
         title: standing.title,
+        gainedPoints: standing.points,
+        totalPoints: cumulative.get(standing.seat) ?? standing.points,
       };
     });
 }
@@ -321,6 +377,7 @@ function setRanks(room: PlayerRoomView): RankView[] {
         kind: member?.isAI ? ('ai' as const) : ('human' as const),
         title: standing.title,
         history: standing.ranks,
+        totalPoints: standing.points,
       };
     });
 }
@@ -394,6 +451,7 @@ function ConnectedApp({ client }: { client: MultiplayerClient }) {
         gameLabel={`第${String(game.gameNo)}戦`}
         activeRuleCount={room.activeRules.length}
         seats={tableSeats(room)}
+        finishes={seatFinishes(room)}
         leadSeatName={
           leadMember
             ? leadMember.memberId === room.you.memberId

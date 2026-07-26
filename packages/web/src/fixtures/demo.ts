@@ -9,6 +9,7 @@ import type { MemberView } from '../components/MemberList';
 import type { RankView } from '../components/RankRow';
 import type { RuleActivation } from '../components/RuleCutIn';
 import type { TableSeat } from '../components/Table';
+import type { SeatFinish } from '../screens/GameScreen';
 import type { FiredRuleVote } from '../screens/SetResultScreen';
 
 export const DEMO_MEMBERS: readonly MemberView[] = [
@@ -35,15 +36,24 @@ export const DEMO_SEATS: readonly TableSeat[] = [
     plays: [],
   },
   {
+    // あがった席の見本。残り枚数ではなく順位バッジを出し、席は減光する。
     name: 'プレイヤーB',
     isSelf: false,
-    handCount: 8,
+    handCount: 0,
     isCurrentTurn: false,
     hasPassed: false,
+    kind: 'ai',
+    finishedRank: 1,
+    finishedTitle: '大富豪',
     plays: [
+      // 同じ場で 2 回出した席の見本。場に出るのは最新の 1 回(9 のペア)だけ。
       [
         { id: 'f-s5', suit: 'spade', rank: '5' },
         { id: 'f-h5', suit: 'heart', rank: '5' },
+      ],
+      [
+        { id: 'f-s9', suit: 'spade', rank: '9' },
+        { id: 'f-h9', suit: 'heart', rank: '9' },
       ],
     ],
   },
@@ -53,6 +63,7 @@ export const DEMO_SEATS: readonly TableSeat[] = [
     handCount: 6,
     isCurrentTurn: true,
     hasPassed: false,
+    status: '考え中…',
     plays: [[{ id: 'f-d8', suit: 'diamond', rank: '8' }]],
   },
   {
@@ -61,11 +72,21 @@ export const DEMO_SEATS: readonly TableSeat[] = [
     handCount: 11,
     isCurrentTurn: false,
     hasPassed: true,
+    kind: 'ai',
     plays: [],
   },
 ];
 
 export const DEMO_LEAD_SEAT = 'プレイヤーC';
+
+/**
+ * 卓の見本に合わせたあがりの履歴。
+ * 初回描画時点の分は告知しないので、見本を開いた瞬間に告知は出ない
+ * (再接続で全量スナップショットが届いたときと同じ振る舞い)。
+ */
+export const DEMO_SEAT_FINISHES: readonly SeatFinish[] = [
+  { seat: 1, name: 'プレイヤーB', isSelf: false, rank: 1, title: '大富豪' },
+];
 
 export const DEMO_HAND: readonly CardView[] = [
   { id: 'h-c3', suit: 'club', rank: '3' },
@@ -80,11 +101,40 @@ export const DEMO_HAND: readonly CardView[] = [
   { id: 'h-h2', suit: 'heart', rank: '2' },
 ];
 
+/** 第 1 戦の直後なので、この戦の得点と累計は同じ。 */
 export const DEMO_GAME_RANKS: readonly RankView[] = [
-  { place: 1, name: 'あなた', kind: 'human', title: '大富豪' },
-  { place: 2, name: 'プレイヤーB', kind: 'ai', title: '富豪' },
-  { place: 3, name: 'プレイヤーC', kind: 'human', title: '貧民' },
-  { place: 4, name: 'プレイヤーD', kind: 'ai', title: '大貧民' },
+  {
+    place: 1,
+    name: 'あなた',
+    kind: 'human',
+    title: '大富豪',
+    gainedPoints: 5,
+    totalPoints: 5,
+  },
+  {
+    place: 2,
+    name: 'プレイヤーB',
+    kind: 'ai',
+    title: '富豪',
+    gainedPoints: 3,
+    totalPoints: 3,
+  },
+  {
+    place: 3,
+    name: 'プレイヤーC',
+    kind: 'human',
+    title: '貧民',
+    gainedPoints: 2,
+    totalPoints: 2,
+  },
+  {
+    place: 4,
+    name: 'プレイヤーD',
+    kind: 'ai',
+    title: '大貧民',
+    gainedPoints: 1,
+    totalPoints: 1,
+  },
 ];
 
 /** セットリザルトは 3 戦の推移込み。「総合結果である」ことをデータ自身が語る。 */
@@ -95,6 +145,7 @@ export const DEMO_SET_RANKS: readonly RankView[] = [
     kind: 'human',
     title: '大富豪',
     history: [1, 1, 2],
+    totalPoints: 13,
   },
   {
     place: 2,
@@ -102,6 +153,7 @@ export const DEMO_SET_RANKS: readonly RankView[] = [
     kind: 'ai',
     title: '富豪',
     history: [2, 3, 1],
+    totalPoints: 10,
   },
   {
     place: 3,
@@ -109,6 +161,7 @@ export const DEMO_SET_RANKS: readonly RankView[] = [
     kind: 'human',
     title: '貧民',
     history: [3, 2, 3],
+    totalPoints: 7,
   },
   {
     place: 4,
@@ -116,6 +169,7 @@ export const DEMO_SET_RANKS: readonly RankView[] = [
     kind: 'ai',
     title: '大貧民',
     history: [4, 4, 4],
+    totalPoints: 3,
   },
 ];
 

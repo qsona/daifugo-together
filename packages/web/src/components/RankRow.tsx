@@ -15,6 +15,12 @@ export type RankView = {
    * 「3 戦の総合結果である」ことを見出しの文ではなくデータ自身に語らせる。
    */
   history?: readonly number[];
+  /**
+   * 現時点の合計点。ゲーム間リザルトでは累計、セットリザルトでは 3 戦の合計。
+   */
+  totalPoints?: number;
+  /** この戦で得た順位点。ゲーム間リザルトでのみ渡す。 */
+  gainedPoints?: number;
 };
 
 export function RankRows({ ranks }: { ranks: readonly RankView[] }) {
@@ -33,6 +39,17 @@ export function RankRows({ ranks }: { ranks: readonly RankView[] }) {
             )}
           </span>
           {rank.title && <span className={styles.title}>{rank.title}</span>}
+          {rank.totalPoints !== undefined && (
+            /* 得点は数字だけで足りる。「合計」「今回」の見出し語は置かない。 */
+            <span className={styles.score}>
+              {rank.gainedPoints !== undefined && (
+                <small className={styles.gain}>
+                  +{String(rank.gainedPoints)}
+                </small>
+              )}
+              {String(rank.totalPoints)}点
+            </span>
+          )}
           <Tag variant={rank.kind}>{rank.kind === 'human' ? '人間' : 'AI'}</Tag>
         </li>
       ))}

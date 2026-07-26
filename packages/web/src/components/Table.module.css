@@ -74,12 +74,23 @@
   align-items: flex-start;
 }
 
-/* 名前と残り枚数。卓の上なのでクリーム地の小さなピルにする。 */
+/*
+ * 席の情報。1 つのチップに全部詰めると名前が「AIプ…」まで削れるので、
+ * 「名前(+AIタグ)」「残り枚数 / 順位」「状態」を行と別バッジに分ける。
+ */
+.info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+/* 名前。卓の上なのでクリーム地の小さなピルにする。 */
 .chip {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
-  max-width: 132px;
+  max-width: 140px;
   padding: 1px var(--space-2);
   background: var(--color-cream-100);
   border: var(--border-control) solid var(--color-border-strong);
@@ -96,13 +107,53 @@
   text-overflow: ellipsis;
 }
 
-.count {
-  color: var(--color-text-secondary);
+/* 枚数・順位・状態の行。席が狭いときだけ折り返す。 */
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: var(--space-1);
+  max-width: 140px;
+  font-size: var(--font-size-micro);
+  font-weight: var(--font-weight-bold);
 }
 
-.status {
+/* 残り枚数。名前と混ざらないよう、白面の小さなバッジに独立させる。 */
+.count {
+  padding: 0 var(--space-1);
+  background: var(--color-bg-surface);
+  border: var(--border-control) solid var(--color-border-strong);
+  border-radius: var(--radius-s);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+}
+
+/* 考え中・パス・切断中(AI代行)などの状態。枚数とは別のバッジにする。 */
+.state {
+  padding: 0 var(--space-1);
+  background: var(--color-navy-100);
+  border-radius: var(--radius-s);
   color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+/* あがった席の順位バッジ。イエローカードと同じ金面で「終わった」を祝う。 */
+.rank {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0 var(--space-2);
+  background: var(--color-warning-bg);
+  border: var(--border-control) solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  color: var(--color-warning-ink);
+  white-space: nowrap;
+}
+
+.title {
   font-size: var(--font-size-micro);
+  font-weight: var(--font-weight-bold);
 }
 
 /* 手番。金の縁 + 拡大なので、色だけに頼っていない。 */
@@ -118,8 +169,13 @@
   color: var(--color-text-secondary);
 }
 
-.pass {
-  color: var(--color-text-secondary);
+/*
+ * あがった席は対局から抜けている。名前と札を減光し、
+ * 順位バッジだけを明るく残すので「抜けた」と「何位だったか」が同時に読める。
+ */
+.finished .chip,
+.finished .pile {
+  opacity: 0.55;
 }
 
 .pile {

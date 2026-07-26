@@ -109,7 +109,8 @@ export type PublicPlayView =
 
 export interface GameResultView {
   gameNo: number;
-  standings: { seat: SeatId; rank: Standing; title: Title }[];
+  /** points はこの戦で得た順位点(POINTS_BY_STANDING、5-3-2-1)。 */
+  standings: { seat: SeatId; rank: Standing; title: Title; points: number }[];
   firedRuleIds: string[];
 }
 
@@ -138,6 +139,8 @@ export interface SetResultView {
     totalRank: number;
     title: string;
     ranks: number[];
+    /** points はセット(3 戦)の合計順位点。 */
+    points: number;
   }[];
   respondBy: number;
 }

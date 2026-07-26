@@ -7,7 +7,7 @@ import { NO_RULE_CHAIN_PORT, type RuleChainPort } from '../rules/chain.js';
 import type { RuleChainEntry, RuleModule } from '../rules/contract.js';
 import { createInProcessRuleChainPort } from '../rules/in-process.js';
 import { reduceSet, startSet, startSetTransition } from './set-reducer.js';
-import { scoreSet } from './scoring.js';
+import { POINTS_BY_STANDING, scoreSet } from './scoring.js';
 import type { SetState } from './types.js';
 
 const ids = ['p1', 'p2', 'p3', 'p4'];
@@ -354,19 +354,50 @@ describe('GE-05 set progression', () => {
       ruleChain: [],
       results,
     });
+    // 1 位 5 点 + 2 位 3 点 = 8 点で並び、最終戦 1 位の p2 が総合 1 位。
     expect(outcome.standings.slice(0, 2)).toEqual([
       {
         player: 'p2',
-        points: 7,
+        points: 8,
         totalStanding: 1,
         title: '大富豪',
       },
       {
         player: 'p1',
-        points: 7,
+        points: 8,
         totalStanding: 2,
         title: '富豪',
       },
+    ]);
+  });
+
+  it('順位点は上から 5-3-2-1', () => {
+    expect(POINTS_BY_STANDING).toEqual({ 1: 5, 2: 3, 3: 2, 4: 1 });
+
+    const outcome = scoreSet('set-points', {
+      members,
+      ruleChain: [],
+      results: [
+        {
+          gameIndex: 0,
+          standings: [
+            { player: 'p1', standing: 1 as const, title: '大富豪' as const },
+            { player: 'p2', standing: 2 as const, title: '富豪' as const },
+            { player: 'p3', standing: 3 as const, title: '貧民' as const },
+            { player: 'p4', standing: 4 as const, title: '大貧民' as const },
+          ],
+          firedRuleIds: [],
+        },
+      ],
+    });
+
+    expect(
+      outcome.standings.map((standing) => [standing.player, standing.points]),
+    ).toEqual([
+      ['p1', 5],
+      ['p2', 3],
+      ['p3', 2],
+      ['p4', 1],
     ]);
   });
 });

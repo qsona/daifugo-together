@@ -2,6 +2,12 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "server",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["packages/server/dist/bin.js"],
+      "port": 3000
+    },
+    {
       "name": "web",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@daifugo/web", "dev", "--port", "5188"],

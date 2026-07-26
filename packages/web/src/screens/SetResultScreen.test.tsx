@@ -30,6 +30,32 @@ describe('SetResultScreen phase boundary', () => {
     ).toBeTruthy();
   });
 
+  it('順位行にセット合計点を出す', () => {
+    render(
+      <SetResultScreen
+        ranks={[
+          {
+            place: 1,
+            name: 'あなた',
+            kind: 'human',
+            title: '大富豪',
+            history: [1, 1, 2],
+            totalPoints: 13,
+          },
+        ]}
+        funRating={null}
+        firedRules={[]}
+        onChangeFunRating={() => undefined}
+        onVoteRule={() => undefined}
+        onPlayAgain={() => undefined}
+        onHome={() => undefined}
+        showEvaluation={false}
+      />,
+    );
+
+    expect(screen.getByText('13点')).toBeTruthy();
+  });
+
   it('継続回答後は未回答の人を表示し、二重回答を無効化する', () => {
     render(
       <SetResultScreen

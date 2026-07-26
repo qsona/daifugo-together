@@ -1,6 +1,7 @@
 import {
   buildPlayerSnapshot,
   NO_RULE_CHAIN_PORT,
+  POINTS_BY_STANDING,
   sortCards,
   type GameResult,
   type PublicGameEvent,
@@ -50,6 +51,7 @@ function resultView(
       seat: requiredSeat(seats, standing.player),
       rank: standing.standing,
       title: standing.title,
+      points: POINTS_BY_STANDING[standing.standing],
     })),
     firedRuleIds: [...result.firedRuleIds],
   });
@@ -243,6 +245,7 @@ function setResultView(state: RoomState): SetResultView | null {
           result.standings.find((entry) => entry.player === standing.player)
             ?.standing ?? 4,
       ),
+      points: standing.points,
     })),
     respondBy: state.setRespondBy,
   };

@@ -58,6 +58,24 @@
   letter-spacing: var(--letter-spacing-wide);
 }
 
+/* 順位点。数字そのものが単位を語るので、ラベルは「点」だけに留める。 */
+.score {
+  flex-shrink: 0;
+  text-align: right;
+  font-size: var(--font-size-title-s);
+  font-weight: var(--font-weight-heavy);
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+/* この戦で得た分。合計の上に小さく添える。 */
+.gain {
+  display: block;
+  font-size: var(--font-size-micro);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-secondary);
+}
+
 .title {
   font-size: var(--font-size-micro);
   font-weight: var(--font-weight-bold);
