@@ -8,6 +8,7 @@ import type { SetOutcome, SetState } from './types.js';
 export function scoreSet(
   setId: string,
   state: Pick<SetState, 'members' | 'ruleChain' | 'results'>,
+  completion: SetOutcome['completion'] = 'completed',
 ): SetOutcome {
   if (state.results.length === 0) {
     throw new Error('Cannot score a set without results');
@@ -62,5 +63,7 @@ export function scoreSet(
       ...new Set(state.results.flatMap((result) => result.firedRuleIds)),
     ],
     results: state.results,
+    completion,
+    gamesPlayed: state.results.length,
   };
 }

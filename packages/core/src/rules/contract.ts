@@ -56,6 +56,19 @@ export interface Standings {
   }[];
 }
 
+/**
+ * Contract v1 hook timing:
+ *
+ * - `modifyLegality`: play validation and legal-move enumeration; transform only.
+ * - `modifyStrength`: immediately before strength comparison; transform only.
+ * - `afterPlay`: after the play is applied and any natural finish is assigned.
+ * - `afterFieldClear`: after cards leave the field, for natural and rule clears.
+ * - `onGameStart`: after dealing and before the first turn.
+ * - `onGameEnd`: after every standing is assigned and before `gameEnded`.
+ *
+ * All rules in one effect batch observe the same detached, deeply frozen view.
+ * A module must return Effects instead of mutating this context.
+ */
 export interface RuleHooks {
   modifyLegality(context: RuleContext, play: Play, base: Legality): Legality;
   modifyStrength(context: RuleContext, base: StrengthOrder): StrengthOrder;
@@ -66,34 +79,42 @@ export interface RuleHooks {
 }
 
 export interface RuleContext {
-  contractVersion: 1;
-  game: GameView;
-  setHistory: GameResult[];
-  memory: {
-    game: Readonly<Record<string, JsonValue>>;
-    set: Readonly<Record<string, JsonValue>>;
+  readonly contractVersion: 1;
+  readonly game: GameView;
+  readonly setHistory: readonly DeepReadonly<GameResult>[];
+  readonly memory: {
+    readonly game: Readonly<Record<string, DeepReadonly<JsonValue>>>;
+    readonly set: Readonly<Record<string, DeepReadonly<JsonValue>>>;
   };
-  rng: {
+  readonly rng: {
     next(): number;
     int(maxExclusive: number): number;
   };
 }
 
+export type DeepReadonly<T> = T extends (...args: never[]) => unknown
+  ? T
+  : T extends readonly (infer Item)[]
+    ? readonly DeepReadonly<Item>[]
+    : T extends object
+      ? { readonly [Key in keyof T]: DeepReadonly<T[Key]> }
+      : T;
+
 export interface GameView {
-  gameIndex: number;
-  seats: PlayerId[];
-  direction: 1 | -1;
-  turn: PlayerId | null;
-  players: {
-    id: PlayerId;
-    hand: readonly Card[];
-    status: PlayerStatus;
-    standing: Standing | null;
+  readonly gameIndex: number;
+  readonly seats: readonly PlayerId[];
+  readonly direction: 1 | -1;
+  readonly turn: PlayerId | null;
+  readonly players: readonly {
+    readonly id: PlayerId;
+    readonly hand: readonly DeepReadonly<Card>[];
+    readonly status: PlayerStatus;
+    readonly standing: Standing | null;
   }[];
-  field: FieldState;
-  discard: readonly Card[];
-  history: readonly PublicGameEvent[];
-  strength: StrengthOrder;
+  readonly field: DeepReadonly<FieldState>;
+  readonly discard: readonly DeepReadonly<Card>[];
+  readonly history: readonly DeepReadonly<PublicGameEvent>[];
+  readonly strength: DeepReadonly<StrengthOrder>;
 }
 
 export type Zone =
@@ -107,6 +128,24 @@ export type CardSelector =
 
 export type MemoryScope = 'game' | 'set';
 
+/**
+ * Declarative state changes accepted from contract v1 rules.
+ *
+ * Hook permissions:
+ *
+ * | Effect | afterPlay | afterFieldClear | onGameStart | onGameEnd |
+ * | --- | --- | --- | --- | --- |
+ * | clearField | yes | no | no | no |
+ * | skipTurns / reverseTurnOrder / forceRank / moveCards | yes | yes | yes | no |
+ * | setMemory | yes | yes | yes | set scope only |
+ * | announce | yes | yes | yes | yes |
+ *
+ * Conflict keys are exhaustively implemented by `priority/conflictKeyOf`:
+ * field, turn:{player}, turnOrder, rank:{player}, resolved card-set union,
+ * and memory:{ruleId}:{key}. `announce` has no key and follows suppression.
+ * Adding an Effect variant requires updating both this table and the exhaustive
+ * switch; otherwise TypeScript compilation must fail.
+ */
 export type Effect =
   | { type: 'clearField' }
   | { type: 'skipTurns'; player: PlayerId; count: number }

@@ -93,6 +93,47 @@ describe('GE-02 game start and snapshots', () => {
     expect(otherCardIds.every((id) => !serialized.includes(id))).toBe(true);
   });
 
+  it('除外札・KV・RNG・hookCallsをJSONスナップショットへ露出しない', () => {
+    const game = started('snapshot-redaction');
+    const hiddenOwner = seats.find(
+      (seat) =>
+        seat !== 'p1' && (game.state.players[seat]?.hand.length ?? 0) > 0,
+    );
+    const hiddenCard = hiddenOwner
+      ? game.state.players[hiddenOwner]?.hand[0]
+      : undefined;
+    if (!hiddenOwner || !hiddenCard) {
+      throw new Error('Expected another player card');
+    }
+    const hiddenState: GameState = {
+      ...game.state,
+      private: {
+        ...game.state.private,
+        excluded: [hiddenCard],
+        memory: { 'r-secret': { secretCardId: hiddenCard.id } },
+        hookCalls: { 'r-secret:afterPlay': 17 },
+      },
+      players: {
+        ...game.state.players,
+        [hiddenOwner]: {
+          ...game.state.players[hiddenOwner]!,
+          hand: game.state.players[hiddenOwner]!.hand.filter(
+            (card) => card.id !== hiddenCard.id,
+          ),
+        },
+      },
+    };
+
+    const serialized = JSON.stringify(
+      buildPlayerSnapshot(game.config, hiddenState, snapshotContext, 'p1'),
+    );
+
+    expect(serialized).not.toContain(hiddenCard.id);
+    expect(serialized).not.toContain('secretCardId');
+    expect(serialized).not.toContain('hookCalls');
+    expect(serialized).not.toContain('"rng"');
+  });
+
   it('手番本人だけに合法手を同梱し、リードでのパスを無効にする', () => {
     const game = started();
     const turn = currentPlayer(game.state);
@@ -297,21 +338,46 @@ describe('GE-02 play, pass, and rejection', () => {
         }),
       },
     };
-    const leadState: GameState = {
+    const strongestTargetCard = [...(game.state.players[target]?.hand ?? [])]
+      .sort(compareCards)
+      .at(-1);
+    const lowOwner = seats.find(
+      (seat) =>
+        seat !== target &&
+        game.state.players[seat]?.hand.some((card) => card.rank === '3'),
+    );
+    const lowCard = lowOwner
+      ? game.state.players[lowOwner]?.hand.find((card) => card.rank === '3')
+      : undefined;
+    if (!strongestTargetCard || !lowOwner || !lowCard) {
+      throw new Error('Expected a legal play for rule rejection');
+    }
+    const ruleState: GameState = {
       ...game.state,
       public: {
         ...game.state.public,
         turn: target,
-        field: { passedSinceLastPlay: [] },
+        field: {
+          current: {
+            play: {
+              kind: 'single',
+              cards: [lowCard],
+              count: 1,
+              repRank: lowCard.rank,
+            },
+            by: lowOwner,
+          },
+          passedSinceLastPlay: [],
+        },
       },
     };
     const forbidden = reduceGame(
       game.config,
-      leadState,
+      ruleState,
       {
         type: 'play',
         player: target,
-        cards: [targetCard.id],
+        cards: [strongestTargetCard.id],
       },
       rejectingRuntime,
     );
@@ -322,6 +388,37 @@ describe('GE-02 play, pass, and rejection', () => {
         reasonKey: 'fixture.forbidden',
       },
     ]);
-    expect(forbidden.state).toBe(leadState);
+    expect(forbidden.state).toBe(ruleState);
+  });
+
+  it('1000手を超えたら手札枚数・席順で全順位を確定して終了する', () => {
+    const game = started('turn-limit');
+    const player = currentPlayer(game.state);
+    const card = game.state.players[player]?.hand[0];
+    if (!card) {
+      throw new Error('Expected an opening card');
+    }
+    const guardedState: GameState = {
+      ...game.state,
+      public: { ...game.state.public, turnCount: 1000 },
+    };
+
+    const transition = reduceGame(game.config, guardedState, {
+      type: 'play',
+      player,
+      cards: [card.id],
+    });
+
+    expect(transition.state.public.phase).toBe('finished');
+    expect(transition.state.public.turn).toBeNull();
+    expect(transition.events).toContainEqual({
+      type: 'failsafe',
+      reason: 'turnLimit',
+      relatedRuleIds: [],
+    });
+    const standings = seats.map(
+      (seat) => transition.state.players[seat]?.standing,
+    );
+    expect([...standings].sort()).toEqual([1, 2, 3, 4]);
   });
 });

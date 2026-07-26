@@ -6,11 +6,16 @@ import {
 } from '../cards/card.js';
 import { randomInt, nextRandom, seedRng, type RngState } from '../rng/rng.js';
 import type {
+  EngineEvent,
   GameConfig,
   GameState,
   GameTransition,
   PlayerId,
+  PublicGameEvent,
 } from './types.js';
+import { noRuleRuntime, type RuleRuntime } from '../rules/chain.js';
+import { executeEffectHook } from '../engine/effects.js';
+import { activePlayers, finishGame } from '../engine/standing.js';
 
 function shuffle(cards: readonly Card[], initialRng: RngState) {
   const shuffled = [...cards];
@@ -58,7 +63,46 @@ function validateConfig(config: GameConfig) {
   }
 }
 
-export function startGame(config: GameConfig): GameTransition {
+function appendPublicEvents(
+  state: GameState,
+  events: readonly EngineEvent[],
+): GameState {
+  const publicEvents = events.filter(
+    (event): event is PublicGameEvent =>
+      event.type !== 'effectApplied' && event.type !== 'effectRejected',
+  );
+  return {
+    ...state,
+    public: {
+      ...state.public,
+      history: [...state.public.history, ...publicEvents],
+    },
+  };
+}
+
+function nextActiveFrom(
+  config: GameConfig,
+  state: GameState,
+  after: PlayerId,
+): PlayerId | undefined {
+  const start = config.seats.indexOf(after);
+  for (let offset = 1; offset <= config.seats.length; offset += 1) {
+    const candidate =
+      config.seats[
+        (start + offset * state.public.direction + config.seats.length * 2) %
+          config.seats.length
+      ];
+    if (candidate && state.players[candidate]?.status === 'active') {
+      return candidate;
+    }
+  }
+  return undefined;
+}
+
+export function startGame(
+  config: GameConfig,
+  runtime: RuleRuntime = noRuleRuntime(),
+): GameTransition {
   validateConfig(config);
   const shuffled = shuffle(createDeck(), seedRng(config.gameSeed));
   const start = randomInt(shuffled.rng, config.seats.length);
@@ -110,5 +154,55 @@ export function startGame(config: GameConfig): GameTransition {
     ),
   };
 
-  return { state, events: [gameStarted], rejections: [] };
+  const startedHook = executeEffectHook(config, state, runtime, 'onGameStart');
+  let nextState = appendPublicEvents(startedHook.state, startedHook.events);
+  const events: EngineEvent[] = [gameStarted, ...startedHook.events];
+  const active = activePlayers(config, nextState);
+  if (active.length <= 1) {
+    const finished = finishGame(config, nextState);
+    const endHook = executeEffectHook(
+      config,
+      finished.state,
+      { ...runtime, setMemory: startedHook.setMemory },
+      'onGameEnd',
+      { standings: finished.event.standings },
+    );
+    events.push(...endHook.events, finished.event);
+    nextState = appendPublicEvents(endHook.state, [
+      ...endHook.events,
+      finished.event,
+    ]);
+    return {
+      state: nextState,
+      events,
+      rejections: [],
+      setMemory: endHook.setMemory,
+    };
+  }
+  if (
+    nextState.public.turn &&
+    nextState.players[nextState.public.turn]?.status !== 'active'
+  ) {
+    const next = nextActiveFrom(config, nextState, nextState.public.turn);
+    if (next) {
+      const turnEvent: PublicGameEvent = {
+        type: 'turnChanged',
+        player: next,
+      };
+      events.push(turnEvent);
+      nextState = appendPublicEvents(
+        {
+          ...nextState,
+          public: { ...nextState.public, turn: next },
+        },
+        [turnEvent],
+      );
+    }
+  }
+  return {
+    state: nextState,
+    events,
+    rejections: [],
+    setMemory: startedHook.setMemory,
+  };
 }

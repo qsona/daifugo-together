@@ -15,6 +15,7 @@ import { scoreSet } from './scoring.js';
 import type {
   SetAction,
   SetConfig,
+  SetEndedEvent,
   SetMember,
   SetState,
   SetTransition,
@@ -69,7 +70,10 @@ function gameResult(state: SetState, gameIndex: number): GameResult {
   };
 }
 
-export function startSet(input: StartSetInput): SetState {
+export function startSet(
+  input: StartSetInput,
+  port: RuleChainPort = NO_RULE_CHAIN_PORT,
+): SetState {
   if (input.members.length !== 4) {
     throw new Error('A set requires exactly four members');
   }
@@ -90,14 +94,46 @@ export function startSet(input: StartSetInput): SetState {
     setMemory: {},
     currentGame: null,
     outcome: null,
+    draining: false,
   };
+  const game = startGame(gameConfig(state, 0), runtime(state, port));
   return {
     ...state,
-    currentGame: startGame(gameConfig(state, 0)).state,
+    currentGame: game.state,
+    setMemory: game.setMemory ?? state.setMemory,
   };
 }
 
-function advance(state: SetState): SetTransition {
+function finishDrainedSet(state: SetState): SetTransition {
+  if (state.results.length === 0) {
+    return {
+      state: { ...state, draining: true },
+      events: [],
+      rejections: [],
+      acceptedAction: { type: 'requestDrain' },
+    };
+  }
+  const outcome = scoreSet(state.setId, state, 'drained');
+  const event: SetEndedEvent = {
+    type: 'setEnded',
+    totals: outcome.standings,
+    completion: outcome.completion,
+    gamesPlayed: outcome.gamesPlayed,
+  };
+  return {
+    state: {
+      ...state,
+      draining: true,
+      phase: { name: 'setResult' },
+      outcome,
+    },
+    events: [event],
+    rejections: [],
+    acceptedAction: { type: 'requestDrain' },
+  };
+}
+
+function advance(state: SetState, port: RuleChainPort): SetTransition {
   if (state.phase.name !== 'interimResult') {
     return {
       state,
@@ -111,15 +147,20 @@ function advance(state: SetState): SetTransition {
     };
   }
   const nextIndex = state.phase.gameIndex + 1;
-  const nextGame = startGame(gameConfig(state, nextIndex));
+  const nextGame = startGame(
+    gameConfig(state, nextIndex),
+    runtime(state, port),
+  );
   return {
     state: {
       ...state,
       phase: { name: 'gameInProgress', gameIndex: nextIndex },
       currentGame: nextGame.state,
+      setMemory: nextGame.setMemory ?? state.setMemory,
     },
     events: nextGame.events,
     rejections: [],
+    acceptedAction: { type: 'advance' },
   };
 }
 
@@ -128,8 +169,31 @@ export function reduceSet(
   action: SetAction,
   port: RuleChainPort = NO_RULE_CHAIN_PORT,
 ): SetTransition {
+  if (action.type === 'requestDrain') {
+    if (state.phase.name === 'setResult') {
+      return {
+        state,
+        events: [],
+        rejections: [
+          {
+            code: 'INVALID_SET_PHASE',
+            detail: 'requestDrain is not valid after setResult',
+          },
+        ],
+      };
+    }
+    if (state.phase.name === 'interimResult') {
+      return finishDrainedSet(state);
+    }
+    return {
+      state: { ...state, draining: true },
+      events: [],
+      rejections: [],
+      acceptedAction: action,
+    };
+  }
   if (action.type === 'advance') {
-    return advance(state);
+    return advance(state, port);
   }
   if (state.phase.name !== 'gameInProgress' || !state.currentGame) {
     return {
@@ -159,18 +223,20 @@ export function reduceSet(
   let nextState: SetState = {
     ...state,
     currentGame: transition.state,
+    setMemory: transition.setMemory ?? state.setMemory,
   };
   if (transition.state.public.phase !== 'finished') {
     return {
       state: nextState,
       events: transition.events,
       rejections: [],
+      acceptedAction: action,
     };
   }
 
   const result = gameResult(nextState, state.phase.gameIndex);
   const results = [...state.results, result];
-  if (results.length < state.config.gamesPerSet) {
+  if (results.length < state.config.gamesPerSet && !state.draining) {
     nextState = {
       ...nextState,
       results,
@@ -184,12 +250,28 @@ export function reduceSet(
     nextState = {
       ...scoreInput,
       phase: { name: 'setResult' },
-      outcome: scoreSet(state.setId, scoreInput),
+      outcome: scoreSet(
+        state.setId,
+        scoreInput,
+        state.draining ? 'drained' : 'completed',
+      ),
     };
   }
   return {
     state: nextState,
-    events: transition.events,
+    events:
+      nextState.phase.name === 'setResult' && nextState.outcome
+        ? [
+            ...transition.events,
+            {
+              type: 'setEnded',
+              totals: nextState.outcome.standings,
+              completion: nextState.outcome.completion,
+              gamesPlayed: nextState.outcome.gamesPlayed,
+            },
+          ]
+        : transition.events,
     rejections: [],
+    acceptedAction: action,
   };
 }

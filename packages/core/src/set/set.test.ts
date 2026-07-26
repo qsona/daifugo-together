@@ -3,6 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { createDeck } from '../cards/card.js';
 import { seedRng } from '../rng/rng.js';
 import type { GameState, PlayerId } from '../game/types.js';
+import { NO_RULE_CHAIN_PORT, type RuleChainPort } from '../rules/chain.js';
+import type { RuleChainEntry, RuleModule } from '../rules/contract.js';
+import { createInProcessRuleChainPort } from '../rules/in-process.js';
 import { reduceSet, startSet } from './set-reducer.js';
 import { scoreSet } from './scoring.js';
 import type { SetState } from './types.js';
@@ -65,7 +68,11 @@ function nearFinishGame(order: PlayerId[]): GameState {
   };
 }
 
-function finishGame(state: SetState, order: PlayerId[]): SetState {
+function finishGame(
+  state: SetState,
+  order: PlayerId[],
+  port: RuleChainPort = NO_RULE_CHAIN_PORT,
+): SetState {
   let current: SetState = {
     ...state,
     currentGame: nearFinishGame(order),
@@ -75,11 +82,15 @@ function finishGame(state: SetState, order: PlayerId[]): SetState {
     if (!card) {
       throw new Error(`Missing card for ${player}`);
     }
-    const transition = reduceSet(current, {
-      type: 'play',
-      player,
-      cards: [card.id],
-    });
+    const transition = reduceSet(
+      current,
+      {
+        type: 'play',
+        player,
+        cards: [card.id],
+      },
+      port,
+    );
     expect(transition.rejections).toEqual([]);
     current = transition.state;
   }
@@ -124,6 +135,139 @@ describe('GE-05 set progression', () => {
     let state = startedSet(1);
     state = finishGame(state, ['p1', 'p2', 'p3', 'p4']);
     expect(state.phase).toEqual({ name: 'setResult' });
+  });
+
+  it('draining要求後は進行中ゲームだけ完走し、途中結果でセットを終了する', () => {
+    let state = startedSet(3);
+    const draining = reduceSet(state, { type: 'requestDrain' });
+    expect(draining.rejections).toEqual([]);
+    expect(draining.acceptedAction).toEqual({ type: 'requestDrain' });
+    expect(draining.state.draining).toBe(true);
+    expect(draining.state.phase).toEqual({
+      name: 'gameInProgress',
+      gameIndex: 0,
+    });
+
+    state = finishGame(draining.state, ['p1', 'p2', 'p3', 'p4']);
+    expect(state.phase).toEqual({ name: 'setResult' });
+    expect(state.results).toHaveLength(1);
+    expect(state.outcome).toMatchObject({
+      completion: 'drained',
+      gamesPlayed: 1,
+    });
+  });
+
+  it('ゲーム間のdraining要求は次戦を始めずセット結果へ進む', () => {
+    const state = finishGame(startedSet(3), ['p1', 'p2', 'p3', 'p4']);
+    expect(state.phase.name).toBe('interimResult');
+
+    const drained = reduceSet(state, { type: 'requestDrain' });
+    expect(drained.rejections).toEqual([]);
+    expect(drained.state.phase).toEqual({ name: 'setResult' });
+    expect(drained.state.outcome?.completion).toBe('drained');
+    expect(drained.state.outcome?.gamesPlayed).toBe(1);
+    expect(drained.events).toContainEqual(
+      expect.objectContaining({
+        type: 'setEnded',
+        completion: 'drained',
+        gamesPlayed: 1,
+      }),
+    );
+  });
+
+  it('第2戦のルールから前戦順位とsetスコープKVを参照できる', () => {
+    const ruleEntry: RuleChainEntry = {
+      ruleId: 'r0200-cross-game',
+      name: '都落ち相当',
+      position: 0,
+      priority: {
+        popularityScore: 0,
+        activatedAt: '2026-07-26T00:00:00.000Z',
+        ruleId: 'r0200-cross-game',
+      },
+      bundleHash: 'fixture',
+      contractVersion: 1,
+    };
+    let observedHistoryLength = 0;
+    let observedChampion: unknown;
+    const module: RuleModule = {
+      meta: {
+        ruleId: ruleEntry.ruleId,
+        name: ruleEntry.name,
+        description: 'cross-game fixture',
+        kind: 'local',
+        proposalId: 'fixture',
+        contractVersion: 1,
+        messages: {},
+      },
+      hooks: {
+        onGameEnd: (_context, standings) => {
+          const champion = standings.standings.find(
+            (result) => result.standing === 1,
+          )?.player;
+          return champion
+            ? [
+                {
+                  type: 'setMemory',
+                  scope: 'set',
+                  key: 'champion',
+                  value: champion,
+                },
+              ]
+            : [];
+        },
+        afterPlay: (context) => {
+          observedHistoryLength = context.setHistory.length;
+          observedChampion = context.memory.set.champion;
+          return typeof observedChampion === 'string' &&
+            context.setHistory.length > 0
+            ? [
+                {
+                  type: 'forceRank',
+                  player: observedChampion,
+                  rank: 4,
+                },
+              ]
+            : [];
+        },
+      },
+    };
+    const port = createInProcessRuleChainPort([module]);
+    let state = startSet(
+      {
+        setId: 'cross-game',
+        config: { gamesPerSet: 3, interimAutoAdvanceMs: 0 },
+        members,
+        ruleChain: [ruleEntry],
+        setSeed: 'cross-game-seed',
+      },
+      port,
+    );
+    state = finishGame(state, ['p1', 'p2', 'p3', 'p4'], port);
+    expect(state.setMemory[ruleEntry.ruleId]?.champion).toBe('p1');
+
+    const advanced = reduceSet(state, { type: 'advance' }, port);
+    state = advanced.state;
+    const player = state.currentGame?.public.turn;
+    const card = player
+      ? state.currentGame?.players[player]?.hand[0]
+      : undefined;
+    if (!player || !card) {
+      throw new Error('Expected second-game opening play');
+    }
+    const played = reduceSet(
+      state,
+      { type: 'play', player, cards: [card.id] },
+      port,
+    );
+
+    expect(played.rejections).toEqual([]);
+    expect(observedHistoryLength).toBe(1);
+    expect(observedChampion).toBe('p1');
+    expect(played.state.currentGame?.players.p1).toMatchObject({
+      status: 'retired',
+      standing: 4,
+    });
   });
 
   it('順位点を合計し、同点は最終戦順位で決める', () => {

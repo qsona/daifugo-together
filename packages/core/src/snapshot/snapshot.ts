@@ -9,7 +9,7 @@ import type {
 import { enumerateLegalPlays } from '../play/candidates.js';
 import { BASE_STRENGTH_ORDER } from '../play/strength.js';
 import { noRuleRuntime, type RuleRuntime } from '../rules/chain.js';
-import { buildRuleContext } from '../rules/context.js';
+import { buildRuleContext, prepareRuleInvocation } from '../rules/context.js';
 
 const TITLES: Record<Standing, PlayerSnapshot['players'][number]['title']> = {
   1: '大富豪',
@@ -32,11 +32,21 @@ export function buildPlayerSnapshot(
   const memberById = new Map(
     context.members.map((member) => [member.id, member]),
   );
+  const strengthInvocation = prepareRuleInvocation(
+    state,
+    config.ruleChain,
+    'modifyStrength',
+    false,
+  );
   const baseContext = buildRuleContext(
     config,
-    state,
+    strengthInvocation.state,
     BASE_STRENGTH_ORDER,
     runtime,
+    {
+      hook: 'modifyStrength',
+      invocationIndices: strengthInvocation.invocationIndices,
+    },
   );
   const effectiveStrength = runtime.port.modifyStrength(
     config.ruleChain,

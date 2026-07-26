@@ -8,6 +8,7 @@ import type {
   RuleContext,
   RuleModule,
 } from './contract.js';
+import { contextForRule } from './context.js';
 
 function changed(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) !== JSON.stringify(right);
@@ -36,12 +37,13 @@ export function createInProcessRuleChainPort(
         if (!hook) {
           continue;
         }
+        const ruleContext = contextForRule(context, entry.ruleId);
         plays.forEach((play, index) => {
           const before = results[index];
           if (!before) {
             return;
           }
-          const after = hook(context, play, before);
+          const after = hook(ruleContext, play, before);
           results[index] = after;
           if (changed(before, after)) {
             influenced.add(entry.ruleId);
@@ -63,7 +65,7 @@ export function createInProcessRuleChainPort(
         if (!hook) {
           continue;
         }
-        const next = hook(context, result);
+        const next = hook(contextForRule(context, entry.ruleId), result);
         if (changed(result, next)) {
           influenced.add(entry.ruleId);
         }
@@ -81,11 +83,12 @@ export function createInProcessRuleChainPort(
           if (!hook) {
             return [];
           }
+          const ruleContext = contextForRule(context, entry.ruleId);
           if (hookName === 'afterPlay') {
             return [
               {
                 ruleId: entry.ruleId,
-                effects: hooks.afterPlay?.(context, argument as Play) ?? [],
+                effects: hooks.afterPlay?.(ruleContext, argument as Play) ?? [],
               },
             ];
           }
@@ -95,7 +98,7 @@ export function createInProcessRuleChainPort(
                 ruleId: entry.ruleId,
                 effects:
                   hooks.onGameEnd?.(
-                    context,
+                    ruleContext,
                     argument as Parameters<
                       NonNullable<typeof hooks.onGameEnd>
                     >[1],
@@ -106,7 +109,7 @@ export function createInProcessRuleChainPort(
           return [
             {
               ruleId: entry.ruleId,
-              effects: hooks[hookName]?.(context) ?? [],
+              effects: hooks[hookName]?.(ruleContext) ?? [],
             },
           ];
         });

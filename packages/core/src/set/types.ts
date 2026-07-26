@@ -1,10 +1,10 @@
 import type {
   ActionRejection,
+  EngineEvent,
   GameAction,
   GameResult,
   GameState,
   PlayerId,
-  PublicGameEvent,
   RuleMemory,
   SetPhase,
   SnapshotMember,
@@ -31,9 +31,11 @@ export interface SetState {
   setMemory: RuleMemory;
   currentGame: GameState | null;
   outcome: SetOutcome | null;
+  draining: boolean;
 }
 
-export type SetAction = GameAction | { type: 'advance' };
+export type SetAction =
+  GameAction | { type: 'advance' } | { type: 'requestDrain' };
 
 export interface SetOutcome {
   setId: string;
@@ -47,6 +49,15 @@ export interface SetOutcome {
   wasActiveRuleIds: string[];
   firedRuleIds: string[];
   results: GameResult[];
+  completion: 'completed' | 'drained';
+  gamesPlayed: number;
+}
+
+export interface SetEndedEvent {
+  type: 'setEnded';
+  totals: SetOutcome['standings'];
+  completion: SetOutcome['completion'];
+  gamesPlayed: number;
 }
 
 export type SetRejection =
@@ -58,8 +69,9 @@ export type SetRejection =
 
 export interface SetTransition {
   state: SetState;
-  events: PublicGameEvent[];
+  events: (EngineEvent | SetEndedEvent)[];
   rejections: SetRejection[];
+  acceptedAction?: SetAction;
 }
 
 export interface ReplayInit {
@@ -79,3 +91,7 @@ export interface ReplayAction {
 }
 
 export type ReplayRecord = ReplayInit | ReplayAction;
+
+export interface ReplayLogBoundary {
+  append(record: ReplayRecord): void | Promise<void>;
+}

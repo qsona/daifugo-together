@@ -1,6 +1,6 @@
 import type { Card } from '../cards/card.js';
 import type { GameConfig, GameState } from '../game/types.js';
-import { buildRuleContext } from '../rules/context.js';
+import { buildRuleContext, prepareRuleInvocation } from '../rules/context.js';
 import { noRuleRuntime, type RuleRuntime } from '../rules/chain.js';
 import type { Legality } from '../rules/contract.js';
 import { compareRanks, BASE_STRENGTH_ORDER } from './strength.js';
@@ -67,26 +67,54 @@ export function evaluateCandidates(
   state: GameState,
   plays: Play[],
   runtime: RuleRuntime = noRuleRuntime(),
-): { plays: Play[]; results: Legality[]; influenced: string[] } {
+  options: { authoritative?: boolean } = {},
+): {
+  state: GameState;
+  plays: Play[];
+  results: Legality[];
+  baseResults: Legality[];
+  influenced: string[];
+  failsafeActivated: boolean;
+} {
+  const strengthInvocation = prepareRuleInvocation(
+    state,
+    config.ruleChain,
+    'modifyStrength',
+    options.authoritative ?? false,
+  );
   const baseContext = buildRuleContext(
     config,
-    state,
+    strengthInvocation.state,
     BASE_STRENGTH_ORDER,
     runtime,
+    {
+      hook: 'modifyStrength',
+      invocationIndices: strengthInvocation.invocationIndices,
+    },
   );
   const strengthResult = runtime.port.modifyStrength(
     config.ruleChain,
     baseContext,
     BASE_STRENGTH_ORDER,
   );
+  const legalityInvocation = prepareRuleInvocation(
+    strengthInvocation.state,
+    config.ruleChain,
+    'modifyLegality',
+    options.authoritative ?? false,
+  );
   const context = buildRuleContext(
     config,
-    state,
+    legalityInvocation.state,
     strengthResult.result,
     runtime,
+    {
+      hook: 'modifyLegality',
+      invocationIndices: legalityInvocation.invocationIndices,
+    },
   );
   const base = plays.map((play) =>
-    baseLegality(state, play, strengthResult.result),
+    baseLegality(legalityInvocation.state, play, strengthResult.result),
   );
   const legalityResult = runtime.port.modifyLegality(
     config.ruleChain,
@@ -94,15 +122,26 @@ export function evaluateCandidates(
     plays,
     base,
   );
-  const legalPlays = plays.filter(
+  let legalPlays = plays.filter(
     (_play, index) => legalityResult.results[index]?.legal === true,
   );
+  const failsafeActivated =
+    state.public.field.current === undefined &&
+    legalPlays.length === 0 &&
+    base.some((result) => result.legal);
+  const finalResults = failsafeActivated ? base : legalityResult.results;
+  if (failsafeActivated) {
+    legalPlays = plays.filter((_play, index) => base[index]?.legal === true);
+  }
   return {
+    state: legalityInvocation.state,
     plays: legalPlays,
-    results: legalityResult.results,
+    results: finalResults,
+    baseResults: base,
     influenced: [
       ...new Set([...strengthResult.influenced, ...legalityResult.influenced]),
     ],
+    failsafeActivated,
   };
 }
 
@@ -118,8 +157,5 @@ export function enumerateLegalPlays(
   }
   const candidates = generateCandidates(playerState.hand);
   const evaluated = evaluateCandidates(config, state, candidates, runtime);
-  if (!state.public.field.current && evaluated.plays.length === 0) {
-    return candidates;
-  }
   return evaluated.plays;
 }

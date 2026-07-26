@@ -1,7 +1,8 @@
 import type { Card, CardId } from '../cards/card.js';
 import type { Play, PlayKind } from '../play/play.js';
 import type { RngState } from '../rng/rng.js';
-import type { RuleChainEntry } from '../rules/contract.js';
+import type { Effect, RuleChainEntry, Zone } from '../rules/contract.js';
+import type { EffectHook } from '../rules/chain.js';
 
 export type PlayerId = string;
 export type RuleId = string;
@@ -77,6 +78,41 @@ export type PublicGameEvent =
       ruleId: RuleId;
       messageKey: string;
       params?: Record<string, string>;
+    }
+  | {
+      type: 'failsafe';
+      reason: 'leadNoLegalMove' | 'turnLimit';
+      relatedRuleIds: RuleId[];
+    }
+  | {
+      type: 'playerRetired';
+      player: PlayerId;
+      cardCount: number;
+      standing: Standing;
+    }
+  | {
+      type: 'cardsMoved';
+      by: RuleId;
+      from: Zone;
+      to: Zone;
+      count: number;
+      cardIds?: CardId[];
+    };
+
+export type EffectResolutionStatus =
+  'adopted' | 'deduped' | 'rejected' | 'superseded' | 'suppressed-announce';
+
+export type EngineEvent =
+  | PublicGameEvent
+  | {
+      type: 'effectApplied' | 'effectRejected';
+      hook: EffectHook;
+      ruleId: RuleId;
+      effect: Effect;
+      resolution: EffectResolutionStatus;
+      conflictKey: string | null;
+      winnerRuleId?: RuleId;
+      detail?: JsonValue;
     };
 
 export interface PublicGameState {
@@ -129,8 +165,9 @@ export interface ActionRejection {
 
 export interface GameTransition {
   state: GameState;
-  events: PublicGameEvent[];
+  events: EngineEvent[];
   rejections: ActionRejection[];
+  setMemory?: RuleMemory;
 }
 
 export interface GameResult {

@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import type { GameConfig, GameState } from '../game/types.js';
 import { startGame } from '../game/start-game.js';
 import { reduceGame } from '../engine/reducer.js';
+import { samePlay } from '../play/play.js';
+import { buildPlayerSnapshot } from '../snapshot/snapshot.js';
 import { NO_RULE_CHAIN_PORT, type RuleRuntime } from './chain.js';
 import type { RuleChainEntry, RuleModule } from './contract.js';
 import { createInProcessRuleChainPort } from './in-process.js';
@@ -39,6 +41,21 @@ const yagiri: RuleModule = {
         : [],
   },
 };
+
+function fixtureEntry(ruleId: string, position: number): RuleChainEntry {
+  return {
+    ruleId,
+    name: ruleId,
+    position,
+    priority: {
+      popularityScore: 0,
+      activatedAt: '2026-07-26T00:00:00.000Z',
+      ruleId,
+    },
+    bundleHash: 'fixture',
+    contractVersion: 1,
+  };
+}
 
 function stateWithEight(config: GameConfig): {
   state: GameState;
@@ -147,5 +164,225 @@ describe('GE-04 independent rule modules', () => {
     );
     expect(transition.rejections).toEqual([]);
     expect(transition.state.public.field.current?.play.repRank).toBe('8');
+  });
+
+  it('ルールへ渡すビューを権威状態から切り離し、深く凍結する', () => {
+    const entry = fixtureEntry('r0002-mutation-probe', 0);
+    let mutationRejected = false;
+    const mutationProbe: RuleModule = {
+      meta: {
+        ruleId: entry.ruleId,
+        name: entry.name,
+        description: '権威状態への直接変更を試す',
+        kind: 'original',
+        proposalId: 'fixture',
+        contractVersion: 1,
+        messages: {},
+      },
+      hooks: {
+        afterPlay(context) {
+          try {
+            (
+              context.game.field as unknown as {
+                current?: unknown;
+              }
+            ).current = undefined;
+          } catch {
+            mutationRejected = true;
+          }
+          return [];
+        },
+      },
+    };
+    const config: GameConfig = {
+      gameIndex: 0,
+      seats: ['p1', 'p2', 'p3', 'p4'],
+      gameSeed: 'immutable-rule-view',
+      ruleChain: [entry],
+    };
+    const started = startGame(config).state;
+    const player = started.public.turn;
+    const card = player ? started.players[player]?.hand[0] : undefined;
+    if (!player || !card) {
+      throw new Error('Expected an opening play');
+    }
+
+    const transition = reduceGame(
+      config,
+      started,
+      { type: 'play', player, cards: [card.id] },
+      {
+        port: createInProcessRuleChainPort([mutationProbe]),
+        setHistory: [],
+        setMemory: {},
+      },
+    );
+
+    expect(mutationRejected).toBe(true);
+    expect(transition.state.public.field.current?.play.cards).toContainEqual(
+      card,
+    );
+    expect(
+      transition.events.some((event) => event.type === 'fieldCleared'),
+    ).toBe(false);
+  });
+
+  it('無作用ルールの乱数消費が別ルールの乱数列へ影響しない', () => {
+    const consumerEntry = fixtureEntry('r0003-rng-consumer', 0);
+    const observerEntry = fixtureEntry('r0004-rng-observer', 1);
+    const observed: number[] = [];
+    const consumer: RuleModule = {
+      meta: {
+        ruleId: consumerEntry.ruleId,
+        name: consumerEntry.name,
+        description: '自分の乱数を消費する',
+        kind: 'original',
+        proposalId: 'fixture',
+        contractVersion: 1,
+        messages: {},
+      },
+      hooks: {
+        afterPlay(context) {
+          context.rng.next();
+          return [];
+        },
+      },
+    };
+    const observer: RuleModule = {
+      meta: {
+        ruleId: observerEntry.ruleId,
+        name: observerEntry.name,
+        description: '乱数列を観測する',
+        kind: 'original',
+        proposalId: 'fixture',
+        contractVersion: 1,
+        messages: {},
+      },
+      hooks: {
+        afterPlay(context) {
+          observed.push(context.rng.next());
+          return [];
+        },
+      },
+    };
+    const baseConfig: GameConfig = {
+      gameIndex: 0,
+      seats: ['p1', 'p2', 'p3', 'p4'],
+      gameSeed: 'independent-rule-rng',
+      ruleChain: [observerEntry],
+    };
+    const started = startGame(baseConfig).state;
+    const player = started.public.turn;
+    const card = player ? started.players[player]?.hand[0] : undefined;
+    if (!player || !card) {
+      throw new Error('Expected an opening play');
+    }
+
+    reduceGame(
+      baseConfig,
+      started,
+      { type: 'play', player, cards: [card.id] },
+      {
+        port: createInProcessRuleChainPort([observer]),
+        setHistory: [],
+        setMemory: {},
+      },
+    );
+    reduceGame(
+      {
+        ...baseConfig,
+        ruleChain: [consumerEntry, observerEntry],
+      },
+      started,
+      { type: 'play', player, cards: [card.id] },
+      {
+        port: createInProcessRuleChainPort([consumer, observer]),
+        setHistory: [],
+        setMemory: {},
+      },
+    );
+
+    expect(observed).toHaveLength(2);
+    expect(observed[1]).toBe(observed[0]);
+  });
+
+  it('リード手詰まり時は表示した合法手を権威判定でも受理する', () => {
+    const entry = fixtureEntry('r0005-forbid-all', 0);
+    const forbidAll: RuleModule = {
+      meta: {
+        ruleId: entry.ruleId,
+        name: entry.name,
+        description: 'すべての候補を禁止する',
+        kind: 'original',
+        proposalId: 'fixture',
+        contractVersion: 1,
+        messages: {},
+      },
+      hooks: {
+        modifyLegality: () => ({
+          legal: false,
+          reasonKey: 'fixture.forbid-all',
+        }),
+      },
+    };
+    const config: GameConfig = {
+      gameIndex: 0,
+      seats: ['p1', 'p2', 'p3', 'p4'],
+      gameSeed: 'lead-failsafe',
+      ruleChain: [entry],
+    };
+    const started = startGame(config).state;
+    const player = started.public.turn;
+    if (!player) {
+      throw new Error('Expected an opening player');
+    }
+    const runtime: RuleRuntime = {
+      port: createInProcessRuleChainPort([forbidAll]),
+      setHistory: [],
+      setMemory: {},
+    };
+    const snapshot = buildPlayerSnapshot(
+      config,
+      started,
+      {
+        setId: 'set-failsafe',
+        setPhase: { name: 'gameInProgress', gameIndex: 0 },
+        members: config.seats.map((id) => ({
+          id,
+          displayName: id,
+          isAI: false,
+        })),
+        setResults: [],
+      },
+      player,
+      runtime,
+    );
+    const legalMove = snapshot.legalMoves?.[0];
+    if (!legalMove) {
+      throw new Error('Expected a failsafe legal move');
+    }
+
+    const transition = reduceGame(
+      config,
+      started,
+      {
+        type: 'play',
+        player,
+        cards: legalMove.cards.map((card) => card.id),
+      },
+      runtime,
+    );
+
+    expect(transition.rejections).toEqual([]);
+    expect(
+      transition.state.public.field.current
+        ? samePlay(transition.state.public.field.current.play, legalMove)
+        : false,
+    ).toBe(true);
+    expect(transition.events).toContainEqual({
+      type: 'failsafe',
+      reason: 'leadNoLegalMove',
+      relatedRuleIds: [entry.ruleId],
+    });
   });
 });
