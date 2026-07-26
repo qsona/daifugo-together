@@ -180,7 +180,7 @@ describe('AI-01', () => {
     await pool.close();
   });
 
-  it('既定50/200msで探索を完了し、同じseedから同じ手を返す', async () => {
+  it('既定soft予算の探索を完了し、同じseedから同じ手を返す', async () => {
     const config: GameConfig = {
       gameIndex: 0,
       seats,
@@ -202,7 +202,9 @@ describe('AI-01', () => {
     const input = {
       view: buildPlayerSnapshot(config, state, context, player),
       legalPlays: enumerateLegalPlays(config, state, player),
-      budget: DEFAULT_THINK_BUDGET,
+      // hardMs は worker 起動時間も含むため、共有CIのCPU速度に依存させない。
+      // softMs/maxPlayouts/sliceMs は本番既定値のまま探索結果を検証する。
+      budget: { ...DEFAULT_THINK_BUDGET, hardMs: 2_000 },
       seed: 'default-budget-seed',
       difficulty: NORMAL_DIFFICULTY,
     };

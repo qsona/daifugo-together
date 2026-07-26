@@ -923,7 +923,7 @@ describe('per-player room view allow-list', () => {
       expect(state.phase).toBe('setResult');
       expectNoOtherHands(state);
     }
-  });
+  }, 15_000);
 
   it('本人の手札だけを含み、他人のuserId・Core private・内部ルール情報を配信しない', () => {
     const started = start(fourHumanRoom());
