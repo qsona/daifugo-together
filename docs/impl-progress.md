@@ -254,7 +254,7 @@ TS-02 から継続で未解決のもの:
 
 ## 並行進行: E2 対戦AI
 
-- 状態: AI-01 プロセス1の縦断実装完了。3回の独立 GPT-5.6 Sol 方向性レビュー `GO_WITH_FIXES` のworker予算・世代管理・partial-search・UCB1再訪・キュー期限指摘を反映し、再レビュー待ち。
+- 状態: AI-01 プロセス1の縦断実装完了。3回の独立 GPT-5.6 Sol 方向性レビュー指摘を反映し、最終方向性レビュー `GO`。プロセス2へ進む。
 - 検証: Node 26.5.0 / pnpm 11.17.0 / TypeScript 6.0.3。統合リポジトリ全体 15 files / 92 tests、format・lint・design lint・typecheck・build 成功。
 - ユーザーストーリー確認: `packages/ai/src/ai-player.test.ts` の「1人+AI 3人で3ゲームのセットを拒否なく完走する」で、人間席1・AI席3の3ゲームセットを実際の E1 reducer に通し、全着手の rejection 0、結果3件、`completion=completed` を確認。
 
