@@ -3,14 +3,25 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 // @ts-expect-error -- 検査スクリプトは .mjs のまま(TS-02 の check-rule-diff と同じ方針)
-import { checkSvgText } from './check-key-visual.mjs';
+import { TARGETS, checkSvgText } from './check-key-visual.mjs';
 
 const check = (text: string): string[] =>
   checkSvgText('t.svg', text) as string[];
 
 describe('キービジュアル SVG の静的検証', () => {
+  it('検証対象がすべて実在する(改名で検査が素通りしないこと)', () => {
+    for (const target of TARGETS as string[]) {
+      expect(() => readFileSync(target, 'utf8')).not.toThrow();
+    }
+  });
+
   it('確定済みの原資産 key-visual-2a.svg は自己完結している', () => {
     const text = readFileSync('docs/design/key-visual-2a.svg', 'utf8');
+    expect(check(text)).toEqual([]);
+  });
+
+  it('派生の favicon.svg も自己完結している', () => {
+    const text = readFileSync('docs/design/favicon.svg', 'utf8');
     expect(check(text)).toEqual([]);
   });
 

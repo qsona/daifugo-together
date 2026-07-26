@@ -16,11 +16,14 @@ import { fileURLToPath } from 'node:url';
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 
-/** 検証対象。派生 SVG が増えたらここに足す。 */
-const TARGETS = [
+/**
+ * 検証対象。派生 SVG が増えたらここに足す。
+ * **不在は fail** にする。改名や削除で検査が静かに素通りするのを防ぐため
+ * (OGP は SVG 正本を持たず generate-design-images.mjs が PNG を合成するので対象外)。
+ */
+export const TARGETS = [
   'docs/design/key-visual-2a.svg',
   'docs/design/favicon.svg',
-  'docs/design/ogp.svg',
 ];
 
 const EXTERNAL_REFERENCE =
@@ -71,7 +74,12 @@ function main() {
 
   for (const target of TARGETS) {
     const path = join(repoRoot, target);
-    if (!existsSync(path)) continue;
+    if (!existsSync(path)) {
+      problems.push(
+        `${target}: 検証対象が見つかりません。改名したなら TARGETS も更新してください`,
+      );
+      continue;
+    }
     checked += 1;
     problems.push(...checkWellFormed(path));
     problems.push(...checkSvgText(target, readFileSync(path, 'utf8')));

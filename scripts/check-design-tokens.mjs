@@ -22,13 +22,26 @@ import { fileURLToPath } from 'node:url';
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 const srcDir = join(repoRoot, 'packages/web/src');
+const publicDir = join(repoRoot, 'packages/web/public');
+const designDir = join(repoRoot, 'docs/design');
 const indexHtml = join(repoRoot, 'packages/web/index.html');
-const tokensCss = join(repoRoot, 'docs/design/design-tokens.css');
+const tokensCss = join(designDir, 'design-tokens.css');
 
 const SCANNED_EXTENSIONS = ['.css', '.ts', '.tsx'];
 
-const RAW_COLOR = /#[0-9a-fA-F]{3,8}\b|\b(?:rgba?|hsla?)\s*\(/;
+/**
+ * 生の色: 16 進 / 旧来の色関数 / 新しい色空間の関数 / よく使われる CSS 名前色。
+ * 名前色は全 148 語を列挙せず、実際に書かれがちなものに絞る(`transparent` と
+ * `currentColor` はトークンの代わりではないので許可する)。
+ */
+const RAW_COLOR =
+  /#[0-9a-fA-F]{3,8}\b|\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\s*\(|(?<![\w.-])(?:white|black|red|blue|green|yellow|orange|purple|pink|gray|grey|silver|gold|navy|teal|cyan|magenta|brown|beige|ivory)\b\s*[;,)]/;
+
 const BOX_SHADOW = /box-shadow\s*:\s*([^;}]+)/g;
+/** 角丸も影と同じくトークン化済みの造形要素なので、トークン参照を強制する。 */
+const BORDER_RADIUS = /border-radius\s*:\s*([^;}]+)/g;
+/** 角丸で literal を許す値。50% は円、0 は角丸なし。どちらもトークンの代わりではない。 */
+const RADIUS_LITERALS = new Set(['50%', '0']);
 
 /** 行内に検査対象外の記述があるか(コメントは対象外)。 */
 function isComment(line) {
@@ -99,6 +112,14 @@ export function findViolations({ files, readFile, htmlText, tokensText }) {
           );
         }
       }
+      for (const match of text.matchAll(BORDER_RADIUS)) {
+        const value = match[1].trim();
+        if (!value.includes('var(') && !RADIUS_LITERALS.has(value)) {
+          violations.push(
+            `${file} border-radius はトークン参照か 50% / 0 にしてください: ${value}`,
+          );
+        }
+      }
     }
   }
 
@@ -118,14 +139,34 @@ export function findViolations({ files, readFile, htmlText, tokensText }) {
   return violations;
 }
 
+/**
+ * 配布物 `packages/web/public/favicon.svg` は `docs/design/favicon.svg` の複製。
+ * 正本を更新して生成スクリプトを流し忘れると静かに drift するので、ここで照合する
+ * (PNG は再生成に sharp が要るので CI では検査しない。SVG の一致がその代理になる)。
+ */
+export function checkFaviconCopy(sourceText, copyText) {
+  return sourceText === copyText
+    ? []
+    : [
+        'packages/web/public/favicon.svg が docs/design/favicon.svg と一致しません。' +
+          'node scripts/generate-design-images.mjs を実行して生成物を更新してください',
+      ];
+}
+
 function main() {
   const files = collectFiles(srcDir);
-  const violations = findViolations({
-    files,
-    readFile: (file) => readFileSync(file, 'utf8'),
-    htmlText: readFileSync(indexHtml, 'utf8'),
-    tokensText: readFileSync(tokensCss, 'utf8'),
-  }).map((message) => message.replaceAll(repoRoot, ''));
+  const violations = [
+    ...findViolations({
+      files,
+      readFile: (file) => readFileSync(file, 'utf8'),
+      htmlText: readFileSync(indexHtml, 'utf8'),
+      tokensText: readFileSync(tokensCss, 'utf8'),
+    }),
+    ...checkFaviconCopy(
+      readFileSync(join(designDir, 'favicon.svg'), 'utf8'),
+      readFileSync(join(publicDir, 'favicon.svg'), 'utf8'),
+    ),
+  ].map((message) => message.replaceAll(repoRoot, ''));
 
   if (violations.length > 0) {
     console.error('デザイントークン準拠の検査に失敗しました:\n');
