@@ -136,8 +136,8 @@ export async function runAiTurn(
   const startedAt = now();
   let timer: ReturnType<typeof setTimeout> | undefined;
   const settled = await Promise.race<SettledDecision>([
-    options.ai
-      .decideMove(options.input)
+    Promise.resolve()
+      .then(() => options.ai.decideMove(options.input))
       .then((decision) => ({ kind: 'decision', decision }) as const)
       .catch(() => ({ kind: 'failed' }) as const),
     new Promise<SettledDecision>((resolve) => {

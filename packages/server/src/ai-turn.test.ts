@@ -132,6 +132,33 @@ describe('server AI turn boundary', () => {
     expect(result.decision.usedFallback).toBe('engine-fallback');
   });
 
+  it('AI adapterがPromiseを返す前に同期throwしてもfallbackで継続する', async () => {
+    const metrics: AiTurnMetric[] = [];
+    const result = await runAiTurn({
+      ai: player(() => {
+        throw new Error('sync adapter failure');
+      }),
+      input,
+      fallbackPlay: () => plays[1]!,
+      animationDelay: { minMs: 0, maxMs: 0 },
+      sleep: async () => {},
+      onMetric: (metric) => metrics.push(metric),
+    });
+
+    expect(result.decision.play).toEqual(plays[1]);
+    expect(result.decision.usedFallback).toBe('engine-fallback');
+    expect(result.watchdogTriggered).toBe(false);
+    expect(metrics).toContainEqual(
+      expect.objectContaining({
+        name: 'ai_fallback_total',
+        labels: {
+          fallback: 'engine-fallback',
+          watchdog: false,
+        },
+      }),
+    );
+  });
+
   it('観測・乱数・演出adapterの例外で合法手を失わない', async () => {
     const result = await runAiTurn({
       ai: player(async () => ({
