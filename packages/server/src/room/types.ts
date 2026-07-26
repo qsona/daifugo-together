@@ -102,12 +102,12 @@ export type RoomAction =
   | {
       type: 'leave';
       memberId: string;
-      now?: number;
-      setSeed?: string;
+      now: number;
+      setSeed: string;
       availableRules?: RuleChainEntry[];
     }
-  | { type: 'disconnect'; memberId: string }
-  | { type: 'reconnect'; memberId: string }
+  | { type: 'disconnect'; memberId: string; now: number }
+  | { type: 'reconnect'; memberId: string; now: number }
   | { type: 'rename'; memberId: string; displayName: string }
   | {
       type: 'continue';
@@ -130,6 +130,14 @@ export type RoomAction =
       now: number;
     }
   | { type: 'pass'; memberId: string; turnSeq: number; now: number }
+  | {
+      type: 'autoAct';
+      memberId: string;
+      turnSeq: number;
+      cards: CardId[] | null;
+      reason: 'ai' | 'turnTimeout';
+      now: number;
+    }
   | { type: 'advanceIntermission'; now: number };
 
 export type RoomErrorCode =
@@ -255,6 +263,8 @@ export interface RoomReducerOptions {
   gamesPerSet?: number;
   interimAutoAdvanceMs?: number;
   setResultTimeoutMs?: number;
+  turnLimitMs?: number;
+  disconnectedTurnLimitMs?: number;
   random?: () => number;
   createAiMemberId?: (index: number) => string;
   rulePort?: RuleChainPort;

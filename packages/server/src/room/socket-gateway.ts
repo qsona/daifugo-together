@@ -1,7 +1,22 @@
 import { randomUUID } from 'node:crypto';
 
+import {
+  createAiPlayer,
+  DEFAULT_THINK_BUDGET,
+  NORMAL_DIFFICULTY,
+  type AiPlayer,
+} from '@daifugo/ai';
+import {
+  buildPlayerSnapshot,
+  enumerateLegalPlays,
+  NO_RULE_CHAIN_PORT,
+  type CardId,
+  type RuleChainPort,
+  type RuleRuntime,
+} from '@daifugo/core';
 import type { Server, Socket } from 'socket.io';
 
+import { runAiTurn } from '../ai-turn.js';
 import { RoomManager } from './manager.js';
 import type {
   Ack,
@@ -14,6 +29,7 @@ import type {
 } from './protocol.js';
 import { InMemorySessionStore } from './session.js';
 import { RoomTimerCoordinator } from './timers.js';
+import type { RoomTimerOptions } from './timers.js';
 import type { RoomState, RoomTransition } from './types.js';
 import { viewFor } from './view.js';
 
@@ -36,6 +52,13 @@ export interface RoomSocketGatewayOptions {
   sessions?: InMemorySessionStore;
   now?: () => number;
   createSetSeed?: () => string;
+  ai?: AiPlayer;
+  rulePort?: RuleChainPort;
+  decideTurn?: (state: RoomState, memberId: string) => Promise<CardId[] | null>;
+  timers?: Pick<
+    RoomTimerOptions,
+    'setTimer' | 'clearTimer' | 'random' | 'aiDelayMinMs' | 'aiDelayMaxMs'
+  >;
   onError?: (error: unknown) => void;
 }
 
@@ -94,7 +117,7 @@ function validDisplayName(value: unknown): value is string {
   const trimmed = value.trim();
   return (
     trimmed.length >= 1 &&
-    trimmed.length <= 20 &&
+    [...trimmed].length <= 10 &&
     ![...trimmed].some((character) => {
       const code = character.codePointAt(0) ?? 0;
       return code <= 31 || code === 127;
@@ -106,11 +129,19 @@ export function attachRoomSocketGateway(
   io: RoomSocketServer,
   options: RoomSocketGatewayOptions = {},
 ): RoomSocketGateway {
-  const rooms = options.rooms ?? new RoomManager();
+  const rooms =
+    options.rooms ??
+    new RoomManager(
+      options.rulePort
+        ? { reducer: { rulePort: options.rulePort } }
+        : undefined,
+    );
   const sessions = options.sessions ?? new InMemorySessionStore();
   const now = options.now ?? Date.now;
   const createSetSeed = options.createSetSeed ?? randomUUID;
   const activeByUser = new Map<string, RoomSocket>();
+  const ai = options.ai ?? createAiPlayer();
+  const ownsAi = options.ai === undefined;
 
   const report = (error: unknown): void => {
     try {
@@ -156,8 +187,60 @@ export function attachRoomSocketGateway(
     }
   };
   const timers = new RoomTimerCoordinator(rooms, {
+    ...options.timers,
     now,
     createSetSeed,
+    decideTurn:
+      options.decideTurn ??
+      (async (state, memberId) => {
+        const engine = state.engine;
+        const game = engine?.currentGame;
+        if (!engine || !game || engine.phase.name !== 'gameInProgress') {
+          return null;
+        }
+        const gameIndex = engine.phase.gameIndex;
+        const config = {
+          gameIndex,
+          seats: engine.members.map((member) => member.id),
+          gameSeed: `${engine.setSeed}:${gameIndex}`,
+          ruleChain: engine.ruleChain,
+        };
+        const runtime: RuleRuntime = {
+          port: options.rulePort ?? NO_RULE_CHAIN_PORT,
+          setHistory: engine.results,
+          setMemory: engine.setMemory,
+        };
+        const legalPlays = enumerateLegalPlays(config, game, memberId, runtime);
+        if (legalPlays.length === 0) return null;
+        const view = buildPlayerSnapshot(
+          config,
+          game,
+          {
+            setId: engine.setId,
+            setPhase: engine.phase,
+            members: engine.members,
+            setResults: engine.results,
+          },
+          memberId,
+          runtime,
+        );
+        const result = await runAiTurn({
+          ai,
+          input: {
+            view,
+            legalPlays,
+            budget: {
+              ...DEFAULT_THINK_BUDGET,
+              maxPlayouts: 16,
+            },
+            seed: `${engine.setSeed}:room:${gameIndex}:${state.turnSeq}:${memberId}`,
+            difficulty: NORMAL_DIFFICULTY,
+          },
+          fallbackPlay: () => legalPlays[0]!,
+          animationDelay: { minMs: 0, maxMs: 0 },
+        });
+        return result.decision.play.cards.map((card) => card.id);
+      }),
     onTransition: emitTransition,
     onError: report,
   });
@@ -193,6 +276,7 @@ export function attachRoomSocketGateway(
       const reconnected = rooms.apply(membership.room.roomId, {
         type: 'reconnect',
         memberId: membership.member.memberId,
+        now: now(),
       });
       if (reconnected?.accepted) {
         publishTransition(membership.room, reconnected);
@@ -458,6 +542,7 @@ export function attachRoomSocketGateway(
         const transition = rooms.apply(current.room.roomId, {
           type: 'disconnect',
           memberId: current.member.memberId,
+          now: now(),
         });
         if (transition?.accepted) {
           publishTransition(current.room, transition);
@@ -473,6 +558,9 @@ export function attachRoomSocketGateway(
     sessions,
     close() {
       timers.close();
+      if (ownsAi) {
+        void ai.close().catch(report);
+      }
       for (const socket of activeByUser.values()) {
         socket.disconnect(true);
       }

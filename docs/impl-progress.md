@@ -302,9 +302,9 @@ TS-02 から継続で未解決のもの:
 
 ## 並行進行: E3 マルチプレイ
 
-- 状態: MP-01/MP-02 のプロセス1。Socket.IO 層の前に、Coreをホストする純粋Room reducer・閲覧者別snapshot・RoomManager indexを実装した。ブランチ `codex/e3-multiplayer-process1`、main `25317dc` へrebase済み。
-- コミット: `9c4ff46`（Room authority/view）、`3c351f3`（切断・離脱時の席/controller維持）、`2762261`（RoomManagerと招待index）。
-- 検証: Node 26.5.0 / pnpm 11.17.0 / TypeScript 6.0.3。`pnpm verify` 成功、19 files / 137 tests。E3純粋層は15 testsで、3ゲーム完走・全着手の`v`/`turnSeq`増加・全snapshotの他人手札ID非出現を確認。
+- 状態: MP-01/MP-02 の縦断実装中。純粋Room reducer・閲覧者別snapshot・RoomManager indexに加え、typed Socket.IO gateway、匿名session、phase/turn timer、E2 AI adapterまで接続した。ブランチ `codex/e3-multiplayer-process1`、main `25317dc` へrebase済み。
+- コミット: `9c4ff46`（Room authority/view）、`3c351f3`（切断・離脱時の席/controller維持）、`2762261`（RoomManagerと招待index）、`5a477a9`（set境界・continue・参照分離）、`4cbc612`（Socket.IO gateway）、`36121c4`（phase timer）。
+- 検証: Node 26.5.0 / pnpm 11.17.0 / TypeScript 6.0.3。純粋層で3ゲーム完走、実Socket.IO server/clientでcreate→join→start・再接続・後勝ちsession・closed通知、および1人+AI 3席のSocket→Room→Core→AI scheduler縦断完走を確認した。
 - 依存: npm registry の `latest` を確認して `socket.io` / `socket.io-client` 4.8.3 を導入した。導入後の `pnpm outdated --format json` は、ユーザー指定で固定したTypeScript 6.0.3（registry latest 7.0.2）以外0件。
 
 ### プロセス1で完了したもの
@@ -315,12 +315,17 @@ TS-02 から継続で未解決のもの:
 - 対局中の切断では席を保持してAI代行、復帰でhumanへ戻す。明示離脱は`departed`として不可逆にし、セット終了までは席と手札を維持する。待機中のホスト離脱は参加順で移譲する。
 - `viewFor` を単一allow-list境界にし、本人の手札だけを含める。他人は枚数のみ。`userId`・token・Core private/KV/RNG・Effect内部表現・合法手一覧は配信型へ入れない。復帰snapshotは常に`events: []`。
 - `RoomManager` の `Map<roomId, RoomState>`、invite→room、user→room index。招待コード正規化、1ユーザー1部屋、満員/対局中参加拒否、部屋破棄時の条件付きindex削除。
+- setResult到達時に切断者・明示離脱者を除去して`byUser`を即時解放。全残留人間のcontinue、leaveとの競合、120秒期限での無応答除外、AI再補充、新しい`SetState`と最新ルール一覧の再固定。
+- `viewFor`と公開Room eventをCore権威状態からdeep cloneし、gateway内処理からCard参照を変更できないようにした。
+- Socket.IO server/client 4.8.3のtyped event/ack、匿名token、同一tokenの後勝ち接続、再接続時`events: []`の全量snapshot、受信者別state emit。
+- fingerprint付きtimerでintermission・setResult・turnを駆動。同じ状態の再syncで期限を延長せず、古いcallbackとAI決定中に進んだ`turnSeq`をno-opにする。AI演出間隔はE3仕様の0.8〜2.5秒をRoom側で持ち、`runAiTurn`内の遅延は0に上書きして二重待機を避ける。
 
 ### E3で置いた仮定・次工程
 
 | 仮定・残作業 | 根拠 | 次工程 |
 |---|---|---|
-| Room reducerとviewをSocket.IOより先に固定する | E03 §3.1(e)がSocket層を薄い変換に限定 | typed event/ack、実Socket.IO in-process統合test |
+| Room reducerとviewをSocket.IOより先に固定する | E03 §3.1(e)がSocket層を薄い変換に限定 | 完了。実Socket.IO in-process統合testを追加 |
 | AI補充member IDと暫定表示名はserver生成 | E03 §3.2で機械名を暫定許容 | E4のトーン確定後に名前プールを差替え |
-| E2の0.4〜1.2秒は探索adapter側の既定のまま維持し、E3の最終ペーシングは0.8〜2.5秒をRoom timer側で上書きする | E02の較正値とE03 §2.1/§3.2の値が不一致。Epic順では後段のE3 UX仕様を統合時の正とする | TimerBag・AI手番scheduler。設計書自体は変更しない |
-| `setRespondBy`・人間手番deadline・intermissionは状態に予約済みだが、タイマー駆動は未接続 | timer callbackも予約時`turnSeq`を再検証する必要がある | fake timersで本人playとの競合、AI連続手番0.8秒以上を検証 |
+| E2の0.4〜1.2秒は探索adapter側の既定のまま維持し、E3の最終ペーシングは0.8〜2.5秒をRoom timer側で上書きする | E02の較正値とE03 §2.1/§3.2の値が不一致。Epic順では後段のE3 UX仕様を統合時の正とする | 完了。Room schedulerが0.8〜2.5秒、AI adapterへは遅延0を注入 |
+| `setRespondBy`・人間手番deadline・intermissionは状態に予約済みだが、タイマー駆動は未接続 | timer callbackも予約時`turnSeq`を再検証する必要がある | 完了。fingerprintと`turnSeq`再検証をfake timerで確認 |
+| waiting切断猶予、lobby TTL、無人対局abandon、join/create rate limitは未接続 | E03 §2.1・§2.5・§3.1 | 次工程でTimerCoordinatorのroom lifecycle keyとgateway rate limiterを追加 |

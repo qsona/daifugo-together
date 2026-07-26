@@ -1,5 +1,6 @@
 import { createServer, type Server as HttpServer } from 'node:http';
 
+import { enumerateLegalPlays } from '@daifugo/core';
 import { Server } from 'socket.io';
 import {
   io as createClient,
@@ -12,10 +13,12 @@ import type {
   ClientToServerEvents,
   ServerToClientEvents,
 } from './protocol.js';
+import { RoomManager } from './manager.js';
 import { InMemorySessionStore } from './session.js';
 import {
   attachRoomSocketGateway,
   type RoomSocketGateway,
+  type RoomSocketGatewayOptions,
   type RoomSocketServer,
 } from './socket-gateway.js';
 import type { PlayerRoomView } from './types.js';
@@ -48,7 +51,11 @@ function allStrings(value: unknown): string[] {
   return [];
 }
 
-async function createHarness(): Promise<Harness> {
+async function createHarness(
+  gatewayOptions: Partial<
+    Pick<RoomSocketGatewayOptions, 'rooms' | 'decideTurn' | 'timers'>
+  > = {},
+): Promise<Harness> {
   let userSequence = 0;
   let tokenSequence = 0;
   const http = createServer();
@@ -65,6 +72,7 @@ async function createHarness(): Promise<Harness> {
     }
   >(http);
   const gateway = attachRoomSocketGateway(io, {
+    ...gatewayOptions,
     sessions: new InMemorySessionStore({
       createUserId: () => `user-${++userSequence}`,
       createToken: () => `token-${++tokenSequence}`.padEnd(20, 'x'),
@@ -250,5 +258,79 @@ describe('Socket.IO room gateway', () => {
     );
     expect(left).toEqual({ ok: true, value: {} });
     await expect(closed).resolves.toEqual({ reason: 'noHumans' });
+  });
+
+  it('1人+AI 3席をSocket/Room/Core/AI scheduler経由でセット結果まで完走する', async () => {
+    let id = 0;
+    const rooms = new RoomManager({
+      now: () => 10_000,
+      createRoomId: () => `room-auto-${++id}`,
+      createMemberId: () => `member-auto-${++id}`,
+      randomIndex: (max) => id++ % max,
+      reducer: {
+        gamesPerSet: 1,
+        turnLimitMs: 0,
+        disconnectedTurnLimitMs: 0,
+        random: () => 0.999_999,
+      },
+    });
+    const harness = await createHarness({
+      rooms,
+      timers: {
+        aiDelayMinMs: 0,
+        aiDelayMaxMs: 0,
+        random: () => 0,
+      },
+      decideTurn: async (state, memberId) => {
+        const engine = state.engine!;
+        const game = engine.currentGame!;
+        const gameIndex =
+          engine.phase.name === 'setResult' ? 0 : engine.phase.gameIndex;
+        const legal = enumerateLegalPlays(
+          {
+            gameIndex,
+            seats: engine.members.map((member) => member.id),
+            gameSeed: `${engine.setSeed}:${gameIndex}`,
+            ruleChain: engine.ruleChain,
+          },
+          game,
+          memberId,
+        );
+        return legal[0]?.cards.map((card) => card.id) ?? null;
+      },
+    });
+    const owner = await connect(harness);
+    const created = await emitAck<
+      'room:create',
+      { roomId: string; inviteCode: string }
+    >(owner.client, 'room:create', {});
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+
+    const versions: number[] = [];
+    const completed = once<PlayerRoomView>((resolve) => {
+      owner.client.on('room:state', (view) => {
+        versions.push(view.v);
+        if (view.phase === 'setResult') resolve(view);
+      });
+    });
+    const started = await emitAck<'room:start', Record<string, never>>(
+      owner.client,
+      'room:start',
+      {},
+    );
+    expect(started).toEqual({ ok: true, value: {} });
+    const result = await completed;
+
+    expect(result.setResult?.standings).toHaveLength(4);
+    expect(
+      versions.every(
+        (value, index) => index === 0 || value > versions[index - 1]!,
+      ),
+    ).toBe(true);
+    const authority = rooms.get(created.value.roomId);
+    expect(authority?.phase).toBe('setResult');
+    expect(authority?.engine?.results).toHaveLength(1);
+    expect(authority?.turnSeq).toBeGreaterThan(0);
   });
 });

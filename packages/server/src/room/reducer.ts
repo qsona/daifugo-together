@@ -23,6 +23,8 @@ import type {
 const DEFAULT_GAMES_PER_SET = 3;
 const DEFAULT_INTERIM_MS = 5_000;
 const DEFAULT_SET_RESULT_TIMEOUT_MS = 120_000;
+const DEFAULT_TURN_LIMIT_MS = 60_000;
+const DEFAULT_DISCONNECTED_TURN_LIMIT_MS = 15_000;
 const SEATS: SeatId[] = [0, 1, 2, 3];
 
 export function createRoomState(input: CreateRoomInput): RoomState {
@@ -344,7 +346,12 @@ function startSet(
       fixedRules,
       engine: started.state,
       setNo,
-      turnDeadlineAt: null,
+      turnDeadlineAt: deadlineAtForTurn(
+        started.state,
+        settlement.members,
+        input.now,
+        options,
+      ),
       setRespondBy:
         phase === 'setResult'
           ? input.now +
@@ -374,6 +381,32 @@ function phaseAfterSettlement(
     !members.some((member) => !member.isAI && !member.departed)
     ? 'closed'
     : phase;
+}
+
+function deadlineAtForTurn(
+  engine: SetTransition['state'],
+  members: readonly RoomMember[],
+  now: number,
+  options: RoomReducerOptions,
+): number | null {
+  if (
+    engine.phase.name !== 'gameInProgress' ||
+    engine.currentGame?.public.phase !== 'awaitingPlay'
+  ) {
+    return null;
+  }
+  const member = members.find(
+    (candidate) => candidate.memberId === engine.currentGame?.public.turn,
+  );
+  if (!member || member.isAI || member.departed) {
+    return null;
+  }
+  return (
+    now +
+    (member.connected
+      ? (options.turnLimitMs ?? DEFAULT_TURN_LIMIT_MS)
+      : (options.disconnectedTurnLimitMs ?? DEFAULT_DISCONNECTED_TURN_LIMIT_MS))
+  );
 }
 
 function join(state: RoomState, action: Extract<RoomAction, { type: 'join' }>) {
@@ -545,9 +578,7 @@ function leave(
   if (
     state.phase === 'setResult' &&
     remainingHumans.length > 0 &&
-    remainingHumans.every((member) => member.wantsNextSet) &&
-    action.now !== undefined &&
-    action.setSeed !== undefined
+    remainingHumans.every((member) => member.wantsNextSet)
   ) {
     return startSet(
       { ...state, members: withHost },
@@ -613,6 +644,7 @@ function expireSetResult(
 function connectionChanged(
   state: RoomState,
   action: Extract<RoomAction, { type: 'disconnect' | 'reconnect' }>,
+  options: RoomReducerOptions,
 ): RoomTransition {
   if (state.phase === 'closed') {
     return rejected(state, 'ROOM_CLOSED');
@@ -638,17 +670,26 @@ function connectionChanged(
         }
       : candidate,
   );
-  return committed(state, { members }, [
+  return committed(
+    state,
     {
-      t: reconnecting ? 'memberReconnected' : 'memberDisconnected',
-      memberId: member.memberId,
+      members,
+      turnDeadlineAt: state.engine
+        ? deadlineAtForTurn(state.engine, members, action.now, options)
+        : null,
     },
-    ...(aiActing
-      ? ([{ t: 'aiTakeover', memberId: member.memberId }] as const)
-      : state.phase !== 'waiting'
-        ? ([{ t: 'humanReturned', memberId: member.memberId }] as const)
-        : []),
-  ]);
+    [
+      {
+        t: reconnecting ? 'memberReconnected' : 'memberDisconnected',
+        memberId: member.memberId,
+      },
+      ...(aiActing
+        ? ([{ t: 'aiTakeover', memberId: member.memberId }] as const)
+        : state.phase !== 'waiting'
+          ? ([{ t: 'humanReturned', memberId: member.memberId }] as const)
+          : []),
+    ],
+  );
 }
 
 function rename(
@@ -670,7 +711,7 @@ function rename(
   const displayName = action.displayName.trim();
   if (
     displayName.length < 1 ||
-    displayName.length > 20 ||
+    [...displayName].length > 10 ||
     [...displayName].some((character) => {
       const code = character.codePointAt(0) ?? 0;
       return code <= 31 || code === 127;
@@ -693,7 +734,7 @@ function rename(
 
 function gameAction(
   state: RoomState,
-  action: Extract<RoomAction, { type: 'play' | 'pass' }>,
+  action: Extract<RoomAction, { type: 'play' | 'pass' | 'autoAct' }>,
   options: RoomReducerOptions,
 ): RoomTransition {
   if (state.phase !== 'playing' || !state.engine) {
@@ -709,13 +750,13 @@ function gameAction(
   if (action.turnSeq !== state.turnSeq) {
     return rejected(state, 'STALE_TURN');
   }
-  const transition = reduceSet(
-    state.engine,
+  const setAction: Parameters<typeof reduceSet>[1] =
     action.type === 'play'
       ? { type: 'play', player: actor.memberId, cards: action.cards }
-      : { type: 'pass', player: actor.memberId },
-    options.rulePort,
-  );
+      : action.type === 'autoAct' && action.cards !== null
+        ? { type: 'play', player: actor.memberId, cards: action.cards }
+        : { type: 'pass', player: actor.memberId };
+  const transition = reduceSet(state.engine, setAction, options.rulePort);
   if (
     transition.rejections.length > 0 ||
     transition.acceptedAction === undefined
@@ -737,6 +778,9 @@ function gameAction(
     state.fixedRules ?? [],
     transition.events,
   );
+  if (action.type === 'autoAct' && action.reason === 'turnTimeout') {
+    engineEvents.unshift({ t: 'turnTimeout', seat: actor.seatId });
+  }
   engineEvents.push(...memberLeftEvents(settlement.removedMemberIds));
   return committed(
     state,
@@ -745,7 +789,12 @@ function gameAction(
       members: settlement.members,
       engine: transition.state,
       turnSeq: state.turnSeq + 1,
-      turnDeadlineAt: null,
+      turnDeadlineAt: deadlineAtForTurn(
+        transition.state,
+        settlement.members,
+        action.now,
+        options,
+      ),
       setRespondBy:
         phase === 'setResult'
           ? action.now +
@@ -797,6 +846,12 @@ function advanceIntermission(
       phase,
       members: settlement.members,
       engine: transition.state,
+      turnDeadlineAt: deadlineAtForTurn(
+        transition.state,
+        settlement.members,
+        action.now,
+        options,
+      ),
       setRespondBy:
         phase === 'setResult'
           ? action.now +
@@ -821,7 +876,7 @@ export function reduceRoom(
       return leave(state, action, options);
     case 'disconnect':
     case 'reconnect':
-      return connectionChanged(state, action);
+      return connectionChanged(state, action, options);
     case 'rename':
       return rename(state, action);
     case 'continue':
@@ -830,6 +885,7 @@ export function reduceRoom(
       return expireSetResult(state, action, options);
     case 'play':
     case 'pass':
+    case 'autoAct':
       return gameAction(state, action, options);
     case 'advanceIntermission':
       return advanceIntermission(state, action, options);

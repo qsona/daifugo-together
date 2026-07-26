@@ -223,6 +223,8 @@ describe('pure room reducer', () => {
     const hostLeft = reduceRoom(joined, {
       type: 'leave',
       memberId: 'member-1',
+      now: 200,
+      setSeed: 'unused',
     });
     expect(hostLeft.accepted).toBe(true);
     expect(hostLeft.state.members).toHaveLength(1);
@@ -238,6 +240,8 @@ describe('pure room reducer', () => {
     const empty = reduceRoom(hostLeft.state, {
       type: 'leave',
       memberId: 'member-2',
+      now: 201,
+      setSeed: 'unused',
     });
     expect(empty.state.phase).toBe('closed');
     expect(empty.state.members).toEqual([]);
@@ -248,6 +252,7 @@ describe('pure room reducer', () => {
     const disconnected = reduceRoom(started, {
       type: 'disconnect',
       memberId: 'member-2',
+      now: 1_500,
     });
     expect(disconnected.state.members).toContainEqual(
       expect.objectContaining({
@@ -266,6 +271,7 @@ describe('pure room reducer', () => {
     const reconnected = reduceRoom(disconnected.state, {
       type: 'reconnect',
       memberId: 'member-2',
+      now: 1_600,
     });
     expect(reconnected.state.members).toContainEqual(
       expect.objectContaining({
@@ -280,6 +286,8 @@ describe('pure room reducer', () => {
     const left = reduceRoom(reconnected.state, {
       type: 'leave',
       memberId: 'member-2',
+      now: 2_000,
+      setSeed: 'unused',
     });
     expect(left.state.members).toContainEqual(
       expect.objectContaining({
@@ -294,6 +302,7 @@ describe('pure room reducer', () => {
       reduceRoom(left.state, {
         type: 'reconnect',
         memberId: 'member-2',
+        now: 2_001,
       }).error?.code,
     ).toBe('NOT_IN_ROOM');
   });
@@ -303,6 +312,7 @@ describe('pure room reducer', () => {
     const disconnected = reduceRoom(joined, {
       type: 'disconnect',
       memberId: 'member-2',
+      now: 500,
     }).state;
     const started = start(disconnected);
     expect(started.members.filter((member) => member.isAI)).toHaveLength(2);
@@ -379,6 +389,66 @@ describe('pure room reducer', () => {
     expect(duplicate.state).toBe(accepted.state);
   });
 
+  it('人間手番の期限を接続状態に合わせ、autoActだけturnTimeoutを公開する', () => {
+    const started = start(fourHumanRoom());
+    const player = started.engine!.currentGame!.public.turn!;
+    expect(started.turnDeadlineAt).toBe(61_000);
+
+    const disconnected = reduceRoom(started, {
+      type: 'disconnect',
+      memberId: player,
+      now: 2_000,
+    });
+    expect(disconnected.state.turnDeadlineAt).toBe(17_000);
+    const reconnected = reduceRoom(disconnected.state, {
+      type: 'reconnect',
+      memberId: player,
+      now: 3_000,
+    });
+    expect(reconnected.state.turnDeadlineAt).toBe(63_000);
+
+    const game = reconnected.state.engine!.currentGame!;
+    const legal = enumerateLegalPlays(
+      {
+        gameIndex: 0,
+        seats: reconnected.state.engine!.members.map((member) => member.id),
+        gameSeed: `${reconnected.state.engine!.setSeed}:0`,
+        ruleChain: reconnected.state.engine!.ruleChain,
+      },
+      game,
+      player,
+    );
+    const automated = reduceRoom(reconnected.state, {
+      type: 'autoAct',
+      memberId: player,
+      turnSeq: reconnected.state.turnSeq,
+      cards: legal[0]?.cards.map((card) => card.id) ?? null,
+      reason: 'turnTimeout',
+      now: 63_000,
+    });
+    expect(automated.accepted).toBe(true);
+    expect(automated.state.turnSeq).toBe(reconnected.state.turnSeq + 1);
+    expect(automated.events.map((event) => event.t)).toContain('turnTimeout');
+  });
+
+  it('表示名は空白除去後1〜10文字に制限する', () => {
+    const accepted = reduceRoom(room(), {
+      type: 'rename',
+      memberId: 'member-1',
+      displayName: '  １２３４５６７８９０  ',
+    });
+    expect(accepted.accepted).toBe(true);
+    expect(accepted.state.members[0]?.displayName).toBe('１２３４５６７８９０');
+
+    const tooLong = reduceRoom(accepted.state, {
+      type: 'rename',
+      memberId: 'member-1',
+      displayName: '１２３４５６７８９０１',
+    });
+    expect(tooLong.error?.code).toBe('INVALID_NAME');
+    expect(tooLong.state).toBe(accepted.state);
+  });
+
   it('Room経由で3ゲームを完走し、全着手で版・連番・手札秘匿を維持する', () => {
     let state = start(room());
     let acceptedActions = 0;
@@ -450,10 +520,13 @@ describe('pure room reducer', () => {
     const withDeparture = reduceRoom(started, {
       type: 'leave',
       memberId: 'member-1',
+      now: 2_000,
+      setSeed: 'unused',
     }).state;
     const disconnected = reduceRoom(withDeparture, {
       type: 'disconnect',
       memberId: 'member-2',
+      now: 2_001,
     }).state;
     const finished = finishSet(disconnected).state;
 

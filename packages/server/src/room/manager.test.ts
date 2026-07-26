@@ -72,7 +72,12 @@ describe('RoomManager indexes', () => {
       }),
     ).toEqual({ ok: false, code: 'ROOM_IN_GAME' });
 
-    const closed = rooms.apply(roomId, { type: 'leave', memberId });
+    const closed = rooms.apply(roomId, {
+      type: 'leave',
+      memberId,
+      now: 2_001,
+      setSeed: 'unused',
+    });
     expect(closed?.state.phase).toBe('closed');
     expect(rooms.size).toBe(0);
     expect(rooms.get(roomId)).toBeUndefined();
@@ -91,6 +96,7 @@ describe('RoomManager indexes', () => {
       rooms.apply('missing', {
         type: 'disconnect',
         memberId: 'missing',
+        now: 1_000,
       }),
     ).toBeUndefined();
   });
@@ -123,6 +129,7 @@ describe('RoomManager indexes', () => {
     rooms.apply(roomId, {
       type: 'disconnect',
       memberId: joined.value.member.memberId,
+      now: 2_001,
     });
 
     for (let guard = 0; guard < 5_000; guard += 1) {
