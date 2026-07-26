@@ -301,9 +301,13 @@ function start(
   if (!actor.isHost) {
     return rejected(state, 'NOT_HOST');
   }
-  const humans = state.members.filter(
-    (member) => !member.isAI && !member.departed,
-  );
+  const humans = state.members
+    .filter((member) => !member.isAI && !member.departed)
+    .map((member) =>
+      member.connected
+        ? { ...member, controller: 'human' as const, aiActing: false }
+        : { ...member, controller: 'ai' as const, aiActing: true },
+    );
   const addedAi = aiMembers(state, 4 - humans.length, options, action.now);
   const random = options.random ?? Math.random;
   const members = withSeats([...humans, ...addedAi], random);
@@ -349,6 +353,121 @@ function start(
     },
     initialEvents,
   );
+}
+
+function leave(
+  state: RoomState,
+  action: Extract<RoomAction, { type: 'leave' }>,
+): RoomTransition {
+  const leaving = state.members.find(
+    (member) => member.memberId === action.memberId && !member.isAI,
+  );
+  if (!leaving) {
+    return rejected(state, 'NOT_IN_ROOM');
+  }
+  if (state.phase === 'closed') {
+    return rejected(state, 'ROOM_CLOSED');
+  }
+  if (state.phase === 'playing') {
+    const members = state.members.map((member) =>
+      member.memberId === leaving.memberId
+        ? {
+            ...member,
+            connected: false,
+            controller: 'ai' as const,
+            aiActing: true,
+            departed: true,
+          }
+        : member,
+    );
+    const humansRemain = members.some(
+      (member) => !member.isAI && !member.departed,
+    );
+    return committed(
+      state,
+      {
+        phase: humansRemain ? state.phase : 'closed',
+        members,
+      },
+      [
+        { t: 'memberLeft', memberId: leaving.memberId },
+        { t: 'aiTakeover', memberId: leaving.memberId },
+      ],
+    );
+  }
+
+  const members = state.members.filter(
+    (member) => member.memberId !== leaving.memberId,
+  );
+  const nextHost = leaving.isHost
+    ? members
+        .filter((member) => !member.isAI && !member.departed)
+        .sort((left, right) => left.joinedAt - right.joinedAt)[0]
+    : undefined;
+  const withHost = nextHost
+    ? members.map((member) => ({
+        ...member,
+        isHost: member.memberId === nextHost.memberId,
+      }))
+    : members;
+  const humansRemain = withHost.some(
+    (member) => !member.isAI && !member.departed,
+  );
+  const events: RoomGameEventPayload[] = [
+    { t: 'memberLeft', memberId: leaving.memberId },
+  ];
+  if (nextHost) {
+    events.push({ t: 'hostChanged', memberId: nextHost.memberId });
+  }
+  return committed(
+    state,
+    {
+      phase: humansRemain ? state.phase : 'closed',
+      members: withHost,
+    },
+    events,
+  );
+}
+
+function connectionChanged(
+  state: RoomState,
+  action: Extract<RoomAction, { type: 'disconnect' | 'reconnect' }>,
+): RoomTransition {
+  if (state.phase === 'closed') {
+    return rejected(state, 'ROOM_CLOSED');
+  }
+  const member = state.members.find(
+    (candidate) => candidate.memberId === action.memberId && !candidate.isAI,
+  );
+  if (!member || member.departed) {
+    return rejected(state, 'NOT_IN_ROOM');
+  }
+  const reconnecting = action.type === 'reconnect';
+  if (member.connected === reconnecting) {
+    return rejected(state, 'ALREADY_IN_ROOM');
+  }
+  const aiActing = !reconnecting && state.phase !== 'waiting';
+  const members = state.members.map((candidate) =>
+    candidate.memberId === member.memberId
+      ? {
+          ...candidate,
+          connected: reconnecting,
+          controller: aiActing ? ('ai' as const) : ('human' as const),
+          aiActing,
+        }
+      : candidate,
+  );
+  return committed(state, { members }, [
+    {
+      t: reconnecting ? 'memberReconnected' : 'memberDisconnected',
+      memberId: member.memberId,
+    },
+    ...(aiActing
+      ? ([{ t: 'aiTakeover', memberId: member.memberId }] as const)
+      : state.phase !== 'waiting'
+        ? ([{ t: 'humanReturned', memberId: member.memberId }] as const)
+        : []),
+  ]);
 }
 
 function gameAction(
@@ -448,6 +567,11 @@ export function reduceRoom(
       return join(state, action);
     case 'start':
       return start(state, action, options);
+    case 'leave':
+      return leave(state, action);
+    case 'disconnect':
+    case 'reconnect':
+      return connectionChanged(state, action);
     case 'play':
     case 'pass':
       return gameAction(state, action, options);

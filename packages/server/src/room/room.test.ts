@@ -164,6 +164,105 @@ describe('pure room reducer', () => {
     },
   );
 
+  it('待機中のホスト離脱で参加順に移譲し、最後の人間離脱で閉じる', () => {
+    const joined = join(room(), 2);
+    const hostLeft = reduceRoom(joined, {
+      type: 'leave',
+      memberId: 'member-1',
+    });
+    expect(hostLeft.accepted).toBe(true);
+    expect(hostLeft.state.members).toHaveLength(1);
+    expect(hostLeft.state.members[0]).toMatchObject({
+      memberId: 'member-2',
+      isHost: true,
+    });
+    expect(hostLeft.events.map((event) => event.t)).toEqual([
+      'memberLeft',
+      'hostChanged',
+    ]);
+
+    const empty = reduceRoom(hostLeft.state, {
+      type: 'leave',
+      memberId: 'member-2',
+    });
+    expect(empty.state.phase).toBe('closed');
+    expect(empty.state.members).toEqual([]);
+  });
+
+  it('対局中の切断は席を保ったAI代行、復帰はhumanへ戻し、明示離脱は不可逆にする', () => {
+    const started = start(join(room(), 2));
+    const disconnected = reduceRoom(started, {
+      type: 'disconnect',
+      memberId: 'member-2',
+    });
+    expect(disconnected.state.members).toContainEqual(
+      expect.objectContaining({
+        memberId: 'member-2',
+        connected: false,
+        controller: 'ai',
+        aiActing: true,
+        departed: false,
+      }),
+    );
+    expect(disconnected.events.map((event) => event.t)).toEqual([
+      'memberDisconnected',
+      'aiTakeover',
+    ]);
+
+    const reconnected = reduceRoom(disconnected.state, {
+      type: 'reconnect',
+      memberId: 'member-2',
+    });
+    expect(reconnected.state.members).toContainEqual(
+      expect.objectContaining({
+        memberId: 'member-2',
+        connected: true,
+        controller: 'human',
+        aiActing: false,
+        departed: false,
+      }),
+    );
+
+    const left = reduceRoom(reconnected.state, {
+      type: 'leave',
+      memberId: 'member-2',
+    });
+    expect(left.state.members).toContainEqual(
+      expect.objectContaining({
+        memberId: 'member-2',
+        seatId: expect.any(Number),
+        controller: 'ai',
+        aiActing: true,
+        departed: true,
+      }),
+    );
+    expect(
+      reduceRoom(left.state, {
+        type: 'reconnect',
+        memberId: 'member-2',
+      }).error?.code,
+    ).toBe('NOT_IN_ROOM');
+  });
+
+  it('開始時に切断中の人間も席数へ含め、その席をAI代行にする', () => {
+    const joined = join(room(), 2);
+    const disconnected = reduceRoom(joined, {
+      type: 'disconnect',
+      memberId: 'member-2',
+    }).state;
+    const started = start(disconnected);
+    expect(started.members.filter((member) => member.isAI)).toHaveLength(2);
+    expect(started.members).toContainEqual(
+      expect.objectContaining({
+        memberId: 'member-2',
+        isAI: false,
+        connected: false,
+        controller: 'ai',
+        aiActing: true,
+      }),
+    );
+  });
+
   it('手番→turnSeq→core合法性の順に検証し、受理時だけ単調増加する', () => {
     const started = start(fourHumanRoom());
     const turn = started.engine?.currentGame?.public.turn;

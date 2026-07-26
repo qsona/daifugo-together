@@ -98,6 +98,9 @@ export type RoomAction =
       now: number;
     }
   | { type: 'start'; memberId: string; now: number; setSeed: string }
+  | { type: 'leave'; memberId: string }
+  | { type: 'disconnect'; memberId: string }
+  | { type: 'reconnect'; memberId: string }
   | {
       type: 'play';
       memberId: string;
