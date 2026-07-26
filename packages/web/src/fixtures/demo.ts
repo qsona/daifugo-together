@@ -5,11 +5,10 @@
  */
 
 import type { CardView } from '../components/Card';
-import type { FieldStack } from '../components/FieldArea';
 import type { MemberView } from '../components/MemberList';
-import type { SeatView } from '../components/PlayerSeat';
 import type { RankView } from '../components/RankRow';
 import type { RuleActivation } from '../components/RuleCutIn';
+import type { TableSeat } from '../components/Table';
 import type { FiredRuleVote } from '../screens/SetResultScreen';
 
 export const DEMO_MEMBERS: readonly MemberView[] = [
@@ -22,35 +21,25 @@ export const DEMO_MEMBERS: readonly MemberView[] = [
 export const DEMO_INVITE_CODE = 'ABCD-1234';
 export const DEMO_ACTIVE_RULE_COUNT = 31;
 
-export const DEMO_SEATS: readonly SeatView[] = [
+/**
+ * 卓。自分を先頭に、手番が回る順(時計回り)で 4 人。
+ * 各席が「席の情報」と「その人がこの場に出した札」の両方を持つ。
+ */
+export const DEMO_SEATS: readonly TableSeat[] = [
+  {
+    name: 'あなた',
+    isSelf: true,
+    handCount: 10,
+    isCurrentTurn: false,
+    hasPassed: false,
+    plays: [],
+  },
   {
     name: 'プレイヤーB',
-    kind: 'ai',
+    isSelf: false,
     handCount: 8,
     isCurrentTurn: false,
     hasPassed: false,
-  },
-  {
-    name: 'プレイヤーC',
-    kind: 'human',
-    handCount: 6,
-    isCurrentTurn: true,
-    hasPassed: false,
-  },
-  {
-    name: 'プレイヤーD',
-    kind: 'ai',
-    handCount: 11,
-    isCurrentTurn: false,
-    hasPassed: true,
-  },
-];
-
-/** 場の札山。プレイヤーごとに、その場で出した札が古い順に積まれている。 */
-export const DEMO_FIELD_STACKS: readonly FieldStack[] = [
-  {
-    playerName: 'プレイヤーB',
-    isSelf: false,
     plays: [
       [
         { id: 'f-s5', suit: 'spade', rank: '5' },
@@ -59,15 +48,24 @@ export const DEMO_FIELD_STACKS: readonly FieldStack[] = [
     ],
   },
   {
-    playerName: 'プレイヤーC',
+    name: 'プレイヤーC',
     isSelf: false,
+    handCount: 6,
+    isCurrentTurn: true,
+    hasPassed: false,
     plays: [[{ id: 'f-d8', suit: 'diamond', rank: '8' }]],
   },
-  { playerName: 'プレイヤーD', isSelf: false, plays: [] },
-  { playerName: 'あなた', isSelf: true, plays: [] },
+  {
+    name: 'プレイヤーD',
+    isSelf: false,
+    handCount: 11,
+    isCurrentTurn: false,
+    hasPassed: true,
+    plays: [],
+  },
 ];
 
-export const DEMO_LEAD_PLAYER = 'プレイヤーC';
+export const DEMO_LEAD_SEAT = 'プレイヤーC';
 
 export const DEMO_HAND: readonly CardView[] = [
   { id: 'h-c3', suit: 'club', rank: '3' },

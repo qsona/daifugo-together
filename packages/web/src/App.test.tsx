@@ -106,8 +106,8 @@ describe('DS-02: フェーズ 1 の主要画面が 1 本の導線でつながる
     expect(screen.getByRole('button', { name: /有効ルール/ })).toBeTruthy();
     await user.click(screen.getByRole('button', { name: '開始する' }));
 
-    // 画面 3: 場・手札・ルール発動。
-    expect(screen.getByRole('region', { name: '場' })).toBeTruthy();
+    // 画面 3: 卓・手札・ルール発動。
+    expect(screen.getByRole('region', { name: '卓' })).toBeTruthy();
     expect(screen.getByRole('region', { name: 'あなたの手札' })).toBeTruthy();
     await user.click(screen.getByRole('button', { name: 'パス' }));
 
@@ -221,7 +221,7 @@ describe('DS-02: フェーズ 1 の主要画面が 1 本の導線でつながる
     expect(play.hasAttribute('disabled')).toBe(false);
   });
 
-  it('場は各プレイヤーの札山として見える(実況ログを置かない)', () => {
+  it('卓は席と場が統合され、各自の札山が見える(実況ログを置かない)', () => {
     useScreenStore.setState({ current: 'game' });
     render(<App />);
 

@@ -2,13 +2,11 @@ import { ActivationChip } from '../components/ActivationChip';
 import { AppBar } from '../components/AppBar';
 import { Button } from '../components/Button';
 import type { CardView } from '../components/Card';
-import { FieldArea } from '../components/FieldArea';
-import type { FieldStack } from '../components/FieldArea';
 import { HandTray } from '../components/HandTray';
-import { PlayerSeats } from '../components/PlayerSeat';
-import type { SeatView } from '../components/PlayerSeat';
 import { RuleCutIn } from '../components/RuleCutIn';
 import type { RuleActivation } from '../components/RuleCutIn';
+import { Table } from '../components/Table';
+import type { TableSeat } from '../components/Table';
 
 import screen from './screen.module.css';
 
@@ -16,11 +14,10 @@ type GameScreenProps = {
   /** セット内の何戦目か。巡目は誰の判断にも使われないので出さない。 */
   gameLabel: string;
   activeRuleCount: number;
-  seats: readonly SeatView[];
-  /** 場はプレイヤーごとの札山。実際の卓と同じく自分の出した札に重ねていく。 */
-  fieldStacks: readonly FieldStack[];
+  /** 自分を先頭に、手番が回る順(時計回り)で 4 人。席と場は卓に統合した。 */
+  seats: readonly TableSeat[];
   /** いま超えるべきプレイの持ち主。場が流れていれば null。 */
-  leadPlayerName: string | null;
+  leadSeatName: string | null;
   isFlushing?: boolean;
   /** 再生中のカットイン。空なら出さない。 */
   activations: readonly RuleActivation[];
@@ -46,8 +43,7 @@ export function GameScreen({
   gameLabel,
   activeRuleCount,
   seats,
-  fieldStacks,
-  leadPlayerName,
+  leadSeatName,
   isFlushing,
   activations,
   onCutInDone,
@@ -70,10 +66,9 @@ export function GameScreen({
         }}
       />
       <main className={screen.body}>
-        <PlayerSeats seats={seats} />
-        <FieldArea
-          stacks={fieldStacks}
-          leadPlayerName={leadPlayerName}
+        <Table
+          seats={seats}
+          leadSeatName={leadSeatName}
           {...(isFlushing === undefined ? {} : { isFlushing })}
         />
         {/* チップはカットインが引いたあとの痕跡なので、再生中は出さない。 */}

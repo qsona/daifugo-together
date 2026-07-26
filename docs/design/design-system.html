@@ -582,23 +582,36 @@ table.spec th { background: var(--color-bg-subtle); white-space: nowrap; }
   border-radius: var(--radius-pill); padding: 1px 8px;
 }
 
-/* 場(プレイヤーごとの札山) */
-.c-field-area {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-2);
+/* 卓(席と場を統合) */
+.c-table {
+  position: relative; height: 330px;
   background: var(--color-green-600);
   border: var(--border-bold) solid var(--color-border-strong);
   border-radius: var(--radius-l); box-shadow: var(--shadow-hard-s);
-  padding: var(--space-3);
+  padding: var(--space-2);
 }
-.c-fstack { display: flex; flex-direction: column; align-items: center; gap: var(--space-1); }
-.c-fstack.-self { grid-column: 2; }
-.c-fstack .nm { font-size: var(--font-size-micro); font-weight: var(--font-weight-bold); color: var(--color-text-on-fill); }
-.c-fstack .pile { display: flex; }
-.c-fstack .pile > .c-card { margin-right: -30px; }
-.c-fstack .pile > .c-card:last-child { margin-right: 0; }
+.c-diamond { position: absolute; inset-inline: var(--space-2); top: 50%; transform: translateY(-50%); height: 296px; }
+.c-diamond .flow { position: absolute; inset: 0; pointer-events: none; }
+.c-tseat { position: absolute; display: flex; flex-direction: column; align-items: center; gap: var(--space-1); }
+.c-tseat.-top { top: 0; left: 50%; transform: translateX(-50%); }
+.c-tseat.-bottom { bottom: 0; left: 50%; transform: translateX(-50%); flex-direction: column-reverse; }
+.c-tseat.-left { left: 0; top: 50%; transform: translateY(-50%); align-items: flex-end; }
+.c-tseat.-right { right: 0; top: 50%; transform: translateY(-50%); align-items: flex-start; }
+.c-tseat .chip {
+  display: inline-flex; align-items: center; gap: var(--space-1); max-width: 132px;
+  padding: 1px var(--space-2); background: var(--color-cream-100);
+  border: var(--border-control) solid var(--color-border-strong); border-radius: var(--radius-pill);
+  font-size: var(--font-size-micro); font-weight: var(--font-weight-bold); white-space: nowrap;
+}
+.c-tseat .chip em { font-style: normal; color: var(--color-text-secondary); }
+.c-tseat.-turn .chip { background: var(--color-warning-bg); border-width: var(--border-bold); transform: scale(1.08); }
+.c-tseat.-passed .chip { background: var(--color-navy-100); color: var(--color-text-secondary); }
+.c-tseat .pile { display: flex; }
+.c-tseat .pile > .c-card { margin-right: -30px; }
+.c-tseat .pile > .c-card:last-child { margin-right: 0; }
 /* いま超えるべき最新のプレイ。 */
-.c-fstack.-lead .pile > .c-card:last-child { outline: var(--border-heavy) solid var(--color-gold-400); border-radius: var(--radius-s); }
-.c-fempty { width: 44px; height: 62px; border: var(--border-control) dashed var(--color-green-500); border-radius: var(--radius-s); }
+.c-tseat.-lead .pile > .c-card:last-child { outline: var(--border-heavy) solid var(--color-gold-400); border-radius: var(--radius-s); }
+.c-fempty { width: 46px; height: 66px; border: var(--border-control) dashed var(--color-green-500); border-radius: var(--radius-s); }
 
 /* ルール発動カットイン */
 .c-cutin {
@@ -1214,30 +1227,26 @@ table.spec th { background: var(--color-bg-subtle); white-space: nowrap; }
     </div>
 
     <div class="panel">
-      <div class="specimen">
-        <span class="lbl">相手席(手番=金の太枠。手札の中身は持たず枚数のみ)</span>
-      </div>
+      <div class="specimen"><span class="lbl">卓(席と場を統合)</span></div>
       <div style="max-width:375px;">
-        <div class="c-seats">
-          <div class="c-seat"><span class="nm">プレイヤーB</span><span class="c-tag -ai">AI</span><span class="ct">残り8枚</span></div>
-          <div class="c-seat -active"><span class="nm">プレイヤーC</span><span class="c-tag -human">人間</span><span class="ct">残り6枚</span><span class="tn">手番</span></div>
-          <div class="c-seat"><span class="nm">プレイヤーD</span><span class="c-tag -ai">AI</span><span class="ct">残り11枚</span><span class="ct">パス</span></div>
+        <div class="c-table">
+          <div class="c-diamond">
+            <svg class="flow" viewBox="0 0 100 100" preserveAspectRatio="none">
+              <ellipse cx="50" cy="50" rx="26" ry="23" fill="none" stroke="var(--color-green-500)" stroke-width="1" stroke-dasharray="2 3" vector-effect="non-scaling-stroke"/>
+              <g fill="var(--color-green-500)"><path d="M50 27 l3 2 l-3 2 z"/><path d="M76 50 l-2 3 l-2 -3 z"/><path d="M50 73 l-3 -2 l3 -2 z"/><path d="M24 50 l2 -3 l2 3 z"/></g>
+            </svg>
+            <div class="c-tseat -top -turn -lead"><span class="chip">プレイヤーC <em>6</em></span><span class="pile"><span class="c-card -red -small"><b>8</b><i>♦</i></span></span></div>
+            <div class="c-tseat -left"><span class="chip">プレイヤーB <em>8</em></span><span class="pile"><span class="c-card -small"><b>5</b><i>♠</i></span><span class="c-card -red -small"><b>5</b><i>♥</i></span></span></div>
+            <div class="c-tseat -right -passed"><span class="chip">プレイヤーD <em>11</em> <em>パス</em></span><span class="c-fempty"></span></div>
+            <div class="c-tseat -bottom"><span class="c-fempty"></span><span class="chip">あなた <em>10</em></span></div>
+          </div>
         </div>
       </div>
-      <div class="note">手番の強調は金(役割「金=注意・強調」)。他人の手札は枚数だけを出す(情報漏えいを設計で断つ)。</div>
-    </div>
-
-    <div class="panel">
-      <div class="specimen"><span class="lbl">場(プレイヤーごとの札山)</span></div>
-      <div style="max-width:375px;">
-        <div class="c-field-area">
-          <div class="c-fstack"><span class="nm">プレイヤーB</span><span class="pile"><span class="c-card -small"><b>5</b><i>♠</i></span><span class="c-card -red -small"><b>5</b><i>♥</i></span></span></div>
-          <div class="c-fstack -lead"><span class="nm">プレイヤーC</span><span class="pile"><span class="c-card -red -small"><b>8</b><i>♦</i></span></span></div>
-          <div class="c-fstack"><span class="nm">プレイヤーD</span><span class="pile"><span class="c-fempty"></span></span></div>
-          <div class="c-fstack -self"><span class="nm">あなた</span><span class="pile"><span class="c-fempty"></span></span></div>
-        </div>
+      <div class="note">
+        相手席の行と場を別々に持たず、<b>1 つの卓に統合する</b>。4 人を上につぶれた菱形に置くので、<b>手番が時計回りに回ることが位置で分かる</b>(破線の輪と 4 つの三角が補助。文字は使わない)。卓の地は KV の丘の緑(green-600)で、白い札と紺輪郭が最も映える。<br>
+        出した札は<b>その人の山に重なり</b>、卓の中心を向く。「誰が何を出したか」が常に見えているので、文字の実況ログは置かない(DS-02 で廃止)。いま超えるべき最新プレイだけ金の縁で示す。手番は金のピル + 拡大、パスは沈めた色 + 短い状態語。他人の手札は枚数だけを出す(情報漏えいを設計で断つ)。<br>
+        緑は画面の残り全部に広がるが、<b>菱形自体は一定の高さに保って縦中央に置く</b>(引き伸ばすと菱形が縦長になり「卓を囲む」感じが崩れるため)。場が流れるときは全員の山が中心へ吸い込まれて消え、その動きが 8 切り系ルールの効果表現そのものになる。
       </div>
-      <div class="note">卓の地は KV の丘の緑(green-600)。<b>中央に 1 つ積むのではなく、実際の卓と同じくプレイヤーごとの山に重ねる。</b>「誰が何を出したか」が常に見えているので、文字の実況ログを置かなくてよい(DS-02 で実況ログは廃止)。いま超えるべき最新プレイの山だけ金の縁で示す。場が流れるときは全山がまとめて掃け、その動きが 8 切り系ルールの効果表現そのものになる。</div>
     </div>
 
     <div class="panel">

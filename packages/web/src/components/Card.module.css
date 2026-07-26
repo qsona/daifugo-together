@@ -68,8 +68,8 @@
 
 /* 場札は少し小さく、伏せ札は面をクリームに。 */
 .small {
-  width: 42px;
-  height: 60px;
+  width: 46px;
+  height: 66px;
 }
 
 .facedown {

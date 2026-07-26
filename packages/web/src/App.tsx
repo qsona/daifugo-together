@@ -4,12 +4,11 @@ import type { RuleVote, SetFunRating } from './screens/SetResultScreen';
 import {
   DEMO_ACTIVATION_VOLLEYS,
   DEMO_ACTIVE_RULE_COUNT,
-  DEMO_FIELD_STACKS,
   DEMO_FIRED_RULES,
   DEMO_GAME_RANKS,
   DEMO_HAND,
   DEMO_INVITE_CODE,
-  DEMO_LEAD_PLAYER,
+  DEMO_LEAD_SEAT,
   DEMO_MEMBERS,
   DEMO_SEATS,
   DEMO_SET_RANKS,
@@ -136,8 +135,7 @@ export function App() {
           gameLabel="第1戦"
           activeRuleCount={DEMO_ACTIVE_RULE_COUNT}
           seats={DEMO_SEATS}
-          fieldStacks={DEMO_FIELD_STACKS}
-          leadPlayerName={DEMO_LEAD_PLAYER}
+          leadSeatName={DEMO_LEAD_SEAT}
           activations={activations}
           onCutInDone={finishCutIn}
           lastActivation={
