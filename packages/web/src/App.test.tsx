@@ -20,7 +20,7 @@ describe('DS-01: 開始画面でキービジュアルに迎えられる', () => 
     render(<App />);
 
     const visual = screen.getByRole('img', { name: KEY_VISUAL_NAME });
-    expect(visual.getAttribute('src')).toMatch(/key-visual-2a\.svg/);
+    expect(visual.getAttribute('src')).toMatch(/key-visual-2a-outlined\.svg/);
   });
 
   it('画面全体が「はじめる」ボタンとして支援技術に露出する', () => {

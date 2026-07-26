@@ -1,7 +1,7 @@
 # E04: ポップなデザイン・キービジュアル
 
 - 作成日: 2026-07-24
-- 状態: 提案(開発者の承認待ち。承認により §5 の決定待ち事項を除き確定)
+- 状態: **承認済み(2026-07-26)**。§5 の決定待ち事項も §5-4(ダークテーマ)を除きすべて決着(decision-log A-5・B-8〜B-13)
 - 一次情報源: `docs/企画書.md`(§2.3・§6)/ `docs/product-backlog.md`(DS-01・DS-02)/ `docs/design/キービジュアル提案.md`(2A 決定の経緯)/ `docs/epics/E12-tech-stack.md`(§4.2 フロントエンド)
 - 参照する並行成果物(別作業で構築中): `docs/design/design-tokens.css` / `docs/design/design-tokens.json` / `docs/design/design-system.html` / `docs/design/デザインシステム.md`(以下まとめて **デザインシステム成果物** と呼ぶ)
 - 確定済みの原資産: `docs/design/key-visual-2a.svg`(案 2A「グランドフェス」。開発者決定 2026-07-24 + 調整 3 点適用済み)/ `docs/design/wireframes.html`(low-fi ワイヤー 13 フレーム)
@@ -276,4 +276,7 @@ DS-01 受け入れ条件 3「開発者がポップなトーンとして承認済
 
 | 承認日 | 承認対象 | 参照(コミット/PR) | 承認者 |
 |---|---|---|---|
-| (未記入) | 2A キービジュアル(`docs/design/key-visual-2a.svg`)+ `design-tokens`(バージョン/ハッシュ) | (未記入) | (未記入) |
+| 2026-07-26 | 2A キービジュアル(`docs/design/key-visual-2a.svg`)+ `design-tokens`(`d9b2277`) | `d9b2277` | qsona |
+| 2026-07-26 | DS-02 で新規に造形を決めたインゲーム部品(`design-system.html` §5-16: 卓・カード・手札・順位行・ルール発動カットイン・発動チップ・セット評価の顔・自動で進むボタン)と favicon の意匠 | `d9b2277` | qsona |
+
+いずれも実装を動かした状態で開発者が目視し、承認した(記録は実装担当が代筆)。

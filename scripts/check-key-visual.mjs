@@ -23,6 +23,7 @@ const repoRoot = fileURLToPath(new URL('..', import.meta.url));
  */
 export const TARGETS = [
   'docs/design/key-visual-2a.svg',
+  'docs/design/key-visual-2a-outlined.svg',
   'docs/design/favicon.svg',
 ];
 

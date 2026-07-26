@@ -1,4 +1,5 @@
-import keyVisualUrl from '@design/key-visual-2a.svg';
+// 配布用はアウトライン版(端末のフォントに依存しない)。編集は原資産側で行う。
+import keyVisualUrl from '@design/key-visual-2a-outlined.svg';
 
 import styles from './TitleScreen.module.css';
 

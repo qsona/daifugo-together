@@ -49,7 +49,9 @@ async function generateFavicons() {
  * 2A トーンの横長構図の新規制作は未決事項(E04 §5-2)。
  */
 async function generateOgp() {
-  const kv = await sharp(join(designDir, 'key-visual-2a.svg'), { density: 96 })
+  const kv = await sharp(join(designDir, 'key-visual-2a-outlined.svg'), {
+    density: 96,
+  })
     .resize({ height: OGP_HEIGHT })
     .png()
     .toBuffer();
