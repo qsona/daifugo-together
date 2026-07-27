@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import {
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   symlinkSync,
   unlinkSync,
@@ -15,6 +16,12 @@ import { validateRulePullRequest } from './diff-guard.mjs';
 
 const repositories: string[] = [];
 const directory = 'r0001-yagiri';
+const redTeamCases = JSON.parse(
+  readFileSync(
+    join(process.cwd(), 'fixtures/red-team/diff-guard/cases.json'),
+    'utf8',
+  ),
+) as Array<{ name: string; path: string; contents: string }>;
 
 function git(cwd: string, ...args: string[]) {
   return execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
@@ -119,6 +126,14 @@ describe('diff guard', () => {
         `packages/rules/${directory}/notes.md: 許可されたルールファイルではありません。`,
       ]),
     );
+  });
+
+  it.each(redTeamCases)('$name fixtureをdiff guardが拒否する', (fixture) => {
+    const repository = createRepository();
+    write(repository.cwd, fixture.path, fixture.contents);
+    repository.head = commit(repository.cwd, `red team: ${fixture.name}`);
+
+    expect(check(repository).violations).not.toHaveLength(0);
   });
 
   it('複数ルールdirectoryを拒否する', () => {

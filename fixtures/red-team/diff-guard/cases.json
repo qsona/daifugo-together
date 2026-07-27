@@ -1,0 +1,12 @@
+[
+  {
+    "name": "outside package",
+    "path": "packages/core/src/injected.ts",
+    "contents": "export const injected = true;\n"
+  },
+  {
+    "name": "second generated rule",
+    "path": "packages/rules/r9998-second/rule.ts",
+    "contents": "export const rule = {};\n"
+  }
+]

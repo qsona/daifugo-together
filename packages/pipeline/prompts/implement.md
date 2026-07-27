@@ -1,4 +1,4 @@
-# Daifugo rule implementation v1
+# Daifugo rule implementation cx02-v3
 
 Implement the rule described by `SPEC.json` in this directory.
 

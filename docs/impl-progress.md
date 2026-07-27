@@ -8,7 +8,7 @@
 - **フェーズ 2 / E6 YC-01〜03 プロセス2完了**: E-18 の非同期構成、ローカル判定ツール、イエローカード表示・停止・救済まで実装済み。修正後 judge eval は Luna/Sol とも 40/40、平均 6.40秒 / 6.23秒のため既定を **GPT-5.6 Sol medium** とした。独立 GPT-5.6 Sol 完了レビューは要件適合 `PASS` / 品質 `APPROVED`
 - **フェーズ 2 / E7 CX-01 プロセス2ほぼ完了**: 独立方向性レビュー `GO_WITH_FIXES` のImportant 4件と、初回完了レビューのImportant 2件を反映。完了再レビューはコード・自動テスト `PASS` / 品質 `APPROVED` / Critical・Importantなし。実app-server評価だけ明示許可待ち
 - **フェーズ 2 / E7 CX-02 プロセス2完了**: subscription Codex CLIを使う共有skill、scaffold先行push/任意段階再開、全差分・履歴検収、1回retry、PR作成、失敗永続化まで実装。独立最終再レビューはコード・テスト範囲 `PASS` / 品質 `APPROVED` / 全指摘なし。実subscriptionでのルール生成・実PR作成は未実行
-- **フェーズ 2 / E7 CX-03 プロセス2実装・全体検証済み、独立完了レビュー待ち**: trusted diff-guard、untrusted quality/rule-tests/simulation、ローカルCI監視を実装。方向性レビュー `GO_WITH_FIXES` のImportant 4件を反映し、58 files / 383 tests成功。実repositoryのbranch protection/ruleset登録は完了レビュー後
+- **フェーズ 2 / E7 CX-03 プロセス2コード修正済み、外部受入ゲート待ち**: trusted diff-guard、untrusted quality/rule-tests/simulation、ローカルCI監視を実装。初回独立完了レビュー `NO_GO` のred-team fixture不足を修正し、59 files / 392 tests成功。実repositoryのbranch protection/ruleset登録はworkflowのmain反映後
 - E1〜E3 の実装記録は本書末尾の「並行進行」節、E13 は「E13」節。E4 の未解消の開発者判断は「詰まっている点」に残っている(1〜4・7・8・11)
 
 ### E-18 / C-2・C-3・C-6 再設計の反映(2026-07-27)
@@ -382,6 +382,14 @@ E3 マージ後の実プレーで開発者から 4 件の指摘を受け、反�
 - mainのbranch protectionへ `diff-guard` / `quality` / `rule-tests` / `simulation` をstrict required checksとして登録する。現時点のmainは未保護。workflowがmainへ入ってcheck sourceを確定し、完了レビュー指摘を反映してから設定する
 - `rule/**` のforce-push禁止・workflow path変更拒否をserver-side rulesetで設定し、実repository上で第三者風branchと通常PRのcheck挙動を確認する
 - 承認済み提案を実subscription Codexで生成して実PRを作る受入リハーサルは、CX-02から継続して未実施。外部状態を変えるため、コード検証と分離する
+
+#### 初回完了レビューと修正
+
+- 別コンテキストの独立 GPT-5.6 Sol 判定: 要件 `PARTIAL` / 品質 `NEEDS_FIXES` / **NO_GO**。Criticalなし、Important 1件、Minor 1件
+- Important（red-team fixture）: §4-4の悪性ケースがインラインlint例とrunner小規模テストに留まっていた。`fixtures/red-team/` に外部import・network・巨大Array・無限loop、カード複製を装う未知Effect、無限skip、memory quota超過、diff範囲外/複数ruleを追加した。`scripts/red-team.test.ts` とdiff-guard fixtureテストが、source policy・simulation・diff guardの各実ゲートで全件を拒否する
+- Minor（prompt版）: prompt見出しの旧 `v1` を永続化値と同じ `cx02-v3` へ統一した
+- 修正後focused: **4 files / 38 tests 成功**。全体 `CI=true pnpm verify`: **59 files / 392 tests 成功**。format / lint / design lint / 全package typecheck・buildも成功
+- process1 Important 4件はレビュアーも全件closedと確認。残るNO_GO理由はmain protection/ruleset未設定と実repository受入だけで、workflowを含むE7差分をmainへ反映する前には設定できないため外部ゲートとして維持する
 
 ## 完了したストーリー
 
