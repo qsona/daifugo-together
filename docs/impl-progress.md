@@ -8,7 +8,7 @@
 - **フェーズ 2 / E6 YC-01〜03 プロセス2完了**: E-18 の非同期構成、ローカル判定ツール、イエローカード表示・停止・救済まで実装済み。修正後 judge eval は Luna/Sol とも 40/40、平均 6.40秒 / 6.23秒のため既定を **GPT-5.6 Sol medium** とした。独立 GPT-5.6 Sol 完了レビューは要件適合 `PASS` / 品質 `APPROVED`
 - **フェーズ 2 / E7 CX-01 プロセス2ほぼ完了**: 独立方向性レビュー `GO_WITH_FIXES` のImportant 4件と、初回完了レビューのImportant 2件を反映。完了再レビューはコード・自動テスト `PASS` / 品質 `APPROVED` / Critical・Importantなし。実app-server評価だけ明示許可待ち
 - **フェーズ 2 / E7 CX-02 プロセス2完了**: subscription Codex CLIを使う共有skill、scaffold先行push/任意段階再開、全差分・履歴検収、1回retry、PR作成、失敗永続化まで実装。独立最終再レビューはコード・テスト範囲 `PASS` / 品質 `APPROVED` / 全指摘なし。実subscriptionでのルール生成・実PR作成は未実行
-- **フェーズ 2 / E7 CX-03 プロセス2コード修正済み、外部受入ゲート待ち**: trusted diff-guard、untrusted quality/rule-tests/simulation、ローカルCI監視を実装。初回独立完了レビュー `NO_GO` のred-team fixture不足を修正し、59 files / 392 tests成功。実repositoryのbranch protection/ruleset登録はworkflowのmain反映後
+- **フェーズ 2 / E7 CX-03 プロセス2再レビュー修正中、外部受入ゲート待ち**: trusted diff-guard、untrusted quality/rule-tests/simulation、ローカルCI監視を実装。2回目の独立完了レビューで見つかったskip test通過とCI job順序を修正し、無限loopの外側timeout回帰も追加。実repositoryのbranch protection/ruleset登録はworkflowのmain反映後
 - **フェーズ 2 / E7 CX-04 プロセス1実装中**: DBフラグによる単独disable/enable、管理API、コード側registryとの積集合、最初のセットを含むセット開始時再読込まで縦に接続。方向性レビュー前のfocusedは3 files / 14 tests成功
 - E1〜E3 の実装記録は本書末尾の「並行進行」節、E13 は「E13」節。E4 の未解消の開発者判断は「詰まっている点」に残っている(1〜4・7・8・11)
 
@@ -391,6 +391,15 @@ E3 マージ後の実プレーで開発者から 4 件の指摘を受け、反�
 - Minor（prompt版）: prompt見出しの旧 `v1` を永続化値と同じ `cx02-v3` へ統一した
 - 修正後focused: **4 files / 38 tests 成功**。全体 `CI=true pnpm verify`: **59 files / 392 tests 成功**。format / lint / design lint / 全package typecheck・buildも成功
 - process1 Important 4件はレビュアーも全件closedと確認。残るNO_GO理由はmain protection/ruleset未設定と実repository受入だけで、workflowを含むE7差分をmainへ反映する前には設定できないため外部ゲートとして維持する
+
+#### 完了再レビューと追加修正
+
+- さらに別コンテキストの独立 GPT-5.6 Sol 判定: 要件 `PARTIAL` / 品質 `NEEDS_FIXES` / **NO_GO**。Criticalなし、Important 2件、Minor 1件
+- Important（skip test）: JSON reportの`numTotalTests`だけを数えていたため3件すべてskipでも通過した。`numPassedTests >= 3`を必須にし、pending/skipped/todoが1件でもあれば拒否する。集計fallbackも`assertionResults[].status`のpassedだけを数える
+- Important（CI順序）: `quality`のlintより先に並列`rule-tests / simulation`がnative codeを実行し得た。両jobへ`needs: quality`を設定し、静的source policy成功後だけnative実行へ進むDAGにした
+- Minor（無限loop timeout）: 実native simulationで`onGameStart`が無限loopするfixtureを子processで起動し、500msの外側timeoutが`SIGKILL / ETIMEDOUT`にする回帰を追加した。workflow側にも`simulation → needs: quality / timeout-minutes: 10`があることをfixture suiteで検査する
+- 追加修正後focused: **5 files / 45 tests成功**。正常rule fixtureは **3 tests / 100% line coverage**でgate通過
+- 追加修正後の全体`CI=true pnpm verify`: **60 files / 400 tests成功**。format / lint / design lint / 全package typecheck・buildも成功
 
 ### E7 CX-04 プロセス1（ルール単位ロールバック）
 

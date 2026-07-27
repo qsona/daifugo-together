@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -52,6 +53,32 @@ describe('CX-03 red-team suite', () => {
 
     expect(simulationViolations(runs)).toEqual(
       expect.arrayContaining([expect.stringContaining('invalid-effect')]),
+    );
+  });
+
+  it('native simulationの無限loopを外側のtimeoutで停止する', () => {
+    const result = spawnSync(
+      process.execPath,
+      ['fixtures/red-team/simulation/infinite-loop-runner.mjs'],
+      {
+        cwd: process.cwd(),
+        encoding: 'utf8',
+        timeout: 500,
+        killSignal: 'SIGKILL',
+      },
+    );
+
+    expect(result.error).toMatchObject({ code: 'ETIMEDOUT' });
+    expect(result.signal).toBe('SIGKILL');
+  });
+
+  it('実workflowのsimulation jobにも10分timeoutとquality依存がある', async () => {
+    const workflow = await readFile(
+      '.github/workflows/rule-pr-checks.yml',
+      'utf8',
+    );
+    expect(workflow).toMatch(
+      /simulation:\n\s+needs: quality\n\s+runs-on:[\s\S]*?timeout-minutes: 10/u,
     );
   });
 });

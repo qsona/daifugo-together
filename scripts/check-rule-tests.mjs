@@ -7,22 +7,49 @@ import { pathToFileURL } from 'node:url';
 const RULE_DIRECTORY = /^r\d{4,}-[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 export function validateRuleTestReport(report) {
-  const total =
-    typeof report?.numTotalTests === 'number'
-      ? report.numTotalTests
+  const passed =
+    typeof report?.numPassedTests === 'number'
+      ? report.numPassedTests
       : Array.isArray(report?.testResults)
         ? report.testResults.reduce(
             (sum, file) =>
               sum +
               (Array.isArray(file?.assertionResults)
-                ? file.assertionResults.length
+                ? file.assertionResults.filter(
+                    (assertion) => assertion?.status === 'passed',
+                  ).length
                 : 0),
             0,
           )
         : 0;
-  return total >= 3
-    ? []
-    : [`rule.test.ts must execute at least 3 tests (actual=${String(total)})`];
+  const pending =
+    typeof report?.numPendingTests === 'number'
+      ? report.numPendingTests
+      : Array.isArray(report?.testResults)
+        ? report.testResults.reduce(
+            (sum, file) =>
+              sum +
+              (Array.isArray(file?.assertionResults)
+                ? file.assertionResults.filter(
+                    (assertion) =>
+                      assertion?.status === 'pending' ||
+                      assertion?.status === 'skipped' ||
+                      assertion?.status === 'todo',
+                  ).length
+                : 0),
+            0,
+          )
+        : 0;
+  return [
+    ...(passed < 3
+      ? [`rule.test.ts must pass at least 3 tests (actual=${String(passed)})`]
+      : []),
+    ...(pending > 0
+      ? [
+          `rule.test.ts must not skip or defer tests (actual=${String(pending)})`,
+        ]
+      : []),
+  ];
 }
 
 function argument(name) {

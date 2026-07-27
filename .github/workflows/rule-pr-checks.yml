@@ -52,6 +52,7 @@ jobs:
         run: pnpm typecheck && pnpm lint && pnpm test
 
   rule-tests:
+    needs: quality
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -90,6 +91,7 @@ jobs:
           node scripts/check-rule-tests.mjs --rule "$RULE_DIRECTORY"
 
   simulation:
+    needs: quality
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
