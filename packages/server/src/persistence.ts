@@ -26,6 +26,7 @@ import type {
 } from './room/session.js';
 import type { RoomAction, RoomState, RoomTransition } from './room/types.js';
 import { ProposalRepository } from './proposal/repository.js';
+import { RuleRepository } from './rules/repository.js';
 
 const users = sqliteTable('users', {
   userId: text('user_id').primaryKey(),
@@ -175,6 +176,7 @@ export class SqlitePersistence implements RoomPersistencePort {
   readonly proposals: ProposalRepository;
   readonly injection: InjectionRepository;
   readonly pipeline: PipelineRepository;
+  readonly rules: RuleRepository;
 
   constructor(path: string, sessionOptions: SessionStoreOptions = {}) {
     if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
@@ -283,6 +285,7 @@ export class SqlitePersistence implements RoomPersistencePort {
       this.proposals,
       this.injection,
     );
+    this.rules = new RuleRepository(this.#sqlite);
   }
 
   roomManagerOptions(): Pick<RoomManagerOptions, 'persistence'> {

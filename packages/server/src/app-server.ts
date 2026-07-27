@@ -28,6 +28,7 @@ import type { LocalScreeningService } from './injection/local-screening.js';
 import type { YellowCardPort } from './injection/yellow-card-service.js';
 import type { PipelineJudgementService } from './pipeline/service.js';
 import type { PipelineJobService } from './pipeline/jobs.js';
+import type { RuleRegistryService } from './rules/service.js';
 
 const CONTENT_TYPES: Record<string, string> = {
   '.css': 'text/css; charset=utf-8',
@@ -64,6 +65,10 @@ export interface AppServerOptions {
       PipelineJobService,
       'next' | 'active' | 'resume' | 'update' | 'retry' | 'fail'
     >;
+  };
+  adminRules?: {
+    token: string;
+    service: Pick<RuleRegistryService, 'get' | 'enable' | 'disable'>;
   };
 }
 
@@ -183,6 +188,69 @@ function writeJson(
 
 export function createAppServer(options: AppServerOptions): AppServer {
   let draining = false;
+  const handleAdminRules = async (
+    request: IncomingMessage,
+    response: ServerResponse,
+  ): Promise<boolean> => {
+    const pathname = new URL(request.url ?? '/', 'http://localhost').pathname;
+    const match = /^\/admin\/rules\/([^/]+)(?:\/(enable|disable))?$/u.exec(
+      pathname,
+    );
+    if (!match) return false;
+    if (!options.adminRules) {
+      writeJson(response, 503, { error: 'admin_rules_unavailable' });
+      return true;
+    }
+    if (!sameSecret(bearerToken(request), options.adminRules.token)) {
+      writeJson(response, 401, { error: 'unauthorized' });
+      return true;
+    }
+    const ruleId = decodeURIComponent(match[1]!);
+    const action = match[2];
+    if (!action) {
+      if (request.method !== 'GET') {
+        response.setHeader('allow', 'GET');
+        writeJson(response, 405, { error: 'method_not_allowed' });
+        return true;
+      }
+      const result = options.adminRules.service.get(ruleId);
+      writeJson(response, result.status === 'not_found' ? 404 : 200, result);
+      return true;
+    }
+    if (request.method !== 'POST') {
+      response.setHeader('allow', 'POST');
+      writeJson(response, 405, { error: 'method_not_allowed' });
+      return true;
+    }
+    let result;
+    if (action === 'disable') {
+      let body: unknown;
+      try {
+        body = await readJsonBody(request);
+      } catch (error) {
+        writeJson(response, error instanceof SyntaxError ? 400 : 413, {
+          error:
+            error instanceof SyntaxError ? 'invalid_json' : 'request_too_large',
+        });
+        return true;
+      }
+      result = options.adminRules.service.disable(ruleId, body);
+    } else {
+      result = options.adminRules.service.enable(ruleId);
+    }
+    writeJson(
+      response,
+      result.status === 'not_found'
+        ? 404
+        : result.status === 'conflict'
+          ? 409
+          : result.status === 'invalid'
+            ? 400
+            : 200,
+      result,
+    );
+    return true;
+  };
   const handleAdminScreening = async (
     request: IncomingMessage,
     response: ServerResponse,
@@ -516,7 +584,10 @@ export function createAppServer(options: AppServerOptions): AppServer {
       response.end();
       return;
     }
-    void handleAdminScreening(request, response)
+    void handleAdminRules(request, response)
+      .then((handled) =>
+        handled ? true : handleAdminScreening(request, response),
+      )
       .then((handled) =>
         handled ? true : handleYellowCards(request, response),
       )

@@ -452,4 +452,74 @@ describe('production app server', () => {
       errorNote: 'unexpected file',
     });
   });
+
+  it('ルール単位の照会・disable・enable APIを専用Bearerで保護する', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'daifugo-web-dist-'));
+    directories.push(directory);
+    const rule = {
+      id: 'r0001-yagiri',
+      slug: 'yagiri',
+      name: '8切り',
+      description: '8を出すと場が流れる',
+      kind: 'original' as const,
+      prefecture: null,
+      proposalId: 'proposal-1',
+      status: 'active' as const,
+      disabledReason: null,
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    const get = vi.fn(() => ({ status: 'found' as const, rule }));
+    const disable = vi.fn(() => ({
+      status: 'updated' as const,
+      rule: {
+        ...rule,
+        status: 'disabled' as const,
+        disabledReason: 'manual' as const,
+      },
+    }));
+    const enable = vi.fn(() => ({ status: 'updated' as const, rule }));
+    const app = createAppServer({
+      webDistDir: directory,
+      adminRules: {
+        token: 'admin-token',
+        service: { get, disable, enable },
+      },
+    });
+    apps.push(app);
+    const port = await app.listen(0, '127.0.0.1');
+    const baseUrl = `http://127.0.0.1:${String(port)}`;
+
+    expect((await fetch(`${baseUrl}/admin/rules/r0001-yagiri`)).status).toBe(
+      401,
+    );
+    const found = await fetch(`${baseUrl}/admin/rules/r0001-yagiri`, {
+      headers: { authorization: 'Bearer admin-token' },
+    });
+    expect(found.status).toBe(200);
+    await expect(found.json()).resolves.toEqual({ status: 'found', rule });
+
+    const disabled = await fetch(
+      `${baseUrl}/admin/rules/r0001-yagiri/disable`,
+      {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer admin-token',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ reason: 'manual' }),
+      },
+    );
+    expect(disabled.status).toBe(200);
+    expect(disable).toHaveBeenCalledWith('r0001-yagiri', {
+      reason: 'manual',
+    });
+
+    const enabled = await fetch(`${baseUrl}/admin/rules/r0001-yagiri/enable`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer admin-token' },
+    });
+    expect(enabled.status).toBe(200);
+    expect(enable).toHaveBeenCalledWith('r0001-yagiri');
+  });
 });

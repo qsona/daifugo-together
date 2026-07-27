@@ -10,6 +10,7 @@ import { PipelineJobService } from './pipeline/jobs.js';
 import { SqlitePersistence } from './persistence.js';
 import { ProposalSubmissionService } from './proposal/submission.js';
 import { RoomManager } from './room/manager.js';
+import { RuleRegistryService } from './rules/service.js';
 
 function errorFields(error: unknown): Record<string, unknown> {
   return error instanceof Error
@@ -47,6 +48,7 @@ const adminPipelineToken = process.env.ADMIN_PIPELINE_TOKEN;
 if (adminPipelineToken !== undefined && adminPipelineToken.length < 32) {
   throw new Error('ADMIN_PIPELINE_TOKEN must be at least 32 characters');
 }
+const rules = new RuleRegistryService(persistence.rules, []);
 const app = createAppServer({
   webDistDir: resolve(process.env.WEB_DIST_DIR ?? 'packages/web/dist'),
   checkDatabase: () => persistence.checkHealth(),
@@ -78,10 +80,17 @@ const app = createAppServer({
             persistence.proposals,
           ),
         },
+        adminRules: {
+          token: adminPipelineToken,
+          service: rules,
+        },
       }
     : {}),
   gateway: {
-    rooms: new RoomManager(persistence.roomManagerOptions()),
+    rooms: new RoomManager({
+      ...persistence.roomManagerOptions(),
+      availableRules: () => rules.availableRules(),
+    }),
     sessions: persistence.sessions,
     onError: (error) => {
       writeLog('error', 'socket_internal_error', errorFields(error));

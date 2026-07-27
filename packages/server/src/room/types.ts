@@ -80,7 +80,13 @@ export type RoomAction =
       };
       now: number;
     }
-  | { type: 'start'; memberId: string; now: number; setSeed: string }
+  | {
+      type: 'start';
+      memberId: string;
+      now: number;
+      setSeed: string;
+      availableRules?: RuleChainEntry[];
+    }
   | {
       type: 'leave';
       memberId: string;

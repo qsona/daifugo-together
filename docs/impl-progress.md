@@ -9,6 +9,7 @@
 - **フェーズ 2 / E7 CX-01 プロセス2ほぼ完了**: 独立方向性レビュー `GO_WITH_FIXES` のImportant 4件と、初回完了レビューのImportant 2件を反映。完了再レビューはコード・自動テスト `PASS` / 品質 `APPROVED` / Critical・Importantなし。実app-server評価だけ明示許可待ち
 - **フェーズ 2 / E7 CX-02 プロセス2完了**: subscription Codex CLIを使う共有skill、scaffold先行push/任意段階再開、全差分・履歴検収、1回retry、PR作成、失敗永続化まで実装。独立最終再レビューはコード・テスト範囲 `PASS` / 品質 `APPROVED` / 全指摘なし。実subscriptionでのルール生成・実PR作成は未実行
 - **フェーズ 2 / E7 CX-03 プロセス2コード修正済み、外部受入ゲート待ち**: trusted diff-guard、untrusted quality/rule-tests/simulation、ローカルCI監視を実装。初回独立完了レビュー `NO_GO` のred-team fixture不足を修正し、59 files / 392 tests成功。実repositoryのbranch protection/ruleset登録はworkflowのmain反映後
+- **フェーズ 2 / E7 CX-04 プロセス1実装中**: DBフラグによる単独disable/enable、管理API、コード側registryとの積集合、最初のセットを含むセット開始時再読込まで縦に接続。方向性レビュー前のfocusedは3 files / 14 tests成功
 - E1〜E3 の実装記録は本書末尾の「並行進行」節、E13 は「E13」節。E4 の未解消の開発者判断は「詰まっている点」に残っている(1〜4・7・8・11)
 
 ### E-18 / C-2・C-3・C-6 再設計の反映(2026-07-27)
@@ -390,6 +391,26 @@ E3 マージ後の実プレーで開発者から 4 件の指摘を受け、反�
 - Minor（prompt版）: prompt見出しの旧 `v1` を永続化値と同じ `cx02-v3` へ統一した
 - 修正後focused: **4 files / 38 tests 成功**。全体 `CI=true pnpm verify`: **59 files / 392 tests 成功**。format / lint / design lint / 全package typecheck・buildも成功
 - process1 Important 4件はレビュアーも全件closedと確認。残るNO_GO理由はmain protection/ruleset未設定と実repository受入だけで、workflowを含むE7差分をmainへ反映する前には設定できないため外部ゲートとして維持する
+
+### E7 CX-04 プロセス1（ルール単位ロールバック）
+
+- `rules`テーブルと`RuleRepository`を追加し、`active / disabled / removed`と`manual / auto_incident / rollback / pending_enable`をDB制約で表現した。`RuleRegistryService`はDBでactiveなIDとコード側`RuleChainEntry`の積集合だけを返すため、DBだけ・コードだけのルールを誤って実行しない
+- `GET /admin/rules/{id}`、`POST /admin/rules/{id}/disable`、`POST /admin/rules/{id}/enable`を既存の管理Bearer境界に追加した。手動APIから指定できるdisable理由は`manual / rollback`だけに限定し、`removed`の再有効化は409相当の競合にする
+- 本番`RoomManager`へregistryを接続した。部屋作成時だけでなく**最初のセット開始時**にも最新activeルールを再読込し、開始後は`fixedRules`を変更しない。これにより、部屋作成後・開始前のdisableも次のセットに正しく反映される
+- ユーザーストーリー確認: `packages/server/src/rules/rules.test.ts`の「部屋作成後のdisableも最初のセット開始時に再読込し、進行中セットは固定する」で、A/BのうちAだけをDB無効化し、開始セットにはBだけが入り、開始後にBを無効化しても進行中の`fixedRules`はBのままであることを確認した。管理HTTP APIも実listenerで認証・照会・disable・enableを確認した
+- focused検証: server typecheck成功。`app-server.test.ts / rules.test.ts / manager.test.ts`: **3 files / 14 tests成功**
+
+#### 置いた仮定（方向性レビュー対象）
+
+- コード側registryとDBのどちらか一方にしか存在しないルールは実行しない。CX-05の起動時同期が差を解消するまでfail-closedにする方が、未承認コードやrevert済みコードの誤実行を避けられる
+- 管理APIの`reason`で指定できるのは運営操作に対応する`manual / rollback`だけとする。`auto_incident`はincident集計サービス、`pending_enable`は起動時同期だけが設定する
+- `removed`はE8の淘汰provenanceを保持する終端状態として、CX-04の一般enable APIからは復帰させない。将来のE8専用reinstate操作は別サービス境界にする
+
+#### プロセス2に回したもの
+
+- `rule_incidents`、同一セット内の実行時ルール除去、coreの`RuleExecutionIssue`からの記録、24時間以内3 distinct setの自動disableと開発者通知
+- `rule_versions`、起動時同期によるrevert検知、恒久revert後の`reverted_at`記録、runbookの実リハーサル
+- APIの境界値・冪等性・DB再起動永続化、基本ルールのみの完走、他ルール非影響のシミュレーションを含む受け入れ条件の仕上げ
 
 ## 完了したストーリー
 

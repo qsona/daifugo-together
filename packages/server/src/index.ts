@@ -16,6 +16,8 @@ export * from './pipeline/jobs.js';
 export * from './persistence.js';
 export * from './proposal/repository.js';
 export * from './proposal/submission.js';
+export * from './rules/repository.js';
+export * from './rules/service.js';
 export * from './room/manager.js';
 export * from './room/protocol.js';
 export * from './room/rate-limit.js';

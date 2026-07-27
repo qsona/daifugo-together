@@ -291,7 +291,8 @@ export class RoomManager {
       return undefined;
     }
     const effectiveAction =
-      (action.type === 'continue' ||
+      (action.type === 'start' ||
+        action.type === 'continue' ||
         action.type === 'leave' ||
         action.type === 'expireSetResult') &&
       this.#options.availableRules
