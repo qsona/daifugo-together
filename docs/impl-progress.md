@@ -2,7 +2,7 @@
 
 ## 現在
 
-- **フェーズ 2 / E14 TU-01〜04 プロセス2完了・完了レビュー待ち**: きほんの部屋、カード案内、初戦ガイド、初回卒業導線まで実装・自動テスト・375×812実画面確認を完了。TU-03までは `main` (`ae0f2ae`) へ fast-forward 済み
+- **フェーズ 2 / E14 TU-01〜04 プロセス2完了・完了レビューPASS**: きほんの部屋、カード案内、初戦ガイド、初回卒業導線まで実装・自動テスト・375×812実画面確認を完了。独立完了レビューのImportant 1件を修正し、最新`main` (`1b15732`) 基点へ統合・全検証・独立再レビュー済み
 - **フェーズ 1 完了(2026-07-27)**: TS-02・E1・E2・E3・E4 は main に統合済み、E13 は本番デプロイと動作検証(DP-01・DP-03)まで完了(`https://daifugo-together.fly.dev/`)。残りは DP-02 の仕上げ(GitHub Environment `production` + `FLY_API_TOKEN` 登録と初回 CD 実行確認)のみ
 - **フェーズ 2 / E5 RP-01〜03 プロセス2完了**: E-18/C-3 の非同期受付に加え、マイ提案API・競合安全な未読/seen・画面7・メニューバッジを接続。独立完了レビューは **GO**、Critical / Important / Minorなし
 - **C-5 追従完了**: E7 内包リトライの決定を反映し、`proposals.failed` を終端化。`failed` 遷移時に `attempt_count=1` を記録して同内容の再提案を即時解禁する
@@ -297,10 +297,10 @@
 
 ### TU-04 プロセス1
 
-- 状態: **プロセス2完了・完了レビュー待ち**
+- 状態: **プロセス2完了・完了レビュー修正済み**
 - ブランチ: `codex/e14-tutorial`
-- プロセス1コミット: `76bf1f7`
-- プロセス2コミット: この記録を含むコミット
+- プロセス1コミット: `5d534f8`（rebase前 `76bf1f7`）
+- プロセス2コミット: `420779b`（rebase前 `2d5402f`）
 - ユーザーストーリーの確認:
   - `SetResultScreen.test.tsx` で、「もう1セットあそぶ」と「みんなのルールで あそんでみる」が同じfooterに並び、後者の押下コールバックが1回呼ばれることを確認
   - `App.test.tsx` で、basicのセットリザルトだけ卒業導線を出し、押下時に `leaveRoom` 完了後 `createRoom('community')` の順で呼ぶことを確認
@@ -369,11 +369,11 @@
 
 #### プロセス2の検証
 
-- TU-04対象: **4 files・59 tests** 成功
+- TU-04対象: **4 files・66 tests** 成功
   - graduation reducer/storage、`SetResultScreen`、`PlaySheet`、`App`
 - `CI=true pnpm verify`: **成功**
   - Prettier / ESLint / AI boundary / design lint / TypeScript / 全package build: 成功
-  - Vitest: **44 files・321 tests** 成功
+  - 最新`main`統合後のVitest: **76 files・542 tests** 成功
 - production buildを375×812で実ブラウザ確認
   - UI→typed Socket.IO→3ゲーム→セットリザルトを完走（確認時間短縮のため検証サーバーのAI待ち時間optionだけ0ms）
   - 3 CTAは上から「もう1セット」「みんなのルール」「ホームへ」、各351×48px、卒業CTAだけprimary
@@ -396,6 +396,23 @@
 
 - 実装上の詰まりなし
 - TU-03の観察テスト(E14 §4)は指定どおり開発者実施範囲。実装側の自動テストと375px実機確認は完了
+
+#### E14完了レビュー
+
+- GPT-5.6-Solを別コンテキスト・読み取り専用で実施
+- 対象: `48cdd80..2d5402f` のE14全8コミット
+- 判定: **GO_WITH_FIXES**
+- Critical / Minor: なし
+- Important: 卒業強調のsnapshot識別子に`room.v`を使うと、同じsetResult中の別メンバー応答でもversionが進み、初回強調が消える
+- 反映:
+  - 識別子を公開契約に既存の安定値`${roomId}:${setResult.respondBy}`へ変更
+  - 同じsetResultで`v`だけ増えた場合は強調を維持し、次セットで`respondBy`が変わった場合だけ通常強調へ戻る回帰テストを追加
+  - 共有契約の追加なし
+- 修正後対象確認: **2 files・48 tests**、Web型検査ともに成功
+- 最新`main`へrebase後、重なった`App`のルール発動表示・提案通知・setResult評価とE14卒業導線を併合
+  - TU-04対象: **4 files・66 tests** 成功
+  - `CI=true pnpm verify`: **76 files・542 tests**、全型検査・lint・design lint・全package build成功
+- GPT-5.6-Solをさらに別コンテキストで統合差分だけ再レビューし、**PASS（actionable findingなし）**
 
 ## フェーズ 2: E5 ルール提案受付(RP-01・RP-02)
 

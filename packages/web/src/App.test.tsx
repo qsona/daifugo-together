@@ -620,7 +620,8 @@ function tutorialSetResultRoom(
           points: 15,
         },
       ],
-      respondBy: Date.now() + 120_000,
+      respondBy: 1_800_000_000_000,
+      firedRules: [],
     },
     events: [],
   };
@@ -1141,7 +1142,7 @@ describe('TU-04: みんなのルールへの卒業導線', () => {
         GRADUATION_STORAGE_KEY,
         JSON.stringify({
           kind: 'emphasized',
-          snapshotKey: 'basic-result-room:12',
+          snapshotKey: 'basic-result-room:1800000000000',
         }),
       ],
     ]);
@@ -1178,6 +1179,17 @@ describe('TU-04: みんなのルールへの卒業導線', () => {
 
     first.unmount();
     room.v = 24;
+    render(<App client={client} storage={storage} />);
+    expect(
+      screen
+        .getByRole('button', {
+          name: 'みんなのルールで あそんでみる',
+        })
+        .classList.contains(buttonStyles.primary!),
+    ).toBe(true);
+
+    cleanup();
+    room.setResult!.respondBy = 1_800_000_120_000;
     render(<App client={client} storage={storage} />);
     expect(
       screen
@@ -1242,7 +1254,7 @@ describe('TU-04: みんなのルールへの卒業導線', () => {
     );
     expect(JSON.parse(stored.get(GRADUATION_STORAGE_KEY)!)).toEqual({
       kind: 'emphasized',
-      snapshotKey: 'basic-result-room:12',
+      snapshotKey: 'basic-result-room:1800000000000',
     });
   });
 

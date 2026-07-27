@@ -12,6 +12,7 @@ function room(
   roomId: string,
   phase: PlayerRoomView['phase'],
   v: number,
+  respondBy = 1_000,
 ): PlayerRoomView {
   return {
     v,
@@ -23,7 +24,14 @@ function room(
     you: { memberId: 'member-1', seatId: 0 },
     activeRules: [],
     game: null,
-    setResult: null,
+    setResult:
+      phase === 'setResult'
+        ? {
+            standings: [],
+            respondBy,
+            firedRules: [],
+          }
+        : null,
     events: [],
   };
 }
@@ -42,21 +50,24 @@ describe('TU-04: 初回卒業強調のclient-local状態', () => {
     });
     expect(completed).toEqual({
       kind: 'emphasized',
-      snapshotKey: 'room-1:20',
+      snapshotKey: 'room-1:1000',
     });
     expect(
       isGraduationEmphasized(completed, room('room-1', 'setResult', 20)),
     ).toBe(true);
   });
 
-  it('同じroomの2セット目はsnapshotが違うため強調しない', () => {
+  it('同じsetResultのvが進んでも強調を保ち、2セット目はrespondByが違うため強調しない', () => {
     const completed = {
       kind: 'emphasized',
-      snapshotKey: 'room-1:20',
+      snapshotKey: 'room-1:1000',
     } as const;
 
     expect(
       isGraduationEmphasized(completed, room('room-1', 'setResult', 40)),
+    ).toBe(true);
+    expect(
+      isGraduationEmphasized(completed, room('room-1', 'setResult', 40, 2_000)),
     ).toBe(false);
   });
 
@@ -97,7 +108,7 @@ describe('TU-04: 初回卒業強調のclient-local状態', () => {
     };
     const state = {
       kind: 'emphasized',
-      snapshotKey: 'room-1:20',
+      snapshotKey: 'room-1:1000',
     } as const;
     writeGraduationState(storage, state);
     expect(readGraduationState(storage)).toEqual(state);

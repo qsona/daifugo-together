@@ -8,6 +8,12 @@ export type GraduationState =
   | { kind: 'candidate'; roomId: string }
   | { kind: 'emphasized'; snapshotKey: string };
 
+function graduationSnapshotKey(room: PlayerRoomView): string | null {
+  return room.setResult
+    ? `${room.roomId}:${String(room.setResult.respondBy)}`
+    : null;
+}
+
 export function readGraduationState(
   storage: Pick<PlayedBeforeStorage, 'getItem'> | null | undefined,
 ): GraduationState | null {
@@ -60,11 +66,9 @@ export function reduceGraduationState(
   if (input.room?.mode !== 'basic') return state;
 
   if (input.room.phase === 'setResult') {
-    return state?.kind === 'candidate'
-      ? {
-          kind: 'emphasized',
-          snapshotKey: `${input.room.roomId}:${String(input.room.v)}`,
-        }
+    const snapshotKey = graduationSnapshotKey(input.room);
+    return state?.kind === 'candidate' && snapshotKey
+      ? { kind: 'emphasized', snapshotKey }
       : state;
   }
 
@@ -78,8 +82,10 @@ export function isGraduationEmphasized(
   state: GraduationState | null,
   room: PlayerRoomView,
 ): boolean {
+  const snapshotKey = graduationSnapshotKey(room);
   return (
     state?.kind === 'emphasized' &&
-    state.snapshotKey === `${room.roomId}:${String(room.v)}`
+    snapshotKey !== null &&
+    state.snapshotKey === snapshotKey
   );
 }
