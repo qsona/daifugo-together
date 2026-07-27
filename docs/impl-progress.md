@@ -6,7 +6,7 @@
 - **フェーズ 2 / E5 RP-01・RP-02 完了**: E-18/C-3 の再設計(非同期受付、名前40/内容1000、投稿レート制限なし)まで反映済み。RP-03 は CX-02 依存のため E7 後に戻る
 - **C-5 追従完了**: E7 内包リトライの決定を反映し、`proposals.failed` を終端化。`failed` 遷移時に `attempt_count=1` を記録して同内容の再提案を即時解禁する
 - **フェーズ 2 / E6 YC-01〜03 プロセス2完了**: E-18 の非同期構成、ローカル判定ツール、イエローカード表示・停止・救済まで実装済み。修正後 judge eval は Luna/Sol とも 40/40、平均 6.40秒 / 6.23秒のため既定を **GPT-5.6 Sol medium** とした。独立 GPT-5.6 Sol 完了レビューは要件適合 `PASS` / 品質 `APPROVED`
-- **フェーズ 2 / E7 CX-01 プロセス1実装済み・方向性レビュー待ち**: E6 pass 後のローカルAI判定、開発者による却下確定／SPEC承認、`pipeline_jobs(phase='queued')` 作成までの縦切りを実装
+- **フェーズ 2 / E7 CX-01 プロセス2ほぼ完了**: 独立方向性レビュー `GO_WITH_FIXES` のImportant 4件を反映。実app-server評価だけ明示許可待ちで、CX-02へ進行可能
 - E1〜E3 の実装記録は本書末尾の「並行進行」節、E13 は「E13」節。E4 の未解消の開発者判断は「詰まっている点」に残っている(1〜4・7・8・11)
 
 ### E-18 / C-2・C-3・C-6 再設計の反映(2026-07-27)
@@ -182,16 +182,16 @@ E3 マージ後の実プレーで開発者から 4 件の指摘を受け、反�
 
 ### CX-01 プロセス1
 
-- 状態: 縦切り実装完了・独立方向性レビュー待ち
+- 状態: 縦切り実装・独立方向性レビュー・Important修正完了。CX-01実モデル評価のみ明示許可待ち
 - ユーザーストーリーの確認:
   - `packages/server/src/pipeline/service.test.ts` で、提案受付 → E6 pass → CX-01 払い出し → AI approve + 正規化SPEC記録 → 開発者SPEC承認 → `proposals.status='implementing'` + `pipeline_jobs.phase='queued'` を同一SQLite境界で確認
   - 同テストで、AI reject は開発者が対象 judgement ID を確定するまで `screening` に留まり、確定後だけ C-6 の公開理由へ写像して `rejected` になることを確認
   - 同テストで、E6 `block_card` は対象 check ID の開発者確定時だけ、カード発行・`inappropriate` 却下・監査 judgement を一体で記録することを確認
-  - `packages/server/src/pipeline/app-server-judge.test.ts` で、ephemeral / read-only / network off / approval never / 全ツール無効の app-server thread と構造化出力スキーマを確認
+  - `packages/pipeline/src/app-server-judge.test.ts` で、ephemeral / read-only / network off / approval never / 全ツール無効の app-server thread と構造化出力スキーマを確認
   - `packages/server/src/app-server.test.ts` で、管理 Bearer token 付きの screening / check / judge / approve-spec API を実HTTPで確認
 - 実装した方向:
   - サーバー側に append-only の `judgements` と提案ごとに一意な `pipeline_jobs` を追加。AI判定と開発者確定を別行にし、`source_check_id` / `source_judgement_id` / `actor` / `created_at` で確定対象と操作者を固定した
-  - `GET /admin/pipeline/screening` は E6 未判定を `stage=e6`、E6 pass かつCX未判定を `stage=cx01` として払い出す。ローカルツールは E6 を先に、次回払い出しで CX-01 を処理する
+  - `GET /admin/pipeline/screening` は E6 未判定を `stage=e6`、E6 pass かつCX未判定を `stage=cx01`、人手確定待ちを `stage=confirmation` として作成順に払い出す。1回のローカルツール起動中に E6 pass 後の一覧を再取得してCX-01まで進める
   - CX-01 は契約v1の全hook/Effect語彙、A1〜C3の線引き、既存ルール一覧、保存済み提案だけを入力にし、approve / reject / needs_review とSPECを同時生成する
   - 可視文言は名前40文字・summary 1000文字・message 200文字、既知hook/Effect部分集合、slug、NG hard patternをサーバーで再検証する。提案由来の `source` はAI入力を信用せず保存済み行からサーバーが再構成する
   - E6 check・AI judgement・開発者確定はIDで結び、古い／別提案の判定では状態遷移しない。SPEC承認は developer judgement、queued job、提案の implementing 遷移を同一transactionにした
@@ -204,9 +204,9 @@ E3 マージ後の実プレーで開発者から 4 件の指摘を受け、反�
 | # | 仮定した内容 | なぜそう決めたか | 出典 | 覆ったときの影響範囲 |
 |---|---|---|---|---|
 | E7-P1-1 | 内部 `queued` は `pipeline_jobs.phase` にだけ持ち、ユーザー向け `proposals.status` はSPEC承認時に `implementing` へ進める | E5 の公開状態に queued はなく、E07 が二層状態を定義しているため | E05 §2.2、E07 §2.3・§3.2(c) | `approveSpec()` とRP-03表示 |
-| E7-P1-2 | `judgements.spec_json` はCX-02の `SPEC.json` 本文に加え、scaffoldの `meta.json` 生成に必要な `slug` / `messages` も含む正規化仕様として保存する | E07の表例は `SPEC.json` と `meta.json` を分ける一方、judgementから後者を復元する専用列を定義していないため | E07 §2.4、§3.1(c) | judgement型、CX-02 scaffold生成、DB互換 |
-| E7-P1-3 | 重複判定用の既存ルール一覧は、当面 `pipeline_jobs.phase IN ('merged','done')` の開発者承認SPECから構成する | 現在の `packages/rules` に登録済み個別ルールがなく、CX-05の有効ルール台帳も未実装のため | E07 §3.1、CX-05依存 | `PipelineRepository.existingRules()`。CX-05で有効ルール台帳へ差し替え |
-| E7-P1-4 | SQLite・API・判定サービスと、既存E6 app-serverクライアントを再利用するローカルCLIを `packages/server` に置き、`packages/pipeline` はCX-02以降の実装ドライバから使用する | 現行E6の `ops:screen` がserver packageにあり、プロセス1では一つのローカルバッチとして縦に通すことを優先したため | E07 §2.3・§3.1(d) | `screening-runner.ts` とapp-server client/promptの移動。DB/API契約は維持 |
+| E7-P1-2 | `judgements.spec_json` はCX-02の `SPEC.json` 本文に加え、scaffoldの `meta.json` 生成に必要な `slug` / `messages` も含む正規化仕様として保存する | E07の表例は `SPEC.json` と `meta.json` を分ける一方、judgementから後者を復元する専用列を定義していないため | E07 §2.4、§3.1(c) | **変更済み**: `spec_json` は正確なSPEC本文だけにし、slug/messagesは `scaffold_meta_json` へ分離 |
+| E7-P1-3 | 重複判定用の既存ルール一覧は、当面 `pipeline_jobs.phase IN ('merged','done')` の開発者承認SPECから構成する | 現在の `packages/rules` に登録済み個別ルールがなく、CX-05の有効ルール台帳も未実装のため | E07 §3.1、CX-05依存 | **変更済み**: developer承認済みの全非failed jobを含める。CX-05で有効ルール台帳との和集合へ移行 |
+| E7-P1-4 | SQLite・API・判定サービスと、既存E6 app-serverクライアントを再利用するローカルCLIを `packages/server` に置き、`packages/pipeline` はCX-02以降の実装ドライバから使用する | 現行E6の `ops:screen` がserver packageにあり、プロセス1では一つのローカルバッチとして縦に通すことを優先したため | E07 §2.3・§3.1(d) | **変更済み**: DB/API/transactionはserver、CLI/app-server client/prompt/eval/確定操作はpipelineへ分離 |
 
 #### プロセス2へ回したもの
 
@@ -218,6 +218,17 @@ E3 マージ後の実プレーで開発者から 4 件の指摘を受け、反�
 | 運用動線 | 未確定判定一覧、check/judgement IDを表示したカード・却下・SPEC確認手順、runbook |
 | パッケージ境界 | E7-P1-4の裁定に従い、ローカル判定CLIを `packages/pipeline` に寄せるかserver内運用を確定する |
 | CX-02〜04 | scaffold、実装skill、検収・差分ガード、PR/CI、マージ確認、enable/disableとロールバック |
+
+#### プロセス1方向性レビューとプロセス2反映
+
+- 独立 GPT-5.6 Sol の判定: **GO_WITH_FIXES**。Criticalなし、Important 4件
+- Important 1（ルールID）: E5のULIDとE07の数値提案IDが衝突していた。E12の上位契約 `r{連番}` とE07の「提案由来」を両立するため、提案作成時に不変の `proposal_number` を割り当て、承認順に依存せず `r0001` 形式へ導出するよう変更。既存DBは作成順で一度だけbackfillする
+- Important 2（package所有）: ローカル判定・確定CLI、prompt、app-server client、評価セットを `packages/pipeline` へ移動。serverはSQLite単一writerとadmin APIだけを所有
+- Important 3（SPEC境界）: `SPEC.json`相当の `spec_json` と、`meta.json` 用slug/messagesの `scaffold_meta_json` を分離。AI approveと開発者承認の両方で別々に検証する
+- Important 4（重複）: merged/doneだけでなく、queued/implementing/pr_openを含む全非failed・developer承認済みルールを重複判定へ渡す
+- 追加申し送りも反映: 作成順でE6/CXを統合して飢餓を防止、同一起動中にE6→CXを連続処理、hook別Effect許可表をpromptとサーバーバリデータへ追加、`needs_review` のapprove/reject両方向、判定run IDによる再送冪等性と再判定追記、未確定一覧と確定CLI/runbookを追加
+- 評価セットはA1〜C3全行 + approve 8件 + needs_review 2件の計22件。実app-server評価は `~/.codex` と外部モデル送信を伴う操作として権限審査で拒否されたため、迂回せず明示許可待ち。評価CLIと構造化出力のFakeテストは完成済み
+- `CI=true pnpm verify`: **44 files / 315 tests 成功**。format / lint / design lint / 全package typecheck・buildも成功
 
 ## 完了したストーリー
 

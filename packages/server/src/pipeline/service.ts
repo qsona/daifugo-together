@@ -7,6 +7,7 @@ import {
   REJECT_CATEGORIES,
   type JudgementVerdict,
   type RejectCategory,
+  type RuleScaffoldMeta,
   type RuleSpecification,
   type StoredJudgement,
 } from './repository.js';
@@ -28,6 +29,28 @@ const EFFECTS = new Set([
   'setMemory',
   'announce',
 ]);
+const EFFECTS_BY_HOOK: Readonly<Record<string, ReadonlySet<string>>> = {
+  modifyLegality: new Set(),
+  modifyStrength: new Set(),
+  afterPlay: EFFECTS,
+  afterFieldClear: new Set([
+    'skipTurns',
+    'reverseTurnOrder',
+    'forceRank',
+    'moveCards',
+    'setMemory',
+    'announce',
+  ]),
+  onGameStart: new Set([
+    'skipTurns',
+    'reverseTurnOrder',
+    'forceRank',
+    'moveCards',
+    'setMemory',
+    'announce',
+  ]),
+  onGameEnd: new Set(['setMemory', 'announce']),
+};
 const REJECT_SUBTYPES = new Set([
   'A1',
   'A2',
@@ -60,6 +83,7 @@ export interface AiJudgementResult {
   reasonForUser: string | null;
   reasonInternal: string;
   spec: Omit<RuleSpecification, 'source'> | null;
+  scaffoldMeta: RuleScaffoldMeta | null;
   confidence: number;
   model: string;
   promptVersion: string;
@@ -137,60 +161,65 @@ function messages(value: unknown): Record<string, string> | null {
   return result;
 }
 
-function visibleTextSafe(spec: {
+function visibleTextSafe(value: {
   name: string;
   summary: string;
   messages: Record<string, string>;
 }): boolean {
-  return Object.values(spec.messages)
-    .concat(spec.name, spec.summary)
+  return Object.values(value.messages)
+    .concat(value.name, value.summary)
     .every((text) => matchPatterns(text).hard.length === 0);
 }
 
 function parseSpec(value: unknown): Omit<RuleSpecification, 'source'> | null {
   const input = object(value);
   if (!input || input.specVersion !== 1) return null;
+  const name = nonempty(input.name, 40);
+  const summary = nonempty(input.summary, 1_000);
+  const hooks = stringList(input.hooks, HOOKS, HOOKS.size, 32);
+  const effects = stringList(input.effects, EFFECTS, EFFECTS.size, 32);
+  const testPoints = stringList(input.testPoints, null, 20, 300);
+  const notes =
+    typeof input.notes === 'string' && input.notes.length <= 1_000
+      ? input.notes.trim()
+      : null;
+  const allowedEffects = new Set(
+    (hooks ?? []).flatMap((hook) => [...(EFFECTS_BY_HOOK[hook] ?? [])]),
+  );
+  if (
+    !name ||
+    !summary ||
+    !hooks ||
+    !effects ||
+    effects.some((effect) => !allowedEffects.has(effect)) ||
+    !testPoints ||
+    testPoints.length === 0 ||
+    notes === null
+  ) {
+    return null;
+  }
+  return {
+    specVersion: 1,
+    name,
+    summary,
+    hooks,
+    effects,
+    testPoints,
+    notes,
+  };
+}
+
+function parseScaffoldMeta(value: unknown): RuleScaffoldMeta | null {
+  const input = object(value);
+  if (!input) return null;
   const slug =
     typeof input.slug === 'string' &&
     /^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(input.slug) &&
     input.slug.length <= 48
       ? input.slug
       : null;
-  const name = nonempty(input.name, 40);
-  const summary = nonempty(input.summary, 1_000);
-  const hooks = stringList(input.hooks, HOOKS, HOOKS.size, 32);
-  const effects = stringList(input.effects, EFFECTS, EFFECTS.size, 32);
   const parsedMessages = messages(input.messages);
-  const testPoints = stringList(input.testPoints, null, 20, 300);
-  const notes =
-    typeof input.notes === 'string' && input.notes.length <= 1_000
-      ? input.notes.trim()
-      : null;
-  if (
-    !slug ||
-    !name ||
-    !summary ||
-    !hooks ||
-    !effects ||
-    !parsedMessages ||
-    !testPoints ||
-    testPoints.length === 0 ||
-    notes === null ||
-    !visibleTextSafe({ name, summary, messages: parsedMessages })
-  ) {
-    return null;
-  }
-  return {
-    specVersion: 1,
-    slug,
-    name,
-    summary,
-    hooks,
-    effects,
-    messages: parsedMessages,
-    testPoints,
-    notes,
-  };
+  return slug && parsedMessages ? { slug, messages: parsedMessages } : null;
 }
 
 export function parseAiJudgement(value: unknown): AiJudgementResult | null {
@@ -215,6 +244,8 @@ export function parseAiJudgement(value: unknown): AiJudgementResult | null {
   const reasonForUser = nullableString(input.reasonForUser, 1_000);
   const reasonInternal = nonempty(input.reasonInternal, 4_000);
   const spec = input.spec === null ? null : parseSpec(input.spec);
+  const scaffoldMeta =
+    input.scaffoldMeta === null ? null : parseScaffoldMeta(input.scaffoldMeta);
   const model = nonempty(input.model, 100);
   const promptVersion = nonempty(input.promptVersion, 100);
   const validMetadata =
@@ -230,18 +261,26 @@ export function parseAiJudgement(value: unknown): AiJudgementResult | null {
       ? rejectCategory === null &&
         rejectSubtype === null &&
         reasonForUser === null &&
-        spec !== null
+        spec !== null &&
+        scaffoldMeta !== null &&
+        visibleTextSafe({
+          name: spec.name,
+          summary: spec.summary,
+          messages: scaffoldMeta.messages,
+        })
       : verdict === 'reject'
         ? rejectCategory !== null &&
           rejectCategory !== false &&
           rejectSubtype !== false &&
           reasonForUser !== null &&
           reasonForUser !== false &&
-          spec === null
+          spec === null &&
+          scaffoldMeta === null
         : rejectCategory === null &&
           rejectSubtype === null &&
           reasonForUser === null &&
-          spec === null;
+          spec === null &&
+          scaffoldMeta === null;
   const rejectPairValid =
     verdict !== 'reject' ||
     (rejectCategory !== null &&
@@ -271,6 +310,7 @@ export function parseAiJudgement(value: unknown): AiJudgementResult | null {
     reasonForUser,
     reasonInternal,
     spec,
+    scaffoldMeta,
     confidence: input.confidence as number,
     model,
     promptVersion,
@@ -321,9 +361,15 @@ export class PipelineJudgementService {
     return this.#pipeline.pendingCx(limit);
   }
 
+  pendingConfirmations(limit = 100) {
+    return this.#pipeline.pendingConfirmations(limit);
+  }
+
   recordAi(proposalId: string, input: unknown): PipelineMutationResult {
     const parsed = parseAiJudgement(input);
     if (!parsed) return { status: 'invalid', error: 'invalid_judgement' };
+    const runId = nonempty(object(input)?.runId, 100);
+    if (!runId) return { status: 'invalid', error: 'invalid_run_id' };
     const proposal = this.#proposals.findById(proposalId);
     const check = this.#injection.checkForProposal(proposalId);
     if (!proposal || proposal.status !== 'screening' || !check) {
@@ -332,7 +378,7 @@ export class PipelineJudgementService {
     if (check.finalVerdict !== 'pass') {
       return { status: 'conflict', error: 'e6_not_passed' };
     }
-    const existing = this.#pipeline.latestAiJudgement(proposalId);
+    const existing = this.#pipeline.aiJudgementForRun(proposalId, runId);
     if (existing) {
       return { status: 'already_recorded', judgement: existing };
     }
@@ -353,6 +399,7 @@ export class PipelineJudgementService {
       decidedBy: 'ai',
       sourceCheckId: check.id,
       sourceJudgementId: null,
+      runId,
       actor: null,
       createdAt: this.#now(),
     });
@@ -391,11 +438,7 @@ export class PipelineJudgementService {
       }
       if (check.finalVerdict === 'block_card') {
         const card = this.#injection.confirmCard(proposalId, this.#now());
-        if (
-          card === 'not_found' ||
-          card === 'not_card' ||
-          card === 'suspended'
-        ) {
+        if (card === 'not_found' || card === 'not_card') {
           return { status: 'conflict', error: `card_${card}` };
         }
       }
@@ -418,6 +461,7 @@ export class PipelineJudgementService {
         reasonForUser,
         reasonInternal: `Developer confirmed E6 ${check.finalVerdict}.`,
         spec: null,
+        scaffoldMeta: null,
         confidence: null,
         decidedBy: 'developer',
         model: null,
@@ -425,6 +469,7 @@ export class PipelineJudgementService {
         latencyMs: null,
         sourceCheckId: check.id,
         sourceJudgementId: null,
+        runId: null,
         actor: confirmedBy,
         createdAt: this.#now(),
       });
@@ -519,6 +564,7 @@ export class PipelineJudgementService {
             ? 'Developer rejected a needs_review judgement.'
             : source.reasonInternal,
         spec: null,
+        scaffoldMeta: null,
         confidence: source.confidence,
         decidedBy: 'developer',
         model: null,
@@ -526,6 +572,7 @@ export class PipelineJudgementService {
         latencyMs: null,
         sourceCheckId: null,
         sourceJudgementId: source.id,
+        runId: null,
         actor: confirmedBy,
         createdAt: this.#now(),
       });
@@ -538,7 +585,18 @@ export class PipelineJudgementService {
     const judgementId = value?.judgementId;
     const confirmedBy = actor(value?.actor);
     const approvedSpec = parseSpec(value?.spec);
-    if (!Number.isSafeInteger(judgementId) || !confirmedBy || !approvedSpec) {
+    const approvedScaffoldMeta = parseScaffoldMeta(value?.scaffoldMeta);
+    if (
+      !Number.isSafeInteger(judgementId) ||
+      !confirmedBy ||
+      !approvedSpec ||
+      !approvedScaffoldMeta ||
+      !visibleTextSafe({
+        name: approvedSpec.name,
+        summary: approvedSpec.summary,
+        messages: approvedScaffoldMeta.messages,
+      })
+    ) {
       return { status: 'invalid', error: 'invalid_spec_approval' };
     }
     return this.#pipeline.transaction(() => {
@@ -584,6 +642,7 @@ export class PipelineJudgementService {
         reasonInternal:
           'Developer reviewed and approved the implementation SPEC.',
         spec,
+        scaffoldMeta: approvedScaffoldMeta,
         confidence: null,
         decidedBy: 'developer',
         model: null,
@@ -591,12 +650,13 @@ export class PipelineJudgementService {
         latencyMs: null,
         sourceCheckId: null,
         sourceJudgementId: source.id,
+        runId: null,
         actor: confirmedBy,
         createdAt: this.#now(),
       });
       const job = this.#pipeline.createQueuedJob(
         proposalId,
-        spec.slug,
+        approvedScaffoldMeta.slug,
         source.promptVersion,
         this.#now(),
       );

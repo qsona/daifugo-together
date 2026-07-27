@@ -2,19 +2,19 @@ import {
   CodexAppServerJudge,
   DEFAULT_SCREENING_MODEL,
   StdioAppServerRpc,
-} from './injection/app-server-judge.js';
-import type {
-  PendingLocalScreening,
-  RecordLocalVerdictResult,
-} from './injection/local-screening.js';
-import { runScreeningBatch } from './injection/screening-batch.js';
-import { CodexCxJudge } from './pipeline/app-server-judge.js';
-import type { PendingCxJudgement } from './pipeline/repository.js';
-import type { PipelineMutationResult } from './pipeline/service.js';
+  runScreeningBatch,
+  type PendingLocalScreening,
+  type PendingCxJudgement,
+  type PendingVerdictConfirmation,
+  type RecordLocalVerdictResult,
+  type PipelineMutationResult,
+} from '@daifugo/server';
+import { CodexCxJudge } from './app-server-judge.js';
 
 type ScreeningItem =
   | ({ stage: 'e6' } & PendingLocalScreening)
-  | ({ stage: 'cx01' } & PendingCxJudgement);
+  | ({ stage: 'cx01' } & PendingCxJudgement)
+  | ({ stage: 'confirmation' } & PendingVerdictConfirmation);
 
 function option(name: string): string | null {
   const index = process.argv.indexOf(name);
@@ -155,7 +155,7 @@ if (items.length === 0) {
     (item): item is Extract<ScreeningItem, { stage: 'e6' }> =>
       item.stage === 'e6',
   );
-  const cxItems = items.filter(
+  let cxItems = items.filter(
     (item): item is Extract<ScreeningItem, { stage: 'cx01' }> =>
       item.stage === 'cx01',
   );
@@ -211,6 +211,19 @@ if (items.length === 0) {
             );
           },
         });
+  if (e6Items.length > 0) {
+    const e6ProposalIds = new Set(e6Items.map((item) => item.proposal.id));
+    const existingCxIds = new Set(cxItems.map((item) => item.proposal.id));
+    const newlyEligible = pendingItems(
+      await requestJson(listUrl, token),
+    ).filter(
+      (item): item is Extract<ScreeningItem, { stage: 'cx01' }> =>
+        item.stage === 'cx01' &&
+        e6ProposalIds.has(item.proposal.id) &&
+        !existingCxIds.has(item.proposal.id),
+    );
+    cxItems = [...cxItems, ...newlyEligible];
+  }
   const cxSummary = {
     processed: cxItems.length,
     recorded: 0,
@@ -219,12 +232,14 @@ if (items.length === 0) {
   };
   for (const item of cxItems) {
     let complete = false;
+    const runId = randomUUID();
     for (let attempt = 1; attempt <= attempts && !complete; attempt += 1) {
-      const rpc = await StdioAppServerRpc.start({
-        ...(process.env.CODEX_BIN ? { codexBin: process.env.CODEX_BIN } : {}),
-        timeoutMs,
-      });
+      let rpc: StdioAppServerRpc | null = null;
       try {
+        rpc = await StdioAppServerRpc.start({
+          ...(process.env.CODEX_BIN ? { codexBin: process.env.CODEX_BIN } : {}),
+          timeoutMs,
+        });
         const judgement = await new CodexCxJudge({
           rpc,
           model,
@@ -241,7 +256,7 @@ if (items.length === 0) {
               method: 'POST',
               body: JSON.stringify({
                 action: 'record_ai',
-                payload: judgement,
+                payload: { ...judgement, runId },
               }),
             },
           ),
@@ -289,17 +304,48 @@ if (items.length === 0) {
           complete = true;
         }
       } finally {
-        rpc.close();
+        rpc?.close();
       }
     }
+  }
+  const confirmations = pendingItems(await requestJson(listUrl, token)).filter(
+    (item): item is Extract<ScreeningItem, { stage: 'confirmation' }> =>
+      item.stage === 'confirmation',
+  );
+  for (const item of confirmations) {
+    process.stdout.write(
+      `${JSON.stringify({
+        stage: 'confirmation',
+        source: item.source,
+        proposal: item.proposal,
+        ...(item.source === 'e6'
+          ? {
+              checkId: item.check.id,
+              finalVerdict: item.check.finalVerdict,
+            }
+          : {
+              judgementId: item.judgement.id,
+              verdict: item.judgement.verdict,
+              rejectCategory: item.judgement.rejectCategory,
+              rejectSubtype: item.judgement.rejectSubtype,
+              reasonForUser: item.judgement.reasonForUser,
+              reasonInternal: item.judgement.reasonInternal,
+              spec: item.judgement.spec,
+              scaffoldMeta: item.judgement.scaffoldMeta,
+              confidence: item.judgement.confidence,
+            }),
+      })}\n`,
+    );
   }
   const summary = {
     processed: e6Summary.processed + cxSummary.processed,
     failed: e6Summary.failed + cxSummary.failed,
     e6: e6Summary,
     cx01: cxSummary,
+    awaitingConfirmation: confirmations.length,
   };
   process.stdout.write(
     `${JSON.stringify({ status: 'complete', ...summary, model })}\n`,
   );
 }
+import { randomUUID } from 'node:crypto';

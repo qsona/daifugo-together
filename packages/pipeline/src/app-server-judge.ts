@@ -3,10 +3,11 @@ import {
   threadIdFrom,
   TOOLLESS_THREAD_CONFIG,
   type AppServerRpc,
-} from '../injection/app-server-judge.js';
+  parseAiJudgement,
+  type AiJudgementResult,
+  type PendingCxJudgement,
+} from '@daifugo/server';
 import { buildCxJudgePrompt, CX01_PROMPT_VERSION } from './judge-prompt.js';
-import type { PendingCxJudgement } from './repository.js';
-import { parseAiJudgement, type AiJudgementResult } from './service.js';
 
 const CX01_OUTPUT_SCHEMA = {
   type: 'object',
@@ -18,6 +19,7 @@ const CX01_OUTPUT_SCHEMA = {
     'reasonForUser',
     'reasonInternal',
     'spec',
+    'scaffoldMeta',
     'confidence',
   ],
   properties: {
@@ -77,22 +79,15 @@ const CX01_OUTPUT_SCHEMA = {
           additionalProperties: false,
           required: [
             'specVersion',
-            'slug',
             'name',
             'summary',
             'hooks',
             'effects',
-            'messages',
             'testPoints',
             'notes',
           ],
           properties: {
             specVersion: { type: 'integer', const: 1 },
-            slug: {
-              type: 'string',
-              pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$',
-              maxLength: 48,
-            },
             name: { type: 'string', minLength: 1, maxLength: 40 },
             summary: { type: 'string', minLength: 1, maxLength: 1_000 },
             hooks: {
@@ -128,6 +123,30 @@ const CX01_OUTPUT_SCHEMA = {
                 ],
               },
             },
+            testPoints: {
+              type: 'array',
+              minItems: 1,
+              maxItems: 20,
+              items: { type: 'string', minLength: 1, maxLength: 300 },
+            },
+            notes: { type: 'string', maxLength: 1_000 },
+          },
+        },
+        { type: 'null' },
+      ],
+    },
+    scaffoldMeta: {
+      anyOf: [
+        {
+          type: 'object',
+          additionalProperties: false,
+          required: ['slug', 'messages'],
+          properties: {
+            slug: {
+              type: 'string',
+              pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$',
+              maxLength: 48,
+            },
             messages: {
               type: 'object',
               maxProperties: 20,
@@ -138,13 +157,6 @@ const CX01_OUTPUT_SCHEMA = {
                 maxLength: 200,
               },
             },
-            testPoints: {
-              type: 'array',
-              minItems: 1,
-              maxItems: 20,
-              items: { type: 'string', minLength: 1, maxLength: 300 },
-            },
-            notes: { type: 'string', maxLength: 1_000 },
           },
         },
         { type: 'null' },

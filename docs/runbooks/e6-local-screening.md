@@ -20,13 +20,13 @@ export CODEX_BIN='/absolute/path/to/codex'
 ## 未判定提案を処理する
 
 ```bash
-pnpm --filter @daifugo/server ops:screen
+pnpm --filter @daifugo/pipeline judge
 ```
 
 既定モデルは評価セットを満たした `gpt-5.6-sol`、reasoning effort は `medium`。一度に処理する件数や実験モデルは明示的に変更できる。
 
 ```bash
-pnpm --filter @daifugo/server ops:screen -- \
+pnpm --filter @daifugo/pipeline judge -- \
   --limit 20 \
   --model gpt-5.6-luna \
   --effort medium
@@ -36,7 +36,31 @@ pnpm --filter @daifugo/server ops:screen -- \
 
 thread では shell、Web 検索、MCP、connector、subagent、画像ツールを無効化し、read-only・network off・approval never を重ねている。応答にツール実行 item が現れた場合は記録せずエラーにする。
 
-このコマンドが記録するのは L3 と E6 決定表の結果まで。提案の却下、イエローカード発行、SPEC 承認、実装キュー投入は E07 の `VERDICT_CONFIRMATION` で開発者が確定する。
+同じコマンドが E6 pass 後の提案を CX-01 まで判定し、末尾に
+`stage=confirmation` の JSON 行を表示する。この行にある `checkId` または
+`judgementId` と、提案本文・理由・SPEC を確認してから確定する。
+
+確定内容は JSON ファイルへ保存し、ローカルツールから送る。E6 遮断の確定例:
+
+```json
+{
+  "action": "confirm_e6_rejection",
+  "proposalId": "01EXAMPLE",
+  "checkId": 7,
+  "actor": "developer@example.com"
+}
+```
+
+```bash
+pnpm --filter @daifugo/pipeline confirm -- --file ./confirmation.json
+```
+
+CX-01 の却下は `action=confirm_rejection` と `judgementId` を使う。
+`needs_review` を却下する場合は `rejectCategory` / `rejectSubtype` /
+`reasonForUser` も開発者が記入する。SPEC 承認は `action=approve_spec` とし、
+`spec`（不変な `SPEC.json` の元）と `scaffoldMeta`（slug / messages）を分ける。
+サーバーは対象ID・提案状態・E6 passを再確認し、監査行・カード／却下または
+queuedジョブを同じtransactionで確定する。確定ファイルには管理tokenを書かない。
 
 ## モデル評価
 
@@ -49,3 +73,13 @@ pnpm --filter @daifugo/server ops:judge-eval -- \
 ```
 
 合格条件は攻撃再現率 100%、正当例の誤検出 0%。プロンプト、静的パターン、モデル指定を変えたときは再実行する。
+
+CX-01 は A1〜C3 と境界例を含む別評価セットで測る。
+
+```bash
+pnpm --filter @daifugo/pipeline judge:eval -- \
+  --model gpt-5.6-sol \
+  --effort medium
+```
+
+モデルを変えたときは exact match（verdict + reject category/subtype）を比較する。

@@ -249,10 +249,14 @@ export class ProposalRepository {
       this.#sqlite
         .prepare(
           `INSERT INTO proposals (
-             id, author_id, kind, prefecture_code, name, body, status,
+             id, proposal_number, author_id, kind, prefecture_code, name, body, status,
              reason_code, reason_text, rule_id, attempt_count, content_hash,
              created_at, status_changed_at, updated_at
-           ) VALUES (?, ?, ?, ?, ?, ?, 'screening', NULL, NULL, NULL, 0, ?, ?, ?, ?)`,
+           ) VALUES (
+             ?,
+             (SELECT COALESCE(MAX(proposal_number), 0) + 1 FROM proposals),
+             ?, ?, ?, ?, ?, 'screening', NULL, NULL, NULL, 0, ?, ?, ?, ?
+           )`,
         )
         .run(
           options.id,

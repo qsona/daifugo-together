@@ -29,12 +29,10 @@ export type RejectCategory = (typeof REJECT_CATEGORIES)[number];
 
 export interface RuleSpecification {
   specVersion: 1;
-  slug: string;
   name: string;
   summary: string;
   hooks: string[];
   effects: string[];
-  messages: Record<string, string>;
   testPoints: string[];
   notes: string;
   source: {
@@ -44,6 +42,11 @@ export interface RuleSpecification {
   };
 }
 
+export interface RuleScaffoldMeta {
+  slug: string;
+  messages: Record<string, string>;
+}
+
 export interface JudgementInput {
   verdict: JudgementVerdict;
   rejectCategory: RejectCategory | null;
@@ -51,6 +54,7 @@ export interface JudgementInput {
   reasonForUser: string | null;
   reasonInternal: string;
   spec: RuleSpecification | null;
+  scaffoldMeta: RuleScaffoldMeta | null;
   confidence: number | null;
   decidedBy: 'ai' | 'developer';
   model: string | null;
@@ -58,6 +62,7 @@ export interface JudgementInput {
   latencyMs: number | null;
   sourceCheckId: number | null;
   sourceJudgementId: number | null;
+  runId: string | null;
   actor: string | null;
   createdAt: number;
 }
@@ -100,6 +105,26 @@ export interface PendingCxJudgement {
   existingRules: Array<{ name: string; summary: string }>;
 }
 
+export type PendingVerdictConfirmation =
+  | {
+      source: 'e6';
+      proposal: {
+        id: string;
+        name: string;
+        body: string;
+      };
+      check: StoredProposalCheck;
+    }
+  | {
+      source: 'cx01';
+      proposal: {
+        id: string;
+        name: string;
+        body: string;
+      };
+      judgement: StoredJudgement;
+    };
+
 type JudgementRow = {
   id: number;
   proposal_id: string;
@@ -109,6 +134,7 @@ type JudgementRow = {
   reason_for_user: string | null;
   reason_internal: string;
   spec_json: string | null;
+  scaffold_meta_json: string | null;
   confidence: number | null;
   decided_by: 'ai' | 'developer';
   model: string | null;
@@ -116,6 +142,7 @@ type JudgementRow = {
   latency_ms: number | null;
   source_check_id: number | null;
   source_judgement_id: number | null;
+  run_id: string | null;
   actor: string | null;
   created_at: number;
 };
@@ -152,6 +179,10 @@ function storedJudgement(row: JudgementRow): StoredJudgement {
       row.spec_json === null
         ? null
         : (JSON.parse(row.spec_json) as RuleSpecification),
+    scaffoldMeta:
+      row.scaffold_meta_json === null
+        ? null
+        : (JSON.parse(row.scaffold_meta_json) as RuleScaffoldMeta),
     confidence: row.confidence,
     decidedBy: row.decided_by,
     model: row.model,
@@ -159,6 +190,7 @@ function storedJudgement(row: JudgementRow): StoredJudgement {
     latencyMs: row.latency_ms,
     sourceCheckId: row.source_check_id,
     sourceJudgementId: row.source_judgement_id,
+    runId: row.run_id,
     actor: row.actor,
     createdAt: row.created_at,
   };
@@ -215,6 +247,7 @@ export class PipelineRepository {
         reason_for_user TEXT,
         reason_internal TEXT NOT NULL,
         spec_json TEXT,
+        scaffold_meta_json TEXT,
         confidence REAL,
         decided_by TEXT NOT NULL CHECK (decided_by IN ('ai', 'developer')),
         model TEXT,
@@ -222,14 +255,12 @@ export class PipelineRepository {
         latency_ms INTEGER,
         source_check_id INTEGER REFERENCES proposal_checks(id),
         source_judgement_id INTEGER REFERENCES judgements(id),
+        run_id TEXT,
         actor TEXT,
         created_at INTEGER NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_judgements_proposal
         ON judgements(proposal_id, id DESC);
-      CREATE UNIQUE INDEX IF NOT EXISTS idx_judgements_ai_source_check
-        ON judgements(proposal_id, source_check_id)
-        WHERE decided_by = 'ai';
       CREATE UNIQUE INDEX IF NOT EXISTS idx_judgements_developer_source
         ON judgements(proposal_id, source_judgement_id, verdict)
         WHERE decided_by = 'developer' AND source_judgement_id IS NOT NULL;
@@ -262,6 +293,23 @@ export class PipelineRepository {
       );
       CREATE INDEX IF NOT EXISTS idx_pipeline_jobs_phase
         ON pipeline_jobs(phase, created_at, id);
+    `);
+    const judgementColumns = this.#sqlite
+      .prepare("PRAGMA table_info('judgements')")
+      .all() as Array<{ name: string }>;
+    if (!judgementColumns.some(({ name }) => name === 'scaffold_meta_json')) {
+      this.#sqlite.exec(
+        'ALTER TABLE judgements ADD COLUMN scaffold_meta_json TEXT',
+      );
+    }
+    if (!judgementColumns.some(({ name }) => name === 'run_id')) {
+      this.#sqlite.exec('ALTER TABLE judgements ADD COLUMN run_id TEXT');
+    }
+    this.#sqlite.exec(`
+      DROP INDEX IF EXISTS idx_judgements_ai_source_check;
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_judgements_ai_run
+        ON judgements(proposal_id, run_id)
+        WHERE decided_by = 'ai' AND run_id IS NOT NULL;
     `);
   }
 
@@ -303,13 +351,59 @@ export class PipelineRepository {
       .slice(0, limit);
   }
 
+  pendingConfirmations(limit = 100): PendingVerdictConfirmation[] {
+    return this.#proposals
+      .screeningForJudgment()
+      .flatMap((proposal): PendingVerdictConfirmation[] => {
+        const check = this.#injection.checkForProposal(proposal.id);
+        if (!check) return [];
+        if (
+          (check.finalVerdict === 'block_soft' ||
+            check.finalVerdict === 'block_card') &&
+          !this.developerConfirmation(proposal.id, null, check.id)
+        ) {
+          return [
+            {
+              source: 'e6',
+              proposal: {
+                id: proposal.id,
+                name: proposal.name,
+                body: proposal.body,
+              },
+              check,
+            },
+          ];
+        }
+        const judgement = this.latestAiJudgement(proposal.id);
+        if (
+          check.finalVerdict === 'pass' &&
+          judgement &&
+          !this.developerConfirmation(proposal.id, judgement.id, null)
+        ) {
+          return [
+            {
+              source: 'cx01',
+              proposal: {
+                id: proposal.id,
+                name: proposal.name,
+                body: proposal.body,
+              },
+              judgement,
+            },
+          ];
+        }
+        return [];
+      })
+      .slice(0, limit);
+  }
+
   existingRules(): Array<{ name: string; summary: string }> {
     const rows = this.#sqlite
       .prepare(
         `SELECT j.spec_json
          FROM pipeline_jobs pj
          JOIN judgements j ON j.proposal_id = pj.proposal_id
-         WHERE pj.phase IN ('merged', 'done')
+         WHERE pj.phase <> 'failed'
            AND j.decided_by = 'developer'
            AND j.verdict = 'approve'
            AND j.spec_json IS NOT NULL
@@ -335,9 +429,9 @@ export class PipelineRepository {
         `INSERT INTO judgements (
            proposal_id, verdict, reject_category, reject_subtype,
            reason_for_user, reason_internal, spec_json, confidence, decided_by,
-           model, prompt_version, latency_ms, source_check_id,
-           source_judgement_id, actor, created_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           scaffold_meta_json, model, prompt_version, latency_ms,
+           source_check_id, source_judgement_id, run_id, actor, created_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         proposalId,
@@ -349,11 +443,13 @@ export class PipelineRepository {
         input.spec === null ? null : JSON.stringify(input.spec),
         input.confidence,
         input.decidedBy,
+        input.scaffoldMeta === null ? null : JSON.stringify(input.scaffoldMeta),
         input.model,
         input.promptVersion,
         input.latencyMs,
         input.sourceCheckId,
         input.sourceJudgementId,
+        input.runId,
         input.actor,
         input.createdAt,
       );
@@ -387,6 +483,17 @@ export class PipelineRepository {
     return row ? storedJudgement(row) : null;
   }
 
+  aiJudgementForRun(proposalId: string, runId: string): StoredJudgement | null {
+    const row = this.#sqlite
+      .prepare(
+        `SELECT * FROM judgements
+         WHERE proposal_id = ? AND decided_by = 'ai' AND run_id = ?
+         LIMIT 1`,
+      )
+      .get(proposalId, runId) as JudgementRow | undefined;
+    return row ? storedJudgement(row) : null;
+  }
+
   developerConfirmation(
     proposalId: string,
     sourceJudgementId: number | null,
@@ -413,18 +520,18 @@ export class PipelineRepository {
   ): PipelineJob {
     const existing = this.jobForProposal(proposalId);
     if (existing) return existing;
-    const sequence = (
+    const proposalNumber = (
       this.#sqlite
         .prepare(
-          `SELECT COALESCE(
-             MAX(CAST(SUBSTR(rule_id, 2) AS INTEGER)), 0
-           ) + 1 AS value
-           FROM pipeline_jobs
-           WHERE rule_id GLOB 'r[0-9]*'`,
+          `SELECT proposal_number AS value
+           FROM proposals WHERE id = ?`,
         )
-        .get() as { value: number }
-    ).value;
-    const ruleId = `r${String(sequence).padStart(4, '0')}`;
+        .get(proposalId) as { value: number | null } | undefined
+    )?.value;
+    if (proposalNumber === null || proposalNumber === undefined) {
+      throw new Error('proposal_number_missing');
+    }
+    const ruleId = `r${String(proposalNumber).padStart(4, '0')}`;
     const insertion = this.#sqlite
       .prepare(
         `INSERT INTO pipeline_jobs (

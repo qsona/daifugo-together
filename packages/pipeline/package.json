@@ -10,7 +10,18 @@
     }
   },
   "scripts": {
+    "prebuild": "pnpm --filter @daifugo/server... build",
     "build": "tsc -p tsconfig.build.json",
+    "confirm": "pnpm build && node dist/confirm.js",
+    "pretypecheck": "pnpm --filter @daifugo/server... build",
+    "judge": "pnpm build && node dist/judge.js",
+    "judge:eval": "pnpm build && node dist/judge-eval.js",
     "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@daifugo/server": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0"
   }
 }

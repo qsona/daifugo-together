@@ -3,10 +3,10 @@ import { describe, expect, it } from 'vitest';
 import {
   TOOLLESS_THREAD_CONFIG,
   type AppServerRpc,
-} from '../injection/app-server-judge.js';
+  type PendingCxJudgement,
+} from '@daifugo/server';
 import { CodexCxJudge } from './app-server-judge.js';
 import { CX01_PROMPT_VERSION } from './judge-prompt.js';
-import type { PendingCxJudgement } from './repository.js';
 
 class FakeRpc implements AppServerRpc {
   readonly calls: Array<{ method: string; params: Record<string, unknown> }> =
@@ -41,15 +41,14 @@ class FakeRpc implements AppServerRpc {
             reasonInternal: '契約v1で実装できる。',
             spec: {
               specVersion: 1,
-              slug: 'yagiri',
               name: '八切り',
               summary: '8を含むプレイで場を流す。',
               hooks: ['afterPlay'],
               effects: ['clearField'],
-              messages: {},
               testPoints: ['8で発動する', '8以外では発動しない'],
               notes: '',
             },
+            scaffoldMeta: { slug: 'yagiri', messages: {} },
             confidence: 0.95,
           }),
         },
@@ -121,7 +120,8 @@ describe('CodexCxJudge', () => {
       model: 'gpt-5.6-sol',
       promptVersion: CX01_PROMPT_VERSION,
       latencyMs: 20,
-      spec: { slug: 'yagiri', hooks: ['afterPlay'] },
+      spec: { hooks: ['afterPlay'] },
+      scaffoldMeta: { slug: 'yagiri' },
     });
     expect(rpc.calls[0]).toEqual({
       method: 'thread/start',

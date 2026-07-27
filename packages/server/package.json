@@ -18,7 +18,6 @@
     "ops:list-appeals": "pnpm build && node dist/ops.js list-appeals",
     "ops:revoke-card": "pnpm build && node dist/ops.js revoke-card",
     "ops:reject-appeal": "pnpm build && node dist/ops.js reject-appeal",
-    "ops:screen": "pnpm build && node dist/screening-runner.js",
     "ops:judge-eval": "pnpm build && node dist/judge-eval.js"
   },
   "dependencies": {

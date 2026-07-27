@@ -203,6 +203,7 @@ export class SqlitePersistence implements RoomPersistencePort {
       );
       CREATE TABLE IF NOT EXISTS proposals (
         id TEXT PRIMARY KEY,
+        proposal_number INTEGER UNIQUE,
         author_id TEXT NOT NULL REFERENCES users(user_id),
         kind TEXT NOT NULL CHECK (kind IN ('local', 'original')),
         prefecture_code TEXT
@@ -236,6 +237,43 @@ export class SqlitePersistence implements RoomPersistencePort {
         ON proposals(author_id, content_hash)
         WHERE status IN ('screening', 'implementing')
           OR (status = 'failed' AND attempt_count = 0);
+    `);
+    const proposalColumns = this.#sqlite
+      .prepare("PRAGMA table_info('proposals')")
+      .all() as Array<{ name: string }>;
+    if (!proposalColumns.some(({ name }) => name === 'proposal_number')) {
+      this.#sqlite.exec(
+        'ALTER TABLE proposals ADD COLUMN proposal_number INTEGER',
+      );
+    }
+    const unnumberedProposals = this.#sqlite
+      .prepare(
+        `SELECT id FROM proposals
+         WHERE proposal_number IS NULL
+         ORDER BY created_at ASC, id ASC`,
+      )
+      .all() as Array<{ id: string }>;
+    if (unnumberedProposals.length > 0) {
+      this.#sqlite.transaction(() => {
+        let next = (
+          this.#sqlite
+            .prepare(
+              'SELECT COALESCE(MAX(proposal_number), 0) AS value FROM proposals',
+            )
+            .get() as { value: number }
+        ).value;
+        const assign = this.#sqlite.prepare(
+          'UPDATE proposals SET proposal_number = ? WHERE id = ?',
+        );
+        for (const proposal of unnumberedProposals) {
+          next += 1;
+          assign.run(next, proposal.id);
+        }
+      })();
+    }
+    this.#sqlite.exec(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_proposals_number
+        ON proposals(proposal_number);
     `);
     this.sessions = new SqliteSessionStore(this.#db, sessionOptions);
     this.proposals = new ProposalRepository(this.#sqlite);

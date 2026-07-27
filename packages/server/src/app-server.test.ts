@@ -259,6 +259,7 @@ describe('production app server', () => {
         token: 'admin-token',
         service: {
           pending: () => [],
+          pendingConfirmations: () => [],
           recordAi,
           confirmE6Rejection: () => ({ status: 'not_found' }),
           confirmCxRejection: () => ({ status: 'not_found' }),

@@ -53,6 +53,7 @@ export interface AppServerOptions {
     service: Pick<
       PipelineJudgementService,
       | 'pending'
+      | 'pendingConfirmations'
       | 'recordAi'
       | 'confirmE6Rejection'
       | 'confirmCxRejection'
@@ -149,13 +150,16 @@ function clientIp(request: IncomingMessage): string {
     : (request.socket.remoteAddress ?? 'unknown');
 }
 
-async function readJsonBody(request: IncomingMessage): Promise<unknown> {
+async function readJsonBody(
+  request: IncomingMessage,
+  maxBytes = 8 * 1024,
+): Promise<unknown> {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of request) {
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
     size += buffer.length;
-    if (size > 64 * 1024) throw new Error('request_too_large');
+    if (size > maxBytes) throw new Error('request_too_large');
     chunks.push(buffer);
   }
   return JSON.parse(Buffer.concat(chunks).toString('utf8'));
@@ -206,18 +210,36 @@ export function createAppServer(options: AppServerOptions): AppServer {
         writeJson(response, 405, { error: 'method_not_allowed' });
         return true;
       }
-      writeJson(response, 200, {
-        items: [
-          ...(options.adminScreening?.service.pending() ?? []).map((item) => ({
-            stage: 'e6' as const,
+      const items = [
+        ...(options.adminScreening?.service.pending() ?? []).map((item) => ({
+          stage: 'e6' as const,
+          ...item,
+        })),
+        ...(options.adminPipeline?.service.pending() ?? []).map((item) => ({
+          stage: 'cx01' as const,
+          ...item,
+        })),
+        ...(options.adminPipeline?.service.pendingConfirmations() ?? []).map(
+          (item) => ({
+            stage: 'confirmation' as const,
             ...item,
-          })),
-          ...(options.adminPipeline?.service.pending() ?? []).map((item) => ({
-            stage: 'cx01' as const,
-            ...item,
-          })),
-        ],
-      });
+          }),
+        ),
+      ].sort(
+        (left, right) =>
+          ('signals' in left
+            ? left.signals.createdAt
+            : 'check' in left
+              ? left.check.createdAt
+              : left.judgement.createdAt) -
+            ('signals' in right
+              ? right.signals.createdAt
+              : 'check' in right
+                ? right.check.createdAt
+                : right.judgement.createdAt) ||
+          left.proposal.id.localeCompare(right.proposal.id),
+      );
+      writeJson(response, 200, { items });
       return true;
     }
     if (request.method !== 'POST') {
@@ -227,7 +249,7 @@ export function createAppServer(options: AppServerOptions): AppServer {
     }
     let body: unknown;
     try {
-      body = await readJsonBody(request);
+      body = await readJsonBody(request, 64 * 1024);
     } catch (error) {
       writeJson(response, error instanceof SyntaxError ? 400 : 413, {
         error:
