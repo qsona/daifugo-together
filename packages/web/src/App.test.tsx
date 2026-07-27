@@ -472,6 +472,162 @@ describe('MP-04: タイムアウト代行後の選択状態', () => {
   });
 });
 
+function tutorialHintRoom(
+  mode: 'basic' | 'community',
+  legalMoves: NonNullable<
+    NonNullable<import('@daifugo/core').PlayerRoomView['game']>['legalMoves']
+  > | null,
+) {
+  const three = {
+    kind: 'natural',
+    id: 'S03',
+    suit: 'spade',
+    rank: '3',
+  } as const;
+  const four = {
+    kind: 'natural',
+    id: 'S04',
+    suit: 'spade',
+    rank: '4',
+  } as const;
+  return {
+    v: 4,
+    roomId: 'tutorial-room',
+    inviteCode: 'ABCD-2345',
+    mode,
+    phase: 'playing',
+    members: [
+      {
+        memberId: 'member-1',
+        seatId: 0,
+        displayName: 'ホスト',
+        isAI: false,
+        isHost: true,
+        connected: true,
+        aiActing: false,
+        departed: false,
+        handCount: 2,
+        finishedRank: null,
+        wantsNextSet: null,
+      },
+    ],
+    you: { memberId: 'member-1', seatId: 0 },
+    activeRules: [],
+    game: {
+      gameNo: 1,
+      status: 'playing',
+      intermission: null,
+      field: { cards: [], playedBySeat: null, passedSeats: [] },
+      turn: { seat: 0, turnSeq: 1, deadlineAt: null },
+      history: [],
+      previousResults: [],
+      yourHand: [three, four],
+      legalMoves,
+    },
+    setResult: null,
+    events: [],
+  } satisfies import('@daifugo/core').PlayerRoomView;
+}
+
+function tutorialHintClient(
+  room: import('@daifugo/core').PlayerRoomView,
+): MultiplayerClient {
+  const state: MultiplayerState = {
+    connection: 'ready',
+    displayName: 'ホスト',
+    room,
+    roomClosedReason: null,
+    error: null,
+  };
+  return {
+    subscribe: () => () => undefined,
+    snapshot: () => state,
+  } as unknown as MultiplayerClient;
+}
+
+describe('TU-02: きほんの部屋のカードヒント統合', () => {
+  afterEach(cleanup);
+
+  it('basicだけ合法手にないカードを沈め、communityでは通常表示にする', () => {
+    const legalMove: import('@daifugo/core').Play = {
+      kind: 'single',
+      cards: [
+        {
+          kind: 'natural',
+          id: 'S03',
+          suit: 'spade',
+          rank: '3',
+        },
+      ],
+      count: 1,
+      repRank: '3',
+    };
+    const basic = render(
+      <App
+        client={tutorialHintClient(tutorialHintRoom('basic', [legalMove]))}
+      />,
+    );
+    expect(
+      screen
+        .getByRole('button', { name: 'スペードの4' })
+        .getAttribute('aria-disabled'),
+    ).toBe('true');
+
+    basic.unmount();
+    render(
+      <App
+        client={tutorialHintClient(tutorialHintRoom('community', [legalMove]))}
+      />,
+    );
+    expect(
+      screen
+        .getByRole('button', { name: 'スペードの4' })
+        .hasAttribute('aria-disabled'),
+    ).toBe(false);
+  });
+
+  it('legalMovesがnullならbasicでも全カードを沈めない', () => {
+    render(
+      <App client={tutorialHintClient(tutorialHintRoom('basic', null))} />,
+    );
+
+    for (const card of screen.getAllByRole('button', { name: /スペードの/ })) {
+      expect(card.hasAttribute('aria-disabled')).toBe(false);
+    }
+  });
+
+  it('選択中カードは再タップで解除でき、dimmedカードは選択に入らない', async () => {
+    const user = userEvent.setup();
+    const three = {
+      kind: 'natural',
+      id: 'S03',
+      suit: 'spade',
+      rank: '3',
+    } as const;
+    const legalMove: import('@daifugo/core').Play = {
+      kind: 'single',
+      cards: [three],
+      count: 1,
+      repRank: '3',
+    };
+    render(
+      <App
+        client={tutorialHintClient(tutorialHintRoom('basic', [legalMove]))}
+      />,
+    );
+    const playable = screen.getByRole('button', { name: 'スペードの3' });
+    const dimmed = screen.getByRole('button', { name: 'スペードの4' });
+
+    await user.click(playable);
+    expect(playable.getAttribute('aria-pressed')).toBe('true');
+    await user.click(playable);
+    expect(playable.getAttribute('aria-pressed')).toBe('false');
+
+    await user.click(dimmed);
+    expect(dimmed.getAttribute('aria-pressed')).toBe('false');
+  });
+});
+
 describe('TU-01: 既プレイ端末の記録', () => {
   it('1戦完了のスナップショットを受けるとlocalStorageへ記録する', () => {
     const stored = new Map<string, string>();

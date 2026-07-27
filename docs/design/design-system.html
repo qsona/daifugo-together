@@ -563,6 +563,14 @@ table.spec th { background: var(--color-bg-subtle); white-space: nowrap; }
   text-align: center; font-size: var(--font-size-micro); font-weight: var(--font-weight-bold);
   color: var(--color-text-primary);
 }
+.c-card.is-dimmed {
+  opacity: .42;
+  filter: saturate(.15);
+}
+.c-card.is-rejected {
+  outline: var(--border-heavy) solid var(--color-action-primary);
+  outline-offset: var(--space-1);
+}
 
 /* 相手席 */
 .c-seats { display: flex; gap: var(--space-2); }
@@ -692,7 +700,8 @@ table.spec th { background: var(--color-bg-subtle); white-space: nowrap; }
   display: flex; flex-direction: column; gap: var(--space-2);
 }
 .c-tray .hd { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); font-size: var(--font-size-micro); font-weight: var(--font-weight-bold); color: var(--color-text-secondary); }
-.c-tray .cs { display: flex; gap: var(--space-2); overflow-x: auto; padding: var(--space-3) var(--space-1) var(--space-5); }
+.c-tray .cs { display: flex; padding: var(--space-3) var(--space-1) var(--space-5); }
+.c-tray .cs > .c-card + .c-card { margin-left: -28px; }
 .c-tray .ac { display: flex; gap: var(--space-2); }
 .c-tray .ac > .c-btn { flex: 1; }
 .c-tray .ac > .c-btn:first-child { flex: 0 0 auto; }
@@ -1240,13 +1249,18 @@ table.spec th { background: var(--color-bg-subtle); white-space: nowrap; }
 
     <div class="panel">
       <div class="specimen">
-        <span class="lbl">カード / 選択中 / 場札(small)</span>
+        <span class="lbl">カード / 選択中 / 出せない / 拒否 / 場札(small)</span>
         <span class="c-card"><b>3</b><i>♣</i></span>
         <span class="c-card -red"><b>7</b><i>♥</i></span>
         <span class="c-card is-selected"><b>K</b><i>♠</i></span>
+        <span class="c-card is-dimmed"><b>5</b><i>♣</i></span>
+        <span class="c-card is-dimmed is-rejected"><b>6</b><i>♠</i></span>
         <span class="c-card -red -small"><b>8</b><i>♦</i></span>
       </div>
-      <div class="note">スートの色は ♥♦=red-500(ブランド装飾)、♠♣=navy-800(共通アウトライン)。選択は「持ち上がる」で示し、色だけに頼らないよう金の縁と「選択中」の文字を添える。</div>
+      <div class="note">
+        スートの色は ♥♦=red-500(ブランド装飾)、♠♣=navy-800(共通アウトライン)。選択は「持ち上がる」で示し、色だけに頼らないよう金の縁と「選択中」の文字を添える。<br>
+        <b>きほんの部屋</b>では、いまの選択から出せない札を不透明度と彩度で沈める。沈んだ札もフォーカス可能なボタンとして残し、タップ・Enter・Space には短い首振りで「いまは選べない」と返す。<code>prefers-reduced-motion: reduce</code> では移動させず、見本の「拒否」のように縁を点滅させる。
+      </div>
     </div>
 
     <div class="panel">
@@ -1296,7 +1310,7 @@ table.spec th { background: var(--color-bg-subtle); white-space: nowrap; }
     </div>
 
     <div class="panel">
-      <div class="specimen"><span class="lbl">手札(横スクロール・選択)</span></div>
+      <div class="specimen"><span class="lbl">手札(重ね表示・選択)</span></div>
       <div style="max-width:375px;">
         <div class="c-tray">
           <div class="hd"><span>あなたの手札</span><span>10枚</span></div>
@@ -1310,7 +1324,7 @@ table.spec th { background: var(--color-bg-subtle); white-space: nowrap; }
           <div class="ac"><button class="c-btn" type="button">パス</button><button class="c-btn -primary" type="button">えらんだカードを出す</button></div>
         </div>
       </div>
-      <div class="note">枚数が増えても縦に折り返さず横スクロールで収める。パスは文言なりの幅、主 CTA が残りを取る。</div>
+      <div class="note">枚数が増えても縦に折り返さず、左から重ねて画面幅に収める。横スクロールは使わず、各札の左上にランクとスートを置いて重なっても読み取れるようにする。パスは文言なりの幅、主 CTA が残りを取る。</div>
     </div>
 
     <div class="panel">

@@ -2,7 +2,7 @@
 
 ## 現在
 
-- **フェーズ 2 / E14 TU-02 プロセス1完了・方向性レビュー待ち**: `deriveCardHints` を8ケースのTDDで固定し、basic の実スナップショットから Card / HandTray / GameScreen へ dim と拒否フィードバックを接続。TU-01は `main` (`124e1cd`) へ fast-forward 済み
+- **フェーズ 2 / E14 TU-02 プロセス2完了**: `deriveCardHints` の8ケース、basic/community 統合、拒否フィードバックと reduced-motion の回帰を固定し、design-system.html §5-16 へ同期。TU-01は `main` (`124e1cd`) へ fast-forward 済み
 - **フェーズ 1 完了(2026-07-27)**: TS-02・E1・E2・E3・E4 は main に統合済み、E13 は本番デプロイと動作検証(DP-01・DP-03)まで完了(`https://daifugo-together.fly.dev/`)。残りは DP-02 の仕上げ(GitHub Environment `production` + `FLY_API_TOKEN` 登録と初回 CD 実行確認)のみ
 - **フェーズ 2 / E5 RP-01・RP-02 完了**: プロセス1の独立 GPT-5.6 Sol レビュー(`GO_WITH_FIXES`)を反映し、プロセス2の独立完了レビューは要件適合 `PASS` / 品質 `APPROVED`。RP-03 は CX-02 依存のため E7 後に戻る
 - E1〜E3 の実装記録は本書末尾の「並行進行」節、E13 は「E13」節。E4 の未解消の開発者判断は「詰まっている点」に残っている(1〜4・7・8・11)
@@ -82,9 +82,10 @@
 
 ### TU-02 プロセス1
 
-- 状態: 縦切り実装完了・方向性レビュー待ち
+- 状態: プロセス2完了
 - ブランチ: `codex/e14-tutorial`
-- コミット: この記録を含むプロセス1コミット
+- プロセス1コミット: `b19b133`
+- プロセス2コミット: この記録を含むコミット
 - ユーザーストーリーの確認:
   - `packages/web/src/game/hints.test.ts` で、手番外・未選択・単騎だけ・ペア選択・3枚出し途中・不正な選択集合・合法手0件・空手札の8ケースを先に失敗させてから実装し、すべて成功
   - `packages/web/src/screens/GameScreen.test.tsx` の「dimmedのカードをタップしても選択せず、拒否フィードバックだけを返す」で、沈んだカードが `onToggleCard` を呼ばず `onDimmedCardTap` だけを呼ぶことを確認
@@ -103,21 +104,38 @@
 |---|---|---|---|---|
 | E14-P2-1 | dimmed カードは `aria-disabled=true` とする一方、ネイティブの `disabled` は使わずフォーカス・クリック可能に保つ | 「選択には入れない」と「タップ時に首を振る」を両立し、支援技術にも現在選べないことを伝えるため | E14 §2.3、チュートリアル設計 §5 | `Card.tsx` と操作テスト。hints 導出には影響なし |
 
-#### プロセス2に回したもの
+#### プロセス1方向性レビュー
+
+- 独立 GPT-5.6 Sol の判定: **GO_WITH_FIXES**。Critical なし。`deriveCardHints` の規則、basic 限定ゲート、Card → HandTray → GameScreen → App の結線に契約逸脱なし
+- Important:
+  - App の basic / community / `legalMoves === null` と選択・拒否操作をスナップショット統合テストで固定する
+  - 連続タップ、animation 終了、reduced-motion、native disabled 不使用、Enter / Space の拒否フィードバックを回帰テストにする
+  - design-system.html §5-16 に dim / 拒否 / reduced-motion 状態を同期する
+- 仮定 E14-P2-1 は**承認**
+
+#### プロセス1からプロセス2へ回したもの
 
 | ストーリー | 内容 | 理由 |
 |---|---|---|
-| TU-02 | `design-system.html` §5-16 の Card 見本へ dim / 拒否状態を追加 | プロセス1では実ゲームの縦導線を優先。部品カタログの全状態同期は仕上げで行う |
-| TU-02 | basic / community の App 結線をスナップショット単位で明示する統合テスト | 純関数8ケースと GameScreen の拒否操作で価値は縦に通っている。モードゲートの回帰固定は仕上げで追加 |
-| TU-02 | `prefers-reduced-motion` 用CSSと反復タップ時のアニメーション再始動の静的回帰 | 実装済み。スタイル契約と連打時の仕上げをレビュー後に固定する |
+| TU-02 | `design-system.html` §5-16 の Card 見本へ dim / 拒否状態を追加 | **完了**。reduced-motion の縁点滅とキーボード操作も部品仕様へ記載 |
+| TU-02 | basic / community の App 結線をスナップショット単位で明示する統合テスト | **完了**。`legalMoves === null`、選択解除、dimmed タップ非選択も同時に固定 |
+| TU-02 | `prefers-reduced-motion` 用CSSと反復タップ時のアニメーション再始動の静的回帰 | **完了**。移動なしの縁点滅、連続操作、animation 終了時のクラス除去を固定 |
+
+#### プロセス2で仕上げたもの
+
+- App の実スナップショット統合テストで、basic だけが合法手外を dim にし、community と手番外(`legalMoves === null`)では沈まないことを確認
+- 選択可能カードの再タップで解除でき、dimmed カードのタップは `aria-pressed=false` のまま選択へ入らないことを確認
+- Card は `aria-disabled=true` でも native `disabled` を付けず、フォーカス可能なまま Enter / Space に拒否フィードバックを返すことを確認
+- 連続タップごとに首振りクラスが再付与され、animation 終了で除去されることを確認。CSS の reduced-motion は `transform` を含まない縁点滅であることを静的検証
+- design-system.html §5-16 に通常 / 選択 / dim / 拒否 / small の見本を並べ、手札見本の古い「横スクロール」記述も実装どおりの重ね表示へ同期
 
 #### 検証
 
 - `CI=true pnpm verify`: 成功
   - Prettier / ESLint / AI boundary / TypeScript / 全 package build: 成功
-  - design lint: 86 ファイル、キービジュアル3ファイル、アウトライン23件が成功
-  - Vitest: **37 files・269 tests** 成功
-- TU-02対象テスト: **3 files・42 tests** 成功
+  - design lint: 87 ファイル、キービジュアル3ファイル、アウトライン23件が成功
+  - Vitest: **39 files・275 tests** 成功
+- TU-02プロセス2対象テスト: **4 files・42 tests** 成功
 - 実ブラウザ: 375×812、実 Socket.IO + basic 1人/AI 3人。`innerWidth=scrollWidth=375` / `innerHeight=scrollHeight=812`、dim 13枚が重なり表示のまま判読可能で操作ボタンを圧迫しないことを確認
 
 #### 設計への提案・気づいたこと
