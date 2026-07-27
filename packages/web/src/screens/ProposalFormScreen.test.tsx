@@ -8,7 +8,7 @@ import {
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { ProposalApi } from '../proposal/client';
+import { ProposalApiError, type ProposalApi } from '../proposal/client';
 import { ProposalFormScreen } from './ProposalFormScreen';
 
 afterEach(() => {
@@ -17,6 +17,47 @@ afterEach(() => {
 });
 
 describe('ProposalFormScreen', () => {
+  it('未登録ならフォームを隠してGoogleログインへ誘導する', async () => {
+    const user = userEvent.setup();
+    const onLogin = vi.fn();
+    render(
+      <ProposalFormScreen
+        api={{ submit: vi.fn() }}
+        onBack={() => undefined}
+        registered={false}
+        onLogin={onLogin}
+      />,
+    );
+
+    expect(screen.queryByLabelText('ルール名')).toBeNull();
+    expect(screen.getByText('提案するには引き継ぎ登録が必要です')).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Googleでログイン' }));
+    expect(onLogin).toHaveBeenCalledOnce();
+  });
+
+  it('送信時のregistration_requiredでもログイン導線へ切り替える', async () => {
+    const user = userEvent.setup();
+    const submit = vi
+      .fn<ProposalApi['submit']>()
+      .mockRejectedValue(
+        new ProposalApiError(
+          403,
+          '表示文言は変更されてもよい',
+          [],
+          'registration_required',
+        ),
+      );
+    render(<ProposalFormScreen api={{ submit }} onBack={() => undefined} />);
+    await user.type(screen.getByLabelText('ルール名'), '8切り');
+    await user.type(screen.getByLabelText('ルールの内容'), '8で場が流れる。');
+    await user.click(screen.getByRole('button', { name: '提案を送信する' }));
+
+    expect(
+      await screen.findByText('提案するには引き継ぎ登録が必要です'),
+    ).toBeTruthy();
+    expect(screen.queryByLabelText('ルール名')).toBeNull();
+  });
+
   it('区分と任意の都道府県を選んで提案し、確認中の結果を表示する', async () => {
     const user = userEvent.setup();
     const submit = vi.fn<ProposalApi['submit']>().mockResolvedValue({

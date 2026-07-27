@@ -8,6 +8,8 @@ import type {
 } from '@daifugo/core';
 import { io, type Socket } from 'socket.io-client';
 
+import { getSafeLocalStorage } from '../browser-storage';
+
 const TOKEN_KEY = 'daifugo.userToken';
 const ACK_TIMEOUT_MS = 8_000;
 
@@ -16,6 +18,7 @@ type MultiplayerSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 export interface MultiplayerState {
   connection: 'connecting' | 'ready' | 'superseded';
   displayName: string | null;
+  registered: boolean;
   room: PlayerRoomView | null;
   roomClosedReason: RoomCloseReason | null;
   error: string | null;
@@ -25,11 +28,12 @@ type Listener = () => void;
 
 export class MultiplayerClient {
   readonly #socket: MultiplayerSocket;
-  readonly #storage: Pick<Storage, 'getItem' | 'setItem'>;
+  readonly #storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
   readonly #listeners = new Set<Listener>();
   #state: MultiplayerState = {
     connection: 'connecting',
     displayName: null,
+    registered: false,
     room: null,
     roomClosedReason: null,
     error: null,
@@ -37,7 +41,7 @@ export class MultiplayerClient {
 
   constructor(
     url: string,
-    storage: Pick<Storage, 'getItem' | 'setItem'>,
+    storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>,
     socketFactory: (
       url: string,
       options: Parameters<typeof io>[1],
@@ -45,17 +49,18 @@ export class MultiplayerClient {
   ) {
     this.#storage = storage;
     this.#socket = socketFactory(url, {
-      auth: { userToken: storage.getItem(TOKEN_KEY) },
+      auth: { userToken: this.#readToken() },
       transports: ['websocket', 'polling'],
       reconnection: true,
     });
     this.#socket.on('session:ready', (session) => {
-      this.#storage.setItem(TOKEN_KEY, session.userToken);
+      this.#writeToken(session.userToken);
       this.#socket.auth = { userToken: session.userToken };
       this.#state = {
         ...this.#state,
         connection: 'ready',
         displayName: session.displayName,
+        registered: session.registered,
         room: this.#newerRoom(session.room),
         roomClosedReason: null,
         error: null,
@@ -150,6 +155,24 @@ export class MultiplayerClient {
     this.#listeners.clear();
   }
 
+  switchSession(userToken: string | null): void {
+    if (userToken === null) {
+      this.#removeToken();
+    } else {
+      this.#writeToken(userToken);
+    }
+    this.#socket.auth = { userToken };
+    this.#state = {
+      ...this.#state,
+      connection: 'connecting',
+      displayName: null,
+      registered: false,
+      room: null,
+    };
+    this.#notify();
+    this.#socket.disconnect().connect();
+  }
+
   #newerRoom(incoming: PlayerRoomView | null): PlayerRoomView | null {
     const current = this.#state.room;
     if (
@@ -189,6 +212,30 @@ export class MultiplayerClient {
   #notify(): void {
     for (const listener of this.#listeners) listener();
   }
+
+  #readToken(): string | null {
+    try {
+      return this.#storage.getItem(TOKEN_KEY);
+    } catch {
+      return null;
+    }
+  }
+
+  #writeToken(token: string): void {
+    try {
+      this.#storage.setItem(TOKEN_KEY, token);
+    } catch {
+      // The live socket remains usable even when persistent storage is blocked.
+    }
+  }
+
+  #removeToken(): void {
+    try {
+      this.#storage.removeItem(TOKEN_KEY);
+    } catch {
+      // Logout still switches the live socket to an anonymous session.
+    }
+  }
 }
 
 let browserClient: MultiplayerClient | undefined;
@@ -196,7 +243,7 @@ let browserClient: MultiplayerClient | undefined;
 export function getBrowserMultiplayerClient(): MultiplayerClient {
   browserClient ??= new MultiplayerClient(
     window.location.origin,
-    window.localStorage,
+    getSafeLocalStorage(window),
   );
   return browserClient;
 }

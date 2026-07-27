@@ -9,6 +9,11 @@ type MenuScreenProps = {
   onPropose: () => void;
   onEncyclopedia: () => void;
   onMyProposals: () => void;
+  registered?: boolean;
+  onLogin?: () => void;
+  onLogout?: () => void;
+  authPending?: boolean;
+  authMessage?: string | null;
   unreadProposalCount?: number;
 };
 
@@ -24,6 +29,11 @@ export function MenuScreen({
   onPropose,
   onEncyclopedia,
   onMyProposals,
+  registered = false,
+  onLogin,
+  onLogout,
+  authPending = false,
+  authMessage = null,
   unreadProposalCount = 0,
 }: MenuScreenProps) {
   return (
@@ -49,6 +59,16 @@ export function MenuScreen({
             )}
           </Button>
         </div>
+        {onLogin && onLogout && (
+          <Button
+            size="small"
+            disabled={authPending}
+            onClick={registered ? onLogout : onLogin}
+          >
+            {registered ? '登録済み・ログアウト' : '引き継ぎ・ログイン'}
+          </Button>
+        )}
+        {authMessage && <p role="status">{authMessage}</p>}
         <HillDivider />
       </main>
     </div>

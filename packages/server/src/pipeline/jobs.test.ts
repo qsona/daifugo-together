@@ -21,7 +21,8 @@ async function approvedProposal() {
     createToken: () => 'pipeline-token-0001',
   });
   instances.push(persistence);
-  persistence.sessions.resolve(undefined);
+  const session = persistence.sessions.resolve(undefined);
+  persistence.auth.complete(session.userId, 'test-pipeline-user', 1);
   const submissions = new ProposalSubmissionService(persistence.proposals, {
     signals: new InjectionSignalRecorder(
       new InjectionStaticAnalyzer(),

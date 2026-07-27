@@ -61,6 +61,7 @@ import {
 } from './routing';
 import screenStyles from './screens/screen.module.css';
 import { deriveCardHints } from './game/hints';
+import { getBrowserAuthClient, type AuthApi } from './auth/client';
 import { FEATURES } from './features';
 import {
   getBrowserEvaluationClient,
@@ -82,6 +83,7 @@ import {
 
 const GRADUATION_ERROR =
   'みんなのルールへ進めませんでした。もう一度ためしてください';
+const AUTH_RESULT_PROMPT_KEY = 'daifugo.authResultPromptShown';
 
 /**
  * 最終戦リザルトを見せる時間。
@@ -590,10 +592,12 @@ function ConnectedApp({
   client,
   storage,
   evaluationApi,
+  auth,
 }: {
   client: MultiplayerClient;
   storage: PlayedBeforeStorage | undefined;
   evaluationApi: EvaluationApi;
+  auth: AuthApi;
 }) {
   const current = useScreenStore((state) => state.current);
   const go = useScreenStore((state) => state.go);
@@ -617,6 +621,9 @@ function ConnectedApp({
   const [finalResultSeen, setFinalResultSeen] = useState<string | null>(null);
   const finalResultDeadline = useRef<{ key: string; at: number } | null>(null);
   const [unreadProposalCount, setUnreadProposalCount] = useState(0);
+  const [authPending, setAuthPending] = useState(false);
+  const [authMessage, setAuthMessage] = useState<string | null>(null);
+  const [showResultAuthPrompt, setShowResultAuthPrompt] = useState(false);
   const proposalApi = getBrowserProposalClient();
   const ruleEventRoomId = useRef<string | null>(null);
   const lastRuleEventSeq = useRef(0);
@@ -649,6 +656,29 @@ function ConnectedApp({
   >(null);
   const ruleCatalogApi = getBrowserRuleCatalogClient();
   const room = state.room;
+  const beginLogin = useCallback(() => {
+    if (
+      state.registered &&
+      !window.confirm(
+        '別のアカウントでログインすると、この端末はそのアカウントに切り替わります',
+      )
+    ) {
+      return;
+    }
+    setAuthPending(true);
+    setAuthMessage(null);
+    void auth
+      .begin()
+      .then((authUrl) => window.location.assign(authUrl))
+      .catch((error: unknown) => {
+        setAuthPending(false);
+        setAuthMessage(
+          error instanceof Error && error.message === 'auth_unavailable'
+            ? 'いまは使えないみたい'
+            : 'うまくいかなかったみたい。もういちどためしてね',
+        );
+      });
+  }, [auth, state.registered]);
   const routeAtRender =
     typeof window === 'undefined'
       ? null
@@ -920,6 +950,52 @@ function ConnectedApp({
       setPlayedBefore(true);
     }
   }, [playedBefore, room, storage]);
+
+  useEffect(() => {
+    if (room?.phase !== 'setResult' || state.registered) {
+      setShowResultAuthPrompt(false);
+      return;
+    }
+    try {
+      if (storage?.getItem(AUTH_RESULT_PROMPT_KEY) === 'true') return;
+      storage?.setItem(AUTH_RESULT_PROMPT_KEY, 'true');
+    } catch {
+      // Storage unavailable: showing the small prompt is still safe.
+    }
+    setShowResultAuthPrompt(true);
+  }, [room?.phase, room?.roomId, state.registered, storage]);
+
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (!hash.startsWith('#/auth/complete')) return;
+    const query = hash.includes('?') ? hash.slice(hash.indexOf('?') + 1) : '';
+    const parameters = new URLSearchParams(query);
+    const error = parameters.get('error');
+    window.history.replaceState(null, '', '/menu');
+    go('menu');
+    if (error) {
+      setAuthMessage('うまくいかなかったみたい。もういちどためしてね');
+      return;
+    }
+    const ott = parameters.get('ott');
+    if (!ott) {
+      setAuthMessage('うまくいかなかったみたい。もういちどためしてね');
+      return;
+    }
+    setAuthPending(true);
+    void auth
+      .complete(ott)
+      .then((result) => {
+        client.switchSession(result.userToken);
+        setAuthMessage(
+          result.outcome === 'linked' ? '引き継ぎ登録したよ' : 'おかえり!',
+        );
+      })
+      .catch(() => {
+        setAuthMessage('うまくいかなかったみたい。もういちどためしてね');
+      })
+      .finally(() => setAuthPending(false));
+  }, [auth, client, go]);
 
   useEffect(() => {
     if (guideSessionKey.current === tutorialSessionKey) return;
@@ -1269,6 +1345,7 @@ function ConnectedApp({
         showEvaluation
         waitingFor={waitingFor}
         actionPending={isGraduating}
+        {...(showResultAuthPrompt ? { onRegister: beginLogin } : {})}
       />,
     );
   }
@@ -1281,6 +1358,8 @@ function ConnectedApp({
       <ProposalFormScreen
         api={getBrowserProposalClient()}
         onBack={() => go('menu')}
+        registered={state.registered}
+        onLogin={beginLogin}
       />,
     );
   }
@@ -1308,6 +1387,14 @@ function ConnectedApp({
         onPropose={() => go('proposal')}
         onEncyclopedia={() => go('ruleDex')}
         onMyProposals={() => go('myProposals')}
+        registered={state.registered}
+        onLogin={beginLogin}
+        onLogout={() => {
+          client.switchSession(null);
+          setAuthMessage('ログアウトしました');
+        }}
+        authPending={authPending}
+        authMessage={authMessage}
         unreadProposalCount={unreadProposalCount}
       />
       {isChoosingRoom && (
@@ -1355,10 +1442,12 @@ export function App({
   client,
   storage,
   evaluationApi,
+  auth,
 }: {
   client?: MultiplayerClient | null;
   storage?: PlayedBeforeStorage;
   evaluationApi?: EvaluationApi;
+  auth?: AuthApi;
 } = {}) {
   useEffect(() => {
     const restoreScreenFromUrl = () => {
@@ -1407,11 +1496,24 @@ export function App({
           }),
         }
       : getBrowserEvaluationClient());
+  const effectiveAuth =
+    auth ??
+    (typeof window === 'undefined'
+      ? {
+          begin: async () => {
+            throw new Error('auth_unavailable');
+          },
+          complete: async () => {
+            throw new Error('auth_unavailable');
+          },
+        }
+      : getBrowserAuthClient());
   return effectiveClient ? (
     <ConnectedApp
       client={effectiveClient}
       storage={effectiveStorage}
       evaluationApi={effectiveEvaluationApi}
+      auth={effectiveAuth}
     />
   ) : (
     <DemoApp />
