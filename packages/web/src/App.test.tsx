@@ -1,4 +1,11 @@
-import { act, cleanup, render, screen, within } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -574,6 +581,49 @@ function observableTutorialClient(
   };
 }
 
+function tutorialSetResultRoom(
+  mode: 'basic' | 'community',
+): import('@daifugo/core').PlayerRoomView {
+  return {
+    v: 12,
+    roomId: `${mode}-result-room`,
+    inviteCode: 'ABCD-2345',
+    mode,
+    phase: 'setResult',
+    members: [
+      {
+        memberId: 'member-1',
+        seatId: 0,
+        displayName: 'ホスト',
+        isAI: false,
+        isHost: true,
+        connected: true,
+        aiActing: false,
+        departed: false,
+        handCount: 0,
+        finishedRank: 1,
+        wantsNextSet: false,
+      },
+    ],
+    you: { memberId: 'member-1', seatId: 0 },
+    activeRules: [],
+    game: null,
+    setResult: {
+      standings: [
+        {
+          memberId: 'member-1',
+          totalRank: 1,
+          title: '大富豪',
+          ranks: [1, 1, 1],
+          points: 15,
+        },
+      ],
+      respondBy: Date.now() + 120_000,
+    },
+    events: [],
+  };
+}
+
 describe('TU-02: きほんの部屋のカードヒント統合', () => {
   afterEach(cleanup);
 
@@ -1020,6 +1070,65 @@ describe('TU-03: はじめての1戦のガイド', () => {
     expect(screen.queryByRole('status')).toBeNull();
     expect(
       screen.queryByLabelText('カードの強さ: 左がよわい、右がつよい'),
+    ).toBeNull();
+  });
+});
+
+describe('TU-04: みんなのルールへの卒業導線', () => {
+  afterEach(cleanup);
+
+  it('basicのセットリザルトから退室後にcommunityの部屋を作る', async () => {
+    const user = userEvent.setup();
+    const calls: string[] = [];
+    const room = tutorialSetResultRoom('basic');
+    const state: MultiplayerState = {
+      connection: 'ready',
+      displayName: 'ホスト',
+      room,
+      roomClosedReason: null,
+      error: null,
+    };
+    const client = {
+      subscribe: () => () => undefined,
+      snapshot: () => state,
+      leaveRoom: vi.fn(async () => {
+        calls.push('leave');
+      }),
+      createRoom: vi.fn(async (mode: string) => {
+        calls.push(`create:${mode}`);
+      }),
+    } as unknown as MultiplayerClient;
+
+    render(<App client={client} />);
+    await user.click(
+      screen.getByRole('button', {
+        name: 'みんなのルールで あそんでみる',
+      }),
+    );
+
+    await waitFor(() => expect(calls).toEqual(['leave', 'create:community']));
+  });
+
+  it('communityのセットリザルトには卒業導線を出さない', () => {
+    const room = tutorialSetResultRoom('community');
+    const state: MultiplayerState = {
+      connection: 'ready',
+      displayName: 'ホスト',
+      room,
+      roomClosedReason: null,
+      error: null,
+    };
+    const client = {
+      subscribe: () => () => undefined,
+      snapshot: () => state,
+    } as unknown as MultiplayerClient;
+
+    render(<App client={client} />);
+
+    expect(
+      screen.queryByRole('button', {
+        name: 'みんなのルールで あそんでみる',
+      }),
     ).toBeNull();
   });
 });

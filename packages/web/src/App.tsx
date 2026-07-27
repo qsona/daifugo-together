@@ -490,6 +490,7 @@ function ConnectedApp({
   } | null>(null);
   const guideState = useRef(createGuideState());
   const guideSessionKey = useRef<string | null>(null);
+  const firstBasicRoomId = useRef<string | null>(null);
   const [guideCue, setGuideCue] = useState<GuideCue | null>(null);
   const [playedBefore, setPlayedBefore] = useState(() =>
     hasPlayedBefore(storage),
@@ -558,6 +559,17 @@ function ConnectedApp({
       active = false;
     };
   }, [current, proposalApi]);
+
+  useEffect(() => {
+    if (
+      playedBefore ||
+      firstBasicRoomId.current !== null ||
+      room?.mode !== 'basic'
+    ) {
+      return;
+    }
+    firstBasicRoomId.current = room.roomId;
+  }, [playedBefore, room]);
 
   useEffect(() => {
     const completedOneGame =
@@ -772,6 +784,16 @@ function ConnectedApp({
         onPlayAgain={() => {
           invoke(client.continueRoom());
         }}
+        {...(room.mode === 'basic'
+          ? {
+              onPlayCommunity: () => {
+                invoke(
+                  client.leaveRoom().then(() => client.createRoom('community')),
+                );
+              },
+              emphasizePlayCommunity: firstBasicRoomId.current === room.roomId,
+            }
+          : {})}
         onHome={() => {
           if (!window.confirm('部屋から出ますか?')) return;
           invoke(

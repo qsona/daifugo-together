@@ -1,5 +1,6 @@
 import { cleanup, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import userEvent from '@testing-library/user-event';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { SetResultScreen } from './SetResultScreen';
 
@@ -100,5 +101,55 @@ describe('SetResultScreen phase boundary', () => {
         .getByRole('button', { name: '待っています…' })
         .hasAttribute('disabled'),
     ).toBe(true);
+  });
+
+  it('卒業コールバックがあると次セットと並べて表示し、押下を渡す', async () => {
+    const user = userEvent.setup();
+    const onPlayCommunity = vi.fn();
+    render(
+      <SetResultScreen
+        ranks={[]}
+        funRating={null}
+        firedRules={[]}
+        onChangeFunRating={() => undefined}
+        onVoteRule={() => undefined}
+        onPlayAgain={() => undefined}
+        onPlayCommunity={onPlayCommunity}
+        onHome={() => undefined}
+        showEvaluation={false}
+        emphasizePlayCommunity
+      />,
+    );
+
+    expect(
+      screen.getByRole('button', { name: 'もう1セットあそぶ' }),
+    ).toBeTruthy();
+    await user.click(
+      screen.getByRole('button', {
+        name: 'みんなのルールで あそんでみる',
+      }),
+    );
+    expect(onPlayCommunity).toHaveBeenCalledOnce();
+  });
+
+  it('卒業コールバックがなければ導線を表示しない', () => {
+    render(
+      <SetResultScreen
+        ranks={[]}
+        funRating={null}
+        firedRules={[]}
+        onChangeFunRating={() => undefined}
+        onVoteRule={() => undefined}
+        onPlayAgain={() => undefined}
+        onHome={() => undefined}
+        showEvaluation={false}
+      />,
+    );
+
+    expect(
+      screen.queryByRole('button', {
+        name: 'みんなのルールで あそんでみる',
+      }),
+    ).toBeNull();
   });
 });

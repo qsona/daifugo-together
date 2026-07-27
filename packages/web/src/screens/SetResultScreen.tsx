@@ -25,6 +25,8 @@ type SetResultScreenProps = {
   onChangeFunRating: (rating: SetFunRating) => void;
   onVoteRule: (ruleId: string, vote: RuleVote) => void;
   onPlayAgain: () => void;
+  onPlayCommunity?: () => void;
+  emphasizePlayCommunity?: boolean;
   onHome: () => void;
   showEvaluation?: boolean;
   waitingFor?: readonly string[] | null;
@@ -42,6 +44,8 @@ export function SetResultScreen({
   onChangeFunRating,
   onVoteRule,
   onPlayAgain,
+  onPlayCommunity,
+  emphasizePlayCommunity = false,
   onHome,
   showEvaluation = true,
   waitingFor = null,
@@ -124,13 +128,22 @@ export function SetResultScreen({
            * だから CTA は次の行動だけを言う。1 ボタン 1 動作。
            */}
           <Button
-            variant="primary"
+            variant={emphasizePlayCommunity ? 'secondary' : 'primary'}
             block
             disabled={waitingFor !== null}
             onClick={onPlayAgain}
           >
             {waitingFor === null ? 'もう1セットあそぶ' : '待っています…'}
           </Button>
+          {onPlayCommunity && (
+            <Button
+              variant={emphasizePlayCommunity ? 'primary' : 'secondary'}
+              block
+              onClick={onPlayCommunity}
+            >
+              みんなのルールで あそんでみる
+            </Button>
+          )}
           <Button block onClick={onHome}>
             ホームへ
           </Button>
