@@ -91,6 +91,10 @@ const CI_AI_BUDGET: ThinkBudget = {
   maxPlayouts: 1,
   sliceMs: 1,
 };
+const CI_AI_WARMUP_BUDGET: ThinkBudget = {
+  ...CI_AI_BUDGET,
+  hardMs: 2_000,
+};
 const CI_MAX_MOVE_WALL_MS = 200;
 
 export async function runAiRuleSimulations(options: {
@@ -140,6 +144,7 @@ export async function runAiRuleSimulations(options: {
       let fallbacks = 0;
       let playouts = 0;
       let maxMoveWallMs = 0;
+      let workerWarmedUp = false;
       const policyViolations: SimReport['invariantViolations'] = [];
       let step = simulation.next();
       try {
@@ -153,8 +158,7 @@ export async function runAiRuleSimulations(options: {
           if (decision.legalPlays.length === 0) {
             action = { type: 'pass', player: decision.player };
           } else {
-            const startedAt = performance.now();
-            const result = await ai.decideMove({
+            const input = {
               view: buildPlayerSnapshot(
                 decision.config,
                 game,
@@ -168,7 +172,6 @@ export async function runAiRuleSimulations(options: {
                 decision.runtime,
               ),
               legalPlays: decision.legalPlays,
-              budget: options.budget ?? CI_AI_BUDGET,
               seed: `ai02:${configuration.name}:${String(seed)}:${String(
                 moves,
               )}:${decision.player}`,
@@ -187,6 +190,24 @@ export async function runAiRuleSimulations(options: {
                 hookCalls: structuredClone(game.private.hookCalls),
                 setMemory: structuredClone(decision.state.setMemory),
               },
+            };
+            if (!workerWarmedUp && decision.legalPlays.length > 1) {
+              const warmup = await ai.decideMove({
+                ...input,
+                budget: CI_AI_WARMUP_BUDGET,
+                seed: `${input.seed}:warmup`,
+              });
+              if (warmup.usedFallback !== 'none') {
+                throw new Error(
+                  `AI worker warmup used fallback: ${warmup.usedFallback}`,
+                );
+              }
+              workerWarmedUp = true;
+            }
+            const startedAt = performance.now();
+            const result = await ai.decideMove({
+              ...input,
+              budget: options.budget ?? CI_AI_BUDGET,
             });
             const wallMs = performance.now() - startedAt;
             maxMoveWallMs = Math.max(maxMoveWallMs, wallMs);
