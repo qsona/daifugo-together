@@ -65,6 +65,29 @@
   box-shadow: var(--shadow-hard-m);
 }
 
+.dimmed {
+  opacity: 0.42;
+  filter: saturate(0.15);
+}
+
+.rejected {
+  animation: reject-shake var(--duration-base) var(--easing-standard);
+}
+
+@keyframes reject-shake {
+  25% {
+    transform: translateX(calc(var(--space-1) * -1));
+  }
+
+  50% {
+    transform: translateX(var(--space-1));
+  }
+
+  75% {
+    transform: translateX(calc(var(--space-1) * -1));
+  }
+}
+
 /* 場札は少し小さく、伏せ札は面をクリームに。 */
 .small {
   width: 46px;
@@ -73,4 +96,17 @@
 
 .facedown {
   background: var(--color-cream-200);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rejected {
+    animation: reject-edge var(--duration-base) step-end 2 !important;
+  }
+}
+
+@keyframes reject-edge {
+  50% {
+    outline: var(--border-heavy) solid var(--color-action-primary);
+    outline-offset: var(--space-1);
+  }
 }

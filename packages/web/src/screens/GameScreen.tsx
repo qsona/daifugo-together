@@ -11,6 +11,7 @@ import type { RuleActivation } from '../components/RuleCutIn';
 import { Table } from '../components/Table';
 import type { TableSeat } from '../components/Table';
 import { Toast } from '../components/Toast';
+import type { CardHint } from '../game/hints';
 import { cx } from '../lib/cx';
 
 import styles from './GameScreen.module.css';
@@ -49,12 +50,14 @@ type GameScreenProps = {
   lastActivation: { name: string; count: number } | null;
   hand: readonly CardView[];
   selectedCardIds: readonly string[];
+  cardHints?: ReadonlyMap<string, CardHint>;
   isMyTurn: boolean;
   canPlay?: boolean;
   canPass?: boolean;
   turnDeadlineAt?: number | null;
   onViewRules: () => void;
   onToggleCard: (id: string) => void;
+  onDimmedCardTap?: (id: string) => void;
   onPlay: () => void;
   onPass: () => void;
 };
@@ -77,12 +80,14 @@ export function GameScreen({
   lastActivation,
   hand,
   selectedCardIds,
+  cardHints,
   isMyTurn,
   canPlay,
   canPass = true,
   turnDeadlineAt,
   onViewRules,
   onToggleCard,
+  onDimmedCardTap,
   onPlay,
   onPass,
 }: GameScreenProps) {
@@ -116,7 +121,9 @@ export function GameScreen({
         <HandTray
           cards={hand}
           selectedIds={selectedCardIds}
+          {...(cardHints ? { cardHints } : {})}
           onToggle={onToggleCard}
+          {...(onDimmedCardTap ? { onDimmedCardTap } : {})}
           actions={
             <>
               <Button disabled={!isMyTurn || !canPass} onClick={onPass}>

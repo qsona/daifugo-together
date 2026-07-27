@@ -36,6 +36,7 @@ import { SetResultScreen } from './screens/SetResultScreen';
 import { TitleScreen } from './screens/TitleScreen';
 import { WaitingRoomScreen } from './screens/WaitingRoomScreen';
 import { useScreenStore } from './store/screen';
+import { deriveCardHints } from './game/hints';
 import {
   getPlayedBeforeStorage,
   hasPlayedBefore,
@@ -526,6 +527,10 @@ function ConnectedApp({
             .sort()
             .every((id, index) => id === selected[index]),
       ) ?? false;
+    const cardHints =
+      room.mode === 'basic'
+        ? deriveCardHints(game.yourHand, game.legalMoves, selectedCardIds)
+        : undefined;
     const leadMember = room.members.find(
       (member) => member.seatId === game.field.playedBySeat,
     );
@@ -547,6 +552,7 @@ function ConnectedApp({
         lastActivation={null}
         hand={cards(game.yourHand)}
         selectedCardIds={selectedCardIds}
+        {...(cardHints ? { cardHints } : {})}
         isMyTurn={game.turn?.seat === room.you.seatId}
         canPlay={legalSelection}
         canPass={game.field.cards.length > 0}

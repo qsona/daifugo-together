@@ -30,10 +30,19 @@ type CardProps = {
   card: CardView;
   size?: 'medium' | 'small';
   selected?: boolean;
+  dimmed?: boolean;
   onToggle?: (id: string) => void;
+  onDimmedTap?: (id: string) => void;
 };
 
-export function Card({ card, size = 'medium', selected, onToggle }: CardProps) {
+export function Card({
+  card,
+  size = 'medium',
+  selected,
+  dimmed = false,
+  onToggle,
+  onDimmedTap,
+}: CardProps) {
   const isRed = card.suit === 'heart' || card.suit === 'diamond';
   const label = `${suitName[card.suit]}の${card.rank}`;
   const className = cx(
@@ -42,6 +51,7 @@ export function Card({ card, size = 'medium', selected, onToggle }: CardProps) {
     size === 'small' && styles.small,
     onToggle && styles.selectable,
     selected && styles.selected,
+    dimmed && styles.dimmed,
   );
 
   /*
@@ -72,7 +82,25 @@ export function Card({ card, size = 'medium', selected, onToggle }: CardProps) {
       className={className}
       aria-label={label}
       aria-pressed={selected ?? false}
-      onClick={() => {
+      aria-disabled={dimmed || undefined}
+      onAnimationEnd={(event) => {
+        const rejectedClass = styles.rejected;
+        if (rejectedClass) {
+          event.currentTarget.classList.remove(rejectedClass);
+        }
+      }}
+      onClick={(event) => {
+        if (dimmed) {
+          const target = event.currentTarget;
+          const rejectedClass = styles.rejected;
+          if (rejectedClass) {
+            target.classList.remove(rejectedClass);
+            void target.offsetWidth;
+            target.classList.add(rejectedClass);
+          }
+          onDimmedTap?.(card.id);
+          return;
+        }
         onToggle(card.id);
       }}
     >

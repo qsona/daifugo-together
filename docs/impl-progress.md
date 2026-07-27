@@ -2,7 +2,7 @@
 
 ## 現在
 
-- **フェーズ 2 / E14 TU-01 プロセス2完了**: 独立 GPT-5.6 Sol の方向性レビュー `GO_WITH_FIXES` を反映。`RoomMode` の最小契約、作成・参加・再接続、きほんのルール空固定、既プレイタグと保存失敗時の続行まで受け入れ条件を満たした。次は TU-02 プロセス1
+- **フェーズ 2 / E14 TU-02 プロセス1完了・方向性レビュー待ち**: `deriveCardHints` を8ケースのTDDで固定し、basic の実スナップショットから Card / HandTray / GameScreen へ dim と拒否フィードバックを接続。TU-01は `main` (`124e1cd`) へ fast-forward 済み
 - **フェーズ 1 完了(2026-07-27)**: TS-02・E1・E2・E3・E4 は main に統合済み、E13 は本番デプロイと動作検証(DP-01・DP-03)まで完了(`https://daifugo-together.fly.dev/`)。残りは DP-02 の仕上げ(GitHub Environment `production` + `FLY_API_TOKEN` 登録と初回 CD 実行確認)のみ
 - **フェーズ 2 / E5 RP-01・RP-02 完了**: プロセス1の独立 GPT-5.6 Sol レビュー(`GO_WITH_FIXES`)を反映し、プロセス2の独立完了レビューは要件適合 `PASS` / 品質 `APPROVED`。RP-03 は CX-02 依存のため E7 後に戻る
 - E1〜E3 の実装記録は本書末尾の「並行進行」節、E13 は「E13」節。E4 の未解消の開発者判断は「詰まっている点」に残っている(1〜4・7・8・11)
@@ -79,6 +79,54 @@
 #### 詰まっている点
 
 - なし。C-10 の入室前 preview は現契約を広げず、設計判断まで保留
+
+### TU-02 プロセス1
+
+- 状態: 縦切り実装完了・方向性レビュー待ち
+- ブランチ: `codex/e14-tutorial`
+- コミット: この記録を含むプロセス1コミット
+- ユーザーストーリーの確認:
+  - `packages/web/src/game/hints.test.ts` で、手番外・未選択・単騎だけ・ペア選択・3枚出し途中・不正な選択集合・合法手0件・空手札の8ケースを先に失敗させてから実装し、すべて成功
+  - `packages/web/src/screens/GameScreen.test.tsx` の「dimmedのカードをタップしても選択せず、拒否フィードバックだけを返す」で、沈んだカードが `onToggleCard` を呼ばず `onDimmedCardTap` だけを呼ぶことを確認
+  - 実サーバーの basic 1人+AI 3人対局を375×812で開始。場が2の単騎になり合法手0件となった手番で、手札13枚すべてが dim になること、`opacity: 0.42` + `saturate(0.15)`、選択状態に入らないことを確認
+
+#### 実装した方向
+
+- `deriveCardHints` は E14 §2.3 の純関数契約どおり Web に限定。`legalMoves === null` は全カード `playable`、選択中はその集合を含む合法手の和集合だけを `playable` にする
+- hints は `room.mode === 'basic'` のときだけ生成し、みんなのルールでは従来どおり全カードを通常表示する
+- `Card` は `dimmed` prop を受け、不透明度と彩度の両方で沈める。タップ時は選択を変えず、通常は左右の首振り、`prefers-reduced-motion` では transform を使わない縁の点滅へ切り替える
+- dimmed カードは `aria-disabled=true` で支援技術へ状態を伝えるが、HTML の `disabled` 属性は付けず、タップとキーボード操作の拒否フィードバックを受け取れる
+
+#### 置いた仮定(方向性レビューで裁定してもらう)
+
+| # | 仮定した内容 | なぜそう決めたか | 出典 | 覆ったときの影響範囲 |
+|---|---|---|---|---|
+| E14-P2-1 | dimmed カードは `aria-disabled=true` とする一方、ネイティブの `disabled` は使わずフォーカス・クリック可能に保つ | 「選択には入れない」と「タップ時に首を振る」を両立し、支援技術にも現在選べないことを伝えるため | E14 §2.3、チュートリアル設計 §5 | `Card.tsx` と操作テスト。hints 導出には影響なし |
+
+#### プロセス2に回したもの
+
+| ストーリー | 内容 | 理由 |
+|---|---|---|
+| TU-02 | `design-system.html` §5-16 の Card 見本へ dim / 拒否状態を追加 | プロセス1では実ゲームの縦導線を優先。部品カタログの全状態同期は仕上げで行う |
+| TU-02 | basic / community の App 結線をスナップショット単位で明示する統合テスト | 純関数8ケースと GameScreen の拒否操作で価値は縦に通っている。モードゲートの回帰固定は仕上げで追加 |
+| TU-02 | `prefers-reduced-motion` 用CSSと反復タップ時のアニメーション再始動の静的回帰 | 実装済み。スタイル契約と連打時の仕上げをレビュー後に固定する |
+
+#### 検証
+
+- `CI=true pnpm verify`: 成功
+  - Prettier / ESLint / AI boundary / TypeScript / 全 package build: 成功
+  - design lint: 86 ファイル、キービジュアル3ファイル、アウトライン23件が成功
+  - Vitest: **37 files・269 tests** 成功
+- TU-02対象テスト: **3 files・42 tests** 成功
+- 実ブラウザ: 375×812、実 Socket.IO + basic 1人/AI 3人。`innerWidth=scrollWidth=375` / `innerHeight=scrollHeight=812`、dim 13枚が重なり表示のまま判読可能で操作ボタンを圧迫しないことを確認
+
+#### 設計への提案・気づいたこと
+
+- なし。E14 §2.3 の入力だけで実装でき、共有契約や Core の変更は不要だった
+
+#### 詰まっている点
+
+- なし
 
 ## フェーズ 2: E5 ルール提案受付(RP-01・RP-02)
 
