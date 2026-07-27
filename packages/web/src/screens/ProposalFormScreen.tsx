@@ -7,6 +7,7 @@ import {
   type CreateProposalRequest,
   type ProposalListItem,
   type ProposalValidationError,
+  type YellowCardInfo,
 } from '@daifugo/core';
 import { useState, type FormEvent } from 'react';
 
@@ -14,6 +15,7 @@ import { AppBar } from '../components/AppBar';
 import { Button } from '../components/Button';
 import { Callout } from '../components/Callout';
 import { SegmentedControl } from '../components/SegmentedControl';
+import { YellowCardModal } from '../components/YellowCardModal';
 import type { ProposalApi } from '../proposal/client';
 import { ProposalApiError } from '../proposal/client';
 
@@ -46,6 +48,10 @@ export function ProposalFormScreen({
   const [errors, setErrors] = useState<ProposalValidationError[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [accepted, setAccepted] = useState<ProposalListItem | null>(null);
+  const [yellowCard, setYellowCard] = useState<Extract<
+    YellowCardInfo,
+    { verdict: 'card' }
+  > | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const fieldError = (field: ProposalValidationError['field']) => {
@@ -57,6 +63,7 @@ export function ProposalFormScreen({
     event.preventDefault();
     setMessage(null);
     setAccepted(null);
+    setYellowCard(null);
     const request: CreateProposalRequest = {
       kind,
       prefectureCode: kind === 'local' ? prefectureCode || null : null,
@@ -76,11 +83,11 @@ export function ProposalFormScreen({
         setAccepted(response.proposal);
         return;
       }
-      setMessage(
-        response.yellowCard.verdict === 'soft'
-          ? response.yellowCard.message
-          : 'この提案は受け付けられませんでした',
-      );
+      if (response.yellowCard.verdict === 'card') {
+        setYellowCard(response.yellowCard);
+      } else {
+        setMessage(response.yellowCard.message);
+      }
     } catch (error) {
       if (error instanceof ProposalApiError) {
         setErrors(error.fields);
@@ -208,6 +215,12 @@ export function ProposalFormScreen({
           </Callout>
         </form>
       </main>
+      {yellowCard && (
+        <YellowCardModal
+          info={yellowCard}
+          onClose={() => setYellowCard(null)}
+        />
+      )}
     </div>
   );
 }

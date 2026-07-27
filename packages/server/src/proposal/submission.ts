@@ -22,8 +22,7 @@ export type ProposalInspection =
     }
   | {
       verdict: 'blocked';
-      yellowCard: YellowCardInfo;
-      commit?: () => void;
+      commit: () => YellowCardInfo;
     }
   | { verdict: 'unavailable' };
 
@@ -183,10 +182,10 @@ export class ProposalSubmissionService implements ProposalSubmissionPort {
       return { status: 503, body: { error: 'check_unavailable' } };
     }
     if (inspection.verdict === 'blocked') {
-      this.#repository.commitBlocked(() => inspection.commit?.());
+      const yellowCard = this.#repository.commitBlocked(inspection.commit);
       return {
         status: 200,
-        body: { outcome: 'blocked', yellowCard: inspection.yellowCard },
+        body: { outcome: 'blocked', yellowCard },
       };
     }
     try {

@@ -300,8 +300,8 @@ export class ProposalRepository {
     return result.changes === 1 ? 'transitioned' : 'noop';
   }
 
-  commitBlocked(commitInspection: () => void): void {
-    this.#sqlite.transaction(commitInspection)();
+  commitBlocked<Result>(commitInspection: () => Result): Result {
+    return this.#sqlite.transaction(commitInspection)();
   }
 
   queue(

@@ -5,6 +5,7 @@
 - **フェーズ 1 完了(2026-07-27)**: TS-02・E1・E2・E3・E4 は main に統合済み、E13 は本番デプロイと動作検証(DP-01・DP-03)まで完了(`https://daifugo-together.fly.dev/`)。残りは DP-02 の仕上げ(GitHub Environment `production` + `FLY_API_TOKEN` 登録と初回 CD 実行確認)のみ
 - **フェーズ 2 / E5 RP-01・RP-02 完了**: プロセス1の独立 GPT-5.6 Sol レビュー(`GO_WITH_FIXES`)を反映し、プロセス2の独立完了レビューは要件適合 `PASS` / 品質 `APPROVED`。RP-03 は CX-02 依存のため E7 後に戻る
 - **C-5 追従完了**: E7 内包リトライの決定を反映し、`proposals.failed` を終端化。`failed` 遷移時に `attempt_count=1` を記録して同内容の再提案を即時解禁する
+- **フェーズ 2 / E6 YC-01〜03 プロセス1**: 縦切り実装完了、独立方向性レビュー待ち。次はレビュー指摘を反映してプロセス2へ進む
 - E1〜E3 の実装記録は本書末尾の「並行進行」節、E13 は「E13」節。E4 の未解消の開発者判断は「詰まっている点」に残っている(1〜4・7・8・11)
 
 ## フェーズ 2: E5 ルール提案受付(RP-01・RP-02)
@@ -68,6 +69,41 @@
   - 対応: NFC 正規化後の値をコードポイント上限で切るよう変更し、分解文字12個が合成済み12文字として残る回帰テストを追加
 - 最終 `pnpm verify`: **34 files / 244 tests 成功**。format / lint / design lint / typecheck / 全 package build も成功
 - 確認を後続へ渡すもの: E6 の実検査証跡ストアと E7 の実ワーカー接続。C-5 は 2026-07-27 の決定を反映済み
+
+## フェーズ 2: E6 インジェクション検査・イエローカード(YC-01〜03)
+
+### プロセス1
+
+- 状態: 縦切り実装完了・方向性レビュー待ち
+- ユーザーストーリーの確認:
+  - `packages/server/src/injection/injection.test.ts` で、正当提案が L0〜L3 を通って `proposal_checks(final_verdict='pass')` と同一トランザクションで保存され、pass 記録のある提案だけが後続キューへ出ることを確認
+  - 同テストで、L1 hard または原文証拠付き L3 injection が提案を作らず遮断され、自己完結した検査記録とイエローカードを残すことを確認
+  - 異なる攻撃文の2枚目で一律24時間の停止が発効し、その後の提案が検査前に403となる一方、提案以外の対局コードへ依存を追加していないことを確認
+  - `packages/web/src/screens/ProposalFormScreen.test.tsx` で、`block_card` 応答から本人に「イエローカード!」モーダルと `1 / 2枚`、対戦継続可能の文言が表示されることを確認
+- 実装した方向:
+  - `packages/server/src/injection/` に L0正規化・L1静的パターン・L2構造特徴・L3 `InjectionJudge` port・決定表・台帳・E5接続を分離
+  - 検査は E5 の認証→停止→レート→検証→重複の後、proposal INSERT 前に実行。pass の検査記録と proposal INSERT は同じ SQLite transaction、遮断時は `proposals` 行を作らない
+  - `users.proposal_suspended_until`、`proposal_checks`、`yellow_cards`、`suspensions`、`card_appeals` のスキーマを追加。C-1 の決定どおり停止は毎回24時間、カード失効は3日
+  - E5 の遮断確定 callback がトランザクション内で `YellowCardInfo` を返すようにし、カード枚数・停止情報を競合なく応答へ載せる
+
+#### 置いた仮定(方向性レビューで裁定)
+
+| # | 仮定した内容 | なぜそう決めたか | 出典 | 覆ったときの影響範囲 |
+|---|---|---|---|---|
+| E6-P1-1 | C-2 のモデル決定までは `InjectionJudge` port と Fake で縦切りを確認し、本番組み立ては `UnavailableInjectionJudge` で fail-closed(全提案503)にする | 未選定モデルを暗黙に採用せず、「検査できない提案は保存しない」を維持するため | decision-log C-2、E06 §2.3 L3・§2.4 行9 | `bin.ts` の judge 組み立てと外部クライアント。L0〜L2・DB・UIは維持 |
+| E6-P1-2 | 英語 hard pattern の `ignore previous rules` は採用せず、`instructions/prompts` に限定する | E06 §2.2 の宛先原理と正当例「これまでのルールを無視」が、§2.3 の英語 hard 例に含まれる `rules` と衝突するため。誤カード回避を優先 | E06 §1.1・§2.2・§2.3 | `patterns.ts` 1箇所とコーパス期待値 |
+| E6-P1-3 | プロセス1の累積確認は遮断応答のカード枚数とモーダル表示までとし、常設表示・GET・異議申し立てはプロセス2へ回す | 縦切りでは「検出→発行→本人が枚数確認→2枚で停止」が成立する。全導線と救済は受け入れ条件を満たし切るプロセス2でまとめる | implementation-workorder §3、E06 §3.2〜3.3 | Web/API/CLI。検出・台帳の方向性には影響なし |
+
+#### プロセス2へ回したもの
+
+| 項目 | 内容 |
+|---|---|
+| C-2 / L3実接続 | プロバイダー・モデル決定、構造化出力、10秒timeout+1回retry、モデル/latency記録、正式promptとfew-shot、外部API認証 |
+| 検査の仕上げ | 24時間の遮断結果キャッシュ、LLM失敗ログ、全決定表、同形異字/難読化/併走、検査バージョン、完全な監査取得API |
+| コーパス | attack/legitの初期検体と決定的CI、実モデルjudge evalの実行経路 |
+| YC-02 UI/API | `GET /api/me/yellow-cards`、画面6注意帯、画面7バッジ、9a/9bの演出・スキップ・reduced-motion |
+| YC-03救済 | appeal API、revoke/list CLI、取り消し時の停止解除とカード復元、本人への結果表示 |
+| YC-03境界 | 3日失効、同時2件、停止期限経過、停止中も対局可能のE2E、履歴監査 |
 
 ### 開発者レビューの反映(2026-07-26・プロセス2 のあと)
 

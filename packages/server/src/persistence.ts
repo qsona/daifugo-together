@@ -13,6 +13,7 @@ import {
   text,
 } from 'drizzle-orm/sqlite-core';
 
+import { InjectionRepository } from './injection/repository.js';
 import type {
   RoomManagerOptions,
   RoomPersistencePort,
@@ -171,6 +172,7 @@ export class SqlitePersistence implements RoomPersistencePort {
   readonly #db: DrizzleDatabase;
   readonly sessions: SqliteSessionStore;
   readonly proposals: ProposalRepository;
+  readonly injection: InjectionRepository;
 
   constructor(path: string, sessionOptions: SessionStoreOptions = {}) {
     if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
@@ -235,6 +237,7 @@ export class SqlitePersistence implements RoomPersistencePort {
     `);
     this.sessions = new SqliteSessionStore(this.#db, sessionOptions);
     this.proposals = new ProposalRepository(this.#sqlite);
+    this.injection = new InjectionRepository(this.#sqlite);
   }
 
   roomManagerOptions(): Pick<RoomManagerOptions, 'persistence'> {

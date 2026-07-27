@@ -102,25 +102,23 @@ describe('ProposalSubmissionService', () => {
   });
 
   it('soft/card遮断と検査不能ではproposalを作らない', async () => {
-    const softCommit = vi.fn();
-    const cardCommit = vi.fn();
+    const softCommit = vi.fn(() => ({
+      verdict: 'soft' as const,
+      reasonKey: 'generic' as const,
+      message: '言い換えてください',
+    }));
+    const cardCommit = vi.fn(() => ({
+      verdict: 'card' as const,
+      card: { active: 1 as const, limit: 2 as const },
+      suspension: null,
+    }));
     const outcomes = [
       {
         verdict: 'blocked' as const,
-        yellowCard: {
-          verdict: 'soft' as const,
-          reasonKey: 'generic' as const,
-          message: '言い換えてください',
-        },
         commit: softCommit,
       },
       {
         verdict: 'blocked' as const,
-        yellowCard: {
-          verdict: 'card' as const,
-          card: { active: 1 as const, limit: 2 as const },
-          suspension: null,
-        },
         commit: cardCommit,
       },
       { verdict: 'unavailable' as const },
@@ -386,9 +384,6 @@ describe('proposal persistence constraints', () => {
     instances.push(persistence);
     const session = persistence.sessions.resolve(undefined);
     const sqlite = new Database(path);
-    sqlite.exec(
-      'ALTER TABLE users ADD COLUMN proposal_suspended_until INTEGER',
-    );
     sqlite
       .prepare(
         'UPDATE users SET proposal_suspended_until = ? WHERE user_id = ?',

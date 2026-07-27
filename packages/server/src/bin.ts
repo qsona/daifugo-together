@@ -1,6 +1,11 @@
 import { resolve } from 'node:path';
 
 import { createAppServer } from './app-server.js';
+import {
+  InjectionDetector,
+  UnavailableInjectionJudge,
+} from './injection/detector.js';
+import { InjectionScreeningGate } from './injection/screening.js';
 import { SqlitePersistence } from './persistence.js';
 import { ProposalSubmissionService } from './proposal/submission.js';
 import { RoomManager } from './room/manager.js';
@@ -33,10 +38,16 @@ if (!Number.isSafeInteger(port) || port < 0 || port > 65_535) {
 const persistence = new SqlitePersistence(
   resolve(process.env.DATABASE_PATH ?? 'data/daifugo.sqlite'),
 );
+const screening = new InjectionScreeningGate(
+  new InjectionDetector(new UnavailableInjectionJudge()),
+  persistence.injection,
+);
 const app = createAppServer({
   webDistDir: resolve(process.env.WEB_DIST_DIR ?? 'packages/web/dist'),
   checkDatabase: () => persistence.checkHealth(),
-  proposals: new ProposalSubmissionService(persistence.proposals),
+  proposals: new ProposalSubmissionService(persistence.proposals, {
+    screening,
+  }),
   gateway: {
     rooms: new RoomManager(persistence.roomManagerOptions()),
     sessions: persistence.sessions,
