@@ -8,6 +8,7 @@
 - **フェーズ 2 / E6 YC-01〜03 プロセス2完了**: E-18 の非同期構成、ローカル判定ツール、イエローカード表示・停止・救済まで実装済み。修正後 judge eval は Luna/Sol とも 40/40、平均 6.40秒 / 6.23秒のため既定を **GPT-5.6 Sol medium** とした。独立 GPT-5.6 Sol 完了レビューは要件適合 `PASS` / 品質 `APPROVED`
 - **フェーズ 2 / E7 CX-01 プロセス2ほぼ完了**: 独立方向性レビュー `GO_WITH_FIXES` のImportant 4件と、初回完了レビューのImportant 2件を反映。完了再レビューはコード・自動テスト `PASS` / 品質 `APPROVED` / Critical・Importantなし。実app-server評価だけ明示許可待ち
 - **フェーズ 2 / E7 CX-02 プロセス2完了**: subscription Codex CLIを使う共有skill、scaffold先行push/任意段階再開、全差分・履歴検収、1回retry、PR作成、失敗永続化まで実装。独立最終再レビューはコード・テスト範囲 `PASS` / 品質 `APPROVED` / 全指摘なし。実subscriptionでのルール生成・実PR作成は未実行
+- **フェーズ 2 / E7 CX-03 プロセス1実装済み・独立方向性レビュー待ち**: `pull_request_target` の信頼済みbase revisionから、単一新規ルールdirectory・許可4ファイル・branch/scaffold SHA/blob/meta schema・PR作成者を検査する縦導線を実装
 - E1〜E3 の実装記録は本書末尾の「並行進行」節、E13 は「E13」節。E4 の未解消の開発者判断は「詰まっている点」に残っている(1〜4・7・8・11)
 
 ### E-18 / C-2・C-3・C-6 再設計の反映(2026-07-27)
@@ -313,6 +314,36 @@ E3 マージ後の実プレーで開発者から 4 件の指摘を受け、反�
 - `CI=true pnpm verify`: **52 files / 346 tests 成功**。format / lint / design lint / 全package typecheck・buildも成功
 - 固定コミット `20ae51c` の独立最終再レビュー: コード・自動テスト要件 `PASS` / 品質 `APPROVED` / Critical・Important・Minorなし。focused **7 files / 30 tests** と差分検査もレビュアー環境で成功
 - 外部受入ゲート: 認証済みsubscription Codexと実GitHubで、承認済み提案1件を生成→branch/PR→`pr_open` 永続化まで流すリハーサルは未実施。外部状態を変えるため自動実行せず、コード完了と分離して残す
+
+### CX-03 プロセス1
+
+- 状態: G-4の信頼済みdiff-guardを縦に通し、独立方向性レビュー待ち
+- ユーザーストーリーの確認:
+  - 正常なscaffold commit→生成commitのローカルGit fixtureを、PR本文の機械可読scaffold SHA・開発者author・決定的branchとともに検査して通過する
+  - 範囲外変更、許可外ファイル、複数ルール、既存ファイル変更、branch不一致、第三者author、SHA欠落/重複、scaffold後のmeta/SPEC改変、不正scaffold履歴、不正meta schemaをすべて拒否する
+  - `.github/workflows/rule-pr.yml` は `pull_request_target` でbase側のworkflowを使い、base SHAからcheckoutした `scripts/diff-guard.mjs` だけでuntrusted headのGit履歴・blobを読む。PR headのコードは実行しない
+  - 非 `rule/**` PRは同じ `diff-guard` jobを安全なno-op成功にし、将来required checkへ登録しても通常開発PRを止めない
+
+#### 置いた仮定（方向性レビュー対象）
+
+| # | 仮定した内容 | なぜそう決めたか | 出典 | 覆ったときの影響範囲 |
+|---|---|---|---|---|
+| E7-CX03-P1-1 | `rule/**` PRは4ファイルすべてが新規追加(A)でなければ拒否する | G-4の「単一の新規ルールディレクトリ」を最も厳格に適用した。E07 §2.5の「削除方向も許可」は人手revertを `revert/**` で行いrule workflowを通さない§3.4と競合するため、安全側を採った | decision-log G-4、E07 §2.5・§3.4 | diff status許可表、revert PRのworkflow選択 |
+| E7-CX03-P1-2 | 許可authorの既定はrepository owner、追加pipeline accountはrepository variable `RULE_PR_ALLOWED_AUTHORS` のcomma区切り | 現在のCX-02は開発者自身の `gh` 認証を使い専用accountを要求しない。public repoの第三者PRは既定で拒否できる | A-2、E07 §2.5(7) | repository設定、複数開発者運用 |
+| E7-CX03-P1-3 | scaffold commitはPRのmerge-base直後の1 commitで、meta/SPECだけを追加する | CX-02 publisherの実履歴と一致し、途中commit挿入やSHA差し替えを機械的に拒否できる | E07 §2.4・§2.5(4)(5) | main追随/rebase運用、retry branch |
+
+#### プロセス2へ回したもの
+
+- `quality` / `rule-tests` / `simulation` の3ジョブと、4ジョブを束ねるrequired-check構成
+- rule固有3ケース・行coverage 70%の機械判定、rules packageの禁止import/API lint
+- E1 simulation harnessのCLI化、基本+新ルール/全ルール+新ルールの2構成×決定的seed、4不変条件、10分job timeout
+- CI失敗の要約、開発者明示re-run/attempt 2/打ち切り、`pipeline_jobs.error_code=ci` と公開 `implementation_failed` への接続
+- レッドチームfixtureと、GitHub ruleset/branch protectionへの4 required checks登録。実repository設定の変更は4ジョブ完成・方向性レビュー後に行う
+
+#### 検証
+
+- `CI=true pnpm exec vitest run scripts/diff-guard.test.ts`: **1 file / 10 tests 成功**
+- `CI=true pnpm verify`: **52 files / 352 tests 成功**。format / lint / design lint / 全package typecheck・buildも成功
 
 ## 完了したストーリー
 

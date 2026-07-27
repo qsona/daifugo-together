@@ -1,11 +1,12 @@
-name: Rule PR diff guard
+name: Rule PR
 
 on:
-  pull_request:
+  pull_request_target:
     types:
       - opened
       - synchronize
       - reopened
+      - edited
       - labeled
       - unlabeled
 
@@ -14,11 +15,15 @@ permissions:
 
 jobs:
   diff-guard:
-    if: contains(github.event.pull_request.labels.*.name, 'rule-change')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: Pass for non-rule branches
+        if: ${{ !startsWith(github.event.pull_request.head.ref, 'rule/') }}
+        run: echo "Not a rule branch; trusted diff guard is not applicable."
+
       - name: Checkout trusted guard from the base revision
+        if: ${{ startsWith(github.event.pull_request.head.ref, 'rule/') }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.pull_request.base.sha }}
@@ -26,6 +31,7 @@ jobs:
           persist-credentials: false
 
       - name: Checkout pull request head with history
+        if: ${{ startsWith(github.event.pull_request.head.ref, 'rule/') }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name }}
@@ -35,19 +41,26 @@ jobs:
           persist-credentials: false
 
       - name: Set up Node.js
+        if: ${{ startsWith(github.event.pull_request.head.ref, 'rule/') }}
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: trusted-base/.node-version
 
       - name: Fetch the base revision into the pull request repository
+        if: ${{ startsWith(github.event.pull_request.head.ref, 'rule/') }}
         working-directory: pull-request
         env:
           RULE_DIFF_BASE: ${{ github.event.pull_request.base.sha }}
         run: git fetch --no-tags ../trusted-base "$RULE_DIFF_BASE"
 
-      - name: Check changed paths
+      - name: Check trusted rule PR boundary
+        if: ${{ startsWith(github.event.pull_request.head.ref, 'rule/') }}
         working-directory: pull-request
         env:
           RULE_DIFF_BASE: ${{ github.event.pull_request.base.sha }}
           RULE_DIFF_HEAD: ${{ github.event.pull_request.head.sha }}
-        run: node ../trusted-base/scripts/check-rule-diff.mjs
+          RULE_PR_BRANCH: ${{ github.event.pull_request.head.ref }}
+          RULE_PR_BODY: ${{ github.event.pull_request.body }}
+          RULE_PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          RULE_PR_ALLOWED_AUTHORS: ${{ vars.RULE_PR_ALLOWED_AUTHORS || github.repository_owner }}
+        run: node ../trusted-base/scripts/diff-guard.mjs
