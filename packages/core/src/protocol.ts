@@ -154,6 +154,11 @@ export interface SetResultView {
     /** points はセット(3 戦)の合計順位点。 */
     points: number;
   }[];
+  /**
+   * 最終戦の結果。セットを完走したときだけ入る。
+   * 中断で終わったセット(drained)では、最後に完走した戦が最終戦とは限らないので null。
+   */
+  finalGame: GameResultView | null;
   firedRules: {
     ruleId: string;
     ruleName: string;

@@ -28,6 +28,7 @@ function room(
       phase === 'setResult'
         ? {
             standings: [],
+            finalGame: null,
             respondBy,
             firedRules: [],
           }

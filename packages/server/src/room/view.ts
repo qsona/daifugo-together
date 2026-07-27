@@ -47,12 +47,15 @@ function resultView(
 ): GameResultView {
   return structuredClone({
     gameNo: result.gameIndex + 1,
-    standings: result.standings.map((standing) => ({
-      seat: requiredSeat(seats, standing.player),
-      rank: standing.standing,
-      title: standing.title,
-      points: POINTS_BY_STANDING[standing.standing],
-    })),
+    // 順位順に固定して配る。受け取り側で並べ替えなくても順位表として読める。
+    standings: [...result.standings]
+      .sort((left, right) => left.standing - right.standing)
+      .map((standing) => ({
+        seat: requiredSeat(seats, standing.player),
+        rank: standing.standing,
+        title: standing.title,
+        points: POINTS_BY_STANDING[standing.standing],
+      })),
     firedRuleIds: [...result.firedRuleIds],
   });
 }
@@ -233,7 +236,10 @@ function gameView(
   };
 }
 
-function setResultView(state: RoomState): SetResultView | null {
+function setResultView(
+  state: RoomState,
+  seats: ReadonlyMap<string, SeatId>,
+): SetResultView | null {
   const engine = state.engine;
   if (
     state.phase !== 'setResult' ||
@@ -244,6 +250,14 @@ function setResultView(state: RoomState): SetResultView | null {
   }
   const rules = state.fixedRules ?? state.availableRules;
   const ruleNames = new Map(rules.map((rule) => [rule.ruleId, rule.name]));
+  /*
+   * 完走したセットでだけ「最終戦」が確定する。中断(drained)で終わったセットの
+   * 最後の結果は、次の戦が始まる前に止まった戦かもしれないので最終戦とは呼べない。
+   */
+  const finalResult =
+    engine.results.length === engine.config.gamesPerSet
+      ? engine.results.at(-1)
+      : undefined;
   return {
     standings: engine.outcome.standings.map((standing) => ({
       memberId: standing.player,
@@ -256,6 +270,7 @@ function setResultView(state: RoomState): SetResultView | null {
       ),
       points: standing.points,
     })),
+    finalGame: finalResult ? resultView(finalResult, seats) : null,
     firedRules: Object.entries(state.firedRuleCounts)
       .filter(([, count]) => count > 0)
       .sort(
@@ -311,7 +326,7 @@ export function viewFor(
       seats,
       options.rulePort ?? NO_RULE_CHAIN_PORT,
     ),
-    setResult: setResultView(state),
+    setResult: setResultView(state, seats),
     events: options.reconnect ? [] : structuredClone(state.lastEvents),
   });
 }

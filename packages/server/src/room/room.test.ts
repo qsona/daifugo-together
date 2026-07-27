@@ -838,6 +838,31 @@ describe('pure room reducer', () => {
     expectNoOtherHands(state);
   });
 
+  it('完走セットのビューは最終戦の順位と順位点を持ち、中断セットでは持たない', () => {
+    const completed = finishSet(start(fourHumanRoom())).state;
+
+    expect(completed.engine?.outcome?.completion).toBe('completed');
+    const finalGame = viewFor(completed, 'member-1').setResult?.finalGame;
+    expect(finalGame?.gameNo).toBe(3);
+    expect(finalGame?.standings.map((standing) => standing.rank)).toEqual([
+      1, 2, 3, 4,
+    ]);
+    expect(finalGame?.standings.map((standing) => standing.points)).toEqual([
+      5, 3, 2, 1,
+    ]);
+    expect(finalGame?.standings[0]?.title).toBe('大富豪');
+
+    const draining = reduceRoom(start(fourHumanRoom()), {
+      type: 'requestDrain',
+      now: 2_000,
+    }).state;
+    const drained = finishSet(draining).state;
+
+    expect(drained.engine?.outcome?.completion).toBe('drained');
+    expect(drained.engine?.results).toHaveLength(1);
+    expect(viewFor(drained, 'member-1').setResult?.finalGame).toBeNull();
+  });
+
   it('setResult到達時に切断中・明示離脱済みの人間を除去し、接続中の人間は残す', () => {
     const started = start(join(join(room(), 2), 3));
     const withDeparture = reduceRoom(started, {

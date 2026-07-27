@@ -621,6 +621,7 @@ function tutorialSetResultRoom(
         },
       ],
       respondBy: 1_800_000_000_000,
+      finalGame: null,
       firedRules: [],
     },
     events: [],
@@ -847,6 +848,7 @@ describe('CX-06: 実ルール発動イベントの演出', () => {
         game: null,
         setResult: {
           standings: [],
+          finalGame: null,
           firedRules: [{ ruleId: 'r-final', ruleName: 'あがり花火', count: 1 }],
           respondBy: Date.now() + 10_000,
         },
@@ -995,6 +997,7 @@ describe('CX-06: 実ルール発動イベントの演出', () => {
                 count: 2,
               },
             ],
+            finalGame: null,
             respondBy: 10_000,
           },
           events: [],
