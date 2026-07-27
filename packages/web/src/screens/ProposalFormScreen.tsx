@@ -7,9 +7,9 @@ import {
   type CreateProposalRequest,
   type ProposalListItem,
   type ProposalValidationError,
-  type YellowCardInfo,
+  type YellowCardSummary,
 } from '@daifugo/core';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 
 import { AppBar } from '../components/AppBar';
 import { Button } from '../components/Button';
@@ -48,11 +48,85 @@ export function ProposalFormScreen({
   const [errors, setErrors] = useState<ProposalValidationError[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [accepted, setAccepted] = useState<ProposalListItem | null>(null);
-  const [yellowCard, setYellowCard] = useState<Extract<
-    YellowCardInfo,
-    { verdict: 'card' }
-  > | null>(null);
+  const [cardSummary, setCardSummary] = useState<YellowCardSummary | null>(
+    null,
+  );
+  const [showCard, setShowCard] = useState(false);
+  const [animateSuspension, setAnimateSuspension] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const shownCardIds = useRef(new Set<number>());
+  const previousCardSummary = useRef<YellowCardSummary | null>(null);
+
+  const refreshCards = async (): Promise<YellowCardSummary | null> => {
+    if (!api.getYellowCards) return null;
+    try {
+      const summary = await api.getYellowCards();
+      setCardSummary(summary);
+      return summary;
+    } catch {
+      return null;
+    }
+  };
+
+  useEffect(() => {
+    let active = true;
+    if (!api.getYellowCards) return;
+    const load = async () => {
+      try {
+        const summary = await api.getYellowCards!();
+        if (!active) return;
+        setCardSummary(summary);
+        const previous = previousCardSummary.current;
+        if (
+          previous !== null &&
+          previous.suspension === null &&
+          summary.suspension !== null
+        ) {
+          const previousIds = new Set(previous.cards.map((card) => card.id));
+          setAnimateSuspension(
+            summary.cards.some(
+              (card) => card.status === 'consumed' && !previousIds.has(card.id),
+            ),
+          );
+        } else if (previous === null && summary.suspension !== null) {
+          setAnimateSuspension(false);
+        }
+        previousCardSummary.current = summary;
+        const activeCard = summary.cards.find(
+          (card) => card.status === 'active',
+        );
+        if (activeCard && !shownCardIds.current.has(activeCard.id)) {
+          shownCardIds.current.add(activeCard.id);
+          setShowCard(true);
+        }
+      } catch {
+        // カード API の一時障害で提案フォーム自体は塞がない。
+      }
+    };
+    void load();
+    const interval = window.setInterval(() => void load(), 5_000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [api]);
+
+  const activeAppealCards =
+    cardSummary?.cards
+      .filter((card) => card.status === 'active')
+      .map((card) => ({
+        id: card.id,
+        appealStatus: card.appeal?.status ?? null,
+      })) ?? [];
+  const consumedAppealCards =
+    cardSummary?.cards
+      .filter((card) => card.status === 'consumed')
+      .sort((left, right) => left.issuedAt - right.issuedAt)
+      .map((card, index) => ({
+        id: card.id,
+        label: `${String(index + 1)}枚目`,
+        appealStatus: card.appeal?.status ?? null,
+      })) ?? [];
 
   const fieldError = (field: ProposalValidationError['field']) => {
     const error = errors.find((candidate) => candidate.field === field);
@@ -63,7 +137,6 @@ export function ProposalFormScreen({
     event.preventDefault();
     setMessage(null);
     setAccepted(null);
-    setYellowCard(null);
     const request: CreateProposalRequest = {
       kind,
       prefectureCode: kind === 'local' ? prefectureCode || null : null,
@@ -79,15 +152,7 @@ export function ProposalFormScreen({
     setSubmitting(true);
     try {
       const response = await api.submit(request);
-      if (response.outcome === 'accepted') {
-        setAccepted(response.proposal);
-        return;
-      }
-      if (response.yellowCard.verdict === 'card') {
-        setYellowCard(response.yellowCard);
-      } else {
-        setMessage(response.yellowCard.message);
-      }
+      setAccepted(response.proposal);
     } catch (error) {
       if (error instanceof ProposalApiError) {
         setErrors(error.fields);
@@ -104,6 +169,16 @@ export function ProposalFormScreen({
     <div className={screen.screen}>
       <AppBar title="ルールをていあんする" onBack={onBack} />
       <main className={screen.body}>
+        {cardSummary?.active === 1 && !cardSummary.suspension && (
+          <div className={styles.warning} role="status">
+            <span>
+              イエローカード 1枚。あと1枚で24時間、提案がお休みになります。
+            </span>
+            <Button size="small" onClick={() => setShowCard(true)}>
+              カードを確認
+            </Button>
+          </div>
+        )}
         <form className={styles.form} onSubmit={(event) => void submit(event)}>
           <div className={styles.field}>
             <span className={styles.label}>ルールの区分</span>
@@ -205,7 +280,7 @@ export function ProposalFormScreen({
               <span className={styles.status}>審査中</span>
             </div>
           )}
-          {!accepted && (
+          {!accepted && !cardSummary?.suspension && (
             <Button type="submit" variant="primary" block disabled={submitting}>
               {submitting ? '送信中…' : '提案を送信する'}
             </Button>
@@ -215,10 +290,48 @@ export function ProposalFormScreen({
           </Callout>
         </form>
       </main>
-      {yellowCard && (
+      {showCard && cardSummary?.active === 1 && (
         <YellowCardModal
-          info={yellowCard}
-          onClose={() => setYellowCard(null)}
+          info={{
+            verdict: 'card',
+            card: { active: 1, limit: 2 },
+            suspension: null,
+          }}
+          cards={activeAppealCards}
+          onAppeal={
+            api.appealYellowCard
+              ? async (cardId, comment) => {
+                  await api.appealYellowCard!(cardId, comment);
+                  await refreshCards();
+                }
+              : undefined
+          }
+          onClose={() => setShowCard(false)}
+        />
+      )}
+      {cardSummary?.suspension && (
+        <YellowCardModal
+          info={{
+            verdict: 'card',
+            card: { active: 2, limit: 2 },
+            suspension: {
+              level: cardSummary.suspension.level,
+              endsAt: cardSummary.suspension.endsAt,
+            },
+          }}
+          staticDisplay={!animateSuspension}
+          cards={consumedAppealCards}
+          onAppeal={
+            api.appealYellowCard
+              ? async (cardId, comment) => {
+                  await api.appealYellowCard!(cardId, comment);
+                  await refreshCards();
+                }
+              : undefined
+          }
+          onClose={
+            animateSuspension ? () => setAnimateSuspension(false) : onBack
+          }
         />
       )}
     </div>

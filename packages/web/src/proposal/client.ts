@@ -1,7 +1,9 @@
 import type {
+  CreateCardAppealResponse,
   CreateProposalRequest,
   CreateProposalResponse,
   ProposalValidationError,
+  YellowCardSummary,
 } from '@daifugo/core';
 
 const TOKEN_KEY = 'daifugo.userToken';
@@ -24,6 +26,11 @@ export class ProposalApiError extends Error {
 
 export interface ProposalApi {
   submit(request: CreateProposalRequest): Promise<CreateProposalResponse>;
+  getYellowCards?(): Promise<YellowCardSummary>;
+  appealYellowCard?(
+    cardId: number,
+    comment: string | null,
+  ): Promise<CreateCardAppealResponse>;
 }
 
 export class ProposalClient implements ProposalApi {
@@ -69,13 +76,59 @@ export class ProposalClient implements ProposalApi {
           validation_failed: '入力内容をたしかめてください',
           unauthorized: '接続し直してから、もう一度ためしてください',
           proposal_suspended: 'いまはルールを提案できません',
-          rate_limited: 'しばらく待ってから、もう一度ためしてください',
-          check_unavailable:
-            'ただいま混み合っています。時間をおいて再送してください',
         }[body.error ?? ''] ?? '提案を送信できませんでした';
       throw new ProposalApiError(response.status, message, body.fields ?? []);
     }
     return body as CreateProposalResponse;
+  }
+
+  async getYellowCards(): Promise<YellowCardSummary> {
+    const response = await this.#authenticatedFetch('/api/me/yellow-cards');
+    return (await response.json()) as YellowCardSummary;
+  }
+
+  async appealYellowCard(
+    cardId: number,
+    comment: string | null,
+  ): Promise<CreateCardAppealResponse> {
+    const response = await this.#authenticatedFetch(
+      `/api/yellow-cards/${String(cardId)}/appeal`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ comment }),
+      },
+    );
+    return (await response.json()) as CreateCardAppealResponse;
+  }
+
+  async #authenticatedFetch(
+    path: string,
+    init: RequestInit = {},
+  ): Promise<Response> {
+    const token = this.#storage.getItem(TOKEN_KEY);
+    if (!token) {
+      throw new ProposalApiError(
+        401,
+        '接続の準備中です。少し待ってからもう一度ためしてください',
+      );
+    }
+    const response = await this.#fetch(`${this.#baseUrl}${path}`, {
+      ...init,
+      headers: {
+        ...init.headers,
+        authorization: `Bearer ${token}`,
+      },
+    });
+    if (!response.ok) {
+      throw new ProposalApiError(
+        response.status,
+        response.status === 409
+          ? 'すでに異議を申し立てています'
+          : 'カード情報を取得できませんでした',
+      );
+    }
+    return response;
   }
 }
 

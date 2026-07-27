@@ -1,0 +1,91 @@
+.appeal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.appealCard {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.appealLabel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  text-align: left;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-micro);
+  font-weight: var(--font-weight-bold);
+}
+
+.appealLabel textarea {
+  min-height: 72px;
+  resize: vertical;
+  border: var(--border-control) solid var(--color-border-control);
+  border-radius: var(--radius-m);
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+  font: inherit;
+  padding: var(--space-2);
+}
+
+.appealLink {
+  border: 0;
+  background: transparent;
+  color: var(--color-text-link);
+  font: inherit;
+  font-size: var(--font-size-micro);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.error {
+  margin: 0;
+  color: var(--color-text-danger);
+  font-size: var(--font-size-micro);
+  font-weight: var(--font-weight-bold);
+}
+
+.cardEntrance {
+  animation: yellow-card-rise 400ms 150ms both cubic-bezier(0.2, 0.9, 0.3, 1.25);
+}
+
+.details {
+  animation: yellow-card-details 250ms 800ms both ease-out;
+}
+
+.skipped {
+  animation: none;
+}
+
+@keyframes yellow-card-rise {
+  from {
+    opacity: 0;
+    transform: translateY(32px) rotate(-8deg) scale(0.6);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) rotate(0) scale(1);
+  }
+}
+
+@keyframes yellow-card-details {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cardEntrance,
+  .details {
+    animation: none;
+  }
+}

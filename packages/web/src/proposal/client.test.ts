@@ -96,4 +96,59 @@ describe('ProposalClient', () => {
       fields: [{ field: 'name', code: 'too_long' }],
     });
   });
+
+  it('本人向けカード一覧を読み、同じtokenで異議申し立てを送る', async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            active: 1,
+            limit: 2,
+            cards: [
+              {
+                id: 7,
+                issuedAt: 1,
+                status: 'active',
+                expiresAt: 2,
+                appeal: null,
+              },
+            ],
+            suspension: null,
+          }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ appealId: 9, status: 'open' }), {
+          status: 201,
+        }),
+      );
+    const client = new ProposalClient(
+      'https://example.test',
+      { getItem: () => 'shared-session-token' },
+      fetcher,
+    );
+
+    await expect(client.getYellowCards()).resolves.toMatchObject({
+      active: 1,
+      cards: [{ id: 7 }],
+    });
+    await expect(client.appealYellowCard(7, '誤検出です')).resolves.toEqual({
+      appealId: 9,
+      status: 'open',
+    });
+    expect(fetcher).toHaveBeenNthCalledWith(
+      2,
+      'https://example.test/api/yellow-cards/7/appeal',
+      {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer shared-session-token',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ comment: '誤検出です' }),
+      },
+    );
+  });
 });

@@ -4,6 +4,21 @@
   gap: var(--space-4);
 }
 
+.warning {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-4);
+  border: var(--border-control) solid var(--color-border-strong);
+  border-radius: var(--radius-m);
+  background: var(--color-warning-bg);
+  padding: var(--space-3);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-bold);
+}
+
 .field {
   display: flex;
   flex-direction: column;

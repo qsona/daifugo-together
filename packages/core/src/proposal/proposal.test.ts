@@ -37,7 +37,7 @@ describe('proposal contract', () => {
     });
   });
 
-  it('12文字を超える名前とoriginalの都道府県を拒否する', () => {
+  it('40文字を超える名前とoriginalの都道府県を拒否する', () => {
     const result = validateProposal({
       kind: 'original',
       prefectureCode: '13',
@@ -53,7 +53,7 @@ describe('proposal contract', () => {
     });
   });
 
-  it('名前12文字・本文400文字ちょうどを許可し、1文字超過を拒否する', () => {
+  it('名前40文字・本文1000文字ちょうどを許可し、1文字超過を拒否する', () => {
     expect(
       validateProposal({
         kind: 'original',

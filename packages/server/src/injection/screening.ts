@@ -1,62 +1,35 @@
-import type { YellowCardInfo } from '@daifugo/core';
-
-import type {
-  ProposalInspection,
-  ProposalScreeningGate,
-} from '../proposal/submission.js';
-import { InjectionDetector, InjectionUnavailableError } from './detector.js';
+import type { ProposalSignalRecorder } from '../proposal/submission.js';
+import { InjectionStaticAnalyzer } from './detector.js';
 import { InjectionRepository } from './repository.js';
 
-export class InjectionScreeningGate implements ProposalScreeningGate {
-  readonly #detector: InjectionDetector;
+/**
+ * 受付時には L0〜L2 を同期計算して提案と同じ transaction に記録する。
+ * 判定・遮断は行わず、L3 は開発マシンのローカル判定ツールが後続で実行する。
+ */
+export class InjectionSignalRecorder implements ProposalSignalRecorder {
+  readonly #analyzer: InjectionStaticAnalyzer;
   readonly #repository: InjectionRepository;
   readonly #now: () => number;
 
   constructor(
-    detector: InjectionDetector,
+    analyzer: InjectionStaticAnalyzer,
     repository: InjectionRepository,
     now: () => number = Date.now,
   ) {
-    this.#detector = detector;
+    this.#analyzer = analyzer;
     this.#repository = repository;
     this.#now = now;
   }
 
-  async inspect(
-    proposal: Parameters<ProposalScreeningGate['inspect']>[0],
+  analyze(
+    proposal: Parameters<ProposalSignalRecorder['analyze']>[0],
     authorId: string,
-  ): Promise<ProposalInspection> {
-    let result;
-    try {
-      result = await this.#detector.detect(proposal, authorId);
-    } catch (error) {
-      if (error instanceof InjectionUnavailableError) {
-        return { verdict: 'unavailable' };
-      }
-      throw error;
-    }
+  ): ReturnType<ProposalSignalRecorder['analyze']> {
+    const result = this.#analyzer.analyze(proposal);
     const now = this.#now();
-    if (result.finalVerdict === 'pass') {
-      return {
-        verdict: 'pass',
-        commit: (proposalId) => {
-          this.#repository.commitCheck(result, authorId, proposalId, now);
-        },
-      };
-    }
     return {
-      verdict: 'blocked',
-      commit: () => {
-        const yellowCard = this.#repository.commitCheck(
-          result,
-          authorId,
-          null,
-          now,
-        );
-        if (!yellowCard) {
-          throw new Error('Blocked inspection did not produce a response');
-        }
-        return yellowCard satisfies YellowCardInfo;
+      commit: (proposalId) => {
+        this.#repository.recordSignals(result, authorId, proposalId, now);
       },
     };
   }

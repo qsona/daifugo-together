@@ -9,15 +9,15 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createAppServer, type AppServer } from '../app-server.js';
 import { SqlitePersistence } from '../persistence.js';
 import {
-  type ProposalScreeningGate,
+  type ProposalSignalRecorder,
   ProposalSubmissionService,
 } from './submission.js';
 
 const apps: AppServer[] = [];
 const persistenceInstances: SqlitePersistence[] = [];
 const directories: string[] = [];
-const PASS_SCREENING: ProposalScreeningGate = {
-  inspect: () => ({ verdict: 'pass', commit: () => undefined }),
+const NOOP_SIGNALS: ProposalSignalRecorder = {
+  analyze: () => ({ commit: () => undefined }),
 };
 
 afterEach(async () => {
@@ -80,7 +80,7 @@ describe('proposal vertical slice', () => {
     const app = createAppServer({
       webDistDir: directory,
       proposals: new ProposalSubmissionService(persistence.proposals, {
-        screening: PASS_SCREENING,
+        signals: NOOP_SIGNALS,
         now: () => 1_000,
         createId: () => '00000000Z8AAAAAAAAAAAAAAAA',
       }),
@@ -145,7 +145,7 @@ describe('proposal vertical slice', () => {
     const app = createAppServer({
       webDistDir: directory,
       proposals: new ProposalSubmissionService(persistence.proposals, {
-        screening: PASS_SCREENING,
+        signals: NOOP_SIGNALS,
       }),
     });
     apps.push(app);
@@ -208,7 +208,7 @@ describe('proposal vertical slice', () => {
     persistenceInstances.push(persistence);
     const session = persistence.sessions.resolve(undefined);
     const service = new ProposalSubmissionService(persistence.proposals, {
-      screening: PASS_SCREENING,
+      signals: NOOP_SIGNALS,
       now: () => 2_000,
       createId: () => '00000001YGAAAAAAAAAAAAAAAA',
     });
@@ -253,7 +253,7 @@ describe('proposal vertical slice', () => {
     persistenceInstances.push(persistence);
     const session = persistence.sessions.resolve(undefined);
     const service = new ProposalSubmissionService(persistence.proposals, {
-      screening: PASS_SCREENING,
+      signals: NOOP_SIGNALS,
       now: () => 3_000,
       createId: () => '00000002XRAAAAAAAAAAAAAAAA',
     });
@@ -348,7 +348,7 @@ describe('proposal vertical slice', () => {
     const session = persistence.sessions.resolve(undefined);
     const ids = ['00000003X0AAAAAAAAAAAAAAAA', '00000003X1AAAAAAAAAAAAAAAA'];
     const service = new ProposalSubmissionService(persistence.proposals, {
-      screening: PASS_SCREENING,
+      signals: NOOP_SIGNALS,
       now: () => 4_000,
       createId: () => ids.shift()!,
     });
@@ -381,7 +381,10 @@ describe('proposal vertical slice', () => {
         id,
         'implementing',
         'failed',
-        { reasonCode: 'ci_failed', reasonText: 'CIに失敗しました' },
+        {
+          reasonCode: 'implementation_failed',
+          reasonText: '実装に失敗しました',
+        },
         4_200,
       ),
     ).toBe('transitioned');
@@ -398,8 +401,8 @@ describe('proposal vertical slice', () => {
     expect(persistence.proposals.findById(id)).toMatchObject({
       status: 'failed',
       attemptCount: 1,
-      reasonCode: 'ci_failed',
-      reasonText: 'CIに失敗しました',
+      reasonCode: 'implementation_failed',
+      reasonText: '実装に失敗しました',
     });
 
     const resubmitted = await service.submit({
@@ -427,7 +430,7 @@ describe('proposal vertical slice', () => {
       '00000004W3AAAAAAAAAAAAAAAA',
     ];
     const service = new ProposalSubmissionService(persistence.proposals, {
-      screening: PASS_SCREENING,
+      signals: NOOP_SIGNALS,
       now: () => 5_000,
       createId: () => ids.shift()!,
     });
@@ -456,7 +459,7 @@ describe('proposal vertical slice', () => {
         '00000004W0AAAAAAAAAAAAAAAA',
         'screening',
         'rejected',
-        { reasonCode: 'not_rule', reasonText: 'ルールとして成立しません' },
+        { reasonCode: 'out_of_scope', reasonText: 'ルールではありません' },
         5_100,
       ),
     ).toBe('transitioned');

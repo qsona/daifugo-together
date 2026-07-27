@@ -12,18 +12,27 @@ type DialogProps = {
   children: ReactNode;
   /** 下部のボタン群。 */
   actions?: ReactNode;
+  /** 再訪時など、初回提示ではない静的表示では演出を止める。 */
+  disableAnimation?: boolean;
 };
 
-export function Dialog({ title, visual, children, actions }: DialogProps) {
+export function Dialog({
+  title,
+  visual,
+  children,
+  actions,
+  disableAnimation = false,
+}: DialogProps) {
   const titleId = useId();
 
   return (
     <div className={styles.scrim}>
       <div
-        className={styles.dialog}
+        className={cx(styles.dialog, disableAnimation && styles.noAnimation)}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        data-animation={disableAnimation ? 'off' : 'on'}
       >
         {visual}
         <h2 id={titleId} className={styles.title}>

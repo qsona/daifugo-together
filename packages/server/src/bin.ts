@@ -1,11 +1,10 @@
 import { resolve } from 'node:path';
 
 import { createAppServer } from './app-server.js';
-import {
-  InjectionDetector,
-  UnavailableInjectionJudge,
-} from './injection/detector.js';
-import { InjectionScreeningGate } from './injection/screening.js';
+import { InjectionStaticAnalyzer } from './injection/detector.js';
+import { LocalScreeningService } from './injection/local-screening.js';
+import { InjectionSignalRecorder } from './injection/screening.js';
+import { YellowCardService } from './injection/yellow-card-service.js';
 import { SqlitePersistence } from './persistence.js';
 import { ProposalSubmissionService } from './proposal/submission.js';
 import { RoomManager } from './room/manager.js';
@@ -38,16 +37,35 @@ if (!Number.isSafeInteger(port) || port < 0 || port > 65_535) {
 const persistence = new SqlitePersistence(
   resolve(process.env.DATABASE_PATH ?? 'data/daifugo.sqlite'),
 );
-const screening = new InjectionScreeningGate(
-  new InjectionDetector(new UnavailableInjectionJudge()),
+const signals = new InjectionSignalRecorder(
+  new InjectionStaticAnalyzer(),
   persistence.injection,
 );
+const adminPipelineToken = process.env.ADMIN_PIPELINE_TOKEN;
+if (adminPipelineToken !== undefined && adminPipelineToken.length < 32) {
+  throw new Error('ADMIN_PIPELINE_TOKEN must be at least 32 characters');
+}
 const app = createAppServer({
   webDistDir: resolve(process.env.WEB_DIST_DIR ?? 'packages/web/dist'),
   checkDatabase: () => persistence.checkHealth(),
   proposals: new ProposalSubmissionService(persistence.proposals, {
-    screening,
+    signals,
   }),
+  yellowCards: new YellowCardService(
+    persistence.injection,
+    persistence.proposals,
+  ),
+  ...(adminPipelineToken
+    ? {
+        adminScreening: {
+          token: adminPipelineToken,
+          service: new LocalScreeningService(
+            persistence.injection,
+            persistence.proposals,
+          ),
+        },
+      }
+    : {}),
   gateway: {
     rooms: new RoomManager(persistence.roomManagerOptions()),
     sessions: persistence.sessions,

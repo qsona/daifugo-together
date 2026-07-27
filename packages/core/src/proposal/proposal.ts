@@ -1,5 +1,5 @@
-export const PROPOSAL_NAME_MAX_LENGTH = 12;
-export const PROPOSAL_BODY_MAX_LENGTH = 400;
+export const PROPOSAL_NAME_MAX_LENGTH = 40;
+export const PROPOSAL_BODY_MAX_LENGTH = 1_000;
 
 export const PREFECTURES = [
   { code: '01', name: '北海道' },
@@ -92,9 +92,36 @@ export type YellowCardInfo =
       message: string;
     };
 
-export type CreateProposalResponse =
-  | { outcome: 'accepted'; proposal: ProposalListItem }
-  | { outcome: 'blocked'; yellowCard: YellowCardInfo };
+export type YellowCardStatus = 'active' | 'consumed' | 'expired' | 'revoked';
+
+export type CardAppealStatus = 'open' | 'upheld' | 'rejected';
+
+export interface YellowCardSummary {
+  active: number;
+  limit: 2;
+  cards: Array<{
+    id: number;
+    issuedAt: number;
+    status: YellowCardStatus;
+    expiresAt: number;
+    appeal: { status: CardAppealStatus } | null;
+  }>;
+  suspension: {
+    level: number;
+    startsAt: number;
+    endsAt: number;
+  } | null;
+}
+
+export interface CreateCardAppealResponse {
+  appealId: number;
+  status: 'open';
+}
+
+export type CreateProposalResponse = {
+  outcome: 'accepted';
+  proposal: ProposalListItem;
+};
 
 export type ProposalField = 'kind' | 'prefectureCode' | 'name' | 'body';
 

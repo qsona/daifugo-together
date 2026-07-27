@@ -74,7 +74,7 @@ export interface CreateStoredProposalOptions {
   contentHash: string;
   now: number;
   id: string;
-  commitInspection: (proposalId: string) => void;
+  commitSignals: (proposalId: string) => void;
 }
 
 const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
@@ -158,6 +158,15 @@ const ALLOWED_TRANSITIONS = new Set([
   'implementing:failed',
 ]);
 
+const REJECTION_REASON_CODES = new Set([
+  'infeasible_technical',
+  'breaks_game',
+  'inappropriate',
+  'duplicate_rule',
+  'out_of_scope',
+  'other',
+]);
+
 function validPatch(
   to: ProposalStatus,
   patch: ProposalTransitionPatch,
@@ -172,8 +181,19 @@ function validPatch(
     patch.reasonText.trim().length > 0;
   const hasRuleId =
     typeof patch.ruleId === 'string' && patch.ruleId.trim().length > 0;
-  if (to === 'rejected' || to === 'failed') {
-    return hasReason && !hasRuleIdField;
+  if (to === 'rejected') {
+    return (
+      hasReason &&
+      REJECTION_REASON_CODES.has(patch.reasonCode!.trim()) &&
+      !hasRuleIdField
+    );
+  }
+  if (to === 'failed') {
+    return (
+      hasReason &&
+      patch.reasonCode!.trim() === 'implementation_failed' &&
+      !hasRuleIdField
+    );
   }
   if (to === 'released') return hasRuleId && !hasAnyReasonField;
   return !hasAnyReasonField && !hasRuleIdField;
@@ -246,7 +266,7 @@ export class ProposalRepository {
           options.now,
           options.now,
         );
-      options.commitInspection(options.id);
+      options.commitSignals(options.id);
       return this.#sqlite
         .prepare('SELECT * FROM proposals WHERE id = ?')
         .get(options.id) as ProposalRow;
@@ -300,15 +320,29 @@ export class ProposalRepository {
     return result.changes === 1 ? 'transitioned' : 'noop';
   }
 
-  commitBlocked<Result>(commitInspection: () => Result): Result {
-    return this.#sqlite.transaction(commitInspection)();
+  /**
+   * ローカル判定ツールが未判定の候補を列挙するための入口。
+   *
+   * E7 の実装キューではないため、E6 の最終判定による資格照合はここでは行わない。
+   * 呼び出し側が proposal_signal_checks / proposal_checks を照合して未判定だけに絞る。
+   */
+  screeningForJudgment(): ProposalQueueItem[] {
+    return this.#screeningCandidates();
   }
 
   queue(
     qualification: ProposalQueueQualification,
     limit = 100,
   ): ProposalQueueItem[] {
-    const candidates = (
+    const candidates = this.#screeningCandidates();
+    const eligible = qualification.eligibleIds(candidates);
+    return candidates
+      .filter((candidate) => eligible.has(candidate.id))
+      .slice(0, limit);
+  }
+
+  #screeningCandidates(): ProposalQueueItem[] {
+    return (
       this.#sqlite
         .prepare(
           `SELECT id, author_id, kind, prefecture_code, name, body, created_at
@@ -334,9 +368,5 @@ export class ProposalRepository {
       body: row.body,
       createdAt: row.created_at,
     }));
-    const eligible = qualification.eligibleIds(candidates);
-    return candidates
-      .filter((candidate) => eligible.has(candidate.id))
-      .slice(0, limit);
   }
 }

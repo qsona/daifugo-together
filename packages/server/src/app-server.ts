@@ -1,3 +1,4 @@
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { access, stat } from 'node:fs/promises';
 import {
@@ -23,6 +24,8 @@ import type {
   SocketData,
 } from './room/protocol.js';
 import type { ProposalSubmissionPort } from './proposal/submission.js';
+import type { LocalScreeningService } from './injection/local-screening.js';
+import type { YellowCardPort } from './injection/yellow-card-service.js';
 
 const CONTENT_TYPES: Record<string, string> = {
   '.css': 'text/css; charset=utf-8',
@@ -39,6 +42,11 @@ export interface AppServerOptions {
   gateway?: RoomSocketGatewayOptions;
   checkDatabase?: () => boolean;
   proposals?: ProposalSubmissionPort;
+  yellowCards?: YellowCardPort;
+  adminScreening?: {
+    token: string;
+    service: Pick<LocalScreeningService, 'pending' | 'record'>;
+  };
 }
 
 export interface AppServer {
@@ -115,6 +123,13 @@ function bearerToken(request: IncomingMessage): string | null {
   return token.length > 0 ? token : null;
 }
 
+function sameSecret(actual: string | null, expected: string): boolean {
+  if (actual === null) return false;
+  const actualHash = createHash('sha256').update(actual).digest();
+  const expectedHash = createHash('sha256').update(expected).digest();
+  return timingSafeEqual(actualHash, expectedHash);
+}
+
 function clientIp(request: IncomingMessage): string {
   const flyClientIp = request.headers['fly-client-ip'];
   return typeof flyClientIp === 'string'
@@ -147,6 +162,115 @@ function writeJson(
 
 export function createAppServer(options: AppServerOptions): AppServer {
   let draining = false;
+  const handleAdminScreening = async (
+    request: IncomingMessage,
+    response: ServerResponse,
+  ): Promise<boolean> => {
+    const pathname = new URL(request.url ?? '/', 'http://localhost').pathname;
+    const isListing = pathname === '/admin/pipeline/screening';
+    const checkMatch = /^\/admin\/proposals\/([^/]+)\/check$/u.exec(pathname);
+    if (!isListing && !checkMatch) return false;
+    if (!options.adminScreening) {
+      writeJson(response, 503, { error: 'admin_screening_unavailable' });
+      return true;
+    }
+    if (!sameSecret(bearerToken(request), options.adminScreening.token)) {
+      writeJson(response, 401, { error: 'unauthorized' });
+      return true;
+    }
+    if (isListing) {
+      if (request.method !== 'GET') {
+        response.setHeader('allow', 'GET');
+        writeJson(response, 405, { error: 'method_not_allowed' });
+        return true;
+      }
+      writeJson(response, 200, {
+        items: options.adminScreening.service.pending(),
+      });
+      return true;
+    }
+    if (request.method !== 'POST') {
+      response.setHeader('allow', 'POST');
+      writeJson(response, 405, { error: 'method_not_allowed' });
+      return true;
+    }
+    let body: unknown;
+    try {
+      body = await readJsonBody(request);
+    } catch (error) {
+      writeJson(response, error instanceof SyntaxError ? 400 : 413, {
+        error:
+          error instanceof SyntaxError ? 'invalid_json' : 'request_too_large',
+      });
+      return true;
+    }
+    const result = options.adminScreening.service.record(
+      decodeURIComponent(checkMatch![1]!),
+      body,
+    );
+    writeJson(
+      response,
+      result.status === 'recorded'
+        ? 200
+        : result.status === 'already_recorded'
+          ? 200
+          : result.status === 'not_found'
+            ? 404
+            : 400,
+      result,
+    );
+    return true;
+  };
+  const handleYellowCards = async (
+    request: IncomingMessage,
+    response: ServerResponse,
+  ): Promise<boolean> => {
+    const pathname = new URL(request.url ?? '/', 'http://localhost').pathname;
+    if (pathname === '/api/me/yellow-cards') {
+      if (request.method !== 'GET') {
+        response.setHeader('allow', 'GET');
+        writeJson(response, 405, { error: 'method_not_allowed' });
+        return true;
+      }
+      if (!options.yellowCards) {
+        writeJson(response, 503, { error: 'yellow_card_service_unavailable' });
+        return true;
+      }
+      const result = options.yellowCards.summary(bearerToken(request));
+      writeJson(response, result.status, result.body);
+      return true;
+    }
+    const appealMatch = /^\/api\/yellow-cards\/([1-9]\d*)\/appeal$/u.exec(
+      pathname,
+    );
+    if (!appealMatch) return false;
+    if (request.method !== 'POST') {
+      response.setHeader('allow', 'POST');
+      writeJson(response, 405, { error: 'method_not_allowed' });
+      return true;
+    }
+    if (!options.yellowCards) {
+      writeJson(response, 503, { error: 'yellow_card_service_unavailable' });
+      return true;
+    }
+    let body: unknown;
+    try {
+      body = await readJsonBody(request);
+    } catch (error) {
+      writeJson(response, error instanceof SyntaxError ? 400 : 413, {
+        error:
+          error instanceof SyntaxError ? 'invalid_json' : 'request_too_large',
+      });
+      return true;
+    }
+    const result = options.yellowCards.appeal({
+      token: bearerToken(request),
+      cardId: Number(appealMatch[1]),
+      body,
+    });
+    writeJson(response, result.status, result.body);
+    return true;
+  };
   const handleProposal = async (
     request: IncomingMessage,
     response: ServerResponse,
@@ -226,7 +350,11 @@ export function createAppServer(options: AppServerOptions): AppServer {
       response.end();
       return;
     }
-    void handleProposal(request, response)
+    void handleAdminScreening(request, response)
+      .then((handled) =>
+        handled ? true : handleYellowCards(request, response),
+      )
+      .then((handled) => (handled ? true : handleProposal(request, response)))
       .then((handled) => {
         if (!handled) {
           return createStaticHandler(options.webDistDir)(request, response);

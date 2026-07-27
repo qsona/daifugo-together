@@ -25,6 +25,10 @@
   animation: pop var(--duration-slow) var(--easing-pop);
 }
 
+.noAnimation {
+  animation: none;
+}
+
 @keyframes pop {
   from {
     transform: scale(0.9);
@@ -33,6 +37,12 @@
   to {
     transform: scale(1);
     opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dialog {
+    animation: none;
   }
 }
 

@@ -67,6 +67,13 @@ export interface DetectionResult {
   reviewFlag: boolean;
 }
 
+export type StaticAnalysisResult = Omit<
+  DetectionResult,
+  'finalVerdict' | 'softReasonKey' | 'reviewFlag' | 'layers'
+> & {
+  layers: Omit<DetectionResult['layers'], 'llm'>;
+};
+
 export class InjectionUnavailableError extends Error {
   constructor(options?: { cause?: unknown }) {
     super('Injection judge is unavailable', options);
@@ -74,7 +81,7 @@ export class InjectionUnavailableError extends Error {
   }
 }
 
-function computeLayer2(
+export function computeLayer2(
   inputText: string,
   normalizedText: string,
   layer1: Layer1Hits,
@@ -100,23 +107,14 @@ function computeLayer2(
   };
 }
 
-export class InjectionDetector {
-  readonly #judge: InjectionJudge;
+export class InjectionStaticAnalyzer {
   readonly detectorVersion: string;
 
-  constructor(
-    judge: InjectionJudge,
-    detectorVersion = 'e6-p1-patterns1-prompt1',
-  ) {
-    this.#judge = judge;
+  constructor(detectorVersion = 'e6-p2-patterns1-prompt1') {
     this.detectorVersion = detectorVersion;
   }
 
-  async detect(
-    proposal: NormalizedProposal,
-    userId: string,
-  ): Promise<DetectionResult> {
-    void userId;
+  analyze(proposal: NormalizedProposal): StaticAnalysisResult {
     const normalized = normalizeDetectionInput(proposal);
     const layer1 = matchPatterns(normalized.normalizedText);
     const layer2 = computeLayer2(
@@ -124,20 +122,85 @@ export class InjectionDetector {
       normalized.normalizedText,
       layer1,
     );
+    return {
+      layers: { layer0: normalized.layer0, layer1, layer2 },
+      detectorVersion: this.detectorVersion,
+      inputText: normalized.inputText,
+      normalizedText: normalized.normalizedText,
+      inputHash: normalized.inputHash,
+    };
+  }
+}
 
-    if (normalized.layer0.invisibleChars || normalized.layer0.lengthExceeded) {
-      return {
-        finalVerdict: 'block_soft',
-        softReasonKey: normalized.layer0.invisibleChars
-          ? 'invisible_chars'
-          : 'format',
-        layers: { layer0: normalized.layer0, layer1, layer2, llm: null },
-        detectorVersion: this.detectorVersion,
-        inputText: normalized.inputText,
-        normalizedText: normalized.normalizedText,
-        inputHash: normalized.inputHash,
-        reviewFlag: false,
-      };
+export function finalizeDetection(
+  analysis: StaticAnalysisResult,
+  llm: LlmResult | null,
+): DetectionResult {
+  const { layer0, layer1, layer2 } = analysis.layers;
+  if (layer0.invisibleChars || layer0.lengthExceeded) {
+    return {
+      finalVerdict: 'block_soft',
+      softReasonKey: layer0.invisibleChars ? 'invisible_chars' : 'format',
+      ...analysis,
+      layers: { ...analysis.layers, llm },
+      reviewFlag: false,
+    };
+  }
+  if (!llm) throw new Error('L3 result is required');
+
+  let finalVerdict: DetectionResult['finalVerdict'] = 'pass';
+  let softReasonKey: DetectionResult['softReasonKey'];
+  let reviewFlag = false;
+  if (layer1.hard.length > 0) {
+    finalVerdict = 'block_card';
+    reviewFlag = llm.verdict === 'clean' || llm.verdict === 'error';
+  } else if (llm.verdict === 'injection' && llm.evidenceVerified) {
+    finalVerdict = 'block_card';
+  } else if (llm.verdict === 'injection') {
+    finalVerdict = 'block_soft';
+    softReasonKey = 'generic';
+    reviewFlag = true;
+  } else if (llm.verdict === 'suspicious') {
+    finalVerdict = 'block_soft';
+    softReasonKey = 'generic';
+  } else if (layer2.hasCodeFence || layer2.hasUrl || layer2.hasBase64Like) {
+    finalVerdict = 'block_soft';
+    softReasonKey = 'format';
+  }
+
+  return {
+    finalVerdict,
+    ...(softReasonKey ? { softReasonKey } : {}),
+    ...analysis,
+    layers: { ...analysis.layers, llm },
+    reviewFlag,
+  };
+}
+
+export class InjectionDetector {
+  readonly #judge: InjectionJudge;
+  readonly #staticAnalyzer: InjectionStaticAnalyzer;
+  readonly detectorVersion: string;
+
+  constructor(
+    judge: InjectionJudge,
+    detectorVersion = 'e6-p1-patterns1-prompt1',
+  ) {
+    this.#judge = judge;
+    this.#staticAnalyzer = new InjectionStaticAnalyzer(detectorVersion);
+    this.detectorVersion = this.#staticAnalyzer.detectorVersion;
+  }
+
+  async detect(
+    proposal: NormalizedProposal,
+    userId: string,
+  ): Promise<DetectionResult> {
+    void userId;
+    const analysis = this.#staticAnalyzer.analyze(proposal);
+    const { layer0, layer1, layer2 } = analysis.layers;
+
+    if (layer0.invisibleChars || layer0.lengthExceeded) {
+      return finalizeDetection(analysis, null);
     }
 
     let llm: LlmResult;
@@ -145,15 +208,15 @@ export class InjectionDetector {
       const judged = await this.#judge.judge({
         name: proposal.name,
         body: proposal.body,
-        inputText: normalized.inputText,
-        normalizedText: normalized.normalizedText,
+        inputText: analysis.inputText,
+        normalizedText: analysis.normalizedText,
         layer1,
         layer2,
       });
       const evidenceVerified =
         judged.evidence !== null &&
         judged.evidence.length > 0 &&
-        normalized.inputText.includes(judged.evidence);
+        analysis.inputText.includes(judged.evidence);
       llm = { ...judged, evidenceVerified };
     } catch (cause) {
       if (layer1.hard.length === 0) {
@@ -169,35 +232,6 @@ export class InjectionDetector {
       };
     }
 
-    let finalVerdict: DetectionResult['finalVerdict'] = 'pass';
-    let softReasonKey: DetectionResult['softReasonKey'];
-    let reviewFlag = false;
-    if (layer1.hard.length > 0) {
-      finalVerdict = 'block_card';
-      reviewFlag = llm.verdict === 'clean' || llm.verdict === 'error';
-    } else if (llm.verdict === 'injection' && llm.evidenceVerified) {
-      finalVerdict = 'block_card';
-    } else if (llm.verdict === 'injection') {
-      finalVerdict = 'block_soft';
-      softReasonKey = 'generic';
-      reviewFlag = true;
-    } else if (llm.verdict === 'suspicious') {
-      finalVerdict = 'block_soft';
-      softReasonKey = 'generic';
-    } else if (layer2.hasCodeFence || layer2.hasUrl || layer2.hasBase64Like) {
-      finalVerdict = 'block_soft';
-      softReasonKey = 'format';
-    }
-
-    return {
-      finalVerdict,
-      ...(softReasonKey ? { softReasonKey } : {}),
-      layers: { layer0: normalized.layer0, layer1, layer2, llm },
-      detectorVersion: this.detectorVersion,
-      inputText: normalized.inputText,
-      normalizedText: normalized.normalizedText,
-      inputHash: normalized.inputHash,
-      reviewFlag,
-    };
+    return finalizeDetection(analysis, llm);
   }
 }

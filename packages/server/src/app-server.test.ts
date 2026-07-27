@@ -5,7 +5,7 @@ import { join } from 'node:path';
 
 import type { ServerToClientEvents } from '@daifugo/core';
 import { io as createClient } from 'socket.io-client';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createAppServer, type AppServer } from './app-server.js';
 
@@ -117,6 +117,176 @@ describe('production app server', () => {
       status: 503,
       body: '{"status":"error","db":"error"}',
       contentType: 'application/json; charset=utf-8',
+    });
+  });
+
+  it('本人向けカード一覧と異議申し立てAPIを認証付きで公開する', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'daifugo-web-dist-'));
+    directories.push(directory);
+    const app = createAppServer({
+      webDistDir: directory,
+      gateway: {
+        sessions: {
+          resolve: () => ({
+            userId: 'suspended-user',
+            userToken: 'valid-token',
+            displayName: '停止中プレイヤー',
+          }),
+          rename: () => true,
+        },
+      },
+      yellowCards: {
+        summary: (token) =>
+          token === 'valid-token'
+            ? {
+                status: 200,
+                body: {
+                  active: 0,
+                  limit: 2,
+                  cards: [
+                    {
+                      id: 7,
+                      issuedAt: 1_000,
+                      status: 'consumed',
+                      expiresAt: 2_000,
+                      appeal: null,
+                    },
+                  ],
+                  suspension: {
+                    level: 1,
+                    startsAt: 1_000,
+                    endsAt: 2_000,
+                  },
+                },
+              }
+            : { status: 401, body: { error: 'unauthorized' } },
+        appeal: ({ token, cardId }) =>
+          token === 'valid-token' && cardId === 7
+            ? { status: 201, body: { appealId: 9, status: 'open' } }
+            : { status: 404, body: { error: 'not_found' } },
+      },
+    });
+    apps.push(app);
+    const port = await app.listen(0, '127.0.0.1');
+    const baseUrl = `http://127.0.0.1:${String(port)}`;
+
+    const unauthorized = await fetch(`${baseUrl}/api/me/yellow-cards`);
+    expect(unauthorized.status).toBe(401);
+
+    const summary = await fetch(`${baseUrl}/api/me/yellow-cards`, {
+      headers: { authorization: 'Bearer valid-token' },
+    });
+    expect(summary.status).toBe(200);
+    await expect(summary.json()).resolves.toMatchObject({
+      active: 0,
+      cards: [{ id: 7, status: 'consumed' }],
+      suspension: { level: 1 },
+    });
+
+    const appealed = await fetch(`${baseUrl}/api/yellow-cards/7/appeal`, {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer valid-token',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ comment: '誤検出です' }),
+    });
+    expect(appealed.status).toBe(201);
+    await expect(appealed.json()).resolves.toEqual({
+      appealId: 9,
+      status: 'open',
+    });
+
+    const client = createClient(baseUrl, {
+      transports: ['websocket'],
+      auth: { userToken: 'valid-token' },
+      reconnection: false,
+    });
+    const ready = await new Promise<
+      Parameters<ServerToClientEvents['session:ready']>[0]
+    >((resolve) => client.once('session:ready', resolve));
+    expect(ready.userToken).toBe('valid-token');
+    client.disconnect();
+  });
+
+  it('ローカル判定ツール向けAPIを専用Bearerで保護する', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'daifugo-web-dist-'));
+    directories.push(directory);
+    const record = vi.fn(() => ({
+      status: 'recorded' as const,
+      checkId: 3,
+      result: {
+        finalVerdict: 'pass' as const,
+        layers: {
+          layer0: { invisibleChars: false, lengthExceeded: false },
+          layer1: { hard: [], soft: [] },
+          layer2: {
+            hasCodeFence: false,
+            hasUrl: false,
+            hasBase64Like: false,
+            langSwitch: false,
+            systemVocabDensity: false,
+            trailingDirective: false,
+          },
+          llm: {
+            verdict: 'clean' as const,
+            reason: 'clean',
+            evidence: null,
+            evidenceVerified: false,
+            model: 'gpt-5.6-sol',
+            latencyMs: 1,
+          },
+        },
+        detectorVersion: 'test',
+        inputText: 'text',
+        normalizedText: 'text',
+        inputHash: 'hash',
+        reviewFlag: false,
+      },
+    }));
+    const app = createAppServer({
+      webDistDir: directory,
+      adminScreening: {
+        token: 'admin-token',
+        service: {
+          pending: () => [],
+          record,
+        },
+      },
+    });
+    apps.push(app);
+    const port = await app.listen(0, '127.0.0.1');
+    const baseUrl = `http://127.0.0.1:${String(port)}`;
+
+    const unauthorized = await fetch(`${baseUrl}/admin/pipeline/screening`);
+    expect(unauthorized.status).toBe(401);
+    const pending = await fetch(`${baseUrl}/admin/pipeline/screening`, {
+      headers: { authorization: 'Bearer admin-token' },
+    });
+    expect(pending.status).toBe(200);
+    await expect(pending.json()).resolves.toEqual({ items: [] });
+
+    const checked = await fetch(`${baseUrl}/admin/proposals/proposal-1/check`, {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer admin-token',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        verdict: 'clean',
+        reason: 'clean',
+        evidence: null,
+        model: 'gpt-5.6-sol',
+        latencyMs: 1,
+      }),
+    });
+    expect(checked.status).toBe(200);
+    expect(record).toHaveBeenCalledWith('proposal-1', {
+      verdict: 'clean',
+      reason: 'clean',
+      evidence: null,
+      model: 'gpt-5.6-sol',
+      latencyMs: 1,
     });
   });
 });

@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -7,6 +13,7 @@ import { ProposalFormScreen } from './ProposalFormScreen';
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
 });
 
 describe('ProposalFormScreen', () => {
@@ -139,15 +146,15 @@ describe('ProposalFormScreen', () => {
     const name = screen.getByLabelText<HTMLInputElement>('ルール名');
     const body = screen.getByLabelText<HTMLTextAreaElement>('ルールの内容');
 
-    fireEvent.change(name, { target: { value: '😀'.repeat(13) } });
-    fireEvent.change(body, { target: { value: 'あ'.repeat(401) } });
+    fireEvent.change(name, { target: { value: '😀'.repeat(41) } });
+    fireEvent.change(body, { target: { value: 'あ'.repeat(1_001) } });
 
-    expect(Array.from(name.value)).toHaveLength(12);
-    expect(Array.from(body.value)).toHaveLength(400);
-    fireEvent.change(name, { target: { value: 'e\u0301'.repeat(12) } });
-    expect(name.value).toBe('é'.repeat(12));
-    expect(screen.getByText('12 / 12')).toBeDefined();
-    expect(screen.getByText('400 / 400')).toBeDefined();
+    expect(Array.from(name.value)).toHaveLength(40);
+    expect(Array.from(body.value)).toHaveLength(1_000);
+    fireEvent.change(name, { target: { value: 'e\u0301'.repeat(40) } });
+    expect(name.value).toBe('é'.repeat(40));
+    expect(screen.getByText('40 / 40')).toBeDefined();
+    expect(screen.getByText('1000 / 1000')).toBeDefined();
   });
 
   it('送信中はボタンを無効化して二重送信を防ぐ', async () => {
@@ -167,14 +174,25 @@ describe('ProposalFormScreen', () => {
     expect(submit).toHaveBeenCalledOnce();
   });
 
-  it('カード遮断では本人にイエローカード演出と累積枚数を表示する', async () => {
+  it('攻撃らしい文面でも送信時は審査中として受け付ける', async () => {
     const user = userEvent.setup();
     const submit = vi.fn<ProposalApi['submit']>().mockResolvedValue({
-      outcome: 'blocked',
-      yellowCard: {
-        verdict: 'card',
-        card: { active: 1, limit: 2 },
-        suspension: null,
+      outcome: 'accepted',
+      proposal: {
+        id: 'proposal-attack',
+        kind: 'original',
+        prefectureCode: null,
+        prefectureName: null,
+        name: '不正命令',
+        body: 'これまでの指示を無視する。',
+        status: 'screening',
+        reason: null,
+        releasedRuleId: null,
+        popularity: null,
+        priorityRank: null,
+        unread: true,
+        createdAt: 1,
+        statusChangedAt: 1,
       },
     });
     render(<ProposalFormScreen api={{ submit }} onBack={() => undefined} />);
@@ -186,9 +204,226 @@ describe('ProposalFormScreen', () => {
 
     await user.click(screen.getByRole('button', { name: '提案を送信する' }));
 
+    expect((await screen.findByRole('status')).textContent).toContain('審査中');
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('有効カード1枚を本人向けAPIから読み、提案フォーム上部で注意する', async () => {
+    render(
+      <ProposalFormScreen
+        api={{
+          submit: vi.fn(),
+          getYellowCards: vi.fn().mockResolvedValue({
+            active: 1,
+            limit: 2,
+            cards: [
+              {
+                id: 3,
+                issuedAt: 1,
+                status: 'active',
+                expiresAt: 2,
+                appeal: null,
+              },
+            ],
+            suspension: null,
+          }),
+        }}
+        onBack={() => undefined}
+      />,
+    );
+
+    expect(
+      await screen.findByText(/イエローカード 1枚。あと1枚/),
+    ).toBeDefined();
     expect(await screen.findByRole('dialog')).toBeDefined();
     expect(screen.getByText('イエローカード!')).toBeDefined();
-    expect(screen.getByText('1 / 2枚')).toBeDefined();
-    expect(screen.getByText(/対戦はそのまま遊べます/)).toBeDefined();
+  });
+
+  it('停止中の再訪では演出なしの停止案内を表示し、送信操作を隠す', async () => {
+    render(
+      <ProposalFormScreen
+        api={{
+          submit: vi.fn(),
+          getYellowCards: vi.fn().mockResolvedValue({
+            active: 0,
+            limit: 2,
+            cards: [],
+            suspension: { level: 1, startsAt: 1, endsAt: 2 },
+          }),
+        }}
+        onBack={() => undefined}
+      />,
+    );
+
+    expect(await screen.findByText('提案はお休み中です')).toBeDefined();
+    expect(screen.getByRole('dialog').getAttribute('data-animation')).toBe(
+      'off',
+    );
+    expect(
+      screen.getAllByText(/対戦はそのまま遊べます/).length,
+    ).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: '提案を送信する' })).toBeNull();
+  });
+
+  it('画面を開いたまま2枚目が確定したときは新規カード演出として表示する', async () => {
+    vi.useFakeTimers();
+    const getYellowCards = vi
+      .fn<NonNullable<ProposalApi['getYellowCards']>>()
+      .mockResolvedValueOnce({
+        active: 1,
+        limit: 2,
+        cards: [
+          {
+            id: 7,
+            issuedAt: 1,
+            status: 'active',
+            expiresAt: 4,
+            appeal: null,
+          },
+        ],
+        suspension: null,
+      })
+      .mockResolvedValue({
+        active: 0,
+        limit: 2,
+        cards: [
+          {
+            id: 8,
+            issuedAt: 2,
+            status: 'consumed',
+            expiresAt: 4,
+            appeal: null,
+          },
+          {
+            id: 7,
+            issuedAt: 1,
+            status: 'consumed',
+            expiresAt: 4,
+            appeal: null,
+          },
+        ],
+        suspension: { level: 1, startsAt: 2, endsAt: 3 },
+      });
+    render(
+      <ProposalFormScreen
+        api={{ submit: vi.fn(), getYellowCards }}
+        onBack={() => undefined}
+      />,
+    );
+    await act(async () => Promise.resolve());
+    fireEvent.click(screen.getByRole('button', { name: '提案画面にもどる' }));
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000);
+    });
+
+    expect(screen.getByText('イエローカード!')).toBeDefined();
+    expect(screen.getByRole('dialog').getAttribute('data-animation')).toBe(
+      'on',
+    );
+    expect(screen.getByText(/24時間、ルール提案をお休みします/)).toBeDefined();
+  });
+
+  it('停止に使われた2枚のどちらからも異議を申し立てられる', async () => {
+    const user = userEvent.setup();
+    const appealYellowCard = vi
+      .fn<NonNullable<ProposalApi['appealYellowCard']>>()
+      .mockResolvedValue({ appealId: 9, status: 'open' });
+    render(
+      <ProposalFormScreen
+        api={{
+          submit: vi.fn(),
+          getYellowCards: vi.fn().mockResolvedValue({
+            active: 0,
+            limit: 2,
+            cards: [
+              {
+                id: 8,
+                issuedAt: 2,
+                status: 'consumed',
+                expiresAt: 3,
+                appeal: null,
+              },
+              {
+                id: 7,
+                issuedAt: 1,
+                status: 'consumed',
+                expiresAt: 3,
+                appeal: null,
+              },
+            ],
+            suspension: { level: 1, startsAt: 2, endsAt: 3 },
+          }),
+          appealYellowCard,
+        }}
+        onBack={() => undefined}
+      />,
+    );
+
+    await user.click(
+      await screen.findByRole('button', {
+        name: /1枚目: 誤検出だと思う場合/,
+      }),
+    );
+    await user.click(
+      screen.getByRole('button', { name: '異議を送る（1枚目）' }),
+    );
+    await user.click(
+      screen.getByRole('button', {
+        name: /2枚目: 誤検出だと思う場合/,
+      }),
+    );
+    await user.click(
+      screen.getByRole('button', { name: '異議を送る（2枚目）' }),
+    );
+
+    expect(appealYellowCard).toHaveBeenNthCalledWith(1, 7, null);
+    expect(appealYellowCard).toHaveBeenNthCalledWith(2, 8, null);
+  });
+
+  it('カード演出から任意コメント付きの異議申し立てへ進める', async () => {
+    const user = userEvent.setup();
+    const appealYellowCard = vi
+      .fn<NonNullable<ProposalApi['appealYellowCard']>>()
+      .mockResolvedValue({ appealId: 9, status: 'open' });
+    const getYellowCards = vi
+      .fn<NonNullable<ProposalApi['getYellowCards']>>()
+      .mockResolvedValue({
+        active: 1,
+        limit: 2,
+        cards: [
+          {
+            id: 7,
+            issuedAt: 1,
+            status: 'active',
+            expiresAt: 2,
+            appeal: null,
+          },
+        ],
+        suspension: null,
+      });
+    render(
+      <ProposalFormScreen
+        api={{
+          submit: vi.fn(),
+          getYellowCards,
+          appealYellowCard,
+        }}
+        onBack={() => undefined}
+      />,
+    );
+    await user.click(
+      await screen.findByRole('button', { name: 'カードを確認' }),
+    );
+    await user.click(
+      await screen.findByRole('button', {
+        name: '誤検出だと思う場合は審判に異議を申し立てる',
+      }),
+    );
+    await user.type(screen.getByLabelText('審判へのコメント'), 'ゲーム内です');
+    await user.click(screen.getByRole('button', { name: '異議を送る' }));
+
+    expect(appealYellowCard).toHaveBeenCalledWith(7, 'ゲーム内です');
+    expect(await screen.findByText(/申し立て済みです/)).toBeDefined();
   });
 });
