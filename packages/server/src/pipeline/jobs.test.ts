@@ -259,6 +259,61 @@ describe('CX-02 pipeline jobs', () => {
     expect(persistence.pipeline.job(item.job.id)?.phase).toBe('queued');
   });
 
+  it('旧DBのmerged jobへ未記録merge SHAだけを同phase CASで補完する', async () => {
+    const { jobs, persistence } = await approvedProposal();
+    const item = jobs.next();
+    if (!item) throw new Error('queued job missing');
+    jobs.update(item.job.id, {
+      from: 'queued',
+      to: 'implementing',
+      branch: 'rule/r0001-yagiri',
+      scaffoldSha: 'a'.repeat(40),
+      promptVersion: 'cx02-v3',
+    });
+    jobs.update(item.job.id, {
+      from: 'implementing',
+      to: 'pr_open',
+      prNumber: 42,
+      headSha: 'b'.repeat(40),
+    });
+    persistence.pipeline.transitionJob(
+      item.job.id,
+      'pr_open',
+      'merged',
+      {},
+      2_000,
+    );
+    expect(persistence.pipeline.job(item.job.id)).toMatchObject({
+      phase: 'merged',
+      headSha: 'b'.repeat(40),
+      mergeSha: null,
+    });
+
+    expect(
+      jobs.update(item.job.id, {
+        from: 'merged',
+        to: 'merged',
+        mergeSha: 'c'.repeat(40),
+      }),
+    ).toMatchObject({
+      status: 'updated',
+      job: { phase: 'merged', mergeSha: 'c'.repeat(40) },
+    });
+    expect(
+      jobs.update(item.job.id, {
+        from: 'merged',
+        to: 'merged',
+        mergeSha: 'd'.repeat(40),
+      }),
+    ).toEqual({
+      status: 'invalid',
+      error: 'missing_job_transition_fields',
+    });
+    expect(persistence.pipeline.job(item.job.id)?.mergeSha).toBe(
+      'c'.repeat(40),
+    );
+  });
+
   it('内部失敗区分とユーザー向けimplementation_failedを同時に確定する', async () => {
     const { jobs, persistence, proposal } = await approvedProposal();
     const item = jobs.next();

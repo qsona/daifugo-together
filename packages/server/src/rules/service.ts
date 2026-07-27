@@ -602,6 +602,12 @@ export class RuleRegistryService {
     if (issue || !this.#proposals || !this.#pipeline) return issue;
     const registration = registrations[0]!;
     const source = this.#releaseSource(rule.proposalId);
+    if (
+      source &&
+      (source.proposal.status !== 'released' || source.job.phase !== 'done')
+    ) {
+      return `active rule release state does not match: ${source.proposal.status}/${source.job.phase}`;
+    }
     const sourceIssue = this.#releaseSourceIssue(registration, source);
     if (sourceIssue || !source) return sourceIssue;
     return versionIssue(
@@ -617,14 +623,12 @@ export class RuleRegistryService {
   ): string | null {
     const meta = registration.module.meta;
     if (!source) return 'proposal or pipeline job is missing';
-    if (
-      source.proposal.status !== 'implementing' &&
-      source.proposal.status !== 'released'
-    ) {
-      return `proposal is not releasable: ${source.proposal.status}`;
-    }
-    if (source.job.phase !== 'merged' && source.job.phase !== 'done') {
-      return `pipeline job is not deployed: ${source.job.phase}`;
+    if (!(
+      (source.proposal.status === 'implementing' &&
+        source.job.phase === 'merged') ||
+      (source.proposal.status === 'released' && source.job.phase === 'done')
+    )) {
+      return `release lifecycle state does not match: ${source.proposal.status}/${source.job.phase}`;
     }
     if (
       source.job.ruleId !== meta.ruleId ||

@@ -825,6 +825,13 @@ TS-02 から継続で未解決のもの:
 - 実ruleディレクトリfixtureで静的registry generatorを実行するテストを追加し、そこでディレクトリからslugを落とす正規表現の既存escape誤りも検出・修正した。複数roomが同じ有効chainを固定することも検証した
 - focused検証は6 files / 41 tests、server/pipeline typecheck、変更ファイルlint、`git diff --check`が成功。全体`CI=true pnpm verify`もformat/lint/design/typecheck、64 files / 431 tests、全package buildまで成功した。初回全体実行ではAI simulationが並列負荷下で41手中1回だけ150ms fallbackとなったが、単独5連続と全体再実行は成功しており、GitHub上の長時間性能ゲートで継続観測する
 
+#### CX-05 プロセス2初回再レビューと追加修正
+
+- 修正コミット`778b368`への独立 GPT-5.6 Sol 再レビューは **GO_WITH_FIXES**。プロセス1の主指摘5件はすべて解消確認済みで、Critical・Minorなし。追加Important 2件を独立SQLiteプローブで再現した
+- 旧DBへ`pipeline_jobs.merge_sha`列を追加すると既存`merged/done`行がNULLになり、当初の`implement:merged`ではGitHub照合後も補完できなかった。GitHubのreview済みheadと実merge commitが一致した場合に限り、NULLの既存行を`merged→merged` / `done→done`の同phase CASで補完する。非NULL値の上書きは拒否する
+- runtime照合がproposalとjobの許可状態を独立に見ていたため、強制的に作った`active + implementing/merged`不整合行をロードできた。同期で許す組を`implementing+merged` / `released+done`だけに限定し、active runtimeは後者だけを許すよう補強した
+- 追加focused検証は3 files / 27 testsとserver/pipeline typecheckが成功。修正後は同じレビュー担当で指摘解消を再確認する
+
 #### CX-05の残る外部・後続ゲート
 
 - 実GitHub PR・main CD・本番SQLiteを用いた「skill起動・レビューとマージ・有効化」の3操作リハーサルは、実PRを作る明示許可と本番受入時に行う

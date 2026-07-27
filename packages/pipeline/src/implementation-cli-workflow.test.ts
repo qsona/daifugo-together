@@ -299,6 +299,45 @@ describe('implementation CLI workflow', () => {
     expect(update).not.toHaveBeenCalled();
   });
 
+  it('旧DBのmerged jobだけをGitHub再検証後に同phaseでbackfillする', async () => {
+    const legacy = item('merged', {
+      prNumber: 42,
+      headSha: 'b'.repeat(40),
+      mergeSha: null,
+    });
+    const update = vi.fn(() => ({
+      status: 'updated' as const,
+      job: { ...legacy.job, mergeSha: 'c'.repeat(40) },
+    }));
+    const process = processPort(async () =>
+      result(0, {
+        stdout: JSON.stringify({
+          state: 'MERGED',
+          mergedAt: '2026-07-27T00:00:00Z',
+          headRefOid: 'b'.repeat(40),
+          mergeCommit: { oid: 'c'.repeat(40) },
+        }),
+      }),
+    );
+
+    await expect(
+      recordMergedImplementation({
+        jobs: { resume: () => legacy, update },
+        process,
+        cwd: '/repo',
+        jobId: 1,
+      }),
+    ).resolves.toMatchObject({
+      status: 'recorded',
+      job: { phase: 'merged', mergeSha: 'c'.repeat(40) },
+    });
+    expect(update).toHaveBeenCalledWith(1, {
+      from: 'merged',
+      to: 'merged',
+      mergeSha: 'c'.repeat(40),
+    });
+  });
+
   it('pr_open attempt 1を旧PR close、旧branch delete後にattempt 2へ進める', async () => {
     const previous = item('pr_open', { prNumber: 42 });
     let cleanupComplete = false;

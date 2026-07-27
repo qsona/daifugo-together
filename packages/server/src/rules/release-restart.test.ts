@@ -242,6 +242,31 @@ describe('CX-05 release persistence and provenance', () => {
     });
   });
 
+  it('proposal/jobが初回公開前のactive不整合ruleをruntimeへ載せない', () => {
+    const persistence = createPersistence(databasePath());
+    const { registration } = seedMerged(persistence);
+    const service = registry(persistence, [registration]);
+    service.synchronizeCodeRegistry();
+    expect(
+      persistence.rules.transition({
+        ruleId: 'r0001-release',
+        expectedStatuses: ['disabled'],
+        nextStatus: 'active',
+        disabledReason: null,
+        now: 1_900,
+      }),
+    ).toMatchObject({ changed: true });
+
+    expect(service.availableRules('inconsistent-release-set')).toEqual([]);
+    expect(persistence.rules.incidents('r0001-release')).toMatchObject([
+      {
+        setId: 'inconsistent-release-set',
+        type: 'load_failure',
+        detail: 'active rule release state does not match: implementing/merged',
+      },
+    ]);
+  });
+
   it('恒久revert後に旧コードが戻っても同じversionを復活・enableしない', () => {
     const persistence = createPersistence(databasePath());
     const { registration } = seedMerged(persistence);

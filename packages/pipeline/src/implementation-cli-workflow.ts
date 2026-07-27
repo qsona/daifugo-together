@@ -140,6 +140,17 @@ export async function recordMergedImplementation(options: {
     throw new Error('merged PR head does not match the reviewed job head');
   }
   if (job.phase === 'merged' || job.phase === 'done') {
+    if (job.mergeSha === null) {
+      const updated = await options.jobs.update(job.id, {
+        from: job.phase,
+        to: job.phase,
+        mergeSha,
+      });
+      if (updated.status !== 'updated') {
+        throw new Error(`merge backfill failed: ${updated.status}`);
+      }
+      return { status: 'recorded', job: updated.job };
+    }
     if (job.mergeSha !== mergeSha) {
       throw new Error('recorded merge commit does not match GitHub');
     }

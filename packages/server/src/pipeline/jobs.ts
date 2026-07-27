@@ -8,7 +8,9 @@ const TRANSITIONS = new Set([
   'implementing:implementing',
   'implementing:pr_open',
   'pr_open:merged',
+  'merged:merged',
   'merged:done',
+  'done:done',
 ]);
 const ERROR_CODES = new Set([
   'infra',
@@ -92,6 +94,7 @@ export class PipelineJobService {
     if (current.phase !== from) {
       return { status: 'conflict', error: 'stale_job_phase' };
     }
+    const mergeBackfill = (from === 'merged' || from === 'done') && to === from;
     const branch = text(value?.branch, 200);
     const headSha = gitSha(value?.headSha);
     const mergeSha = gitSha(value?.mergeSha);
@@ -135,7 +138,13 @@ export class PipelineJobService {
           mergeSha === undefined ||
           current.headSha === null ||
           current.prNumber === null)) ||
-      (from === 'merged' && to !== 'done')
+      (mergeBackfill &&
+        (mergeSha === undefined ||
+          current.mergeSha !== null ||
+          current.headSha === null ||
+          current.prNumber === null)) ||
+      (from === 'merged' && to !== 'merged' && to !== 'done') ||
+      (from === 'done' && to !== 'done')
     ) {
       return { status: 'invalid', error: 'missing_job_transition_fields' };
     }
