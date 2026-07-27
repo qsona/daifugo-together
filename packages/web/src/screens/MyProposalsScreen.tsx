@@ -1,7 +1,15 @@
-import type { ProposalListItem, ProposalStatus } from '@daifugo/core';
+import type {
+  MyProposalsResponse,
+  ProposalListItem,
+  ProposalStatus,
+} from '@daifugo/core';
 import { useEffect, useState } from 'react';
 
 import { AppBar } from '../components/AppBar';
+import {
+  ProposalStepper,
+  type ProposalStep,
+} from '../components/ProposalStepper';
 import type { ProposalApi } from '../proposal/client';
 
 import styles from './MyProposalsScreen.module.css';
@@ -45,6 +53,41 @@ function dateLabel(timestamp: number): string {
   }).format(timestamp);
 }
 
+function statusSteps(status: ProposalStatus): ProposalStep[] {
+  if (status === 'rejected') {
+    return [
+      { label: '審査中', state: 'done' },
+      { label: '却下', state: 'rejected' },
+    ];
+  }
+  if (status === 'failed') {
+    return [
+      { label: '審査中', state: 'done' },
+      { label: '実装中', state: 'done' },
+      { label: '実装失敗', state: 'rejected' },
+    ];
+  }
+  return [
+    {
+      label: '審査中',
+      state: status === 'screening' ? 'now' : 'done',
+    },
+    {
+      label: '実装中',
+      state:
+        status === 'implementing'
+          ? 'now'
+          : status === 'screening'
+            ? 'pending'
+            : 'done',
+    },
+    {
+      label: 'リリース',
+      state: status === 'released' ? 'released' : 'pending',
+    },
+  ];
+}
+
 export function MyProposalsScreen({
   api,
   onBack,
@@ -56,6 +99,7 @@ export function MyProposalsScreen({
 }) {
   const [items, setItems] = useState<ProposalListItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [seenError, setSeenError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -64,15 +108,29 @@ export function MyProposalsScreen({
         setError('提案一覧を取得できませんでした');
         return;
       }
+      let response: MyProposalsResponse;
       try {
-        const response = await api.mine();
-        if (!active) return;
-        setItems(response.items);
-        onUnreadCountChange?.(response.unreadCount);
-        await api.markProposalsSeen();
-        if (active) onUnreadCountChange?.(0);
+        response = await api.mine();
       } catch {
         if (active) setError('提案一覧を取得できませんでした');
+        return;
+      }
+      if (!active) return;
+      setItems(response.items);
+      onUnreadCountChange?.(response.unreadCount);
+      const seenThrough = response.items.reduce(
+        (maximum, item) => Math.max(maximum, item.statusChangedAt),
+        0,
+      );
+      try {
+        await api.markProposalsSeen(seenThrough);
+        if (active) onUnreadCountChange?.(0);
+      } catch {
+        if (active) {
+          setSeenError(
+            '未読状態を更新できませんでした。もう一度開いてください。',
+          );
+        }
       }
     };
     void load();
@@ -86,6 +144,7 @@ export function MyProposalsScreen({
       <AppBar title="マイ提案" onBack={onBack} />
       <main className={screen.body}>
         {error && <p role="alert">{error}</p>}
+        {seenError && <p role="alert">{seenError}</p>}
         {!error && items === null && <p role="status">読み込み中…</p>}
         {items?.length === 0 && (
           <p className={styles.empty}>まだ提案はありません。</p>
@@ -102,6 +161,7 @@ export function MyProposalsScreen({
                 {item.unread && <span className={styles.unread}>未読</span>}
               </div>
               <p className={styles.kind}>{kindLabel(item)}</p>
+              <ProposalStepper steps={statusSteps(item.status)} />
               <p className={styles.body}>{item.body}</p>
               {reason && <p className={styles.reason}>{reason}</p>}
               <p className={styles.date}>

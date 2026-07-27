@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import type { CreateProposalResponse } from '@daifugo/core';
+import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { createAppServer, type AppServer } from '../app-server.js';
@@ -184,7 +185,15 @@ describe('proposal vertical slice', () => {
 
     const first = await fetch(`${baseUrl}/api/proposals/mine`, { headers });
     expect(first.status).toBe(200);
-    await expect(first.json()).resolves.toMatchObject({
+    const firstBody = (await first.json()) as {
+      unreadCount: number;
+      items: Array<{
+        name: string;
+        statusChangedAt: number;
+        unread: boolean;
+      }>;
+    };
+    expect(firstBody).toMatchObject({
       unreadCount: 2,
       items: [
         { name: '新しい提案', unread: true },
@@ -194,29 +203,27 @@ describe('proposal vertical slice', () => {
     const second = await fetch(`${baseUrl}/api/proposals/mine`, { headers });
     await expect(second.json()).resolves.toMatchObject({ unreadCount: 2 });
 
-    now = 2_000;
-    const seen = await fetch(`${baseUrl}/api/proposals/seen`, {
-      method: 'POST',
-      headers,
-    });
-    expect(seen.status).toBe(204);
-    const afterSeen = await fetch(`${baseUrl}/api/proposals/mine`, { headers });
-    await expect(afterSeen.json()).resolves.toMatchObject({
-      unreadCount: 0,
-      items: [{ unread: false }, { unread: false }],
-    });
-
+    const seenThrough = Math.max(
+      ...firstBody.items.map((item) => item.statusChangedAt),
+    );
     expect(
       persistence.proposals.transitionProposal(
         '00000000Z8AAAAAAAAAAAAAA01',
         'screening',
         'rejected',
         { reasonCode: 'out_of_scope', reasonText: '対象外です' },
-        3_000,
+        seenThrough,
       ),
     ).toBe('transitioned');
-    const changed = await fetch(`${baseUrl}/api/proposals/mine`, { headers });
-    await expect(changed.json()).resolves.toMatchObject({
+
+    const seen = await fetch(`${baseUrl}/api/proposals/seen`, {
+      method: 'POST',
+      headers: { ...headers, 'content-type': 'application/json' },
+      body: JSON.stringify({ seenThrough }),
+    });
+    expect(seen.status).toBe(204);
+    const afterSeen = await fetch(`${baseUrl}/api/proposals/mine`, { headers });
+    await expect(afterSeen.json()).resolves.toMatchObject({
       unreadCount: 1,
       items: [
         { name: '新しい提案', unread: false },
@@ -228,11 +235,79 @@ describe('proposal vertical slice', () => {
         },
       ],
     });
+
+    const latest = persistence.proposals.statusWatermark(mine.userId);
+    expect(latest).toBeGreaterThan(seenThrough);
+    const markLatest = await fetch(`${baseUrl}/api/proposals/seen`, {
+      method: 'POST',
+      headers: { ...headers, 'content-type': 'application/json' },
+      body: JSON.stringify({ seenThrough: latest }),
+    });
+    expect(markLatest.status).toBe(204);
+    const markOlderAgain = await fetch(`${baseUrl}/api/proposals/seen`, {
+      method: 'POST',
+      headers: { ...headers, 'content-type': 'application/json' },
+      body: JSON.stringify({ seenThrough }),
+    });
+    expect(markOlderAgain.status).toBe(204);
+    await expect(
+      fetch(`${baseUrl}/api/proposals/mine`, { headers }).then((response) =>
+        response.json(),
+      ),
+    ).resolves.toMatchObject({ unreadCount: 0 });
+
+    const compatibleNoBody = await fetch(`${baseUrl}/api/proposals/seen`, {
+      method: 'POST',
+      headers,
+    });
+    expect(compatibleNoBody.status).toBe(204);
+
+    const invalidFuture = await fetch(`${baseUrl}/api/proposals/seen`, {
+      method: 'POST',
+      headers: { ...headers, 'content-type': 'application/json' },
+      body: JSON.stringify({ seenThrough: latest + 1 }),
+    });
+    expect(invalidFuture.status).toBe(400);
+    await expect(invalidFuture.json()).resolves.toEqual({
+      error: 'invalid_seen_watermark',
+    });
     expect(
       await fetch(`${baseUrl}/api/proposals/mine`, {
         headers: { authorization: `Bearer ${other.userToken}` },
       }).then((response) => response.json()),
     ).toMatchObject({ items: [{ name: '他人の提案' }] });
+  });
+
+  it('旧users表へ既読列を加算migrationし、既存セッションを維持する', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'daifugo-proposal-legacy-'));
+    directories.push(directory);
+    const path = join(directory, 'legacy.sqlite');
+    const legacy = new Database(path);
+    legacy.exec(`
+      CREATE TABLE users (
+        user_id TEXT PRIMARY KEY,
+        user_token TEXT NOT NULL UNIQUE,
+        display_name TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      );
+      INSERT INTO users (user_id, user_token, display_name, created_at)
+      VALUES ('legacy-user', 'legacy-proposal-token', '旅人', 1000);
+    `);
+    legacy.close();
+
+    const persistence = new SqlitePersistence(path);
+    persistenceInstances.push(persistence);
+    expect(persistence.sessions.resolve('legacy-proposal-token')).toMatchObject(
+      {
+        userId: 'legacy-user',
+        displayName: '旅人',
+      },
+    );
+    expect(persistence.proposals.mine('legacy-user')).toEqual({
+      items: [],
+      unreadCount: 0,
+    });
+    expect(persistence.proposals.markSeen('legacy-user', 0)).toBe(true);
   });
 
   it('HTTP境界でmethod・認証・JSON・body上限・区分整合を拒否する', async () => {

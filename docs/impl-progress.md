@@ -851,7 +851,7 @@ TS-02 から継続で未解決のもの:
 ### E5 RP-03 プロセス1（マイ提案・状態通知）
 
 - `users.proposals_seen_at`をNULL許容の加算migrationで追加し、`GET /api/proposals/mine`はBearer tokenの本人提案だけを作成日時の新しい順で返す。各行と件数の未読は`status_changed_at > COALESCE(proposals_seen_at, 0)`で算出し、GET自体は既読化しない
-- `POST /api/proposals/seen`は既読時刻を単調増加で更新して204を返す。画面7は一覧取得後に明示seenを送り、状態5値、ローカル/オリジナル区分、却下・実装失敗理由、未読印、release日とrule ID導線を表示する。メニューはmineの`unreadCount`をバッジ表示する
+- `POST /api/proposals/seen`は既読基準を単調増加で更新して204を返す。画面7は一覧取得後に明示seenを送り、状態5値、ローカル/オリジナル区分、却下・実装失敗理由、未読印、release日とrule ID導線を表示する。メニューはmineの`unreadCount`をバッジ表示する
 - 縦結合テストで、複数利用者の分離、新しい順、未訪問時の全件未読、GET非既読、seen後の消灯、seen後の状態変化だけの再点灯をHTTP越しに確認した。Webは画面表示・seen呼出し・clientのGET/POSTを回帰化した
 
 #### RP-03で置いた仮定・プロセス2送り
@@ -861,6 +861,16 @@ TS-02 から継続で未解決のもの:
 | E5-RP03-P1-1 | 画面7は一覧取得成功後にseenを送り、取得した行の未読印はその表示中だけ残す。メニューへ戻った時点で件数を0にする | GET自体を既読化しないAPI契約と、「画面7を開いたら既読」の両立 | seen失敗・再読込・並行状態変更の境界を追加検証 |
 | E5-RP03-P1-2 | E11未実装のためrelease導線はrule IDの表示までとし、画面遷移は後続E11で接続する | E05 §3.3(d)は`releasedRuleId`を前方参照とし、人気度・優先度もnull許容 | E11接続点を壊さない型/表示を確認 |
 | E5-RP03-P1-3 | `reason_text`があればそれを優先し、無ければC-6のcode別固定文言へfallbackする | E05 §3.3(c)の表示仕様とC-6確定理由セット | 全理由code、長文、空文字の表示を網羅 |
+
+### E5 RP-03 方向性レビューとプロセス2
+
+- 新規コンテキストの独立 GPT-5.6 Sol 方向性レビューは **GO_WITH_FIXES**。Criticalなし。取得後からseen送信までに状態が変わると、サーバーの受信時刻で既読化する実装が未表示の変更まで消す点をImportant、`reason_text=NULL`を生の`reason_code`へ変換して固定文言fallbackを妨げる点をMinorとした
+- P1-1は、画面が実際に取得した各行の最大`statusChangedAt`を`seenThrough`として送る方式へ変更した。状態更新時刻はSQLite transaction内でDB全体の最大値より必ず大きい論理時刻にし、同一ミリ秒の「GET → 状態変更 → seen」でも後発変更だけ未読に残す。任意の未来値は本人提案の現在最大値を超えるため400で拒否し、古いwatermarkの再送は`MAX`更新で既読を巻き戻さない
+- E05 §3.3(d)の既存`POST /api/proposals/seen`無body契約は互換維持し、bodyなしではPOST時点の現在最大値を既読にする。Webクライアントだけが競合を避ける任意JSON body `{ seenThrough }`を使う
+- P1-3はDBのNULL理由文を空文字として返し、画面側でC-6の却下6区分と`implementation_failed`へ変換する。`other`の個別詳細・長文はそのまま表示する
+- seen更新だけ失敗した場合は取得済み一覧と未読件数を維持し、一覧取得失敗とは別の再試行案内を表示する。状態5値のステッパー、メニューの未読件数と`99+`境界も回帰化した
+- 旧`users`表からの加算migrationを実SQLiteで開き、既存token・表示名を維持したまま`proposals_seen_at`を利用できることを確認した。HTTP結合では本人分離、新しい順、GET非既読、同時刻競合、等値境界、単調更新、未来値拒否を確認する
+- P1-2のE11図鑑遷移は予定どおり後続へ残し、`releasedRuleId`の表示と型接続は維持する
 
 ### E2で見つけた設計書の不整合
 

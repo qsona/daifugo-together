@@ -543,7 +543,24 @@ export function createAppServer(options: AppServerOptions): AppServer {
       return true;
     }
     if (isSeen) {
-      const result = await options.proposals.seen(bearerToken(request));
+      let body: unknown;
+      const hasBody =
+        request.headers['transfer-encoding'] !== undefined ||
+        Number(request.headers['content-length'] ?? 0) > 0;
+      if (hasBody) {
+        try {
+          body = await readJsonBody(request);
+        } catch (error) {
+          writeJson(response, error instanceof SyntaxError ? 400 : 413, {
+            error:
+              error instanceof SyntaxError
+                ? 'invalid_json'
+                : 'request_too_large',
+          });
+          return true;
+        }
+      }
+      const result = await options.proposals.seen(bearerToken(request), body);
       if (result.status === 204) {
         response.statusCode = 204;
         response.setHeader('cache-control', 'no-store');

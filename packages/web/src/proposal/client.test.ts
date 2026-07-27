@@ -171,7 +171,7 @@ describe('ProposalClient', () => {
       items: [],
       unreadCount: 2,
     });
-    await expect(client.markProposalsSeen()).resolves.toBeUndefined();
+    await expect(client.markProposalsSeen(1234)).resolves.toBeUndefined();
     expect(fetcher).toHaveBeenNthCalledWith(
       1,
       'https://example.test/api/proposals/mine',
@@ -184,7 +184,11 @@ describe('ProposalClient', () => {
       'https://example.test/api/proposals/seen',
       {
         method: 'POST',
-        headers: { authorization: 'Bearer shared-session-token' },
+        headers: {
+          authorization: 'Bearer shared-session-token',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ seenThrough: 1234 }),
       },
     );
   });

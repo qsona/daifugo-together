@@ -45,8 +45,11 @@ export interface ProposalSubmissionPort {
   >;
   seen(
     token: string | null,
+    body: unknown,
   ): Promise<
-    { status: 204 } | { status: 401; body: { error: 'unauthorized' } }
+    | { status: 204 }
+    | { status: 400; body: { error: 'invalid_seen_watermark' } }
+    | { status: 401; body: { error: 'unauthorized' } }
   >;
 }
 
@@ -153,8 +156,11 @@ export class ProposalSubmissionService implements ProposalSubmissionPort {
 
   async seen(
     token: string | null,
+    body: unknown,
   ): Promise<
-    { status: 204 } | { status: 401; body: { error: 'unauthorized' } }
+    | { status: 204 }
+    | { status: 400; body: { error: 'invalid_seen_watermark' } }
+    | { status: 401; body: { error: 'unauthorized' } }
   > {
     if (!token) {
       return { status: 401, body: { error: 'unauthorized' } };
@@ -163,7 +169,25 @@ export class ProposalSubmissionService implements ProposalSubmissionPort {
     if (!authorId) {
       return { status: 401, body: { error: 'unauthorized' } };
     }
-    this.#repository.markSeen(authorId, this.#now());
+    const currentWatermark = this.#repository.statusWatermark(authorId);
+    const seenThrough =
+      body === undefined
+        ? currentWatermark
+        : typeof body === 'object' &&
+            body !== null &&
+            !Array.isArray(body) &&
+            'seenThrough' in body
+          ? body.seenThrough
+          : undefined;
+    if (
+      typeof seenThrough !== 'number' ||
+      !Number.isSafeInteger(seenThrough) ||
+      seenThrough < 0 ||
+      seenThrough > currentWatermark
+    ) {
+      return { status: 400, body: { error: 'invalid_seen_watermark' } };
+    }
+    this.#repository.markSeen(authorId, seenThrough);
     return { status: 204 };
   }
 }

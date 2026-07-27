@@ -113,7 +113,7 @@ function toListItem(row: ProposalRow, seenAt = 0): ProposalListItem {
       ? null
       : {
           code: row.reason_code,
-          text: row.reason_text ?? row.reason_code,
+          text: row.reason_text ?? '',
         };
   return {
     id: row.id,
@@ -251,6 +251,18 @@ export class ProposalRepository {
     );
   }
 
+  statusWatermark(authorId: string): number {
+    return (
+      this.#sqlite
+        .prepare(
+          `SELECT COALESCE(MAX(status_changed_at), 0) AS value
+           FROM proposals
+           WHERE author_id = ?`,
+        )
+        .get(authorId) as { value: number }
+    ).value;
+  }
+
   suspendedUntil(authorId: string): number | null {
     const hasColumn = (
       this.#sqlite.prepare("PRAGMA table_info('users')").all() as Array<{
@@ -284,6 +296,7 @@ export class ProposalRepository {
 
   create(options: CreateStoredProposalOptions): ProposalListItem {
     const transaction = this.#sqlite.transaction(() => {
+      const statusTimestamp = this.#nextStatusTimestamp(options.now);
       this.#sqlite
         .prepare(
           `INSERT INTO proposals (
@@ -305,7 +318,7 @@ export class ProposalRepository {
           options.proposal.body,
           options.contentHash,
           options.now,
-          options.now,
+          statusTimestamp,
           options.now,
         );
       options.commitSignals(options.id);
@@ -336,30 +349,44 @@ export class ProposalRepository {
     const failed = to === 'failed';
     const terminalReason = to === 'rejected' || to === 'failed';
     const released = to === 'released';
-    const result = this.#sqlite
-      .prepare(
-        `UPDATE proposals
-         SET status = ?,
-             status_changed_at = ?,
-             updated_at = ?,
-             attempt_count = CASE WHEN ? = 1 THEN 1 ELSE attempt_count END,
-             reason_code = ?,
-             reason_text = ?,
-             rule_id = ?
-         WHERE id = ? AND status = ?`,
-      )
-      .run(
-        to,
-        now,
-        now,
-        failed ? 1 : 0,
-        terminalReason ? patch.reasonCode!.trim() : null,
-        terminalReason ? patch.reasonText!.trim() : null,
-        released ? patch.ruleId!.trim() : null,
-        id,
-        from,
-      );
+    const result = this.#sqlite.transaction(() => {
+      const statusTimestamp = this.#nextStatusTimestamp(now);
+      return this.#sqlite
+        .prepare(
+          `UPDATE proposals
+           SET status = ?,
+               status_changed_at = ?,
+               updated_at = ?,
+               attempt_count = CASE WHEN ? = 1 THEN 1 ELSE attempt_count END,
+               reason_code = ?,
+               reason_text = ?,
+               rule_id = ?
+           WHERE id = ? AND status = ?`,
+        )
+        .run(
+          to,
+          statusTimestamp,
+          now,
+          failed ? 1 : 0,
+          terminalReason ? patch.reasonCode!.trim() : null,
+          terminalReason ? patch.reasonText!.trim() : null,
+          released ? patch.ruleId!.trim() : null,
+          id,
+          from,
+        );
+    })();
     return result.changes === 1 ? 'transitioned' : 'noop';
+  }
+
+  #nextStatusTimestamp(requested: number): number {
+    const maximum = (
+      this.#sqlite
+        .prepare(
+          'SELECT COALESCE(MAX(status_changed_at), -1) AS value FROM proposals',
+        )
+        .get() as { value: number }
+    ).value;
+    return Math.max(requested, maximum + 1);
   }
 
   /**

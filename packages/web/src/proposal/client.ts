@@ -28,7 +28,7 @@ export class ProposalApiError extends Error {
 export interface ProposalApi {
   submit(request: CreateProposalRequest): Promise<CreateProposalResponse>;
   mine?(): Promise<MyProposalsResponse>;
-  markProposalsSeen?(): Promise<void>;
+  markProposalsSeen?(seenThrough: number): Promise<void>;
   getYellowCards?(): Promise<YellowCardSummary>;
   appealYellowCard?(
     cardId: number,
@@ -91,12 +91,24 @@ export class ProposalClient implements ProposalApi {
   }
 
   async mine(): Promise<MyProposalsResponse> {
-    const response = await this.#authenticatedFetch('/api/proposals/mine');
+    const response = await this.#authenticatedFetch(
+      '/api/proposals/mine',
+      {},
+      '提案一覧を取得できませんでした',
+    );
     return (await response.json()) as MyProposalsResponse;
   }
 
-  async markProposalsSeen(): Promise<void> {
-    await this.#authenticatedFetch('/api/proposals/seen', { method: 'POST' });
+  async markProposalsSeen(seenThrough: number): Promise<void> {
+    await this.#authenticatedFetch(
+      '/api/proposals/seen',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ seenThrough }),
+      },
+      '提案の既読状態を更新できませんでした',
+    );
   }
 
   async appealYellowCard(
@@ -117,6 +129,7 @@ export class ProposalClient implements ProposalApi {
   async #authenticatedFetch(
     path: string,
     init: RequestInit = {},
+    errorMessage = 'カード情報を取得できませんでした',
   ): Promise<Response> {
     const token = this.#storage.getItem(TOKEN_KEY);
     if (!token) {
@@ -135,9 +148,7 @@ export class ProposalClient implements ProposalApi {
     if (!response.ok) {
       throw new ProposalApiError(
         response.status,
-        response.status === 409
-          ? 'すでに異議を申し立てています'
-          : 'カード情報を取得できませんでした',
+        response.status === 409 ? 'すでに異議を申し立てています' : errorMessage,
       );
     }
     return response;
