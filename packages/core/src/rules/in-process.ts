@@ -25,9 +25,9 @@ function detachedClone<T>(value: T): T {
   return structuredClone(value);
 }
 
-function detachedEffectList(value: unknown): Effect[] {
+function detachedEffectList(value: unknown): Effect[] | null {
   const cloned = detachedClone(value);
-  return Array.isArray(cloned) ? (cloned as Effect[]) : [];
+  return Array.isArray(cloned) ? (cloned as Effect[]) : null;
 }
 
 function isLegality(value: unknown): value is Legality {
@@ -43,8 +43,15 @@ function isLegality(value: unknown): value is Legality {
   return !('reasonKey' in value) || typeof value.reasonKey === 'string';
 }
 
+export interface RuleExecutionIssue {
+  ruleId: RuleId;
+  hook: keyof RuleModule['hooks'];
+  reason: 'exception' | 'invalid-return';
+}
+
 export function createInProcessRuleChainPort(
   modules: readonly RuleModule[],
+  options: { onIssue?: (issue: RuleExecutionIssue) => void } = {},
 ): RuleChainPort {
   const byId = new Map(modules.map((module) => [module.meta.ruleId, module]));
 
@@ -73,6 +80,11 @@ export function createInProcessRuleChainPort(
               hook(ruleContext, detachedFrozen(play), detachedFrozen(before)),
             );
             if (!isLegality(after)) {
+              options.onIssue?.({
+                ruleId: entry.ruleId,
+                hook: 'modifyLegality',
+                reason: 'invalid-return',
+              });
               return;
             }
             const wasChanged = changed(before, after);
@@ -81,6 +93,11 @@ export function createInProcessRuleChainPort(
               influenced.add(entry.ruleId);
             }
           } catch {
+            options.onIssue?.({
+              ruleId: entry.ruleId,
+              hook: 'modifyLegality',
+              reason: 'exception',
+            });
             return;
           }
         });
@@ -106,9 +123,19 @@ export function createInProcessRuleChainPort(
             hook(contextForRule(context, entry.ruleId), detachedFrozen(result)),
           );
         } catch {
+          options.onIssue?.({
+            ruleId: entry.ruleId,
+            hook: 'modifyStrength',
+            reason: 'exception',
+          });
           continue;
         }
         if (!next) {
+          options.onIssue?.({
+            ruleId: entry.ruleId,
+            hook: 'modifyStrength',
+            reason: 'invalid-return',
+          });
           continue;
         }
         if (changed(result, next)) {
@@ -130,41 +157,41 @@ export function createInProcessRuleChainPort(
           }
           const ruleContext = contextForRule(context, entry.ruleId);
           try {
+            let effects: Effect[] | null;
             if (hookName === 'afterPlay') {
-              return [
-                {
-                  ruleId: entry.ruleId,
-                  effects: detachedEffectList(
-                    hooks.afterPlay?.(
-                      ruleContext,
-                      detachedFrozen(argument as Play),
-                    ) ?? [],
-                  ),
-                },
-              ];
+              effects = detachedEffectList(
+                hooks.afterPlay?.(
+                  ruleContext,
+                  detachedFrozen(argument as Play),
+                ) ?? [],
+              );
+            } else if (hookName === 'onGameEnd') {
+              effects = detachedEffectList(
+                hooks.onGameEnd?.(
+                  ruleContext,
+                  detachedFrozen(argument as Standings),
+                ) ?? [],
+              );
+            } else {
+              effects = detachedEffectList(
+                hooks[hookName]?.(ruleContext) ?? [],
+              );
             }
-            if (hookName === 'onGameEnd') {
-              return [
-                {
-                  ruleId: entry.ruleId,
-                  effects: detachedEffectList(
-                    hooks.onGameEnd?.(
-                      ruleContext,
-                      detachedFrozen(argument as Standings),
-                    ) ?? [],
-                  ),
-                },
-              ];
-            }
-            return [
-              {
+            if (!effects) {
+              options.onIssue?.({
                 ruleId: entry.ruleId,
-                effects: detachedEffectList(
-                  hooks[hookName]?.(ruleContext) ?? [],
-                ),
-              },
-            ];
+                hook: hookName,
+                reason: 'invalid-return',
+              });
+              return [];
+            }
+            return [{ ruleId: entry.ruleId, effects }];
           } catch {
+            options.onIssue?.({
+              ruleId: entry.ruleId,
+              hook: hookName,
+              reason: 'exception',
+            });
             return [];
           }
         });

@@ -8,7 +8,7 @@
 - **フェーズ 2 / E6 YC-01〜03 プロセス2完了**: E-18 の非同期構成、ローカル判定ツール、イエローカード表示・停止・救済まで実装済み。修正後 judge eval は Luna/Sol とも 40/40、平均 6.40秒 / 6.23秒のため既定を **GPT-5.6 Sol medium** とした。独立 GPT-5.6 Sol 完了レビューは要件適合 `PASS` / 品質 `APPROVED`
 - **フェーズ 2 / E7 CX-01 プロセス2ほぼ完了**: 独立方向性レビュー `GO_WITH_FIXES` のImportant 4件と、初回完了レビューのImportant 2件を反映。完了再レビューはコード・自動テスト `PASS` / 品質 `APPROVED` / Critical・Importantなし。実app-server評価だけ明示許可待ち
 - **フェーズ 2 / E7 CX-02 プロセス2完了**: subscription Codex CLIを使う共有skill、scaffold先行push/任意段階再開、全差分・履歴検収、1回retry、PR作成、失敗永続化まで実装。独立最終再レビューはコード・テスト範囲 `PASS` / 品質 `APPROVED` / 全指摘なし。実subscriptionでのルール生成・実PR作成は未実行
-- **フェーズ 2 / E7 CX-03 プロセス1実装済み・独立方向性レビュー待ち**: `pull_request_target` の信頼済みbase revisionから、単一新規ルールdirectory・許可4ファイル・branch/scaffold SHA/blob/meta schema・PR作成者を検査する縦導線を実装
+- **フェーズ 2 / E7 CX-03 プロセス2実装・全体検証済み、独立完了レビュー待ち**: trusted diff-guard、untrusted quality/rule-tests/simulation、ローカルCI監視を実装。方向性レビュー `GO_WITH_FIXES` のImportant 4件を反映し、58 files / 383 tests成功。実repositoryのbranch protection/ruleset登録は完了レビュー後
 - E1〜E3 の実装記録は本書末尾の「並行進行」節、E13 は「E13」節。E4 の未解消の開発者判断は「詰まっている点」に残っている(1〜4・7・8・11)
 
 ### E-18 / C-2・C-3・C-6 再設計の反映(2026-07-27)
@@ -317,7 +317,7 @@ E3 マージ後の実プレーで開発者から 4 件の指摘を受け、反�
 
 ### CX-03 プロセス1
 
-- 状態: G-4の信頼済みdiff-guardを縦に通し、独立方向性レビュー待ち
+- 状態: G-4の信頼済みdiff-guardを縦に通し、独立方向性レビュー `GO_WITH_FIXES` を経てプロセス2へ移行
 - ユーザーストーリーの確認:
   - 正常なscaffold commit→生成commitのローカルGit fixtureを、PR本文の機械可読scaffold SHA・開発者author・決定的branchとともに検査して通過する
   - 範囲外変更、許可外ファイル、複数ルール、既存ファイル変更、branch不一致、第三者author、SHA欠落/重複、scaffold後のmeta/SPEC改変、不正scaffold履歴、不正meta schemaをすべて拒否する
@@ -344,6 +344,44 @@ E3 マージ後の実プレーで開発者から 4 件の指摘を受け、反�
 
 - `CI=true pnpm exec vitest run scripts/diff-guard.test.ts`: **1 file / 10 tests 成功**
 - `CI=true pnpm verify`: **52 files / 352 tests 成功**。format / lint / design lint / 全package typecheck・buildも成功
+
+#### プロセス1方向性レビューと裁定
+
+- 独立した別コンテキストの GPT-5.6 Sol 判定: **GO_WITH_FIXES**。Criticalなし、Important 4件
+- Important 1（通常branch迂回）: branch名ではなく変更pathも分類し、通常branchから `packages/rules/r*/**` を変更する迂回を拒否。新規ルールは4ファイル追加だけ、恒久巻き戻しは信頼済みauthorの `revert/r{id}-{slug}` で4ファイル削除だけを許可する
+- Important 2（workflow信頼境界）: `pull_request_target` ではbase revisionのデータ専用diff-guardだけを実行し、PRコードを実行するquality/rule-tests/simulationはsecretなし・read-onlyの `pull_request` workflowへ分離する
+- Important 3（main追随履歴）: scaffoldの親を現在のmerge-baseに固定する方式を撤回。PR本文へ元base SHAを記録し、scaffold親=記録base、記録baseが現在mainの祖先、scaffoldがheadの祖先であることを別々に検査する。mainのmerge catch-upを許可し、rebase/固定点差し替えを拒否する
+- Important 4（author allowlist）: repository ownerを常に許可し、`RULE_PR_ALLOWED_AUTHORS` は置換でなく追加集合にする。CX-02 CLIもjob claim前に現在の `gh` loginを同じ集合と照合する
+- 仮定 P1-1は「新規追加のみ + 明示revert mode」で採用、P1-2はowner+追加accountへ修正、P1-3は元baseメタデータ方式へ修正した
+
+### CX-03 プロセス2
+
+- trusted gate:
+  - `.github/workflows/rule-pr.yml` は `pull_request_target` でmainのguardをcheckoutし、untrusted headを実行せずGit objectとして検査する。main以外をtargetにしたPRは対象外
+  - `scripts/diff-guard.mjs` は通常/pipeline/revertの3 modeをpathとbranchの両方で検証。pipelineは単一directoryの `meta.json` / `SPEC.json` / `rule.ts` / `rule.test.ts` の追加、決定的branch（初回/`-a2`）、author、機械可読SHA block、scaffold履歴・blob不変、meta exact schema、全ファイルの `100644 blob` を要求する
+  - 非rule branchのgenerated path変更、空allowlist、第三者、symlink、既存変更・削除、複数directory、余分なpath、不正/重複SHA、main非祖先、scaffold後改変をfixture Git repositoryで拒否する
+- untrusted checks:
+  - `.github/workflows/rule-pr-checks.yml` にsecretなし/read-onlyの `quality` / `rule-tests` / `simulation` を分離。非rule PRは同名checkをno-op成功にしてrequired checkと共存する
+  - generated `rule.ts` は `@daifugo/core` のみ、`rule.test.ts` はcoreと`vitest`のみimport可。ネットワーク・時刻・外部乱数・dynamic import/eval・明白な無限loop・長さ指定Arrayをlintで拒否するred-team suiteを追加
+  - `scripts/check-rule-tests.mjs` は実行テスト3件以上と `rule.ts` 行coverage 70%以上をVitest JSON/V8 coverageで検査。正常fixtureを実コマンドで実行して100% coverageを確認した
+  - `@daifugo/sim` はbuild済み全ルールを `meta.json` deep equality付きでloadし、新ルール単独/全ルールの2構成を各200ゲーム×5固定seedで実行する。終了・既存Sim invariant・無効Effect・hook例外/不正返値をfailにする
+- 開発者動線:
+  - 実装prompt/検収を `export const rule: RuleModule` とmeta exact equalityへ強化し、prompt versionを `cx02-v3` へ更新
+  - PR本文へ `base-sha` を追加。publisherのGitHub owner抽出と `gh api user` preflightを実装し、許可外accountではclaim前に停止する
+  - `implement:checks` はPRの4 checkを名前重複・欠落も含めて検査し、green/pending/failedを返す。失敗時はActions logの先頭100行だけをuntrusted dataとして提示する。共有skillはgreen後のSPEC/コード人間レビュー、フレークのrerun、内容起因の開発者承認retry/打ち切りを案内し、自動mergeしない
+
+#### プロセス2の検証
+
+- focused: **12 files / 68 tests 成功**。diff guard 3 mode、file mode/main追随、source policy、実coverage、simulation loader/runner、CI monitor、publisher/CLIを含む
+- `CI=true node scripts/check-rule-tests.mjs --rule r9999-valid --rules-root fixtures/cx03/valid-rule`: 3 tests、line coverage **100%**、成功
+- `CI=true pnpm --filter @daifugo/sim build`: 成功
+- `CI=true pnpm verify`: **58 files / 383 tests 成功**。format / lint / design lint / 全package typecheck・buildも成功。sandbox内の初回はlocalhost listen禁止（`EPERM`）だけで失敗したため、同一コマンドをsandbox外で再実行して実HTTP/Socket.IOを含め成功
+
+#### 完了レビュー前に残す外部受入ゲート
+
+- mainのbranch protectionへ `diff-guard` / `quality` / `rule-tests` / `simulation` をstrict required checksとして登録する。現時点のmainは未保護。workflowがmainへ入ってcheck sourceを確定し、完了レビュー指摘を反映してから設定する
+- `rule/**` のforce-push禁止・workflow path変更拒否をserver-side rulesetで設定し、実repository上で第三者風branchと通常PRのcheck挙動を確認する
+- 承認済み提案を実subscription Codexで生成して実PRを作る受入リハーサルは、CX-02から継続して未実施。外部状態を変えるため、コード検証と分離する
 
 ## 完了したストーリー
 

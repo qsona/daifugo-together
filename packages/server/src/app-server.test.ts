@@ -261,7 +261,7 @@ describe('production app server', () => {
         prNumber: null,
         headSha: null,
         scaffoldSha: null,
-        promptVersion: 'cx02-v2',
+        promptVersion: 'cx02-v3',
         errorCode: null,
         errorNote: null,
         createdAt: 1,
@@ -404,7 +404,7 @@ describe('production app server', () => {
         to: 'implementing',
         branch: 'rule/r0001-yagiri',
         scaffoldSha: 'a'.repeat(40),
-        promptVersion: 'cx02-v2',
+        promptVersion: 'cx02-v3',
       }),
     });
     expect(updated.status).toBe(200);
@@ -413,7 +413,7 @@ describe('production app server', () => {
       to: 'implementing',
       branch: 'rule/r0001-yagiri',
       scaffoldSha: 'a'.repeat(40),
-      promptVersion: 'cx02-v2',
+      promptVersion: 'cx02-v3',
     });
 
     const retried = await fetch(`${baseUrl}/admin/pipeline/jobs/1/retry`, {

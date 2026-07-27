@@ -121,7 +121,7 @@ describe('HttpPipelineJobPort', () => {
                 phase: 'implementing',
                 branch: 'rule/r0001-yagiri',
                 scaffoldSha: 'a'.repeat(40),
-                promptVersion: 'cx02-v2',
+                promptVersion: 'cx02-v3',
               },
             },
           }),

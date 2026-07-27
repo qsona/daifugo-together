@@ -136,7 +136,7 @@ describe('CX-02 implementation vertical slice', () => {
           );
           await writeFile(
             join(directory, 'rule.test.ts'),
-            'export const cases = ["fires", "does not fire", "boundary"];\n',
+            "import { it } from 'vitest';\nit('generated', () => {});\n",
           );
           return { status: 'completed' };
         },
@@ -168,7 +168,7 @@ describe('CX-02 implementation vertical slice', () => {
         );
         await writeFile(
           join(directory, 'rule.test.ts'),
-          'export const cases = ["fires", "does not fire", "boundary"];\n',
+          "import { it } from 'vitest';\nit('generated', () => {});\n",
         );
         return { status: 'completed' };
       },
@@ -202,7 +202,7 @@ describe('CX-02 implementation vertical slice', () => {
       phase: 'implementing',
       branch: 'rule/r0001-yagiri',
       scaffoldSha: 'a'.repeat(40),
-      promptVersion: 'cx02-v2',
+      promptVersion: 'cx02-v3',
     };
     const run = vi.fn<CodexRunner['run']>();
     const result = await runNextImplementation({

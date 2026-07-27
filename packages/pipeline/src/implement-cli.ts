@@ -10,6 +10,7 @@ import {
   prepareImplementationRetry,
   prepareImplementationWorkspace,
   removeCompletedWorkspace,
+  verifyGitHubPublisher,
 } from './implementation-cli-workflow.js';
 import { runNextImplementation } from './implementation-driver.js';
 import { SpawnProcessPort } from './process.js';
@@ -48,6 +49,14 @@ async function main(): Promise<void> {
     process.stdout.write(`${JSON.stringify({ result })}\n`);
     return;
   }
+  await verifyGitHubPublisher({
+    process: commands,
+    repositoryUrl,
+    ...(process.env.RULE_PR_ALLOWED_AUTHORS
+      ? { additionalAllowedAuthors: process.env.RULE_PR_ALLOWED_AUTHORS }
+      : {}),
+    cwd: process.cwd(),
+  });
   const retryId =
     process.argv[2] === 'retry' ? Number(process.argv[3]) : undefined;
   let retryItem: QueuedImplementation | null = null;

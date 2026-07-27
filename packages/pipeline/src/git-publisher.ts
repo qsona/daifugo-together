@@ -323,6 +323,7 @@ export class GitImplementationPublisher implements ScaffoldPublisher {
       '',
       '<!-- daifugo-pipeline',
       `scaffold-sha: ${input.scaffoldSha}`,
+      `base-sha: ${(await this.#git(['rev-parse', `${input.scaffoldSha}^`])).stdout.trim()}`,
       'end-daifugo-pipeline -->',
       '',
       '- [ ] SPEC/meta match the approved proposal',

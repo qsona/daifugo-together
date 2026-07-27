@@ -17,8 +17,9 @@ Do not modify `meta.json`, `SPEC.json`, git history, configuration, lockfiles,
 other packages, or other rules. Use only the contract exported by
 `@daifugo/core`. Do not add dependencies, network access, filesystem access,
 process access, dynamic code execution, or nondeterministic external state.
-Imports and re-exports may target only `@daifugo/core`. Do not use `Date`,
-`Math.random`, dynamic `import()`, or any other nondeterministic global.
+In `rule.ts`, imports and re-exports may target only `@daifugo/core`. In
+`rule.test.ts`, imports may target only `@daifugo/core` and `vitest`. Do not use
+`Date`, `Math.random`, dynamic `import()`, or any other nondeterministic global.
 
 Implement only the hooks and Effects listed in `SPEC.json`. Cover at least:
 
@@ -26,6 +27,21 @@ Implement only the hooks and Effects listed in `SPEC.json`. Cover at least:
 2. a non-firing case;
 3. a boundary or multi-card case;
 4. every item in `SPEC.json.testPoints`.
+
+Export exactly one public rule module:
+
+```ts
+export const rule: RuleModule = {
+  meta: {
+    // Copy every field exactly from meta.json.
+  },
+  hooks: {
+    // Implement only approved hooks.
+  },
+};
+```
+
+The exported `rule.meta` must be deeply equal to `meta.json`.
 
 Before finishing, run both commands from this directory and fix any failure:
 

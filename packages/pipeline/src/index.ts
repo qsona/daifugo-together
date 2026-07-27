@@ -1,6 +1,7 @@
 export {};
 export * from './app-server-judge.js';
 export * from './codex-runner.js';
+export * from './ci-monitor.js';
 export * from './confirmation.js';
 export * from './cx-batch.js';
 export * from './judge-corpus.js';

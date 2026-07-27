@@ -136,6 +136,23 @@ function invariantProblems(state: SetState): string[] {
   return problems;
 }
 
+function invalidEffectProblems(
+  events: readonly SetTransition['events'][number][],
+): string[] {
+  return events.flatMap((event) => {
+    if (
+      event.type !== 'effectRejected' ||
+      !event.detail ||
+      typeof event.detail !== 'object' ||
+      Array.isArray(event.detail) ||
+      typeof event.detail.reason !== 'string'
+    ) {
+      return [];
+    }
+    return [`${event.ruleId}:${event.hook}:${event.detail.reason}`];
+  });
+}
+
 export function simulate(options: SimulateOptions): SimReport {
   if (!Number.isSafeInteger(options.games) || options.games < 0) {
     throw new Error('games must be a non-negative safe integer');
@@ -171,6 +188,13 @@ export function simulate(options: SimulateOptions): SimReport {
     failsafeActivations += initialFailsafes.total;
     leadNoLegalMoveActivations += initialFailsafes.leadNoLegalMove;
     turnLimitActivations += initialFailsafes.turnLimit;
+    for (const problem of invalidEffectProblems(started.events)) {
+      invariantViolations.push({
+        game: setIndex,
+        invariant: 'invalid-effect',
+        detail: `initial:${problem}`,
+      });
+    }
     for (const result of state.results) {
       completedGames += 1;
       totalTurns += state.currentGame?.public.turnCount ?? 0;
@@ -188,6 +212,13 @@ export function simulate(options: SimulateOptions): SimReport {
       failsafeActivations += failsafes.total;
       leadNoLegalMoveActivations += failsafes.leadNoLegalMove;
       turnLimitActivations += failsafes.turnLimit;
+      for (const problem of invalidEffectProblems(transition.events)) {
+        invariantViolations.push({
+          game: setIndex,
+          invariant: 'invalid-effect',
+          detail: `action=${actions}:${problem}`,
+        });
+      }
       if (failsafes.turnLimit > 0) {
         invariantViolations.push({
           game: setIndex,

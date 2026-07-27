@@ -61,17 +61,29 @@ export async function inspectGeneratedRule(
         violations.push(`${name}: exceeds ${String(maxBytes)} bytes`);
       }
       const content = await readFile(path, 'utf8');
+      if (
+        name === 'rule.ts' &&
+        !/\bexport\s+const\s+rule\s*(?::[^=]+)?=/u.test(content)
+      ) {
+        violations.push('rule.ts: must export const rule');
+      }
       for (const match of content.matchAll(
         /\b(?:import|export)\s+[\s\S]*?\sfrom\s+['"]([^'"]+)['"]/gu,
       )) {
-        if (match[1] !== '@daifugo/core') {
+        const allowed =
+          match[1] === '@daifugo/core' ||
+          (name === 'rule.test.ts' && match[1] === 'vitest');
+        if (!allowed) {
           violations.push(
             `${name}: imports forbidden module ${match[1] ?? 'unknown'}`,
           );
         }
       }
       for (const match of content.matchAll(/\bimport\s*['"]([^'"]+)['"]/gu)) {
-        if (match[1] !== '@daifugo/core') {
+        const allowed =
+          match[1] === '@daifugo/core' ||
+          (name === 'rule.test.ts' && match[1] === 'vitest');
+        if (!allowed) {
           violations.push(
             `${name}: imports forbidden module ${match[1] ?? 'unknown'}`,
           );

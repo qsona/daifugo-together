@@ -3,6 +3,8 @@ import { pathToFileURL } from 'node:url';
 
 const RULE_PATH =
   /^packages\/rules\/(r\d{4,}-[a-z0-9]+(?:-[a-z0-9]+)*)\/(rule\.ts|rule\.test\.ts|meta\.json|SPEC\.json)$/;
+const GENERATED_RULE_PATH =
+  /^packages\/rules\/(r\d{4,}-[a-z0-9]+(?:-[a-z0-9]+)*)\/(.+)$/;
 const SCAFFOLD_FILES = ['meta.json', 'SPEC.json'];
 const GENERATED_FILES = ['rule.ts', 'rule.test.ts'];
 
@@ -53,19 +55,29 @@ export function changedEntries({ base, head, cwd = process.cwd() }) {
   return entries;
 }
 
-export function scaffoldShaFromBody(body) {
+export function pipelineMetadataFromBody(body) {
   const blocks = [
     ...body.matchAll(
       /<!-- daifugo-pipeline\s+([\s\S]*?)\s+end-daifugo-pipeline -->/g,
     ),
   ];
   if (blocks.length !== 1) return null;
-  const matches = [
+  const scaffoldMatches = [
     ...blocks[0][1].matchAll(
       /(?:^|\n)scaffold-sha:\s*([0-9a-f]{40,64})\s*(?=\n|$)/g,
     ),
   ];
-  return matches.length === 1 ? matches[0][1] : null;
+  const baseMatches = [
+    ...blocks[0][1].matchAll(
+      /(?:^|\n)base-sha:\s*([0-9a-f]{40,64})\s*(?=\n|$)/g,
+    ),
+  ];
+  return scaffoldMatches.length === 1 && baseMatches.length === 1
+    ? {
+        scaffoldSha: scaffoldMatches[0][1],
+        baseSha: baseMatches[0][1],
+      }
+    : null;
 }
 
 function validateMeta(meta, directory) {
@@ -78,6 +90,24 @@ function validateMeta(meta, directory) {
     if (typeof meta[key] !== 'string' || meta[key].trim() === '') {
       violations.push(`meta.json: ${key} は空でないstringが必要です。`);
     }
+  }
+  const allowedKeys = new Set([
+    ...requiredStrings,
+    'kind',
+    'prefecture',
+    'contractVersion',
+    'messages',
+  ]);
+  for (const key of Object.keys(meta)) {
+    if (!allowedKeys.has(key)) {
+      violations.push(`meta.json: 未知のproperty ${key} は許可されません。`);
+    }
+  }
+  if (typeof meta.name === 'string' && meta.name.length > 40) {
+    violations.push('meta.json: name は40文字以下が必要です。');
+  }
+  if (typeof meta.description === 'string' && meta.description.length > 1_000) {
+    violations.push('meta.json: description は1000文字以下が必要です。');
   }
   if (meta.ruleId !== directory) {
     violations.push(
@@ -107,6 +137,21 @@ function validateMeta(meta, directory) {
     Object.values(meta.messages).some((value) => typeof value !== 'string')
   ) {
     violations.push('meta.json: messages はstring値のobjectが必要です。');
+  } else {
+    const entries = Object.entries(meta.messages);
+    if (
+      entries.length > 20 ||
+      entries.some(
+        ([key, value]) =>
+          !/^[a-z][a-z0-9_]{0,63}$/u.test(key) ||
+          value.trim().length === 0 ||
+          value.length > 200,
+      )
+    ) {
+      violations.push(
+        'meta.json: messages は20件以下、key形式と1〜200文字の値が必要です。',
+      );
+    }
   }
   return violations;
 }
@@ -132,9 +177,96 @@ export function validateRulePullRequest(options) {
   if (entries.length === 0) {
     return {
       entries,
+      mode: 'ordinary',
       directory: null,
       scaffoldSha: null,
+      recordedBaseSha: null,
       violations: ['差分がありません。'],
+    };
+  }
+
+  const mode = branch.startsWith('rule/')
+    ? 'pipeline'
+    : branch.startsWith('revert/')
+      ? 'revert'
+      : 'ordinary';
+  const normalizedAllowedAuthors = new Set(
+    allowedAuthors.map((value) => value.trim().toLowerCase()).filter(Boolean),
+  );
+  const authorAllowed =
+    normalizedAllowedAuthors.size > 0 &&
+    normalizedAllowedAuthors.has(author.trim().toLowerCase());
+  if (mode === 'ordinary') {
+    for (const entry of entries) {
+      if (GENERATED_RULE_PATH.test(entry.path)) {
+        violations.push(
+          `${entry.path}: generated ruleの変更はrule/**またはrevert/** branchだけ許可します。`,
+        );
+      }
+    }
+    return {
+      entries,
+      mode,
+      directory: null,
+      scaffoldSha: null,
+      recordedBaseSha: null,
+      violations,
+    };
+  }
+
+  if (!authorAllowed) {
+    violations.push(
+      `PR作成者 ${author} は許可されたpipeline作成者ではありません。`,
+    );
+  }
+  if (mode === 'revert') {
+    const revertDirectories = new Set();
+    for (const entry of entries) {
+      const match = RULE_PATH.exec(entry.path);
+      if (match) {
+        revertDirectories.add(match[1]);
+        if (entry.status !== 'D') {
+          violations.push(
+            `${entry.path}: revert PRでは削除(D)だけ許可します(status=${entry.status})。`,
+          );
+        }
+      } else if (
+        entry.path !== 'packages/rules/rules-exclude.json' ||
+        entry.status !== 'M'
+      ) {
+        violations.push(
+          `${entry.path}: revert PRで許可された差分ではありません。`,
+        );
+      }
+    }
+    const directories = [...revertDirectories];
+    if (directories.length !== 1) {
+      violations.push('revert対象のルールdirectoryは1つだけ必要です。');
+    }
+    const directory = directories.length === 1 ? directories[0] : null;
+    if (directory) {
+      const deleted = entries
+        .filter((entry) => RULE_PATH.test(entry.path))
+        .map((entry) => entry.path)
+        .sort();
+      if (
+        JSON.stringify(deleted) !== JSON.stringify(expectedPaths(directory))
+      ) {
+        violations.push('revert PRは対象ルールの4ファイルを削除してください。');
+      }
+      if (branch !== `revert/${directory}`) {
+        violations.push(
+          `branch ${branch} が revert/${directory} と一致しません。`,
+        );
+      }
+    }
+    return {
+      entries,
+      mode,
+      directory,
+      scaffoldSha: null,
+      recordedBaseSha: null,
+      violations,
     };
   }
 
@@ -180,36 +312,58 @@ export function validateRulePullRequest(options) {
     }
   }
 
-  const normalizedAllowedAuthors = new Set(
-    allowedAuthors.map((value) => value.trim().toLowerCase()).filter(Boolean),
-  );
-  if (
-    normalizedAllowedAuthors.size === 0 ||
-    !normalizedAllowedAuthors.has(author.trim().toLowerCase())
-  ) {
+  const metadata = pipelineMetadataFromBody(prBody);
+  const scaffoldSha = metadata?.scaffoldSha ?? null;
+  const recordedBaseSha = metadata?.baseSha ?? null;
+  if (!metadata) {
     violations.push(
-      `PR作成者 ${author} は許可されたpipeline作成者ではありません。`,
+      'PR本文の機械可読blockにscaffold-shaとbase-shaが各1件必要です。',
     );
   }
-
-  const scaffoldSha = scaffoldShaFromBody(prBody);
-  if (!scaffoldSha) {
-    violations.push('PR本文の機械可読blockにscaffold-shaが1件必要です。');
-  }
-  if (!directory || !scaffoldSha) {
-    return { entries, directory, scaffoldSha, violations };
+  if (!directory || !scaffoldSha || !recordedBaseSha) {
+    return {
+      entries,
+      mode,
+      directory,
+      scaffoldSha,
+      recordedBaseSha,
+      violations,
+    };
   }
 
   if (
     gitExitCode(cwd, ['merge-base', '--is-ancestor', scaffoldSha, head]) !== 0
   ) {
     violations.push('scaffold SHAはPR headの祖先ではありません。');
-    return { entries, directory, scaffoldSha, violations };
+    return {
+      entries,
+      mode,
+      directory,
+      scaffoldSha,
+      recordedBaseSha,
+      violations,
+    };
   }
-  const mergeBase = git(cwd, ['merge-base', base, head]).trim();
-  const scaffoldParent = git(cwd, ['rev-parse', `${scaffoldSha}^`]).trim();
-  if (scaffoldParent !== mergeBase) {
-    violations.push('scaffold commitはPR branchの基点直後ではありません。');
+  for (const path of expectedPaths(directory)) {
+    const treeEntry = git(cwd, ['ls-tree', head, '--', path]).trim();
+    if (!treeEntry.startsWith('100644 blob ')) {
+      violations.push(`${path}: regular file mode 100644が必要です。`);
+    }
+  }
+  let scaffoldParent = null;
+  try {
+    scaffoldParent = git(cwd, ['rev-parse', `${scaffoldSha}^`]).trim();
+  } catch {
+    violations.push('scaffold commitの親を検証できません。');
+  }
+  if (scaffoldParent !== null && scaffoldParent !== recordedBaseSha) {
+    violations.push('scaffold commitの親が記録済みbase SHAと一致しません。');
+  }
+  if (
+    gitExitCode(cwd, ['merge-base', '--is-ancestor', recordedBaseSha, base]) !==
+    0
+  ) {
+    violations.push('記録済みbase SHAは現在のmainの祖先ではありません。');
   }
 
   const scaffoldPaths = git(cwd, [
@@ -256,7 +410,14 @@ export function validateRulePullRequest(options) {
   } catch {
     violations.push('meta.jsonをscaffold commitから読み取り・解析できません。');
   }
-  return { entries, directory, scaffoldSha, violations };
+  return {
+    entries,
+    mode,
+    directory,
+    scaffoldSha,
+    recordedBaseSha,
+    violations,
+  };
 }
 
 function argumentValue(name) {
@@ -300,7 +461,7 @@ function main() {
     return;
   }
   console.log(
-    `差分ガード通過: ${result.directory}, scaffold ${result.scaffoldSha}`,
+    `差分ガード通過: mode=${result.mode}, directory=${result.directory ?? '-'}, scaffold=${result.scaffoldSha ?? '-'}`,
   );
 }
 

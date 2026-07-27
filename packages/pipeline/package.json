@@ -20,6 +20,7 @@
     "implement:resume": "pnpm build && node dist/implement-cli.js resume",
     "implement:retry": "pnpm build && node dist/implement-cli.js retry",
     "implement:fail": "pnpm build && node dist/implement-cli.js fail",
+    "implement:checks": "pnpm build && node dist/ci-cli.js",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {

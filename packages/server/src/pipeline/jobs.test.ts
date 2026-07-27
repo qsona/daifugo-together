@@ -160,7 +160,7 @@ describe('CX-02 pipeline jobs', () => {
         to: 'implementing',
         branch: 'rule/r0001-yagiri',
         scaffoldSha: 'a'.repeat(40),
-        promptVersion: 'cx02-v2',
+        promptVersion: 'cx02-v3',
       }),
     ).toMatchObject({
       status: 'updated',
@@ -168,7 +168,7 @@ describe('CX-02 pipeline jobs', () => {
         phase: 'implementing',
         branch: 'rule/r0001-yagiri',
         scaffoldSha: 'a'.repeat(40),
-        promptVersion: 'cx02-v2',
+        promptVersion: 'cx02-v3',
       },
     });
     expect(jobs.next()).toBeNull();
@@ -224,7 +224,7 @@ describe('CX-02 pipeline jobs', () => {
         to: 'implementing',
         branch: 'rule/wrong',
         scaffoldSha: 'a'.repeat(40),
-        promptVersion: 'cx02-v2',
+        promptVersion: 'cx02-v3',
       }),
     ).toEqual({
       status: 'invalid',
@@ -242,7 +242,7 @@ describe('CX-02 pipeline jobs', () => {
       to: 'implementing',
       branch: 'rule/r0001-yagiri',
       scaffoldSha: 'a'.repeat(40),
-      promptVersion: 'cx02-v2',
+      promptVersion: 'cx02-v3',
     });
 
     expect(
@@ -281,7 +281,7 @@ describe('CX-02 pipeline jobs', () => {
       to: 'implementing',
       branch: 'rule/r0001-yagiri',
       scaffoldSha: 'a'.repeat(40),
-      promptVersion: 'cx02-v2',
+      promptVersion: 'cx02-v3',
     });
 
     expect(
@@ -304,7 +304,7 @@ describe('CX-02 pipeline jobs', () => {
         to: 'implementing',
         branch: 'rule/r0001-yagiri',
         scaffoldSha: 'b'.repeat(40),
-        promptVersion: 'cx02-v2',
+        promptVersion: 'cx02-v3',
       }),
     ).toEqual({
       status: 'invalid',
@@ -316,7 +316,7 @@ describe('CX-02 pipeline jobs', () => {
         to: 'implementing',
         branch: 'rule/r0001-yagiri-a2',
         scaffoldSha: 'b'.repeat(40),
-        promptVersion: 'cx02-v2',
+        promptVersion: 'cx02-v3',
       }),
     ).toMatchObject({
       status: 'updated',

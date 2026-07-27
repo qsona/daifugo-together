@@ -11,6 +11,7 @@ import {
   prepareImplementationWorkspace,
   removeCompletedWorkspace,
   runTransient,
+  verifyGitHubPublisher,
 } from './implementation-cli-workflow.js';
 import type { ProcessPort, ProcessResult } from './process.js';
 
@@ -54,7 +55,7 @@ function item(
       prNumber: null,
       headSha: null,
       scaffoldSha: 'a'.repeat(40),
-      promptVersion: 'cx02-v2',
+      promptVersion: 'cx02-v3',
       errorCode: null,
       errorNote: null,
       createdAt: 1,
@@ -131,6 +132,38 @@ function retryJobs(
 }
 
 describe('implementation CLI workflow', () => {
+  it('repository ownerまたは追加allowlistのgh loginだけを許可する', async () => {
+    const ownerProcess = processPort(async () =>
+      result(0, { stdout: 'qsona\n' }),
+    );
+    await expect(
+      verifyGitHubPublisher({
+        process: ownerProcess,
+        repositoryUrl: 'git@github.com:qsona/daifugo-together.git',
+        cwd: '/repo',
+      }),
+    ).resolves.toBe('qsona');
+
+    const pipelineProcess = processPort(async () =>
+      result(0, { stdout: 'pipeline-bot\n' }),
+    );
+    await expect(
+      verifyGitHubPublisher({
+        process: pipelineProcess,
+        repositoryUrl: 'https://github.com/qsona/daifugo-together.git',
+        additionalAllowedAuthors: 'pipeline-bot',
+        cwd: '/repo',
+      }),
+    ).resolves.toBe('pipeline-bot');
+    await expect(
+      verifyGitHubPublisher({
+        process: pipelineProcess,
+        repositoryUrl: 'https://github.com/qsona/daifugo-together.git',
+        cwd: '/repo',
+      }),
+    ).rejects.toThrow('is not allowed to publish rule PRs');
+  });
+
   it('transient commandを最大3回、指数バックオフ付きで再試行する', async () => {
     const waits: number[] = [];
     let calls = 0;

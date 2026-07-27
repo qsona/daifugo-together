@@ -1,0 +1,76 @@
+import type { RuleModule } from '@daifugo/core';
+import { describe, expect, it } from 'vitest';
+
+import { runRuleSimulations, simulationViolations } from './runner.js';
+
+function module(id: string, hooks: RuleModule['hooks'] = {}): RuleModule {
+  return {
+    meta: {
+      ruleId: id,
+      name: id,
+      description: id,
+      kind: 'original',
+      proposalId: `proposal-${id}`,
+      contractVersion: 1,
+      messages: {},
+    },
+    hooks,
+  };
+}
+
+describe('CX-03 simulation runner', () => {
+  it('new-only/allの2構成を固定seedで完走する', () => {
+    const runs = runRuleSimulations({
+      modules: [module('r0001-one'), module('r0002-two')],
+      newRuleId: 'r0002-two',
+      games: 2,
+      seeds: 2,
+    });
+
+    expect(runs).toHaveLength(4);
+    expect(new Set(runs.map((run) => run.configuration))).toEqual(
+      new Set(['new-only', 'all']),
+    );
+    expect(simulationViolations(runs)).toEqual([]);
+  });
+
+  it('rule例外を握りつぶさずCI違反として報告する', () => {
+    const runs = runRuleSimulations({
+      modules: [
+        module('r0001-broken', {
+          onGameStart() {
+            throw new Error('broken');
+          },
+        }),
+      ],
+      newRuleId: 'r0001-broken',
+      games: 1,
+      seeds: 1,
+    });
+
+    expect(simulationViolations(runs)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('r0001-broken/onGameStart: exception'),
+      ]),
+    );
+  });
+
+  it('不正Effectをsimulation不変条件違反として報告する', () => {
+    const runs = runRuleSimulations({
+      modules: [
+        module('r0001-invalid', {
+          onGameStart() {
+            return [{ type: 'clearField' }];
+          },
+        }),
+      ],
+      newRuleId: 'r0001-invalid',
+      games: 1,
+      seeds: 1,
+    });
+
+    expect(simulationViolations(runs)).toEqual(
+      expect.arrayContaining([expect.stringContaining('invalid-effect')]),
+    );
+  });
+});

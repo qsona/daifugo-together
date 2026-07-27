@@ -42,6 +42,42 @@ function failed(result: ProcessResult): boolean {
   return result.timedOut || result.exitCode !== 0;
 }
 
+export function repositoryOwner(repositoryUrl: string): string | null {
+  return (
+    /github\.com[/:]([^/]+)\/[^/]+(?:\.git)?$/u.exec(repositoryUrl)?.[1] ?? null
+  );
+}
+
+export async function verifyGitHubPublisher(options: {
+  process: ProcessPort;
+  repositoryUrl: string;
+  additionalAllowedAuthors?: string;
+  cwd: string;
+}): Promise<string> {
+  const owner = repositoryOwner(options.repositoryUrl);
+  if (!owner)
+    throw new Error('RULE_REPOSITORY_URL must be a GitHub repository');
+  const result = await runTransient(options.process, {
+    command: 'gh',
+    args: ['api', 'user', '--jq', '.login'],
+    cwd: options.cwd,
+    timeoutMs: 60_000,
+  });
+  if (failed(result)) {
+    throw new Error(result.stderr.trim() || 'could not inspect gh login');
+  }
+  const login = result.stdout.trim();
+  const allowed = new Set(
+    [owner, ...(options.additionalAllowedAuthors ?? '').split(',')]
+      .map((value) => value.trim().toLowerCase())
+      .filter(Boolean),
+  );
+  if (!allowed.has(login.toLowerCase())) {
+    throw new Error(`gh login ${login} is not allowed to publish rule PRs`);
+  }
+  return login;
+}
+
 export async function prepareImplementationRetry(options: {
   jobs: Pick<PipelineJobPort, 'resume' | 'retry'>;
   process: ProcessPort;

@@ -4,6 +4,38 @@
 
 自動実装されるルールは `RuleModule` として独立登録し、状態を直接変更せず `Effect` を返します。同一バッチの全ルールは、権威状態から複製して深く凍結した同一時点のビューを受け取ります。メモリと乱数はルール ID ごとに分離されます。
 
+`rule.ts` は `@daifugo/core` だけをimportし、`export const rule:
+RuleModule` を1件公開します。`rule.test.ts` は `@daifugo/core` と `vitest`
+だけをimportできます。`rule.meta` は同じディレクトリの `meta.json`
+全フィールドを正確に複製してください。CIは型だけでなくJSONとのdeep equalityも検査します。
+
+```ts
+import type { RuleModule } from '@daifugo/core';
+
+export const rule: RuleModule = {
+  meta: {
+    ruleId: 'r0001-example',
+    name: '例ルール',
+    description: '例の説明',
+    kind: 'original',
+    proposalId: 'proposal-id',
+    contractVersion: 1,
+    messages: { fired: '例ルールが発動しました' },
+  },
+  hooks: {
+    afterPlay(context, play) {
+      return play.cards.some((card) => card.rank === '8')
+        ? [{ type: 'clearField' }]
+        : [];
+    },
+  },
+};
+```
+
+テストでは公開契約の `RuleContext` を満たす最小fixture builderを
+`rule.test.ts` 内に置きます。fixtureは固定値だけを使い、発動・非発動・
+境界/複数枚と `SPEC.json.testPoints` を検証します。
+
 契約 v1 では、プレイヤーへの追加入力、手の種類の追加、パス起点のフックには対応しません。
 
 ## フック

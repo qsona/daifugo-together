@@ -3,7 +3,7 @@ import type { QueuedImplementation } from '@daifugo/server';
 import { createRuleScaffold, type ScaffoldResult } from './scaffold.js';
 import { inspectGeneratedRule } from './inspector.js';
 
-export const IMPLEMENTATION_PROMPT_VERSION = 'cx02-v2';
+export const IMPLEMENTATION_PROMPT_VERSION = 'cx02-v3';
 
 export interface CodexRunner {
   run(input: { directory: string; promptPath: string }): Promise<

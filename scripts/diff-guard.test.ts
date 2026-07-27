@@ -1,5 +1,12 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -70,7 +77,7 @@ function check(
   return validateRulePullRequest({
     ...repository,
     branch: `rule/${directory}`,
-    prBody: `<!-- daifugo-pipeline\nscaffold-sha: ${repository.scaffoldSha}\nend-daifugo-pipeline -->`,
+    prBody: `<!-- daifugo-pipeline\nscaffold-sha: ${repository.scaffoldSha}\nbase-sha: ${repository.base}\nend-daifugo-pipeline -->`,
     author: 'qsona',
     allowedAuthors: ['qsona'],
     ...overrides,
@@ -88,8 +95,10 @@ describe('diff guard', () => {
     const repository = createRepository();
 
     expect(check(repository)).toMatchObject({
+      mode: 'pipeline',
       directory,
       scaffoldSha: repository.scaffoldSha,
+      recordedBaseSha: repository.base,
       violations: [],
     });
   });
@@ -151,11 +160,22 @@ describe('diff guard', () => {
     );
   });
 
+  it('-a2 retry branchを許可する', () => {
+    const repository = createRepository();
+
+    expect(
+      check(repository, { branch: `rule/${directory}-a2` }).violations,
+    ).toEqual([]);
+  });
+
   it('第三者PRを拒否する', () => {
     const repository = createRepository();
 
     expect(check(repository, { author: 'attacker' }).violations).toContain(
       'PR作成者 attacker は許可されたpipeline作成者ではありません。',
+    );
+    expect(check(repository, { allowedAuthors: [] }).violations).toContain(
+      'PR作成者 qsona は許可されたpipeline作成者ではありません。',
     );
   });
 
@@ -164,24 +184,37 @@ describe('diff guard', () => {
     const duplicate = `<!-- daifugo-pipeline
 scaffold-sha: ${repository.scaffoldSha}
 scaffold-sha: ${repository.scaffoldSha}
+base-sha: ${repository.base}
 end-daifugo-pipeline -->`;
 
     expect(check(repository, { prBody: '' }).violations).toContain(
-      'PR本文の機械可読blockにscaffold-shaが1件必要です。',
+      'PR本文の機械可読blockにscaffold-shaとbase-shaが各1件必要です。',
     );
     expect(check(repository, { prBody: duplicate }).violations).toContain(
-      'PR本文の機械可読blockにscaffold-shaが1件必要です。',
+      'PR本文の機械可読blockにscaffold-shaとbase-shaが各1件必要です。',
     );
     expect(
       check(repository, {
         prBody: `<!-- daifugo-pipeline
 scaffold-sha: ${repository.scaffoldSha}
+base-sha: ${repository.base}
 end-daifugo-pipeline -->
 <!-- daifugo-pipeline
 scaffold-sha: ${repository.scaffoldSha}
+base-sha: ${repository.base}
 end-daifugo-pipeline -->`,
       }).violations,
-    ).toContain('PR本文の機械可読blockにscaffold-shaが1件必要です。');
+    ).toContain(
+      'PR本文の機械可読blockにscaffold-shaとbase-shaが各1件必要です。',
+    );
+    expect(
+      check(repository, {
+        prBody: `<!-- daifugo-pipeline
+scaffold-sha: ${'f'.repeat(40)}
+base-sha: ${repository.base}
+end-daifugo-pipeline -->`,
+      }).violations,
+    ).toContain('scaffold SHAはPR headの祖先ではありません。');
   });
 
   it('scaffold後のmeta/SPEC改変を拒否する', () => {
@@ -257,8 +290,90 @@ end-daifugo-pipeline -->`,
     );
     repository.head = commit(repository.cwd, 'implement');
 
+    expect(
+      check(repository, {
+        prBody: `<!-- daifugo-pipeline
+scaffold-sha: ${repository.scaffoldSha}
+base-sha: ${repository.base}
+end-daifugo-pipeline -->`,
+      }).violations,
+    ).toContain('scaffold commitの親が記録済みbase SHAと一致しません。');
+  });
+
+  it('通常branchはgenerated rule差分を拒否し、非生成差分だけなら許可する', () => {
+    const repository = createRepository();
+    expect(check(repository, { branch: 'feature/bypass' }).violations).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining(
+          'generated ruleの変更はrule/**またはrevert/** branchだけ許可します。',
+        ),
+      ]),
+    );
+
+    git(repository.cwd, 'reset', '--hard', repository.base);
+    write(repository.cwd, 'docs/note.md', 'normal change\n');
+    repository.head = commit(repository.cwd, 'normal change');
+    expect(check(repository, { branch: 'feature/normal' })).toMatchObject({
+      mode: 'ordinary',
+      violations: [],
+    });
+  });
+
+  it('trusted revert branchだけが単一ルール4ファイルの削除を許可する', () => {
+    const repository = createRepository();
+    repository.base = repository.head;
+    for (const file of ['meta.json', 'SPEC.json', 'rule.ts', 'rule.test.ts']) {
+      git(repository.cwd, 'rm', `packages/rules/${directory}/${file}`);
+    }
+    repository.head = commit(repository.cwd, 'revert rule');
+
+    expect(check(repository, { branch: `revert/${directory}` })).toMatchObject({
+      mode: 'revert',
+      directory,
+      violations: [],
+    });
+    expect(
+      check(repository, {
+        branch: `revert/${directory}`,
+        author: 'attacker',
+      }).violations,
+    ).toContain('PR作成者 attacker は許可されたpipeline作成者ではありません。');
+  });
+
+  it('main更新をmergeしても記録済みbaseとscaffoldを維持して通過する', () => {
+    const repository = createRepository();
+    const ruleHead = repository.head;
+    git(repository.cwd, 'checkout', '-b', 'updated-main', repository.base);
+    write(repository.cwd, 'docs/main.md', 'main advanced\n');
+    const currentBase = commit(repository.cwd, 'advance main');
+    git(repository.cwd, 'checkout', '-b', 'rule-branch', ruleHead);
+    git(repository.cwd, 'merge', '--no-edit', 'updated-main');
+    repository.head = git(repository.cwd, 'rev-parse', 'HEAD');
+
+    expect(
+      git(
+        repository.cwd,
+        'merge-base',
+        '--is-ancestor',
+        currentBase,
+        repository.head,
+      ),
+    ).toBe('');
+    expect(check(repository, { base: currentBase }).violations).toEqual([]);
+  });
+
+  it('generated ruleのsymlinkをregular fileとして拒否する', () => {
+    const repository = createRepository();
+    const rulePath = join(
+      repository.cwd,
+      `packages/rules/${directory}/rule.ts`,
+    );
+    unlinkSync(rulePath);
+    symlinkSync('SPEC.json', rulePath);
+    repository.head = commit(repository.cwd, 'replace rule with symlink');
+
     expect(check(repository).violations).toContain(
-      'scaffold commitはPR branchの基点直後ではありません。',
+      `packages/rules/${directory}/rule.ts: regular file mode 100644が必要です。`,
     );
   });
 });

@@ -129,7 +129,7 @@ describe('GitImplementationPublisher', () => {
 
     await writeFile(
       join(recoveredScaffold.directory, 'rule.ts'),
-      'export {};\n',
+      'export const rule = { hooks: {} };\n',
     );
     await writeFile(
       join(recoveredScaffold.directory, 'rule.test.ts'),
@@ -193,11 +193,13 @@ describe('GitImplementationPublisher', () => {
       prNumber: 42,
       headSha: expect.stringMatching(/^[0-9a-f]{40}$/u),
     });
-    expect(
-      ghCalls
-        .find((args) => args[0] === 'pr' && args[1] === 'create')
-        ?.join('\n'),
-    ).toContain(`SPEC summary: ${item.spec.summary}`);
+    const createArguments = ghCalls
+      .find((args) => args[0] === 'pr' && args[1] === 'create')
+      ?.join('\n');
+    expect(createArguments).toContain(`SPEC summary: ${item.spec.summary}`);
+    expect(createArguments).toContain(
+      `base-sha: ${(await git(recovered, 'rev-parse', `${published.scaffoldSha}^`)).stdout.trim()}`,
+    );
     await expect(
       new GitImplementationPublisher({
         repoRoot: recovered,
@@ -210,7 +212,7 @@ describe('GitImplementationPublisher', () => {
             phase: 'implementing',
             branch: published.branch,
             scaffoldSha: published.scaffoldSha,
-            promptVersion: 'cx02-v2',
+            promptVersion: 'cx02-v3',
           },
         },
         scaffold: recoveredScaffold,
@@ -223,7 +225,9 @@ describe('GitImplementationPublisher', () => {
         'show',
         `origin/${published.branch}:packages/rules/r0001-yagiri/rule.ts`,
       ),
-    ).resolves.toMatchObject({ stdout: 'export {};\n' });
+    ).resolves.toMatchObject({
+      stdout: 'export const rule = { hooks: {} };\n',
+    });
 
     await writeFile(join(recovered, 'outside.txt'), 'unexpected\n');
     await expect(
