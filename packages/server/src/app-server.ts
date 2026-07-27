@@ -205,7 +205,13 @@ export function createAppServer(options: AppServerOptions): AppServer {
       writeJson(response, 401, { error: 'unauthorized' });
       return true;
     }
-    const ruleId = decodeURIComponent(match[1]!);
+    let ruleId: string;
+    try {
+      ruleId = decodeURIComponent(match[1]!);
+    } catch {
+      writeJson(response, 400, { error: 'invalid_path_encoding' });
+      return true;
+    }
     const action = match[2];
     if (!action) {
       if (request.method !== 'GET') {

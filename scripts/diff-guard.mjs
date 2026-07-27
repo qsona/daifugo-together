@@ -34,6 +34,39 @@ function gitExitCode(cwd, args) {
   }
 }
 
+function validateRevertExclude(cwd, base, head, directory) {
+  try {
+    const before = JSON.parse(
+      git(cwd, ['show', `${base}:packages/rules/rules-exclude.json`]),
+    );
+    const after = JSON.parse(
+      git(cwd, ['show', `${head}:packages/rules/rules-exclude.json`]),
+    );
+    if (
+      !Array.isArray(before) ||
+      !Array.isArray(after) ||
+      !before.every((value) => typeof value === 'string') ||
+      !after.every((value) => typeof value === 'string') ||
+      new Set(before).size !== before.length ||
+      new Set(after).size !== after.length
+    ) {
+      return ['rules-exclude.jsonは重複のないstring配列である必要があります。'];
+    }
+    const expected = before.filter((ruleId) => ruleId !== directory);
+    if (
+      !before.includes(directory) ||
+      JSON.stringify(after) !== JSON.stringify(expected)
+    ) {
+      return [
+        `rules-exclude.jsonはrevert対象 ${directory} の既存entry削除だけ許可します。`,
+      ];
+    }
+    return [];
+  } catch {
+    return ['rules-exclude.jsonのrevert差分を解析できません。'];
+  }
+}
+
 export function changedEntries({ base, head, cwd = process.cwd() }) {
   const output = git(cwd, [
     'diff',
@@ -258,6 +291,13 @@ export function validateRulePullRequest(options) {
         violations.push(
           `branch ${branch} が revert/${directory} と一致しません。`,
         );
+      }
+      if (
+        entries.some(
+          (entry) => entry.path === 'packages/rules/rules-exclude.json',
+        )
+      ) {
+        violations.push(...validateRevertExclude(cwd, base, head, directory));
       }
     }
     return {

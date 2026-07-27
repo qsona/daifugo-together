@@ -54,6 +54,11 @@ export function createInProcessRuleChainPort(
   options: { onIssue?: (issue: RuleExecutionIssue) => void } = {},
 ): RuleChainPort {
   const byId = new Map(modules.map((module) => [module.meta.ruleId, module]));
+  const disabled = new Set<RuleId>();
+  const report = (issue: RuleExecutionIssue) => {
+    disabled.add(issue.ruleId);
+    options.onIssue?.(issue);
+  };
 
   return {
     modifyLegality(
@@ -65,27 +70,31 @@ export function createInProcessRuleChainPort(
       const results = [...base];
       const influenced = new Set<RuleId>();
       for (const entry of lowToHigh(entries)) {
+        if (disabled.has(entry.ruleId)) continue;
         const hook = byId.get(entry.ruleId)?.hooks.modifyLegality;
         if (!hook) {
           continue;
         }
+        const beforeRule = structuredClone(results);
+        let failed = false;
         const ruleContext = contextForRule(context, entry.ruleId);
-        plays.forEach((play, index) => {
+        for (const [index, play] of plays.entries()) {
           const before = results[index];
           if (!before) {
-            return;
+            continue;
           }
           try {
             const after = detachedClone(
               hook(ruleContext, detachedFrozen(play), detachedFrozen(before)),
             );
             if (!isLegality(after)) {
-              options.onIssue?.({
+              report({
                 ruleId: entry.ruleId,
                 hook: 'modifyLegality',
                 reason: 'invalid-return',
               });
-              return;
+              failed = true;
+              break;
             }
             const wasChanged = changed(before, after);
             results[index] = after;
@@ -93,14 +102,19 @@ export function createInProcessRuleChainPort(
               influenced.add(entry.ruleId);
             }
           } catch {
-            options.onIssue?.({
+            report({
               ruleId: entry.ruleId,
               hook: 'modifyLegality',
               reason: 'exception',
             });
-            return;
+            failed = true;
+            break;
           }
-        });
+        }
+        if (failed) {
+          results.splice(0, results.length, ...beforeRule);
+          influenced.delete(entry.ruleId);
+        }
       }
       return { results, influenced: [...influenced] };
     },
@@ -113,6 +127,7 @@ export function createInProcessRuleChainPort(
       let result = base;
       const influenced = new Set<RuleId>();
       for (const entry of lowToHigh(entries)) {
+        if (disabled.has(entry.ruleId)) continue;
         const hook = byId.get(entry.ruleId)?.hooks.modifyStrength;
         if (!hook) {
           continue;
@@ -123,7 +138,7 @@ export function createInProcessRuleChainPort(
             hook(contextForRule(context, entry.ruleId), detachedFrozen(result)),
           );
         } catch {
-          options.onIssue?.({
+          report({
             ruleId: entry.ruleId,
             hook: 'modifyStrength',
             reason: 'exception',
@@ -131,7 +146,7 @@ export function createInProcessRuleChainPort(
           continue;
         }
         if (!next) {
-          options.onIssue?.({
+          report({
             ruleId: entry.ruleId,
             hook: 'modifyStrength',
             reason: 'invalid-return',
@@ -150,6 +165,7 @@ export function createInProcessRuleChainPort(
       return [...entries]
         .sort((left, right) => left.position - right.position)
         .flatMap((entry) => {
+          if (disabled.has(entry.ruleId)) return [];
           const hooks = byId.get(entry.ruleId)?.hooks;
           const hook = hooks?.[hookName];
           if (!hook) {
@@ -178,7 +194,7 @@ export function createInProcessRuleChainPort(
               );
             }
             if (!effects) {
-              options.onIssue?.({
+              report({
                 ruleId: entry.ruleId,
                 hook: hookName,
                 reason: 'invalid-return',
@@ -187,7 +203,7 @@ export function createInProcessRuleChainPort(
             }
             return [{ ruleId: entry.ruleId, effects }];
           } catch {
-            options.onIssue?.({
+            report({
               ruleId: entry.ruleId,
               hook: hookName,
               reason: 'exception',

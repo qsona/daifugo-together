@@ -469,16 +469,30 @@ describe('production app server', () => {
       createdAt: 1,
       updatedAt: 1,
     };
-    const get = vi.fn(() => ({ status: 'found' as const, rule }));
-    const disable = vi.fn(() => ({
-      status: 'updated' as const,
-      rule: {
-        ...rule,
-        status: 'disabled' as const,
-        disabledReason: 'manual' as const,
-      },
-    }));
-    const enable = vi.fn(() => ({ status: 'updated' as const, rule }));
+    const get = vi.fn((ruleId: string) =>
+      ruleId === 'missing'
+        ? ({ status: 'not_found' } as const)
+        : { status: 'found' as const, rule, versions: [], incidents: [] },
+    );
+    const disable = vi.fn((ruleId: string, body: unknown) =>
+      ruleId === 'removed'
+        ? ({ status: 'conflict', error: 'rule_removed' } as const)
+        : (body as { reason?: string }).reason !== 'manual'
+          ? ({ status: 'invalid', error: 'invalid_reason' } as const)
+          : ({
+              status: 'updated',
+              rule: {
+                ...rule,
+                status: 'disabled',
+                disabledReason: 'manual',
+              },
+            } as const),
+    );
+    const enable = vi.fn((ruleId: string) =>
+      ruleId === 'removed'
+        ? ({ status: 'conflict', error: 'rule_removed' } as const)
+        : ({ status: 'updated', rule } as const),
+    );
     const app = createAppServer({
       webDistDir: directory,
       adminRules: {
@@ -497,7 +511,12 @@ describe('production app server', () => {
       headers: { authorization: 'Bearer admin-token' },
     });
     expect(found.status).toBe(200);
-    await expect(found.json()).resolves.toEqual({ status: 'found', rule });
+    await expect(found.json()).resolves.toEqual({
+      status: 'found',
+      rule,
+      versions: [],
+      incidents: [],
+    });
 
     const disabled = await fetch(
       `${baseUrl}/admin/rules/r0001-yagiri/disable`,
@@ -521,5 +540,48 @@ describe('production app server', () => {
     });
     expect(enabled.status).toBe(200);
     expect(enable).toHaveBeenCalledWith('r0001-yagiri');
+
+    expect(
+      (
+        await fetch(`${baseUrl}/admin/rules/missing`, {
+          headers: { authorization: 'Bearer admin-token' },
+        })
+      ).status,
+    ).toBe(404);
+    expect(
+      (
+        await fetch(`${baseUrl}/admin/rules/removed/enable`, {
+          method: 'POST',
+          headers: { authorization: 'Bearer admin-token' },
+        })
+      ).status,
+    ).toBe(409);
+    expect(
+      (
+        await fetch(`${baseUrl}/admin/rules/r0001-yagiri/disable`, {
+          method: 'POST',
+          headers: {
+            authorization: 'Bearer admin-token',
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({ reason: 'auto_incident' }),
+        })
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await fetch(`${baseUrl}/admin/rules/r0001-yagiri`, {
+          method: 'DELETE',
+          headers: { authorization: 'Bearer admin-token' },
+        })
+      ).status,
+    ).toBe(405);
+    const malformed = await fetch(`${baseUrl}/admin/rules/%E0%A4%A`, {
+      headers: { authorization: 'Bearer admin-token' },
+    });
+    expect(malformed.status).toBe(400);
+    await expect(malformed.json()).resolves.toEqual({
+      error: 'invalid_path_encoding',
+    });
   });
 });

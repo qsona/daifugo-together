@@ -8,8 +8,8 @@
 - **フェーズ 2 / E6 YC-01〜03 プロセス2完了**: E-18 の非同期構成、ローカル判定ツール、イエローカード表示・停止・救済まで実装済み。修正後 judge eval は Luna/Sol とも 40/40、平均 6.40秒 / 6.23秒のため既定を **GPT-5.6 Sol medium** とした。独立 GPT-5.6 Sol 完了レビューは要件適合 `PASS` / 品質 `APPROVED`
 - **フェーズ 2 / E7 CX-01 プロセス2ほぼ完了**: 独立方向性レビュー `GO_WITH_FIXES` のImportant 4件と、初回完了レビューのImportant 2件を反映。完了再レビューはコード・自動テスト `PASS` / 品質 `APPROVED` / Critical・Importantなし。実app-server評価だけ明示許可待ち
 - **フェーズ 2 / E7 CX-02 プロセス2完了**: subscription Codex CLIを使う共有skill、scaffold先行push/任意段階再開、全差分・履歴検収、1回retry、PR作成、失敗永続化まで実装。独立最終再レビューはコード・テスト範囲 `PASS` / 品質 `APPROVED` / 全指摘なし。実subscriptionでのルール生成・実PR作成は未実行
-- **フェーズ 2 / E7 CX-03 プロセス2再レビュー修正中、外部受入ゲート待ち**: trusted diff-guard、untrusted quality/rule-tests/simulation、ローカルCI監視を実装。2回目の独立完了レビューで見つかったskip test通過とCI job順序を修正し、無限loopの外側timeout回帰も追加。実repositoryのbranch protection/ruleset登録はworkflowのmain反映後
-- **フェーズ 2 / E7 CX-04 プロセス1実装中**: DBフラグによる単独disable/enable、管理API、コード側registryとの積集合、最初のセットを含むセット開始時再読込まで縦に接続。方向性レビュー前のfocusedは3 files / 14 tests成功
+- **フェーズ 2 / E7 CX-03 プロセス2完了、外部受入ゲート待ち**: trusted diff-guard、untrusted quality/rule-tests/simulation、ローカルCI監視を実装。独立完了再レビューはコード・自動テスト `PASS` / 品質 `APPROVED` / Critical・Importantなし。実repositoryのbranch protection/ruleset登録はworkflowのmain反映後
+- **フェーズ 2 / E7 CX-04 プロセス2実装・検証中**: 即時disable/enable、セット内障害隔離、24時間内3セットでの自動disable、版履歴と恒久revert同期、管理API、revert差分ガード、runbookまで実装。独立完了レビュー前
 - E1〜E3 の実装記録は本書末尾の「並行進行」節、E13 は「E13」節。E4 の未解消の開発者判断は「詰まっている点」に残っている(1〜4・7・8・11)
 
 ### E-18 / C-2・C-3・C-6 再設計の反映(2026-07-27)
@@ -420,6 +420,37 @@ E3 マージ後の実プレーで開発者から 4 件の指摘を受け、反�
 - `rule_incidents`、同一セット内の実行時ルール除去、coreの`RuleExecutionIssue`からの記録、24時間以内3 distinct setの自動disableと開発者通知
 - `rule_versions`、起動時同期によるrevert検知、恒久revert後の`reverted_at`記録、runbookの実リハーサル
 - APIの境界値・冪等性・DB再起動永続化、基本ルールのみの完走、他ルール非影響のシミュレーションを含む受け入れ条件の仕上げ
+
+#### プロセス1方向性レビューとプロセス2反映
+
+- 独立 GPT-5.6 Sol の判定: **GO_WITH_FIXES**。Criticalなし、Important 3件、Minor 2件
+- Important（registry境界）: DB active順を権威にし、コード欠落・重複、contract version不一致、DB/meta不一致を全てfail-closedにした。load failureはセット開始を止めずincidentと通知ログへ送る
+- Important（enable境界）: removedだけでなく、コード欠落・重複・契約不一致・meta不一致も409相当で復帰拒否する
+- Important（状態遷移）: expected status付きの汎用CAS transitionとrepository transactionを追加し、CX-04・将来E8の競合を同じ原子境界で扱えるようにした。E8専用のremoved/reinstate公開操作は追加していない
+- Minor（API）: 不正percent encodingを400、未知ruleを404、状態・コード競合を409、不正reasonを400、非対応methodを405として回帰化した
+- Minor（永続化）: file SQLiteを閉じて再起動し、versionと恒久revert状態が保持されることを確認した
+
+#### プロセス2実装
+
+- `rule_incidents`を追加し、`exception / invalid_effect / load_failure`をルール・セット単位で冪等記録する。同一セットで複数回・複数種が起きても閾値上は1セットと数え、**24時間内3 distinct set**でactiveルールだけを`disabled / auto_incident`へ原子的に遷移させる
+- hook例外・不正返値はcoreのセット専用portが当該ルールだけを以後のhookから除外する。`modifyLegality`が候補列の途中で失敗した場合は、その呼び出し中の部分変更も巻き戻す。engineがEffectを拒否した場合もserverが`invalid_effect`を記録し、同じセットの後続hookから除外する
+- ルールchainはセット開始が権限・phase検証を通過してから読み込む。拒否されたstart操作をload incidentへ誤計上せず、開始後は固定し、次セットだけ最新DB状態を反映する。セット終了時に専用portを解放する
+- `rule_versions`とcurrent一意制約を追加し、同期の再実行を冪等化した。起動時同期はcurrent versionに対応するコード欠落を検出し、`reverted_at`を記録してrule行を`disabled / rollback`のまま保持する
+- revert PRの差分ガードは対象ルール4ファイルの削除に加え、一時excludeが存在する場合だけ**その1 entryの削除**を許す。他entryの削除・追加・並べ替えは拒否する
+- `docs/runbooks/E07-rule-rollback.md`に即時disable、誤操作復帰、恒久revert、事後SQL・API確認、基本ルールsimulationまでを記載した
+
+#### 置いた仮定（完了レビュー対象）
+
+| # | 仮定した内容 | なぜそう決めたか | 出典 | 覆ったときの影響範囲 |
+|---|---|---|---|---|
+| E7-CX04-P2-1 | 自動無効化の閾値を24時間内3 distinct setで確定する | E07の暫定値を採用し、同一セット内の連鎖障害で即座に全卓から外れない一方、再現性のある事故は短時間で止めるため | E07 §3.4(b)(f)、E12 §7-8 | `AUTO_DISABLE_*`、incident集計テスト、運用アラート |
+| E7-CX04-P2-2 | 開発者通知の当面の出口は構造化サーバーログとする | 通知チャネルとキュー可視化はE10 OP-01の責務で、CX-04では障害を欠落なく記録し運用へ渡せれば境界を保てるため | E07 §3.4、E10 OP-01 | `bin.ts` callback。OP-01で永続通知または外部通知へ差し替え |
+| E7-CX04-P2-3 | 起動時revert同期はコードregistryに一度でも登録されたcurrent versionだけを対象にする | rule rowだけでは未有効化と恒久削除を区別できないため。`rule_versions.is_current`をデプロイ済み版の根拠にする | E07 §3.4(b)・§3.5(c) | `markMissingCodeReverted()`、CX-05のmerge/version登録 |
+
+#### 残る外部受入ゲート
+
+- runbookの「即時disable → 復帰 → 恒久revert PR → CD → 起動時同期」を実repository・実環境で1回リハーサルする。実PR・mainデプロイを伴うため、自動テストとは分離して開発者の実施許可後に行う
+- `packages/rules`の静的import registryと、merge時の`rules / rule_versions`登録はCX-05の実装で接続する。CX-04側のロード・revert同期境界はFake registryで回帰済み
 
 ## 完了したストーリー
 

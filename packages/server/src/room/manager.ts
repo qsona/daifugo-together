@@ -25,7 +25,7 @@ export interface RoomManagerOptions {
   createRoomId?: () => string;
   createMemberId?: () => string;
   randomIndex?: (maxExclusive: number) => number;
-  availableRules?: () => RuleChainEntry[];
+  availableRules?: (setId?: string) => RuleChainEntry[];
   reducer?: RoomReducerOptions;
   persistence?: RoomPersistencePort;
 }
@@ -75,7 +75,7 @@ export class RoomManager {
     createRoomId: () => string;
     createMemberId: () => string;
     randomIndex: (maxExclusive: number) => number;
-    availableRules: (() => RuleChainEntry[]) | undefined;
+    availableRules: ((setId?: string) => RuleChainEntry[]) | undefined;
     reducer: RoomReducerOptions | undefined;
     persistence: RoomPersistencePort | undefined;
   };
@@ -290,22 +290,25 @@ export class RoomManager {
     if (!room) {
       return undefined;
     }
-    const effectiveAction =
-      (action.type === 'start' ||
-        action.type === 'continue' ||
-        action.type === 'leave' ||
-        action.type === 'expireSetResult') &&
-      this.#options.availableRules
-        ? {
-            ...action,
-            availableRules: this.#options.availableRules(),
-          }
-        : action;
-    const transition = reduceRoom(room, effectiveAction, this.#options.reducer);
+    const reducer = this.#options.availableRules
+      ? {
+          ...this.#options.reducer,
+          availableRulesForSet: (setId: string) =>
+            this.#options.availableRules!(setId),
+        }
+      : this.#options.reducer;
+    const transition = reduceRoom(room, action, reducer);
     if (!transition.accepted) {
       return transition;
     }
-    this.#options.persistence?.commit(room, effectiveAction, transition);
+    this.#options.persistence?.commit(room, action, transition);
+    if (
+      room.engine &&
+      (transition.state.engine?.setId !== room.engine.setId ||
+        transition.state.phase === 'closed')
+    ) {
+      this.#options.reducer?.releaseRulePort?.(room.engine.setId);
+    }
     this.#rooms.set(roomId, transition.state);
     if (action.type === 'leave') {
       const leaving = room.members.find(

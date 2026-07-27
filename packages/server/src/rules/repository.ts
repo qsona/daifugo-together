@@ -38,6 +38,42 @@ export interface RegisterRuleInput {
   now: number;
 }
 
+export const RULE_INCIDENT_TYPES = [
+  'exception',
+  'invalid_effect',
+  'load_failure',
+] as const;
+export type RuleIncidentType = (typeof RULE_INCIDENT_TYPES)[number];
+
+export interface StoredRuleIncident {
+  id: number;
+  ruleId: string;
+  setId: string | null;
+  type: RuleIncidentType;
+  detail: string | null;
+  createdAt: number;
+}
+
+export interface StoredRuleVersion {
+  id: number;
+  ruleId: string;
+  version: number;
+  contractVersion: number;
+  prNumber: number | null;
+  mergeSha: string | null;
+  isCurrent: boolean;
+  revertedAt: number | null;
+  createdAt: number;
+}
+
+export interface RuleLifecycleTransition {
+  ruleId: string;
+  expectedStatuses: readonly RuleStatus[];
+  nextStatus: RuleStatus;
+  disabledReason: RuleDisabledReason | null;
+  now: number;
+}
+
 type RuleRow = {
   id: string;
   slug: string;
@@ -50,6 +86,27 @@ type RuleRow = {
   disabled_reason: RuleDisabledReason | null;
   created_at: number;
   updated_at: number;
+};
+
+type RuleIncidentRow = {
+  id: number;
+  rule_id: string;
+  set_id: string | null;
+  type: RuleIncidentType;
+  detail: string | null;
+  created_at: number;
+};
+
+type RuleVersionRow = {
+  id: number;
+  rule_id: string;
+  version: number;
+  contract_version: number;
+  pr_number: number | null;
+  merge_sha: string | null;
+  is_current: number;
+  reverted_at: number | null;
+  created_at: number;
 };
 
 function storedRule(row: RuleRow): StoredRule {
@@ -65,6 +122,31 @@ function storedRule(row: RuleRow): StoredRule {
     disabledReason: row.disabled_reason,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+  };
+}
+
+function storedIncident(row: RuleIncidentRow): StoredRuleIncident {
+  return {
+    id: row.id,
+    ruleId: row.rule_id,
+    setId: row.set_id,
+    type: row.type,
+    detail: row.detail,
+    createdAt: row.created_at,
+  };
+}
+
+function storedVersion(row: RuleVersionRow): StoredRuleVersion {
+  return {
+    id: row.id,
+    ruleId: row.rule_id,
+    version: row.version,
+    contractVersion: row.contract_version,
+    prNumber: row.pr_number,
+    mergeSha: row.merge_sha,
+    isCurrent: row.is_current === 1,
+    revertedAt: row.reverted_at,
+    createdAt: row.created_at,
   };
 }
 
@@ -99,7 +181,41 @@ export class RuleRepository {
       );
       CREATE INDEX IF NOT EXISTS idx_rules_status
         ON rules(status, created_at, id);
+
+      CREATE TABLE IF NOT EXISTS rule_versions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        rule_id TEXT NOT NULL REFERENCES rules(id),
+        version INTEGER NOT NULL,
+        contract_version INTEGER NOT NULL,
+        pr_number INTEGER,
+        merge_sha TEXT,
+        is_current INTEGER NOT NULL DEFAULT 1 CHECK (is_current IN (0, 1)),
+        reverted_at INTEGER,
+        created_at INTEGER NOT NULL,
+        UNIQUE (rule_id, version)
+      );
+      CREATE INDEX IF NOT EXISTS idx_rule_versions_current
+        ON rule_versions(rule_id, is_current);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_rule_versions_one_current
+        ON rule_versions(rule_id) WHERE is_current = 1;
+
+      CREATE TABLE IF NOT EXISTS rule_incidents (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        rule_id TEXT NOT NULL REFERENCES rules(id),
+        set_id TEXT,
+        type TEXT NOT NULL
+          CHECK (type IN ('exception', 'invalid_effect', 'load_failure')),
+        detail TEXT,
+        created_at INTEGER NOT NULL,
+        UNIQUE (rule_id, set_id, type)
+      );
+      CREATE INDEX IF NOT EXISTS idx_rule_incidents_window
+        ON rule_incidents(rule_id, created_at, set_id);
     `);
+  }
+
+  transaction<T>(operation: () => T): T {
+    return this.#sqlite.transaction(operation)();
   }
 
   register(input: RegisterRuleInput): StoredRule {
@@ -134,39 +250,178 @@ export class RuleRepository {
   }
 
   activeIds(): ReadonlySet<string> {
+    return new Set(this.active().map(({ id }) => id));
+  }
+
+  active(): StoredRule[] {
     const rows = this.#sqlite
       .prepare(
-        `SELECT id FROM rules
+        `SELECT * FROM rules
          WHERE status = 'active'
          ORDER BY created_at ASC, id ASC`,
       )
-      .all() as Array<{ id: string }>;
-    return new Set(rows.map(({ id }) => id));
+      .all() as RuleRow[];
+    return rows.map(storedRule);
   }
 
-  setDisabled(
-    ruleId: string,
-    reason: Extract<RuleDisabledReason, 'manual' | 'rollback'>,
+  transition(input: RuleLifecycleTransition): {
+    changed: boolean;
+    rule: StoredRule | null;
+  } {
+    if (input.expectedStatuses.length === 0) {
+      return { changed: false, rule: this.get(input.ruleId) };
+    }
+    const placeholders = input.expectedStatuses.map(() => '?').join(', ');
+    const result = this.#sqlite
+      .prepare(
+        `UPDATE rules
+         SET status = ?, disabled_reason = ?, updated_at = ?
+         WHERE id = ? AND status IN (${placeholders})`,
+      )
+      .run(
+        input.nextStatus,
+        input.disabledReason,
+        input.now,
+        input.ruleId,
+        ...input.expectedStatuses,
+      );
+    return {
+      changed: result.changes === 1,
+      rule: this.get(input.ruleId),
+    };
+  }
+
+  recordIncident(input: {
+    ruleId: string;
+    setId: string | null;
+    type: RuleIncidentType;
+    detail: string | null;
+    now: number;
+  }): { incident: StoredRuleIncident; inserted: boolean } {
+    const insertion = this.#sqlite
+      .prepare(
+        `INSERT INTO rule_incidents (
+           rule_id, set_id, type, detail, created_at
+         ) VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(rule_id, set_id, type) DO NOTHING`,
+      )
+      .run(input.ruleId, input.setId, input.type, input.detail, input.now);
+    const row = this.#sqlite
+      .prepare(
+        `SELECT * FROM rule_incidents
+         WHERE rule_id = ? AND set_id IS ? AND type = ?
+         ORDER BY id DESC LIMIT 1`,
+      )
+      .get(input.ruleId, input.setId, input.type) as RuleIncidentRow;
+    return { incident: storedIncident(row), inserted: insertion.changes === 1 };
+  }
+
+  distinctIncidentSetsSince(ruleId: string, since: number): number {
+    const row = this.#sqlite
+      .prepare(
+        `SELECT COUNT(DISTINCT set_id) AS count
+         FROM rule_incidents
+         WHERE rule_id = ? AND set_id IS NOT NULL AND created_at >= ?`,
+      )
+      .get(ruleId, since) as { count: number };
+    return row.count;
+  }
+
+  incidents(ruleId: string): StoredRuleIncident[] {
+    return (
+      this.#sqlite
+        .prepare(
+          `SELECT * FROM rule_incidents
+           WHERE rule_id = ? ORDER BY created_at ASC, id ASC`,
+        )
+        .all(ruleId) as RuleIncidentRow[]
+    ).map(storedIncident);
+  }
+
+  registerVersion(input: {
+    ruleId: string;
+    version: number;
+    contractVersion: number;
+    prNumber: number | null;
+    mergeSha: string | null;
+    now: number;
+  }): StoredRuleVersion {
+    return this.transaction(() => {
+      this.#sqlite
+        .prepare(
+          `UPDATE rule_versions SET is_current = 0
+           WHERE rule_id = ? AND is_current = 1`,
+        )
+        .run(input.ruleId);
+      this.#sqlite
+        .prepare(
+          `INSERT INTO rule_versions (
+             rule_id, version, contract_version, pr_number, merge_sha,
+             is_current, created_at
+           ) VALUES (?, ?, ?, ?, ?, 1, ?)
+           ON CONFLICT(rule_id, version) DO UPDATE SET
+             contract_version = excluded.contract_version,
+             pr_number = excluded.pr_number,
+             merge_sha = excluded.merge_sha,
+             is_current = 1,
+             reverted_at = NULL`,
+        )
+        .run(
+          input.ruleId,
+          input.version,
+          input.contractVersion,
+          input.prNumber,
+          input.mergeSha,
+          input.now,
+        );
+      return this.versions(input.ruleId).find(
+        ({ version }) => version === input.version,
+      )!;
+    });
+  }
+
+  versions(ruleId: string): StoredRuleVersion[] {
+    return (
+      this.#sqlite
+        .prepare(
+          `SELECT * FROM rule_versions
+           WHERE rule_id = ? ORDER BY version DESC`,
+        )
+        .all(ruleId) as RuleVersionRow[]
+    ).map(storedVersion);
+  }
+
+  markMissingCodeReverted(
+    codeRuleIds: ReadonlySet<string>,
     now: number,
-  ): StoredRule | null {
-    this.#sqlite
-      .prepare(
-        `UPDATE rules
-         SET status = 'disabled', disabled_reason = ?, updated_at = ?
-         WHERE id = ? AND status <> 'removed'`,
-      )
-      .run(reason, now, ruleId);
-    return this.get(ruleId);
-  }
-
-  setActive(ruleId: string, now: number): StoredRule | null {
-    this.#sqlite
-      .prepare(
-        `UPDATE rules
-         SET status = 'active', disabled_reason = NULL, updated_at = ?
-         WHERE id = ? AND status <> 'removed'`,
-      )
-      .run(now, ruleId);
-    return this.get(ruleId);
+  ): StoredRule[] {
+    return this.transaction(() => {
+      const current = this.#sqlite
+        .prepare(
+          `SELECT DISTINCT rule_id FROM rule_versions
+           WHERE is_current = 1 AND reverted_at IS NULL`,
+        )
+        .all() as Array<{ rule_id: string }>;
+      const reverted: StoredRule[] = [];
+      for (const { rule_id: ruleId } of current) {
+        if (codeRuleIds.has(ruleId)) continue;
+        this.#sqlite
+          .prepare(
+            `UPDATE rule_versions
+             SET is_current = 0, reverted_at = ?
+             WHERE rule_id = ? AND is_current = 1 AND reverted_at IS NULL`,
+          )
+          .run(now, ruleId);
+        const transition = this.transition({
+          ruleId,
+          expectedStatuses: ['active', 'disabled'],
+          nextStatus: 'disabled',
+          disabledReason: 'rollback',
+          now,
+        });
+        if (transition.rule) reverted.push(transition.rule);
+      }
+      return reverted;
+    });
   }
 }

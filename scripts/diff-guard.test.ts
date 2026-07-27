@@ -355,6 +355,45 @@ end-daifugo-pipeline -->`,
     ).toContain('PR作成者 attacker は許可されたpipeline作成者ではありません。');
   });
 
+  it('revert時のrules-exclude変更は対象entryの削除だけを許可する', () => {
+    const repository = createRepository();
+    write(
+      repository.cwd,
+      'packages/rules/rules-exclude.json',
+      `${JSON.stringify([directory, 'r0002-other'])}\n`,
+    );
+    repository.base = commit(repository.cwd, 'temporarily exclude rule');
+    for (const file of ['meta.json', 'SPEC.json', 'rule.ts', 'rule.test.ts']) {
+      git(repository.cwd, 'rm', `packages/rules/${directory}/${file}`);
+    }
+    write(
+      repository.cwd,
+      'packages/rules/rules-exclude.json',
+      `${JSON.stringify(['r0002-other'])}\n`,
+    );
+    repository.head = commit(repository.cwd, 'revert and remove exclusion');
+
+    expect(
+      check(repository, { branch: `revert/${directory}` }).violations,
+    ).toEqual([]);
+
+    git(repository.cwd, 'reset', '--hard', repository.base);
+    for (const file of ['meta.json', 'SPEC.json', 'rule.ts', 'rule.test.ts']) {
+      git(repository.cwd, 'rm', `packages/rules/${directory}/${file}`);
+    }
+    write(
+      repository.cwd,
+      'packages/rules/rules-exclude.json',
+      `${JSON.stringify(['r9999-injected'])}\n`,
+    );
+    repository.head = commit(repository.cwd, 'tamper exclusion during revert');
+    expect(
+      check(repository, { branch: `revert/${directory}` }).violations,
+    ).toContain(
+      `rules-exclude.jsonはrevert対象 ${directory} の既存entry削除だけ許可します。`,
+    );
+  });
+
   it('main更新をmergeしても記録済みbaseとscaffoldを維持して通過する', () => {
     const repository = createRepository();
     const ruleHead = repository.head;

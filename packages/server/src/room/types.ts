@@ -177,6 +177,15 @@ export interface RoomReducerOptions {
   random?: () => number;
   createAiMemberId?: (index: number) => string;
   rulePort?: RuleChainPort;
+  availableRulesForSet?: (setId: string) => RuleChainEntry[];
+  rulePortForSet?: (setId: string) => RuleChainPort;
+  releaseRulePort?: (setId: string) => void;
+  onRuleIncident?: (incident: {
+    setId: string;
+    ruleId: string;
+    type: 'invalid_effect';
+    detail: string;
+  }) => void;
 }
 
 export type RoomEngineResult = GameResult;

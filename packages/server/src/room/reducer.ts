@@ -29,6 +29,29 @@ const DEFAULT_LOBBY_TTL_MS = 30 * 60_000;
 const DEFAULT_ABANDON_TIMEOUT_MS = 5 * 60_000;
 const SEATS: SeatId[] = [0, 1, 2, 3];
 
+function rulePort(options: RoomReducerOptions, setId: string) {
+  return options.rulePortForSet?.(setId) ?? options.rulePort;
+}
+
+function reportRuleIncidents(
+  options: RoomReducerOptions,
+  setId: string,
+  events: readonly (EngineEvent | SetEndedEvent)[],
+): void {
+  for (const event of events) {
+    if (event.type !== 'effectRejected') continue;
+    options.onRuleIncident?.({
+      setId,
+      ruleId: event.ruleId,
+      type: 'invalid_effect',
+      detail: `${String(event.hook)}: ${JSON.stringify(event.detail)}`.slice(
+        0,
+        4_000,
+      ),
+    });
+  }
+}
+
 export function createRoomState(input: CreateRoomInput): RoomState {
   return {
     roomId: input.roomId,
@@ -296,8 +319,12 @@ function startSet(
   options: RoomReducerOptions,
   leadingEvents: RoomGameEventPayload[] = [],
 ): RoomTransition {
+  const setNo = state.setNo + 1;
+  const setId = `${state.roomId}:set:${setNo}`;
   const availableRules = structuredClone(
-    input.availableRules ?? state.availableRules,
+    input.availableRules ??
+      options.availableRulesForSet?.(setId) ??
+      state.availableRules,
   );
   const preparedHumans = humans.map((member) =>
     member.connected
@@ -328,10 +355,9 @@ function startSet(
   const random = options.random ?? Math.random;
   const members = withSeats([...preparedHumans, ...addedAi], random);
   const fixedRules = structuredClone(availableRules);
-  const setNo = state.setNo + 1;
   const started = startSetTransition(
     {
-      setId: `${state.roomId}:set:${setNo}`,
+      setId,
       config: {
         gamesPerSet: options.gamesPerSet ?? DEFAULT_GAMES_PER_SET,
         interimAutoAdvanceMs:
@@ -345,8 +371,9 @@ function startSet(
       ruleChain: fixedRules,
       setSeed: input.setSeed,
     },
-    options.rulePort,
+    rulePort(options, setId),
   );
+  reportRuleIncidents(options, setId, started.events);
   const settlement = settleMembersAtSetResult(members, started.state);
   const phase = phaseAfterSettlement(started.state, settlement.members);
   return committed(
@@ -878,7 +905,12 @@ function gameAction(
       : action.type === 'autoAct' && action.cards !== null
         ? { type: 'play', player: actor.memberId, cards: action.cards }
         : { type: 'pass', player: actor.memberId };
-  const transition = reduceSet(state.engine, setAction, options.rulePort);
+  const transition = reduceSet(
+    state.engine,
+    setAction,
+    rulePort(options, state.engine.setId),
+  );
+  reportRuleIncidents(options, state.engine.setId, transition.events);
   if (
     transition.rejections.length > 0 ||
     transition.acceptedAction === undefined
@@ -947,8 +979,9 @@ function advanceIntermission(
   const transition = reduceSet(
     state.engine,
     { type: 'advance' },
-    options.rulePort,
+    rulePort(options, state.engine.setId),
   );
+  reportRuleIncidents(options, state.engine.setId, transition.events);
   if (transition.rejections.length > 0) {
     return rejected(state, 'INVALID_SET_PHASE');
   }
@@ -1002,8 +1035,9 @@ function requestDrain(
   const transition = reduceSet(
     state.engine,
     { type: 'requestDrain' },
-    options.rulePort,
+    rulePort(options, state.engine.setId),
   );
+  reportRuleIncidents(options, state.engine.setId, transition.events);
   if (
     transition.rejections.length > 0 ||
     transition.acceptedAction === undefined

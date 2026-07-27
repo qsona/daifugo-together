@@ -48,7 +48,24 @@ const adminPipelineToken = process.env.ADMIN_PIPELINE_TOKEN;
 if (adminPipelineToken !== undefined && adminPipelineToken.length < 32) {
   throw new Error('ADMIN_PIPELINE_TOKEN must be at least 32 characters');
 }
-const rules = new RuleRegistryService(persistence.rules, []);
+const rules = new RuleRegistryService(persistence.rules, [], {
+  onAutoDisable: (rule, incident) => {
+    writeLog('error', 'rule_auto_disabled', {
+      ruleId: rule.id,
+      incidentId: incident.id,
+    });
+  },
+  onLoadFailure: (rule, incident) => {
+    writeLog('error', 'rule_load_failure', {
+      ruleId: rule.id,
+      incidentId: incident.id,
+      detail: incident.detail,
+    });
+  },
+});
+for (const rule of rules.reconcileRevertedCode()) {
+  writeLog('info', 'rule_revert_reconciled', { ruleId: rule.id });
+}
 const app = createAppServer({
   webDistDir: resolve(process.env.WEB_DIST_DIR ?? 'packages/web/dist'),
   checkDatabase: () => persistence.checkHealth(),
@@ -89,7 +106,15 @@ const app = createAppServer({
   gateway: {
     rooms: new RoomManager({
       ...persistence.roomManagerOptions(),
-      availableRules: () => rules.availableRules(),
+      availableRules: (setId) => rules.availableRules(setId),
+      reducer: {
+        rulePortForSet: (setId) => rules.rulePortForSet(setId),
+        releaseRulePort: (setId) => rules.releaseRulePort(setId),
+        onRuleIncident: (incident) => {
+          rules.disableRuleInSet(incident.setId, incident.ruleId);
+          rules.recordIncident(incident);
+        },
+      },
     }),
     sessions: persistence.sessions,
     onError: (error) => {
