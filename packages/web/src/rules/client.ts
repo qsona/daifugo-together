@@ -6,6 +6,8 @@ export interface RuleCatalogFilters {
   kind?: 'local' | 'original';
   limit?: number;
   offset?: number;
+  sort?: 'recent' | 'priority' | 'popularity';
+  order?: 'asc' | 'desc';
 }
 
 export interface RuleCatalogApi {
@@ -22,7 +24,10 @@ export class RuleCatalogClient implements RuleCatalogApi {
   }
 
   async list(filters: RuleCatalogFilters = {}): Promise<RuleCatalogResponse> {
-    const parameters = new URLSearchParams({ sort: 'recent', order: 'desc' });
+    const parameters = new URLSearchParams({
+      sort: filters.sort ?? 'recent',
+      order: filters.order ?? 'desc',
+    });
     for (const [key, value] of Object.entries(filters)) {
       if (value !== undefined) parameters.set(key, String(value));
     }

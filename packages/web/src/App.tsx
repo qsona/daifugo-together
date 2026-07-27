@@ -52,6 +52,7 @@ import { TitleScreen } from './screens/TitleScreen';
 import { WaitingRoomScreen } from './screens/WaitingRoomScreen';
 import { useScreenStore } from './store/screen';
 import { deriveCardHints } from './game/hints';
+import { FEATURES } from './features';
 import { createGuideState, reduceGuide, type GuideCue } from './game/guide';
 import {
   getPlayedBeforeStorage,
@@ -128,7 +129,7 @@ const DEMO_RULE_CATALOG_API: RuleCatalogApi = {
       status: 'active',
       priority: null,
       popularity: null,
-      implementedAt: Date.now(),
+      implementedAt: new Date().toISOString(),
       removedAt: null,
     })),
   }),
@@ -244,6 +245,7 @@ function DemoApp({ storage }: { storage: PlayedBeforeStorage | undefined }) {
           rules={DEMO_RULES}
           onBack={() => go(activeRulesReturn)}
           onOpenDex={() => go('ruleDex')}
+          showDexLink={FEATURES.ruleDex}
         />
       );
 
@@ -595,6 +597,7 @@ function ConnectedApp({
 
   useEffect(() => {
     setSelectedCardIds((selected) => reconcileSelectedCardIds(selected, room));
+    if (!room) setRoomOverlay(null);
   }, [room]);
 
   useEffect(() => {
@@ -747,6 +750,7 @@ function ConnectedApp({
         rules={room.activeRules}
         onBack={() => setRoomOverlay(null)}
         onOpenDex={() => setRoomOverlay('ruleDex')}
+        showDexLink={FEATURES.ruleDex}
       />,
     );
   }

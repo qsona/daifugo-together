@@ -14,7 +14,7 @@
 - **フェーズ 2 / E2 AI-02 プロセス2コード完了**: workerへ権威runtime snapshotと実SHA-256検証済みbundleを渡し、E1 simulation generatorをworker AI 4席で駆動。独立完了再レビューは要件 `PASS` / 品質 `APPROVED` / Critical・Important・Minorなし
 - **フェーズ 2 / E7 CX-05 プロセス2コード完了**: 第三操作、起動中registryのreadiness attestation、48時間リマインダーまで追加。独立完了再レビューはコード要件 `PASS` / 品質 `APPROVED` / Critical・Importantなし。実GitHub/CD/本番の3操作リハーサルとRP-03 UIは外部・後続ゲート
 - **フェーズ 2 / E10 OP-01・OP-02 プロセス2コード完了**: 人間承認駆動に合わせたキュー・判定・失敗・ファネルCLIを既存台帳から読み取り専用で構成。独立完了レビューは `PASS / APPROVED / GO`、全指摘なし。D-5/OP-01/E-15の正式な文書裁定だけ外部ゲート
-- **フェーズ 2 / E11 RV-01・RV-02 プロセス1実装完了・方向性レビュー待ち**: 待機/対局画面から固定ルール名一覧を開く導線と、メニュー/一覧から公開ルール図鑑を開く導線を接続。`GET /api/rules`、フィルタ、30件ページング、出自の非断定表現、active/removed表示まで縦に通した
+- **フェーズ 2 / E11 RV-01・RV-02 プロセス2コード完了・完了レビュー待ち**: 待機/対局画面の固定ルール一覧と公開ルール図鑑を接続。方向性レビューのImportant 2件を反映し、待機中のregistry変更追従、最終API契約、詳細・再試行・競合fetch・公開API保護、実DB境界、375×812実画面まで仕上げた
 - E1〜E3 の実装記録は本書末尾の「並行進行」節、E13 は「E13」節。E4 の未解消の開発者判断は「詰まっている点」に残っている(1〜4・7・8・11)
 
 ### E-18 / C-2・C-3・C-6 再設計の反映(2026-07-27)
@@ -1337,6 +1337,35 @@ TS-02 から継続で未解決のもの:
 | E11-P1-3 | 既存schemaに`removed_at`がないため、removed行の`updated_at`を`removedAt`として返す | lifecycle transition時刻を表す既存の唯一の列で、契約追加なしに意味が一致する | transition回帰テストを追加。別更新がremoved後に入り得るかレビューする |
 | E11-P1-4 | フェーズ2のsortは`recent`だけを受理し、priority/popularityはnull固定にする | workorder #7が人気度・優先度表示をフェーズ3へ明示延期 | API/UI双方で未知sortを400にし、将来の列追加位置だけ残す |
 | E11-P1-5 | 詳細は初期一覧の短文までとし、行展開はプロセス2へ送る | E11は初期実装として展開を推奨するが、ユーザーストーリーの縦導線とフィルタを先に確認できる | 説明全文・実装日/排除日の展開、失敗再試行、競合fetch、API/DB統合、ページ境界、実画面確認を仕上げる |
+
+#### E11 独立方向性レビューとプロセス2
+
+- 新規コンテキストの独立 GPT-5.6 Sol 方向性レビューは **GO_WITH_FIXES**、Criticalなし
+- Important 1「待機中にregistryが変わっても`activeRules`が更新されない」は、registryのdisable / enable / release / auto-disable成功後に待機中community卓だけへ`refreshRules`を適用し、固定後のplaying卓とbasic卓を変えない境界で解消した
+- Important 2「図鑑の共有型が最終契約より狭い」は、`description: string | null`、`priority` / `popularity: number | null`、ISO 8601文字列の日付へ揃えた
+- Minor「名称をReact keyにしている」は`ruleId`へ変更した
+- E11-P1-1〜5はすべて採用。removed後を終端にして`updated_at`を排除日時として不変化し、disabledは公開・summaryから除外、priority / popularity / eliminationは既定OFFのfeature flag境界へ置いた
+
+#### E11 プロセス2で仕上げたもの
+
+- 公開`GET /api/rules`を未認証で利用可能に保ちつつ、既存のIP単位fixed-window limiterで既定120回/分に制限した。内部例外は本文を漏らさず500、上限超過は429にする
+- 実SQLiteへ32件を入れるrepositoryテストで、disabled除外、summary、都道府県カバー、30+1件ページ境界、県なし・ANDフィルタ、active-only feature flag、removed終端時刻を固定した
+- 図鑑は初回失敗の再試行、追加取得失敗時の既存一覧保持、古いfetch応答の破棄、名称折返し、一覧説明の1行省略、行展開での説明全文・出自・状態・JST日付を実装した
+- メニュー、待機、対局の各導線から一覧/図鑑を開いて戻れること、room消失時にoverlayを消すこと、図鑑導線とelimination / priority / popularity表示をfeature flagで止められることを統合テストへ追加した
+- 固定ルール一覧は名称だけのラフ表示を守り、件数と「すべての卓に適用（変更不可）」だけを補足する。人気度・優先度・順位・都道府県は表示しない
+
+#### E11 検証
+
+- プロセス2重点テスト: **10 files / 107 tests** 成功。catalog service / 実SQLite repository / room manager / registry service / app-server / origin / 固定一覧 / 図鑑 / App導線 / proposal clientを確認
+- `CI=true pnpm verify`: 成功
+  - Prettier / ESLint / AI boundary / TypeScript / 全package build: 成功
+  - design lint: **110 files**、キービジュアル3ファイル、アウトライン23件が成功
+  - Vitest: **83 files / 575 tests** 成功
+- 実ブラウザ: 375×812で45件・初期30件の図鑑を表示。長い名称と説明の展開前後とも`clientWidth=scrollWidth=375`で横スクロールなし。`<script>alert(1)</script>`を含む説明は文字列として表示され、ダイアログ・実行なし。詳細の区分・状態・実装日も確認した
+
+#### E11 詰まっている点
+
+- なし。priority / popularity / eliminationはフェーズ3または後続の仕様確定とserver対応を同時に有効化する
 
 ### E2で見つけた設計書の不整合
 

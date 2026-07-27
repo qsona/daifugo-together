@@ -165,6 +165,7 @@ export class RuleRegistryService {
   readonly #onLoadFailure:
     ((rule: StoredRule, incident: StoredRuleIncident) => void) | undefined;
   readonly #onReleased: ((rule: StoredRule) => void) | undefined;
+  readonly #onAvailabilityChanged: (() => void) | undefined;
   readonly #proposals: ProposalReleaseRepository | undefined;
   readonly #pipeline: PipelineReleaseRepository | undefined;
   readonly #ports = new Map<
@@ -180,6 +181,7 @@ export class RuleRegistryService {
       onAutoDisable?: (rule: StoredRule, incident: StoredRuleIncident) => void;
       onLoadFailure?: (rule: StoredRule, incident: StoredRuleIncident) => void;
       onReleased?: (rule: StoredRule) => void;
+      onAvailabilityChanged?: () => void;
       proposals?: ProposalReleaseRepository;
       pipeline?: PipelineReleaseRepository;
     } = {},
@@ -195,6 +197,7 @@ export class RuleRegistryService {
     this.#onAutoDisable = options.onAutoDisable;
     this.#onLoadFailure = options.onLoadFailure;
     this.#onReleased = options.onReleased;
+    this.#onAvailabilityChanged = options.onAvailabilityChanged;
     this.#proposals = options.proposals;
     this.#pipeline = options.pipeline;
   }
@@ -423,9 +426,11 @@ export class RuleRegistryService {
       disabledReason: reason,
       now: this.#now(),
     });
-    return transition.changed && transition.rule
-      ? { status: 'updated', rule: transition.rule }
-      : { status: 'conflict', error: 'status_changed' };
+    if (transition.changed && transition.rule) {
+      this.#notifyAvailabilityChanged();
+      return { status: 'updated', rule: transition.rule };
+    }
+    return { status: 'conflict', error: 'status_changed' };
   }
 
   enable(ruleId: string): RuleControlResult {
@@ -450,9 +455,11 @@ export class RuleRegistryService {
         disabledReason: null,
         now: this.#now(),
       });
-      return transition.changed && transition.rule
-        ? { status: 'updated', rule: transition.rule }
-        : { status: 'conflict', error: 'status_changed' };
+      if (transition.changed && transition.rule) {
+        this.#notifyAvailabilityChanged();
+        return { status: 'updated', rule: transition.rule };
+      }
+      return { status: 'conflict', error: 'status_changed' };
     }
     const registration = this.#codeById.get(existing.id)![0]!;
     const source = this.#releaseSource(existing.proposalId);
@@ -505,6 +512,7 @@ export class RuleRegistryService {
           // deliberately best-effort and must not turn success into HTTP 500.
         }
       }
+      this.#notifyAvailabilityChanged();
       return result;
     } catch (error) {
       return error instanceof ReleaseConflict
@@ -521,7 +529,7 @@ export class RuleRegistryService {
     type: RuleIncidentType;
     detail: string | null;
   }): RecordedRuleIncident {
-    return this.#repository.transaction(() => {
+    const result = this.#repository.transaction(() => {
       const now = this.#now();
       const recorded = this.#repository.recordIncident({
         ...input,
@@ -549,6 +557,17 @@ export class RuleRegistryService {
       }
       return { ...recorded, autoDisabled };
     });
+    if (result.autoDisabled) this.#notifyAvailabilityChanged();
+    return result;
+  }
+
+  #notifyAvailabilityChanged(): void {
+    try {
+      this.#onAvailabilityChanged?.();
+    } catch {
+      // Room preview updates are best effort; the next room action re-reads
+      // the authoritative registry before a set starts.
+    }
   }
 
   rulePortForSet(setId: string): RuleChainPort {

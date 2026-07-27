@@ -1,0 +1,6 @@
+.caption {
+  margin: 0;
+  font-size: var(--font-size-micro);
+  color: var(--color-text-secondary);
+  text-align: center;
+}

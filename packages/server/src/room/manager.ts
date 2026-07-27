@@ -59,6 +59,11 @@ export interface RoomSweepResult {
   closeReason?: 'lobbyExpired' | 'abandoned' | 'setEndedNoContinue';
 }
 
+export interface WaitingRuleRefresh {
+  previous: RoomState;
+  transition: RoomTransition;
+}
+
 export function normalizeInviteCode(input: string): string {
   const raw = input.toUpperCase().replaceAll(/[^A-Z0-9]/g, '');
   return raw.length === INVITE_RAW_LENGTH
@@ -120,6 +125,29 @@ export class RoomManager {
       return undefined;
     }
     return { room, member };
+  }
+
+  refreshWaitingRules(): WaitingRuleRefresh[] {
+    if (!this.#options.availableRules) return [];
+    const nextRules = this.#options.availableRules();
+    const encoded = JSON.stringify(nextRules);
+    const refreshed: WaitingRuleRefresh[] = [];
+    for (const roomId of this.roomIds()) {
+      const previous = this.#rooms.get(roomId);
+      if (
+        previous?.phase !== 'waiting' ||
+        previous.mode !== 'community' ||
+        JSON.stringify(previous.availableRules) === encoded
+      ) {
+        continue;
+      }
+      const transition = this.apply(roomId, {
+        type: 'refreshRules',
+        availableRules: nextRules,
+      });
+      if (transition?.accepted) refreshed.push({ previous, transition });
+    }
+    return refreshed;
   }
 
   sweep(

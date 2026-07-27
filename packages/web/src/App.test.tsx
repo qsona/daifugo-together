@@ -710,6 +710,75 @@ describe('TU-02: きほんの部屋のカードヒント統合', () => {
   });
 });
 
+describe('E11: ルール閲覧の実App導線', () => {
+  afterEach(cleanup);
+
+  it('メニューから図鑑を開いて戻れる', async () => {
+    const user = userEvent.setup();
+    useScreenStore.setState({ current: 'menu' });
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: 'ルール図鑑' }));
+    expect(screen.getByRole('heading', { name: 'ルール図鑑' })).toBeTruthy();
+    expect(
+      await screen.findAllByText('対局にひとひねり加えるルールです。'),
+    ).toHaveLength(2);
+    await user.click(screen.getByRole('button', { name: 'もどる' }));
+    expect(screen.getByRole('button', { name: 'あそぶ' })).toBeTruthy();
+  });
+
+  it('待機画面から名称限定一覧を開いて元の画面へ戻れる', async () => {
+    const user = userEvent.setup();
+    useScreenStore.setState({ current: 'waitingRoom' });
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: /有効ルール/u }));
+    expect(
+      screen.getByRole('heading', { name: 'この対局のルール' }),
+    ).toBeTruthy();
+    expect(screen.getByText('8切り')).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'もどる' }));
+    expect(screen.getByText('ABCD-1234')).toBeTruthy();
+  });
+
+  it('接続中の対局でもsnapshotの同じactiveRulesを表示する', async () => {
+    const user = userEvent.setup();
+    const room = {
+      ...tutorialHintRoom('community', []),
+      activeRules: [
+        { ruleId: 'r1', name: '8切り' },
+        { ruleId: 'r2', name: '二枚縛り' },
+      ],
+    };
+    render(<App client={tutorialHintClient(room)} />);
+
+    await user.click(screen.getByRole('button', { name: /有効ルール/u }));
+    expect(screen.getByText('8切り')).toBeTruthy();
+    expect(screen.getByText('二枚縛り')).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'もどる' }));
+    expect(screen.getByRole('region', { name: '卓' })).toBeTruthy();
+  });
+
+  it('部屋が閉じたら卓内オーバーレイを破棄する', async () => {
+    const user = userEvent.setup();
+    const observable = observableTutorialClient({
+      ...tutorialHintRoom('community', []),
+      activeRules: [{ ruleId: 'r1', name: '8切り' }],
+    });
+    render(<App client={observable.client} />);
+    await user.click(screen.getByRole('button', { name: /有効ルール/u }));
+    expect(screen.getByText('8切り')).toBeTruthy();
+
+    act(() => observable.setRoom(null));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'あそぶ' })).toBeTruthy(),
+    );
+    expect(
+      screen.queryByRole('heading', { name: 'この対局のルール' }),
+    ).toBeNull();
+  });
+});
+
 describe('CX-06: 実ルール発動イベントの演出', () => {
   afterEach(cleanup);
 

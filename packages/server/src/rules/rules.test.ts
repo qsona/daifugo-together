@@ -101,6 +101,7 @@ describe('CX-04 rule registry', () => {
     const { persistence, register } = setup();
     register({ id: 'r0001-a', slug: 'a', name: 'ルールA' });
     register({ id: 'r0002-b', slug: 'b', name: 'ルールB' });
+    const onAvailabilityChanged = vi.fn();
     const service = new RuleRegistryService(
       persistence.rules,
       [
@@ -108,7 +109,7 @@ describe('CX-04 rule registry', () => {
         codeRule('r0001-a', 'ルールA'),
         codeRule('r9999-code-only', 'コードのみ'),
       ],
-      { now: () => 2_000 },
+      { now: () => 2_000, onAvailabilityChanged },
     );
 
     const initiallyAvailable = service.availableRules();
@@ -155,6 +156,7 @@ describe('CX-04 rule registry', () => {
       'r0001-a',
       'r0002-b',
     ]);
+    expect(onAvailabilityChanged).toHaveBeenCalledTimes(2);
   });
 
   it('部屋作成後のdisableも最初のセット開始時に再読込し、進行中セットは固定する', () => {

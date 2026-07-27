@@ -39,3 +39,42 @@
   flex-direction: column;
   gap: var(--space-3);
 }
+
+.ruleButton {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.detail {
+  margin: calc(-1 * var(--space-2)) var(--space-2) 0;
+  padding: var(--space-3);
+  border: var(--border-control) solid var(--color-border-strong);
+  border-top: 0;
+  border-radius: 0 0 var(--radius-m) var(--radius-m);
+  background: var(--color-bg-surface);
+}
+
+.detail p {
+  margin: 0 0 var(--space-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.detail dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-1) var(--space-2);
+  margin: 0;
+  font-size: var(--font-size-micro);
+}
+
+.detail dd {
+  margin: 0;
+}

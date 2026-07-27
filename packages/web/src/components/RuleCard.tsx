@@ -1,3 +1,5 @@
+import type { RuleRef } from '@daifugo/core';
+
 import { cx } from '../lib/cx';
 
 import { PopularityBar } from './PopularityBar';
@@ -59,12 +61,12 @@ export function RuleCard({ rule }: { rule: RuleCardView }) {
  * 対局・待機画面用のルール行。名称のみで、人気度・都道府県・優先度の数値は出さない
  * (企画書 §4.5「ラフな体験」)。
  */
-export function RuleNameList({ names }: { names: readonly string[] }) {
+export function RuleNameList({ rules }: { rules: readonly RuleRef[] }) {
   return (
     <ul className={styles.list}>
-      {names.map((name) => (
-        <li key={name} className={styles.slim}>
-          {name}
+      {rules.map((rule) => (
+        <li key={rule.ruleId} className={styles.slim}>
+          {rule.name}
         </li>
       ))}
     </ul>

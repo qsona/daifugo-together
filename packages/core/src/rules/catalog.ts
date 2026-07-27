@@ -4,14 +4,14 @@ export type RuleCatalogKind = 'local' | 'original';
 export interface RuleCatalogItem {
   id: string;
   name: string;
-  description: string;
+  description: string | null;
   kind: RuleCatalogKind;
   prefecture: string | null;
   status: RuleCatalogStatus;
-  priority: null;
-  popularity: null;
-  implementedAt: number;
-  removedAt: number | null;
+  priority: number | null;
+  popularity: number | null;
+  implementedAt: string;
+  removedAt: string | null;
 }
 
 export interface RuleCatalogSummary {

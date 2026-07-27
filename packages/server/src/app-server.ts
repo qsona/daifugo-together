@@ -30,6 +30,7 @@ import type { PipelineJudgementService } from './pipeline/service.js';
 import type { PipelineJobService } from './pipeline/jobs.js';
 import type { RuleRegistryService } from './rules/service.js';
 import type { RuleCatalogService } from './rules/catalog.js';
+import { FixedWindowRateLimiter } from './room/rate-limit.js';
 
 const RELEASE_REMINDER_MS = 48 * 60 * 60 * 1_000;
 
@@ -49,6 +50,8 @@ export interface AppServerOptions {
   checkDatabase?: () => boolean;
   proposals?: ProposalSubmissionPort;
   ruleCatalog?: Pick<RuleCatalogService, 'list'>;
+  ruleCatalogRateLimit?: { maxAttempts: number; windowMs: number };
+  now?: () => number;
   yellowCards?: YellowCardPort;
   adminScreening?: {
     token: string;
@@ -192,6 +195,12 @@ function writeJson(
 
 export function createAppServer(options: AppServerOptions): AppServer {
   let draining = false;
+  const ruleCatalogRateLimiter = new FixedWindowRateLimiter(
+    options.ruleCatalogRateLimit ?? {
+      maxAttempts: 120,
+      windowMs: 60_000,
+    },
+  );
   const handleRuleCatalog = (
     request: IncomingMessage,
     response: ServerResponse,
@@ -207,7 +216,22 @@ export function createAppServer(options: AppServerOptions): AppServer {
       writeJson(response, 503, { error: 'rule_catalog_unavailable' });
       return true;
     }
-    const result = options.ruleCatalog.list(url.searchParams);
+    if (
+      !ruleCatalogRateLimiter.allow(
+        clientIp(request),
+        options.now?.() ?? Date.now(),
+      )
+    ) {
+      writeJson(response, 429, { error: 'rate_limited' });
+      return true;
+    }
+    let result;
+    try {
+      result = options.ruleCatalog.list(url.searchParams);
+    } catch {
+      writeJson(response, 500, { error: 'rule_catalog_failed' });
+      return true;
+    }
     writeJson(response, result.status, result.body);
     return true;
   };

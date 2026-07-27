@@ -97,6 +97,7 @@ export interface RoomSocketGatewayOptions {
 export interface RoomSocketGateway {
   rooms: RoomManager;
   sessions: SessionStore;
+  refreshWaitingRules(): number;
   beginDrain(): Promise<void>;
   close(): void;
 }
@@ -700,6 +701,11 @@ export function attachRoomSocketGateway(
   return {
     rooms,
     sessions,
+    refreshWaitingRules() {
+      const refreshed = rooms.refreshWaitingRules();
+      for (const { transition } of refreshed) emitState(transition.state);
+      return refreshed.length;
+    },
     beginDrain() {
       if (drainPromise) return drainPromise;
       draining = true;

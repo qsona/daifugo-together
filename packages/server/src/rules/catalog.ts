@@ -28,9 +28,14 @@ function integer(value: string | undefined, fallback: number): number | null {
 
 export class RuleCatalogService {
   readonly #rules: RuleCatalogPort;
+  readonly #eliminationEnabled: boolean;
 
-  constructor(rules: RuleCatalogPort) {
+  constructor(
+    rules: RuleCatalogPort,
+    options: { eliminationEnabled?: boolean } = {},
+  ) {
     this.#rules = rules;
+    this.#eliminationEnabled = options.eliminationEnabled ?? false;
   }
 
   list(parameters: URLSearchParams): CatalogHttpResult {
@@ -67,6 +72,7 @@ export class RuleCatalogService {
       };
     }
     const result = this.#rules.catalog({
+      includeRemoved: this.#eliminationEnabled,
       ...(prefecture ? { prefecture } : {}),
       ...(status ? { status: status as 'active' | 'removed' } : {}),
       ...(kind ? { kind: kind as 'local' | 'original' } : {}),
@@ -88,8 +94,11 @@ export class RuleCatalogService {
           status: rule.status as 'active' | 'removed',
           priority: null,
           popularity: null,
-          implementedAt: rule.createdAt,
-          removedAt: rule.status === 'removed' ? rule.updatedAt : null,
+          implementedAt: new Date(rule.createdAt).toISOString(),
+          removedAt:
+            rule.status === 'removed'
+              ? new Date(rule.updatedAt).toISOString()
+              : null,
         })),
       },
     };

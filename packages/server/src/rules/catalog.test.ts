@@ -28,7 +28,10 @@ describe('RuleCatalogService', () => {
         },
       ],
     }));
-    const service = new RuleCatalogService({ catalog });
+    const service = new RuleCatalogService(
+      { catalog },
+      { eliminationEnabled: true },
+    );
 
     expect(
       service.list(
@@ -62,13 +65,14 @@ describe('RuleCatalogService', () => {
             status: 'removed',
             priority: null,
             popularity: null,
-            implementedAt: 3_000,
-            removedAt: 4_000,
+            implementedAt: '1970-01-01T00:00:03.000Z',
+            removedAt: '1970-01-01T00:00:04.000Z',
           },
         ],
       },
     });
     expect(catalog).toHaveBeenCalledWith({
+      includeRemoved: true,
       prefecture: '埼玉県',
       status: 'removed',
       kind: 'local',
@@ -87,6 +91,29 @@ describe('RuleCatalogService', () => {
     expect(service.list(new URLSearchParams({ limit: '101' }))).toEqual({
       status: 400,
       body: { error: 'invalid_query', field: 'limit' },
+    });
+  });
+
+  it('淘汰機能の解禁前はactiveだけを公開対象にする', () => {
+    const catalog = vi.fn(() => ({
+      summary: {
+        implemented: 0,
+        active: 0,
+        removed: 0,
+        prefectureCoverage: 0,
+      },
+      total: 0,
+      items: [],
+    }));
+    new RuleCatalogService({ catalog }).list(
+      new URLSearchParams({ status: 'removed' }),
+    );
+    expect(catalog).toHaveBeenCalledWith({
+      includeRemoved: false,
+      status: 'removed',
+      order: 'desc',
+      limit: 30,
+      offset: 0,
     });
   });
 });

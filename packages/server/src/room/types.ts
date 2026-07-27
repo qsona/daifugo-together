@@ -76,6 +76,10 @@ export interface RoomState {
 
 export type RoomAction =
   | {
+      type: 'refreshRules';
+      availableRules: RuleChainEntry[];
+    }
+  | {
       type: 'join';
       member: {
         memberId: string;

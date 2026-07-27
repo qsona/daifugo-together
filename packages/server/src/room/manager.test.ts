@@ -31,6 +31,16 @@ const AVAILABLE_RULE: RuleChainEntry = {
   contractVersion: 1,
 };
 
+const NEXT_AVAILABLE_RULE: RuleChainEntry = {
+  ...AVAILABLE_RULE,
+  ruleId: 'rule-released-later',
+  name: 'あとから増えたルール',
+  priority: {
+    ...AVAILABLE_RULE.priority,
+    ruleId: 'rule-released-later',
+  },
+};
+
 function modeManager(availableRules: () => RuleChainEntry[]) {
   let id = 0;
   return new RoomManager({
@@ -118,6 +128,45 @@ describe('RoomManager indexes', () => {
     ]);
     expect(community.created.value.room.mode).toBe('community');
     expect(community.availableRules).toHaveBeenCalledOnce();
+  });
+
+  it('待機中communityだけ最新ルールへ追随し、開始後の固定集合は変えない', () => {
+    let available = [AVAILABLE_RULE];
+    const rooms = modeManager(() => available);
+    const community = rooms.create(
+      { userId: 'refresh-community', displayName: 'ホスト' },
+      { mode: 'community' },
+    );
+    const basic = rooms.create(
+      { userId: 'refresh-basic', displayName: 'ホスト' },
+      { mode: 'basic' },
+    );
+    expect(community.ok).toBe(true);
+    expect(basic.ok).toBe(true);
+    if (!community.ok || !basic.ok) return;
+
+    available = [NEXT_AVAILABLE_RULE];
+    const refreshed = rooms.refreshWaitingRules();
+    expect(refreshed).toHaveLength(1);
+    expect(rooms.get(community.value.room.roomId)?.availableRules).toEqual([
+      NEXT_AVAILABLE_RULE,
+    ]);
+    expect(rooms.get(basic.value.room.roomId)?.availableRules).toEqual([]);
+
+    const started = rooms.apply(community.value.room.roomId, {
+      type: 'start',
+      memberId: community.value.member.memberId,
+      now: 2_000,
+      setSeed: 'fixed-after-refresh',
+    });
+    expect(started?.accepted).toBe(true);
+    expect(started?.state.fixedRules).toEqual([NEXT_AVAILABLE_RULE]);
+
+    available = [];
+    expect(rooms.refreshWaitingRules()).toHaveLength(0);
+    expect(rooms.get(community.value.room.roomId)?.fixedRules).toEqual([
+      NEXT_AVAILABLE_RULE,
+    ]);
   });
 
   it.each(['continue', 'leave', 'expireSetResult'] as const)(

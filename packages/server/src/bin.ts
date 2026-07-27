@@ -52,6 +52,7 @@ if (adminPipelineToken !== undefined && adminPipelineToken.length < 32) {
   throw new Error('ADMIN_PIPELINE_TOKEN must be at least 32 characters');
 }
 const codeRules = await loadRuleCodeBundles();
+let refreshWaitingRules = (): void => undefined;
 const rules = new RuleRegistryService(persistence.rules, codeRules, {
   proposals: persistence.proposals,
   pipeline: persistence.pipeline,
@@ -74,6 +75,7 @@ const rules = new RuleRegistryService(persistence.rules, codeRules, {
       proposalId: rule.proposalId,
     });
   },
+  onAvailabilityChanged: () => refreshWaitingRules(),
 });
 const registrySync = rules.synchronizeCodeRegistry();
 for (const rule of registrySync.registered) {
@@ -91,13 +93,29 @@ for (const rule of registrySync.reverted) {
 for (const failure of registrySync.failures) {
   writeLog('error', 'rule_registry_sync_failed', { ...failure });
 }
+const roomManager = new RoomManager({
+  ...persistence.roomManagerOptions(),
+  availableRules: (setId) => rules.availableRules(setId),
+  reducer: {
+    rulePortForSet: (setId) => rules.rulePortForSet(setId),
+    resolveRuleMessage: (ruleId, messageKey, params) =>
+      rules.resolveMessage(ruleId, messageKey, params),
+    releaseRulePort: (setId) => rules.releaseRulePort(setId),
+    onRuleIncident: (incident) => {
+      rules.disableRuleInSet(incident.setId, incident.ruleId);
+      rules.recordIncident(incident);
+    },
+  },
+});
 const app = createAppServer({
   webDistDir: resolve(process.env.WEB_DIST_DIR ?? 'packages/web/dist'),
   checkDatabase: () => persistence.checkHealth(),
   proposals: new ProposalSubmissionService(persistence.proposals, {
     signals,
   }),
-  ruleCatalog: new RuleCatalogService(persistence.rules),
+  ruleCatalog: new RuleCatalogService(persistence.rules, {
+    eliminationEnabled: process.env.FEATURE_ELIMINATION === 'true',
+  }),
   yellowCards: new YellowCardService(
     persistence.injection,
     persistence.proposals,
@@ -130,21 +148,7 @@ const app = createAppServer({
       }
     : {}),
   gateway: {
-    rooms: new RoomManager({
-      ...persistence.roomManagerOptions(),
-      availableRules: (setId) => rules.availableRules(setId),
-      reducer: {
-        rulePortForSet: (setId) => rules.rulePortForSet(setId),
-        resolveRuleMessage: (ruleId, messageKey, params) =>
-          rules.resolveMessage(ruleId, messageKey, params),
-        releaseRulePort: (setId) => rules.releaseRulePort(setId),
-        onRuleIncident: (incident) => {
-          rules.disableRuleInSet(incident.setId, incident.ruleId);
-          rules.recordIncident(incident);
-        },
-      },
-    }),
-    sessions: persistence.sessions,
+    rooms: roomManager,
     rulePortForSet: (setId) => rules.rulePortForSet(setId),
     effectiveRuleChainForSet: (setId, entries) =>
       rules.effectiveRuleChainForSet(setId, entries),
@@ -159,6 +163,9 @@ const app = createAppServer({
     },
   },
 });
+refreshWaitingRules = () => {
+  app.gateway.refreshWaitingRules();
+};
 const actualPort = await app.listen(port);
 writeLog('info', 'server_listening', { port: actualPort });
 

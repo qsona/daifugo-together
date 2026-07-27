@@ -76,6 +76,7 @@ export interface RuleLifecycleTransition {
 }
 
 export interface RuleCatalogQuery {
+  includeRemoved: boolean;
   prefecture?: string | 'none';
   status?: 'active' | 'removed';
   kind?: 'local' | 'original';
@@ -297,7 +298,10 @@ export class RuleRepository {
   }
 
   catalog(query: RuleCatalogQuery): RuleCatalogResult {
-    const conditions = ["status IN ('active', 'removed')"];
+    const visibleStatuses = query.includeRemoved
+      ? "status IN ('active', 'removed')"
+      : "status = 'active'";
+    const conditions = [visibleStatuses];
     const parameters: Array<string | number> = [];
     if (query.status) {
       conditions.push('status = ?');
@@ -325,7 +329,7 @@ export class RuleRepository {
              WHEN kind = 'local' AND prefecture IS NOT NULL THEN prefecture
            END) AS prefecture_coverage
          FROM rules
-         WHERE status IN ('active', 'removed')`,
+         WHERE ${visibleStatuses}`,
       )
       .get() as {
       implemented: number;
@@ -371,7 +375,9 @@ export class RuleRepository {
       .prepare(
         `UPDATE rules
          SET status = ?, disabled_reason = ?, updated_at = ?
-         WHERE id = ? AND status IN (${placeholders})`,
+         WHERE id = ?
+           AND status <> 'removed'
+           AND status IN (${placeholders})`,
       )
       .run(
         input.nextStatus,

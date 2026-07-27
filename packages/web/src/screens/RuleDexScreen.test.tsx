@@ -1,4 +1,5 @@
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -32,7 +33,7 @@ function response() {
         status: 'active' as const,
         priority: null,
         popularity: null,
-        implementedAt: 1_000,
+        implementedAt: '1970-01-01T00:00:01.000Z',
         removedAt: null,
       },
       {
@@ -44,17 +45,26 @@ function response() {
         status: 'removed' as const,
         priority: null,
         popularity: null,
-        implementedAt: 2_000,
-        removedAt: 3_000,
+        implementedAt: '1970-01-01T00:00:02.000Z',
+        removedAt: '1970-01-01T00:00:03.000Z',
       },
     ],
   };
 }
 
 describe('RuleDexScreen', () => {
+  const features = {
+    priority: false,
+    popularity: false,
+    elimination: true,
+    ruleDex: true,
+  } as const;
+
   it('出自・状態を表示し、未実装の人気度・優先度を表示しない', async () => {
     const api: RuleCatalogApi = { list: vi.fn(async () => response()) };
-    const { container } = render(<RuleDexScreen api={api} onBack={vi.fn()} />);
+    const { container } = render(
+      <RuleDexScreen api={api} onBack={vi.fn()} features={features} />,
+    );
     expect(await screen.findByText('県ありルール')).toBeTruthy();
     expect(screen.getByText('報告: 埼玉県')).toBeTruthy();
     expect(screen.getByText('埼玉県で遊ばれていた報告')).toBeTruthy();
@@ -64,7 +74,9 @@ describe('RuleDexScreen', () => {
 
   it('都道府県・状態・区分をAND条件として再取得する', async () => {
     const list = vi.fn(async () => response());
-    render(<RuleDexScreen api={{ list }} onBack={vi.fn()} />);
+    render(
+      <RuleDexScreen api={{ list }} onBack={vi.fn()} features={features} />,
+    );
     await screen.findByText('県ありルール');
 
     fireEvent.change(screen.getByLabelText('都道府県'), {
@@ -82,9 +94,96 @@ describe('RuleDexScreen', () => {
         prefecture: 'none',
         status: 'removed',
         kind: 'local',
+        sort: 'recent',
+        order: 'desc',
         limit: 30,
         offset: 0,
       }),
     );
+  });
+
+  it('行を展開して説明全文とISO日時由来の日付を表示する', async () => {
+    render(
+      <RuleDexScreen
+        api={{ list: vi.fn(async () => response()) }}
+        onBack={vi.fn()}
+        features={features}
+      />,
+    );
+    const rule = await screen.findByRole('button', {
+      name: /県ありルール/u,
+    });
+    fireEvent.click(rule);
+    const detail = screen.getByRole('region', {
+      name: '県ありルールの詳細',
+    });
+    expect(detail.textContent).toContain('説明');
+    expect(detail.textContent).toContain('1970年1月1日');
+  });
+
+  it('フィルタ連打では古いレスポンスで新しい結果を上書きしない', async () => {
+    let resolveFirst!: (value: ReturnType<typeof response>) => void;
+    let resolveSecond!: (value: ReturnType<typeof response>) => void;
+    const first = new Promise<ReturnType<typeof response>>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const second = new Promise<ReturnType<typeof response>>((resolve) => {
+      resolveSecond = resolve;
+    });
+    const list = vi
+      .fn()
+      .mockImplementationOnce(() => first)
+      .mockImplementationOnce(() => second);
+    render(
+      <RuleDexScreen api={{ list }} onBack={vi.fn()} features={features} />,
+    );
+    fireEvent.change(screen.getByLabelText('区分'), {
+      target: { value: 'local' },
+    });
+    await waitFor(() => expect(list).toHaveBeenCalledTimes(2));
+
+    await act(async () => {
+      resolveSecond({
+        ...response(),
+        items: [{ ...response().items[0]!, name: '新しい結果' }],
+      });
+    });
+    expect(await screen.findByText('新しい結果')).toBeTruthy();
+    await act(async () => {
+      resolveFirst({
+        ...response(),
+        items: [{ ...response().items[0]!, name: '古い結果' }],
+      });
+    });
+    expect(screen.queryByText('古い結果')).toBeNull();
+    expect(screen.getByText('新しい結果')).toBeTruthy();
+  });
+
+  it('初回取得失敗から再試行できる', async () => {
+    const list = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce(response());
+    render(
+      <RuleDexScreen api={{ list }} onBack={vi.fn()} features={features} />,
+    );
+    expect(
+      await screen.findByText('ルール図鑑を読み込めませんでした。'),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'もう一度ためす' }));
+    expect(await screen.findByText('県ありルール')).toBeTruthy();
+  });
+
+  it('淘汰機能の解禁前は排除済みの選択肢と行を描画しない', async () => {
+    render(
+      <RuleDexScreen
+        api={{ list: vi.fn(async () => response()) }}
+        onBack={vi.fn()}
+        features={{ ...features, elimination: false }}
+      />,
+    );
+    expect(await screen.findByText('県ありルール')).toBeTruthy();
+    expect(screen.queryByText('昔のルール')).toBeNull();
+    expect(screen.queryByRole('option', { name: '排除済み' })).toBeNull();
   });
 });

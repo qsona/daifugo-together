@@ -120,6 +120,76 @@ describe('production app server', () => {
     });
   });
 
+  it('公開ルール図鑑APIを認証なしで返し、IP単位で読み取りを制限する', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'daifugo-web-dist-'));
+    directories.push(directory);
+    const app = createAppServer({
+      webDistDir: directory,
+      now: () => 1_000,
+      ruleCatalogRateLimit: { maxAttempts: 1, windowMs: 60_000 },
+      ruleCatalog: {
+        list: () => ({
+          status: 200,
+          body: {
+            summary: {
+              implemented: 1,
+              active: 1,
+              removed: 0,
+              prefectureCoverage: 0,
+            },
+            page: { total: 1, limit: 30, offset: 0 },
+            items: [
+              {
+                id: 'r1',
+                name: '8切り',
+                description: '8を出すと場が流れます。',
+                kind: 'original',
+                prefecture: null,
+                status: 'active',
+                priority: null,
+                popularity: null,
+                implementedAt: '2026-07-27T00:00:00.000Z',
+                removedAt: null,
+              },
+            ],
+          },
+        }),
+      },
+    });
+    apps.push(app);
+    const port = await app.listen(0, '127.0.0.1');
+    const url = `http://127.0.0.1:${String(port)}/api/rules`;
+
+    const first = await fetchText(url);
+    expect(first.status).toBe(200);
+    expect(JSON.parse(first.body)).toMatchObject({
+      summary: { implemented: 1, active: 1 },
+      items: [{ id: 'r1', name: '8切り' }],
+    });
+    await expect(fetchText(url)).resolves.toMatchObject({
+      status: 429,
+      body: '{"error":"rate_limited"}',
+    });
+  });
+
+  it('ルール図鑑の読み取り障害を500へ閉じ込める', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'daifugo-web-dist-'));
+    directories.push(directory);
+    const app = createAppServer({
+      webDistDir: directory,
+      ruleCatalog: {
+        list: () => {
+          throw new Error('database unavailable');
+        },
+      },
+    });
+    apps.push(app);
+    const port = await app.listen(0, '127.0.0.1');
+    await expect(
+      fetchText(`http://127.0.0.1:${String(port)}/api/rules`),
+    ).resolves.toMatchObject({ status: 500 });
+  });
+
   it('本人向けカード一覧と異議申し立てAPIを認証付きで公開する', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'daifugo-web-dist-'));
     directories.push(directory);

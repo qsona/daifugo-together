@@ -29,4 +29,17 @@ describe('ActiveRulesScreen', () => {
     expect(screen.getByText('追加ルールはありません')).toBeTruthy();
     expect(screen.getByRole('button', { name: '図鑑でくわしく' })).toBeTruthy();
   });
+
+  it('図鑑機能の解禁前は名称一覧だけで成立する', () => {
+    render(
+      <ActiveRulesScreen
+        rules={[{ ruleId: 'r1', name: '8切り' }]}
+        onBack={vi.fn()}
+        onOpenDex={vi.fn()}
+        showDexLink={false}
+      />,
+    );
+    expect(screen.getByText('8切り')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: '図鑑でくわしく' })).toBeNull();
+  });
 });

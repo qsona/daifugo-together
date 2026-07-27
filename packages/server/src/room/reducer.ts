@@ -1157,6 +1157,14 @@ export function reduceRoom(
   options: RoomReducerOptions = {},
 ): RoomTransition {
   switch (action.type) {
+    case 'refreshRules':
+      return state.phase === 'waiting' && state.mode === 'community'
+        ? committed(
+            state,
+            { availableRules: structuredClone(action.availableRules) },
+            [],
+          )
+        : rejected(state, 'NOT_WAITING');
     case 'join':
       return join(state, action, options);
     case 'start':
