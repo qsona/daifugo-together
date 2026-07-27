@@ -5,6 +5,8 @@
   inset: 0;
   overflow: hidden;
   pointer-events: none;
+  /* 紙は手前に降る。土台の中の兄弟(順位カード)より上に置く。 */
+  z-index: 1;
 }
 
 .piece {
