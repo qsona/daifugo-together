@@ -162,10 +162,9 @@
     <g transform="translate(770,1475) rotate(24)">
       <use href="#fanCard2a"/>
       <rect x="-96" y="-144" width="192" height="288" rx="12" fill="#2FA36B" stroke="#1C2447" stroke-width="5"/>
-      <text x="62" y="-104" font-size="20" font-weight="bold" text-anchor="middle" fill="#FFF4DC">新潟発</text>
-      <text x="62" y="-30" font-size="56" font-weight="bold" text-anchor="middle" fill="#FFF4DC">8</text>
-      <text x="62" y="46" font-size="56" font-weight="bold" text-anchor="middle" fill="#FFF4DC">切</text>
-      <text x="62" y="122" font-size="56" font-weight="bold" text-anchor="middle" fill="#FFF4DC">り</text>
+      <text x="62" y="-56" font-size="56" font-weight="bold" text-anchor="middle" fill="#FFF4DC">8</text>
+      <text x="62" y="20" font-size="56" font-weight="bold" text-anchor="middle" fill="#FFF4DC">切</text>
+      <text x="62" y="96" font-size="56" font-weight="bold" text-anchor="middle" fill="#FFF4DC">り</text>
     </g>
     <!-- 左2: 8 ハート -->
     <g transform="translate(420,1427) rotate(-12)">
@@ -177,10 +176,8 @@
     <g transform="translate(660,1427) rotate(12)">
       <use href="#fanCard2a"/>
       <rect x="-96" y="-144" width="192" height="288" rx="12" fill="#FFC53D" stroke="#1C2447" stroke-width="5"/>
-      <text x="62" y="-104" font-size="20" font-weight="bold" text-anchor="middle" letter-spacing="1" fill="#1C2447">NEW</text>
-      <text x="62" y="-22" font-size="60" font-weight="bold" text-anchor="middle" fill="#1C2447">革</text>
-      <text x="62" y="58" font-size="60" font-weight="bold" text-anchor="middle" fill="#1C2447">命</text>
-      <text x="62" y="122" font-size="20" font-weight="bold" text-anchor="middle" fill="#1C2447">No.148</text>
+      <text x="62" y="-20" font-size="60" font-weight="bold" text-anchor="middle" fill="#1C2447">革</text>
+      <text x="62" y="60" font-size="60" font-weight="bold" text-anchor="middle" fill="#1C2447">命</text>
     </g>
     <!-- 中央: JOKER -->
     <g transform="translate(540,1410)">
