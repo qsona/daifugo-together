@@ -19,7 +19,7 @@ export const DEMO_MEMBERS: readonly MemberView[] = [
   { kind: 'empty' },
 ];
 
-export const DEMO_INVITE_CODE = 'ABCD-1234';
+export const DEMO_INVITE_CODE = '01234';
 export const DEMO_ACTIVE_RULE_COUNT = 31;
 
 /**

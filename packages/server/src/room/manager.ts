@@ -11,8 +11,8 @@ import type {
   RoomTransition,
 } from './types.js';
 
-const INVITE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-const INVITE_RAW_LENGTH = 8;
+const INVITE_CODE_LENGTH = 5;
+const INVITE_CODE_SPACE = 10 ** INVITE_CODE_LENGTH;
 const MAX_INVITE_ATTEMPTS = 64;
 
 export interface RoomUser {
@@ -65,10 +65,7 @@ export interface WaitingRuleRefresh {
 }
 
 export function normalizeInviteCode(input: string): string {
-  const raw = input.toUpperCase().replaceAll(/[^A-Z0-9]/g, '');
-  return raw.length === INVITE_RAW_LENGTH
-    ? `${raw.slice(0, 4)}-${raw.slice(4)}`
-    : input.toUpperCase().trim();
+  return input.trim();
 }
 
 export class RoomManager {
@@ -375,18 +372,12 @@ export class RoomManager {
 
   #newInviteCode(): string | undefined {
     for (let attempt = 0; attempt < MAX_INVITE_ATTEMPTS; attempt += 1) {
-      let raw = '';
-      for (let index = 0; index < INVITE_RAW_LENGTH; index += 1) {
-        const sampled = this.#options.randomIndex(INVITE_ALPHABET.length);
-        const safeIndex =
-          Number.isInteger(sampled) &&
-          sampled >= 0 &&
-          sampled < INVITE_ALPHABET.length
-            ? sampled
-            : 0;
-        raw += INVITE_ALPHABET[safeIndex];
-      }
-      const code = normalizeInviteCode(raw);
+      const sampled = this.#options.randomIndex(INVITE_CODE_SPACE);
+      const safeIndex =
+        Number.isInteger(sampled) && sampled >= 0 && sampled < INVITE_CODE_SPACE
+          ? sampled
+          : 0;
+      const code = String(safeIndex).padStart(INVITE_CODE_LENGTH, '0');
       if (!this.#byInvite.has(code)) {
         return code;
       }

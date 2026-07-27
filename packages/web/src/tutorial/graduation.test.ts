@@ -17,7 +17,7 @@ function room(
   return {
     v,
     roomId,
-    inviteCode: 'ABCD-2345',
+    inviteCode: '01234',
     mode: 'basic',
     phase,
     members: [],

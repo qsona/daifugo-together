@@ -6,7 +6,7 @@ import { setSeedForRoomStart, TUTORIAL_SET_SEED } from './tutorial.js';
 function room(mode: 'basic' | 'community') {
   return createRoomState({
     roomId: 'room-1',
-    inviteCode: 'ABCD-2345',
+    inviteCode: '01234',
     mode,
     owner: {
       memberId: 'member-1',

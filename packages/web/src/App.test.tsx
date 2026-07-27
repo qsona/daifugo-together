@@ -119,7 +119,7 @@ describe('DS-02: フェーズ 1 の主要画面が 1 本の導線でつながる
     );
 
     // 画面 2b: 招待コードと有効ルール件数。
-    expect(screen.getByText('ABCD-1234')).toBeTruthy();
+    expect(screen.getByText('01234')).toBeTruthy();
     expect(screen.getByRole('button', { name: /有効ルール/ })).toBeTruthy();
     await user.click(screen.getByRole('button', { name: '開始する' }));
 
@@ -449,7 +449,7 @@ describe('MP-04: タイムアウト代行後の選択状態', () => {
     const base = {
       v: 2,
       roomId: 'room-1',
-      inviteCode: 'ABCD-2345',
+      inviteCode: '01234',
       mode: 'community',
       phase: 'playing',
       members: [],
@@ -502,7 +502,7 @@ function tutorialHintRoom(
   return {
     v: 4,
     roomId: 'tutorial-room',
-    inviteCode: 'ABCD-2345',
+    inviteCode: '01234',
     mode,
     phase: 'playing',
     members: [
@@ -589,7 +589,7 @@ function tutorialSetResultRoom(
   return {
     v: 12,
     roomId: `${mode}-result-room`,
-    inviteCode: 'ABCD-2345',
+    inviteCode: '01234',
     mode,
     phase: 'setResult',
     members: [
@@ -738,7 +738,7 @@ describe('E11: ルール閲覧の実App導線', () => {
     ).toBeTruthy();
     expect(screen.getByText('8切り')).toBeTruthy();
     await user.click(screen.getByRole('button', { name: 'もどる' }));
-    expect(screen.getByText('ABCD-1234')).toBeTruthy();
+    expect(screen.getByText('01234')).toBeTruthy();
   });
 
   it('接続中の対局でもsnapshotの同じactiveRulesを表示する', async () => {
@@ -1490,7 +1490,7 @@ describe('TU-01: 既プレイ端末の記録', () => {
     const room = {
       v: 4,
       roomId: 'tutorial-room',
-      inviteCode: 'ABCD-2345',
+      inviteCode: '01234',
       mode: 'basic',
       phase: 'playing',
       members: [

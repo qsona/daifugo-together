@@ -18,7 +18,7 @@ interface FakeTimer {
 function state(): RoomState {
   return createRoomState({
     roomId: 'room-1',
-    inviteCode: 'ABCD-2345',
+    inviteCode: '01234',
     mode: 'community',
     owner: {
       memberId: 'member-1',

@@ -7,7 +7,7 @@ function room(v: number): PlayerRoomView {
   return {
     v,
     roomId: 'room-1',
-    inviteCode: 'ABCD-2345',
+    inviteCode: '01234',
     mode: 'community',
     phase: 'waiting',
     members: [

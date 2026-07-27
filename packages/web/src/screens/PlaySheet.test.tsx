@@ -69,9 +69,14 @@ describe('TU-01: あそぶモードの選択', () => {
     await user.click(
       screen.getByRole('button', { name: '友だちの部屋にはいる' }),
     );
-    await user.type(screen.getByLabelText('招待コード'), 'ABCD-1234');
+    const inviteCodeInput = screen.getByLabelText(
+      '招待コード',
+    ) as HTMLInputElement;
+    expect(inviteCodeInput.getAttribute('inputmode')).toBe('numeric');
+    await user.type(inviteCodeInput, '0A12-3456');
+    expect(inviteCodeInput.value).toBe('01234');
     await user.click(screen.getByRole('button', { name: 'はいる' }));
-    expect(onJoin).toHaveBeenCalledWith('ABCD-1234');
+    expect(onJoin).toHaveBeenCalledWith('01234');
   });
 
   it('community作成の再試行ではモード選択を戻さず、失敗を作成ボタンの下へ出す', () => {

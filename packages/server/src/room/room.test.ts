@@ -8,7 +8,7 @@ import { viewFor } from './view.js';
 function room(): RoomState {
   return createRoomState({
     roomId: 'room-1',
-    inviteCode: 'ABCD-2345',
+    inviteCode: '01234',
     mode: 'community',
     owner: {
       memberId: 'member-1',
@@ -144,7 +144,7 @@ describe('pure room reducer', () => {
   it('きほんの1人AI戦は人間のタイマーを外し、初戦だけ人間をseat 0に置く', () => {
     const basic = createRoomState({
       roomId: 'basic-tutorial',
-      inviteCode: 'BASIC-T03',
+      inviteCode: '01003',
       mode: 'basic',
       owner: {
         memberId: 'member-1',
@@ -181,7 +181,7 @@ describe('pure room reducer', () => {
   it('きほんでも人間2人なら通常タイマーを残し、communityの席順は従来どおりシャッフルする', () => {
     const basicTwoHumans = createRoomState({
       roomId: 'basic-multi',
-      inviteCode: 'BASIC-M03',
+      inviteCode: '02003',
       mode: 'basic',
       owner: {
         memberId: 'member-1',
@@ -224,7 +224,7 @@ describe('pure room reducer', () => {
     const secondSet = {
       ...createRoomState({
         roomId: 'basic-second-set',
-        inviteCode: 'BASIC-S03',
+        inviteCode: '03003',
         mode: 'basic' as const,
         owner: {
           memberId: 'member-1',
@@ -266,7 +266,7 @@ describe('pure room reducer', () => {
     };
     const basic = createRoomState({
       roomId: 'basic-room',
-      inviteCode: 'BASIC-001',
+      inviteCode: '00001',
       mode: 'basic',
       owner: {
         memberId: 'basic-owner',

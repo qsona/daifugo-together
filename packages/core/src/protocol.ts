@@ -183,7 +183,9 @@ export const clientPayloadSchemas = {
   'room:create': z
     .object({ mode: z.enum(['basic', 'community']).optional() })
     .strict(),
-  'room:join': z.object({ inviteCode: z.string() }).strict(),
+  'room:join': z
+    .object({ inviteCode: z.string().regex(/^[0-9]{5}$/) })
+    .strict(),
   'room:leave': emptyPayloadSchema,
   'room:start': emptyPayloadSchema,
   'room:continue': emptyPayloadSchema,

@@ -42,7 +42,19 @@ describe('shared client payload schemas', () => {
 
   it('validates join, play, pass, and rename payloads', () => {
     expect(
+      clientPayloadSchemas['room:join'].safeParse({ inviteCode: '01234' })
+        .success,
+    ).toBe(true);
+    expect(
       clientPayloadSchemas['room:join'].safeParse({ inviteCode: 123 }).success,
+    ).toBe(false);
+    expect(
+      clientPayloadSchemas['room:join'].safeParse({ inviteCode: '1234' })
+        .success,
+    ).toBe(false);
+    expect(
+      clientPayloadSchemas['room:join'].safeParse({ inviteCode: '12A45' })
+        .success,
     ).toBe(false);
     expect(
       clientPayloadSchemas['game:play'].safeParse({

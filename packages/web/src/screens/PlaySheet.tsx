@@ -50,20 +50,24 @@ export function PlaySheet({
         <>
           <InputField
             label="招待コード"
-            placeholder="例: ABCD-1234"
+            placeholder="例: 01234"
             value={code}
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            maxLength={5}
             autoComplete="off"
             autoFocus
             onChange={(event) => {
-              setCode(event.target.value);
+              setCode(event.target.value.replaceAll(/[^0-9]/g, '').slice(0, 5));
             }}
           />
           <Button
             variant="primary"
             block
-            disabled={code.trim() === ''}
+            disabled={code.length !== 5}
             onClick={() => {
-              onJoin(code.trim());
+              onJoin(code);
             }}
           >
             はいる

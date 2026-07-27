@@ -263,18 +263,16 @@ describe('RoomManager indexes', () => {
     if (!created.ok) {
       return;
     }
-    expect(created.value.room.inviteCode).toMatch(
-      /^[A-HJ-KM-NP-Z2-9]{4}-[A-HJ-KM-NP-Z2-9]{4}$/,
-    );
-    expect(normalizeInviteCode(' abcd 2345 ')).toBe('ABCD-2345');
+    expect(created.value.room.inviteCode).toMatch(/^[0-9]{5}$/);
+    expect(normalizeInviteCode(' 01234 ')).toBe('01234');
     expect(rooms.findByUser('user-1')?.room.roomId).toBe(
       created.value.room.roomId,
     );
 
-    const joined = rooms.join(
-      created.value.room.inviteCode.toLowerCase().replace('-', ' '),
-      { userId: 'user-2', displayName: '参加者' },
-    );
+    const joined = rooms.join(created.value.room.inviteCode, {
+      userId: 'user-2',
+      displayName: '参加者',
+    });
     expect(joined.ok).toBe(true);
     expect(rooms.findByUser('user-2')?.member.displayName).toBe('参加者');
     expect(rooms.create({ userId: 'user-2', displayName: '重複' })).toEqual({

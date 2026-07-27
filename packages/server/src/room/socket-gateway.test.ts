@@ -205,11 +205,12 @@ describe('Socket.IO room gateway', () => {
         if (view.phase === 'playing') resolve(view);
       }),
     );
-    await emitAck<'room:start', Record<string, never>>(
+    const started = await emitAck<'room:start', Record<string, never>>(
       owner.client,
       'room:start',
       {},
     );
+    expect(started).toEqual({ ok: true, value: {} });
     const view = await startedState;
 
     expect(view.you.seatId).toBe(0);
@@ -254,7 +255,7 @@ describe('Socket.IO room gateway', () => {
     const joined = await emitAck<'room:join', { roomId: string }>(
       guest.client,
       'room:join',
-      { inviteCode: created.value.inviteCode.toLowerCase().replace('-', ' ') },
+      { inviteCode: created.value.inviteCode },
     );
     expect(joined).toEqual({
       ok: true,
@@ -521,17 +522,17 @@ describe('Socket.IO room gateway', () => {
     const first = await emitAck<'room:join', { roomId: string }>(
       client.client,
       'room:join',
-      { inviteCode: 'AAAA-AAAA' },
+      { inviteCode: '11111' },
     );
     const second = await emitAck<'room:join', { roomId: string }>(
       client.client,
       'room:join',
-      { inviteCode: 'BBBB-BBBB' },
+      { inviteCode: '22222' },
     );
     const limited = await emitAck<'room:join', { roomId: string }>(
       client.client,
       'room:join',
-      { inviteCode: 'CCCC-CCCC' },
+      { inviteCode: '33333' },
     );
     expect(first).toEqual({ ok: false, code: 'ROOM_NOT_FOUND' });
     expect(second).toEqual({ ok: false, code: 'ROOM_NOT_FOUND' });
@@ -544,7 +545,7 @@ describe('Socket.IO room gateway', () => {
     const badJoin = await emitAck<'room:join', { roomId: string }>(
       client.client,
       'room:join',
-      { inviteCode: 123 } as unknown as { inviteCode: string },
+      { inviteCode: '12A45' },
     );
     const badPlay = await emitAck<'game:play', Record<string, never>>(
       client.client,
