@@ -7,7 +7,7 @@
 - **C-5 追従完了**: E7 内包リトライの決定を反映し、`proposals.failed` を終端化。`failed` 遷移時に `attempt_count=1` を記録して同内容の再提案を即時解禁する
 - **フェーズ 2 / E6 YC-01〜03 プロセス2完了**: E-18 の非同期構成、ローカル判定ツール、イエローカード表示・停止・救済まで実装済み。修正後 judge eval は Luna/Sol とも 40/40、平均 6.40秒 / 6.23秒のため既定を **GPT-5.6 Sol medium** とした。独立 GPT-5.6 Sol 完了レビューは要件適合 `PASS` / 品質 `APPROVED`
 - **フェーズ 2 / E7 CX-01 プロセス2ほぼ完了**: 独立方向性レビュー `GO_WITH_FIXES` のImportant 4件と、初回完了レビューのImportant 2件を反映。完了再レビューはコード・自動テスト `PASS` / 品質 `APPROVED` / Critical・Importantなし。実app-server評価だけ明示許可待ち
-- **フェーズ 2 / E7 CX-02 プロセス2レビュー修正完了・独立再レビュー待ち**: subscription Codex CLIを使う共有skill、scaffold先行push/任意段階再開、全差分・履歴検収、1回retry、PR作成、失敗永続化まで実装。実subscriptionでのルール生成・実PR作成は未実行
+- **フェーズ 2 / E7 CX-02 プロセス2レビュー修正完了・独立最終再レビュー中**: subscription Codex CLIを使う共有skill、scaffold先行push/任意段階再開、全差分・履歴検収、1回retry、PR作成、失敗永続化まで実装。実subscriptionでのルール生成・実PR作成は未実行
 - E1〜E3 の実装記録は本書末尾の「並行進行」節、E13 は「E13」節。E4 の未解消の開発者判断は「詰まっている点」に残っている(1〜4・7・8・11)
 
 ### E-18 / C-2・C-3・C-6 再設計の反映(2026-07-27)
@@ -242,7 +242,7 @@ E3 マージ後の実プレーで開発者から 4 件の指摘を受け、反�
 
 ### CX-02 プロセス1
 
-- 状態: FakeCodexRunner を使う縦切り実装、独立方向性レビュー、プロセス2実装まで完了。独立完了レビュー待ち
+- 状態: FakeCodexRunner を使う縦切り実装、独立方向性レビュー、プロセス2実装、初回完了レビュー修正まで完了。独立最終再レビュー中
 - ユーザーストーリーの確認:
   - `packages/server/src/pipeline/jobs.test.ts` で、E6 pass + 開発者SPEC承認済みの `queued` jobだけを払い出し、提案・承認済みSPEC・scaffoldメタを同じjobへ結びつけることを確認
   - `packages/pipeline/src/implement.test.ts` で、払い出し → 不変 `meta.json` / `SPEC.json` scaffold → Fake publisherによるscaffold SHA固定 → compare-and-setで `implementing` claim → FakeCodexRunnerによる `rule.ts` / `rule.test.ts` 生成 → 検収、を縦に確認
@@ -295,8 +295,8 @@ E3 マージ後の実プレーで開発者から 4 件の指摘を受け、反�
 
 #### プロセス2の検証
 
-- 対象実テスト: `CI=true pnpm exec vitest run ...`: **6 files / 21 tests 成功**。実ローカルHTTP、bare Git remoteへのscaffold push・別cloneからの回復、全差分検収、生成commit/push、Fake `gh` PR契約を含む
-- 全体 `CI=true pnpm verify`: **51 files / 337 tests 成功**。format / lint / design lint / 全package typecheck・buildも成功。AI boundary検査は `no LLM SDK or network I/O`
+- 対象実テスト: `CI=true pnpm exec vitest run ...`: **7 files / 30 tests 成功**。実ローカルHTTP、bare Git remoteへのscaffold push・別cloneからの回復、全差分検収、生成commit/push、Fake `gh` PR契約、CLI再試行・中断復旧を含む
+- 全体 `CI=true pnpm verify`: **52 files / 346 tests 成功**。format / lint / design lint / 全package typecheck・buildも成功。AI boundary検査は `no LLM SDK or network I/O`
 - skill validatorはfrontmatter/YAMLを手動確認済み。公式 `quick_validate.py` は実行したが、利用可能なPython環境にPyYAMLがなくスクリプト自体が起動不能だった
 - 未実行: 実Codex subscriptionでの提案1件の生成、実GitHubへのbranch push/PR作成。外部状態を変える実ジョブは存在せず、自動テストではFake/ローカルremoteに限定した
 
@@ -307,8 +307,10 @@ E3 マージ後の実プレーで開発者から 4 件の指摘を受け、反�
 - Important 2（retry/attempt）: 開発者が明示した1回だけ `attempt=2` へCAS更新し、旧PRをコメント付きclose、旧branchを非forceで削除、`-a2` branchへ進む `implement:retry` を追加。clone/install/git remote/GitHub操作は最大3回の指数backoffにした
 - Important 3（authoring契約）: 実装promptから正本 `packages/core/src/rules/README.md` を読むようにし、完了時typecheck/test commandを明記。外部import/re-export、`Date`、`Math.random`、dynamic importをpush前に拒否し、prompt版を `cx02-v2` に更新した
 - Important 4（PR本文）: 開発者レビュー用に承認済み `SPEC.summary` をPR本文へ追加し、Fake `gh` 契約テストで固定した
-- 正常完了した一時workspaceは削除し、失敗時だけ診断・再開用に残す
-- `CI=true pnpm verify`: **48 files / 326 tests 成功**。format / lint / design lint / 全package typecheck・buildも成功
+- 初回修正後の独立再レビューはCriticalなし・Important 1件。CLIの旧PR close/comment、旧branch削除、retry CAS、clone/install再試行、workspace清掃を実行するオーケストレーション自体の回帰テスト不足を指摘された
+- CLIオーケストレーションを注入可能なportへ抽出し、cleanup途中・CAS直後の応答消失、2回失敗後の3回目成功、二重retry拒否、成功/準備失敗時のworkspace清掃を回帰化した。既に `pr_open` のresumeは再実装しない正常no-op応答にした
+- 正常完了した一時workspaceと準備失敗した一時workspaceを削除し、実装処理中に失敗したworkspaceだけを診断・再開用に残す
+- `CI=true pnpm verify`: **52 files / 346 tests 成功**。format / lint / design lint / 全package typecheck・buildも成功
 
 ## 完了したストーリー
 

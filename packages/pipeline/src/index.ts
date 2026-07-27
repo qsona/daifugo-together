@@ -6,6 +6,7 @@ export * from './cx-batch.js';
 export * from './judge-corpus.js';
 export * from './judge-prompt.js';
 export * from './implement.js';
+export * from './implementation-cli-workflow.js';
 export * from './implementation-driver.js';
 export * from './implementation-api.js';
 export * from './git-publisher.js';
