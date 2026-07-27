@@ -10,8 +10,10 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { App, reconcileSelectedCardIds } from './App';
+import buttonStyles from './components/Button.module.css';
 import type { MultiplayerClient, MultiplayerState } from './multiplayer/client';
 import { useScreenStore } from './store/screen';
+import { GRADUATION_STORAGE_KEY } from './tutorial/graduation';
 import { PLAYED_BEFORE_STORAGE_KEY } from './tutorial/played-before';
 
 const KEY_VISUAL_NAME = /毎日どこかで、新ルール。/;
@@ -1130,6 +1132,270 @@ describe('TU-04: みんなのルールへの卒業導線', () => {
         name: 'みんなのルールで あそんでみる',
       }),
     ).toBeNull();
+  });
+
+  it('保存した初回setResultだけ卒業を強調し、同じroomの次セットと既プレイ端末では通常へ戻す', async () => {
+    const stored = new Map<string, string>([
+      [PLAYED_BEFORE_STORAGE_KEY, 'true'],
+      [
+        GRADUATION_STORAGE_KEY,
+        JSON.stringify({
+          kind: 'emphasized',
+          snapshotKey: 'basic-result-room:12',
+        }),
+      ],
+    ]);
+    const storage = {
+      getItem: (key: string) => stored.get(key) ?? null,
+      setItem: (key: string, value: string) => stored.set(key, value),
+    };
+    const room = tutorialSetResultRoom('basic');
+    const state: MultiplayerState = {
+      connection: 'ready',
+      displayName: 'ホスト',
+      room,
+      roomClosedReason: null,
+      error: null,
+    };
+    const client = {
+      subscribe: () => () => undefined,
+      snapshot: () => state,
+    } as unknown as MultiplayerClient;
+    const first = render(<App client={client} storage={storage} />);
+
+    expect(
+      screen
+        .getByRole('button', {
+          name: 'みんなのルールで あそんでみる',
+        })
+        .classList.contains(buttonStyles.primary!),
+    ).toBe(true);
+    expect(
+      screen
+        .getByRole('button', { name: 'もう1セットあそぶ' })
+        .classList.contains(buttonStyles.primary!),
+    ).toBe(false);
+
+    first.unmount();
+    room.v = 24;
+    render(<App client={client} storage={storage} />);
+    expect(
+      screen
+        .getByRole('button', {
+          name: 'みんなのルールで あそんでみる',
+        })
+        .classList.contains(buttonStyles.primary!),
+    ).toBe(false);
+    expect(
+      screen
+        .getByRole('button', { name: 'もう1セットあそぶ' })
+        .classList.contains(buttonStyles.primary!),
+    ).toBe(true);
+
+    cleanup();
+    stored.delete(GRADUATION_STORAGE_KEY);
+    render(<App client={client} storage={storage} />);
+    expect(
+      screen
+        .getByRole('button', {
+          name: 'みんなのルールで あそんでみる',
+        })
+        .classList.contains(buttonStyles.primary!),
+    ).toBe(false);
+  });
+
+  it('候補roomを保存した端末がsetResultへ直接復帰しても初回強調を復元する', async () => {
+    const stored = new Map<string, string>([
+      [PLAYED_BEFORE_STORAGE_KEY, 'true'],
+      [
+        GRADUATION_STORAGE_KEY,
+        JSON.stringify({ kind: 'candidate', roomId: 'basic-result-room' }),
+      ],
+    ]);
+    const storage = {
+      getItem: (key: string) => stored.get(key) ?? null,
+      setItem: (key: string, value: string) => stored.set(key, value),
+    };
+    const room = tutorialSetResultRoom('basic');
+    const state: MultiplayerState = {
+      connection: 'ready',
+      displayName: 'ホスト',
+      room,
+      roomClosedReason: null,
+      error: null,
+    };
+    const client = {
+      subscribe: () => () => undefined,
+      snapshot: () => state,
+    } as unknown as MultiplayerClient;
+
+    render(<App client={client} storage={storage} />);
+
+    await waitFor(() =>
+      expect(
+        screen
+          .getByRole('button', {
+            name: 'みんなのルールで あそんでみる',
+          })
+          .classList.contains(buttonStyles.primary!),
+      ).toBe(true),
+    );
+    expect(JSON.parse(stored.get(GRADUATION_STORAGE_KEY)!)).toEqual({
+      kind: 'emphasized',
+      snapshotKey: 'basic-result-room:12',
+    });
+  });
+
+  it('退室に失敗したらcommunityを作らず、結果画面で再試行できる', async () => {
+    const user = userEvent.setup();
+    const room = tutorialSetResultRoom('basic');
+    const state: MultiplayerState = {
+      connection: 'ready',
+      displayName: 'ホスト',
+      room,
+      roomClosedReason: null,
+      error: null,
+    };
+    const leaveRoom = vi.fn(async () => {
+      throw new Error('leave failed');
+    });
+    const createRoom = vi.fn();
+    const client = {
+      subscribe: () => () => undefined,
+      snapshot: () => state,
+      leaveRoom,
+      createRoom,
+    } as unknown as MultiplayerClient;
+    render(<App client={client} />);
+
+    await user.click(
+      screen.getByRole('button', {
+        name: 'みんなのルールで あそんでみる',
+      }),
+    );
+
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'もう一度ためしてください',
+    );
+    expect(leaveRoom).toHaveBeenCalledOnce();
+    expect(createRoom).not.toHaveBeenCalled();
+    expect(
+      screen
+        .getByRole('button', {
+          name: 'みんなのルールで あそんでみる',
+        })
+        .hasAttribute('disabled'),
+    ).toBe(false);
+  });
+
+  it('作成だけ失敗したらcommunity作成を選択済みで再試行する', async () => {
+    const user = userEvent.setup();
+    let state: MultiplayerState = {
+      connection: 'ready',
+      displayName: 'ホスト',
+      room: tutorialSetResultRoom('basic'),
+      roomClosedReason: null,
+      error: null,
+    };
+    const listeners = new Set<() => void>();
+    const leaveRoom = vi.fn(async () => {
+      state = { ...state, room: null };
+      for (const listener of listeners) listener();
+    });
+    let firstCreate = true;
+    const createRoom = vi.fn(async () => {
+      if (firstCreate) {
+        firstCreate = false;
+        throw new Error('create failed');
+      }
+    });
+    const client = {
+      subscribe: (listener: () => void) => {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+      snapshot: () => state,
+      leaveRoom,
+      createRoom,
+    } as unknown as MultiplayerClient;
+    render(<App client={client} />);
+
+    await user.click(
+      screen.getByRole('button', {
+        name: 'みんなのルールで あそんでみる',
+      }),
+    );
+
+    expect(
+      await screen.findByRole('dialog', {
+        name: 'じぶんの部屋をつくる',
+      }),
+    ).toBeTruthy();
+    expect(screen.getByRole('alert').textContent).toContain(
+      'もう一度ためしてください',
+    );
+    expect(leaveRoom).toHaveBeenCalledOnce();
+    expect(createRoom).toHaveBeenNthCalledWith(1, 'community');
+
+    await user.click(
+      screen.getByRole('button', { name: 'じぶんの部屋をつくる' }),
+    );
+    await waitFor(() => expect(createRoom).toHaveBeenCalledTimes(2));
+    expect(createRoom).toHaveBeenNthCalledWith(2, 'community');
+    expect(leaveRoom).toHaveBeenCalledOnce();
+  });
+
+  it('卒業処理中の連打と次セット・ホームの競合を止める', async () => {
+    const user = userEvent.setup();
+    const room = tutorialSetResultRoom('basic');
+    const state: MultiplayerState = {
+      connection: 'ready',
+      displayName: 'ホスト',
+      room,
+      roomClosedReason: null,
+      error: null,
+    };
+    let resolveLeave!: () => void;
+    const leaveRoom = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveLeave = resolve;
+        }),
+    );
+    const createRoom = vi.fn(async () => undefined);
+    const continueRoom = vi.fn(async () => undefined);
+    const client = {
+      subscribe: () => () => undefined,
+      snapshot: () => state,
+      leaveRoom,
+      createRoom,
+      continueRoom,
+    } as unknown as MultiplayerClient;
+    render(<App client={client} />);
+
+    const graduation = screen.getByRole('button', {
+      name: 'みんなのルールで あそんでみる',
+    });
+    await user.click(graduation);
+    await user.click(graduation);
+    await user.click(screen.getByRole('button', { name: 'もう1セットあそぶ' }));
+    await user.click(screen.getByRole('button', { name: 'ホームへ' }));
+
+    expect(leaveRoom).toHaveBeenCalledOnce();
+    expect(continueRoom).not.toHaveBeenCalled();
+    expect(createRoom).not.toHaveBeenCalled();
+    for (const name of [
+      'もう1セットあそぶ',
+      'みんなのルールで あそんでみる',
+      'ホームへ',
+    ]) {
+      expect(
+        screen.getByRole('button', { name }).hasAttribute('disabled'),
+      ).toBe(true);
+    }
+
+    await act(async () => resolveLeave());
+    await waitFor(() => expect(createRoom).toHaveBeenCalledWith('community'));
   });
 });
 

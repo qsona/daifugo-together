@@ -27,6 +27,8 @@ type SetResultScreenProps = {
   onPlayAgain: () => void;
   onPlayCommunity?: () => void;
   emphasizePlayCommunity?: boolean;
+  actionPending?: boolean;
+  actionError?: string | null;
   onHome: () => void;
   showEvaluation?: boolean;
   waitingFor?: readonly string[] | null;
@@ -46,6 +48,8 @@ export function SetResultScreen({
   onPlayAgain,
   onPlayCommunity,
   emphasizePlayCommunity = false,
+  actionPending = false,
+  actionError = null,
   onHome,
   showEvaluation = true,
   waitingFor = null,
@@ -130,7 +134,7 @@ export function SetResultScreen({
           <Button
             variant={emphasizePlayCommunity ? 'secondary' : 'primary'}
             block
-            disabled={waitingFor !== null}
+            disabled={waitingFor !== null || actionPending}
             onClick={onPlayAgain}
           >
             {waitingFor === null ? 'もう1セットあそぶ' : '待っています…'}
@@ -139,12 +143,19 @@ export function SetResultScreen({
             <Button
               variant={emphasizePlayCommunity ? 'primary' : 'secondary'}
               block
+              disabled={actionPending}
+              aria-busy={actionPending}
               onClick={onPlayCommunity}
             >
               みんなのルールで あそんでみる
             </Button>
           )}
-          <Button block onClick={onHome}>
+          {actionError && (
+            <p className={styles.actionError} role="alert">
+              {actionError}
+            </p>
+          )}
+          <Button block disabled={actionPending} onClick={onHome}>
             ホームへ
           </Button>
         </div>

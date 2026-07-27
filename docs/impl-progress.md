@@ -2,7 +2,7 @@
 
 ## 現在
 
-- **フェーズ 2 / E14 TU-03 プロセス2完了**: きほん1人戦のタイマーなし・AIの間合い・初戦seat 0、探索seed、遭遇型ガイド、強さ目盛りを仕上げ、独立方向性レビューの必須指摘を反映。TU-02までは `main` (`8d1acba`) へ fast-forward 済み
+- **フェーズ 2 / E14 TU-01〜04 プロセス2完了・完了レビュー待ち**: きほんの部屋、カード案内、初戦ガイド、初回卒業導線まで実装・自動テスト・375×812実画面確認を完了。TU-03までは `main` (`ae0f2ae`) へ fast-forward 済み
 - **フェーズ 1 完了(2026-07-27)**: TS-02・E1・E2・E3・E4 は main に統合済み、E13 は本番デプロイと動作検証(DP-01・DP-03)まで完了(`https://daifugo-together.fly.dev/`)。残りは DP-02 の仕上げ(GitHub Environment `production` + `FLY_API_TOKEN` 登録と初回 CD 実行確認)のみ
 - **フェーズ 2 / E5 RP-01〜03 プロセス2完了**: E-18/C-3 の非同期受付に加え、マイ提案API・競合安全な未読/seen・画面7・メニューバッジを接続。独立完了レビューは **GO**、Critical / Important / Minorなし
 - **C-5 追従完了**: E7 内包リトライの決定を反映し、`proposals.failed` を終端化。`failed` 遷移時に `attempt_count=1` を記録して同内容の再提案を即時解禁する
@@ -297,9 +297,10 @@
 
 ### TU-04 プロセス1
 
-- 状態: **縦切り実装完了・方向性レビュー待ち**
+- 状態: **プロセス2完了・完了レビュー待ち**
 - ブランチ: `codex/e14-tutorial`
-- コミット: この記録を含むプロセス1コミット
+- プロセス1コミット: `76bf1f7`
+- プロセス2コミット: この記録を含むコミット
 - ユーザーストーリーの確認:
   - `SetResultScreen.test.tsx` で、「もう1セットあそぶ」と「みんなのルールで あそんでみる」が同じfooterに並び、後者の押下コールバックが1回呼ばれることを確認
   - `App.test.tsx` で、basicのセットリザルトだけ卒業導線を出し、押下時に `leaveRoom` 完了後 `createRoom('community')` の順で呼ぶことを確認
@@ -341,6 +342,60 @@
 #### 詰まっている点
 
 - なし。共有契約・Core・serverの変更なしで縦に通った
+
+### TU-04 方向性レビュー・プロセス2
+
+#### プロセス1方向性レビュー
+
+- GPT-5.6-Solを別コンテキスト・読み取り専用で実施
+- 判定: **GO_WITH_FIXES**
+- E14-P4-1: **採用**。初回だけ卒業導線を唯一のprimaryにし、通常時は「もう1セット」をprimaryへ戻す
+- E14-P4-2: **不採用**。`roomId` のメモリ内refだけでは、同一ルーム2セット目、未完走ルームからの作り直し、再読み込み/直接setResultを正しく扱えない
+- 必須修正として、クライアントローカルの一度だけの状態、離脱/作成の部分失敗、再試行、pending中の重複操作防止、3 CTAのDOM規律、375px実導線をプロセス2へ反映した
+
+#### プロセス2で仕上げたもの
+
+- `daifugo.tutorialGraduation` に、未完走basic候補または「初回卒業導線を表示済み」のsnapshot識別子を保存する純関数reducerを追加
+  - 同一ルーム2セット目は通常強調へ戻る
+  - basicを未完走で離れ、別のbasicを初完走した場合も初回強調する
+  - 既プレイ端末が保存状態なしでsetResultへ入った場合は通常強調のまま
+  - 再読み込み/直接setResultでも候補が保存済みなら初回強調を復元する
+  - storage取得・読み書きの例外は画面を壊さず無視する
+- セットリザルトの3 CTAを同じfooter内に保ち、初回は「みんなのルールで あそんでみる」だけをprimary、通常は「もう1セットあそぶ」だけをprimaryにした
+- 卒業処理中は「もう1セット」「みんなのルール」「ホームへ」をすべて無効化し、重複leave/createを防止
+- `leaveRoom`失敗時はセットリザルトに留まり、短いエラー文と再試行可能な卒業CTAを表示。community作成は行わない
+- leave成功後の`createRoom('community')`失敗時は、communityを選択済みの作成sheetを開き、同じエラー文からleaveを重ねず作成だけ再試行できる
+- 共有契約、Core、serverは変更していない
+
+#### プロセス2の検証
+
+- TU-04対象: **4 files・59 tests** 成功
+  - graduation reducer/storage、`SetResultScreen`、`PlaySheet`、`App`
+- `CI=true pnpm verify`: **成功**
+  - Prettier / ESLint / AI boundary / design lint / TypeScript / 全package build: 成功
+  - Vitest: **44 files・321 tests** 成功
+- production buildを375×812で実ブラウザ確認
+  - UI→typed Socket.IO→3ゲーム→セットリザルトを完走（確認時間短縮のため検証サーバーのAI待ち時間optionだけ0ms）
+  - 3 CTAは上から「もう1セット」「みんなのルール」「ホームへ」、各351×48px、卒業CTAだけprimary
+  - viewport 375×812、document scrollWidth 375、最下段bottom 792で横あふれ・画面外押し出しなし
+  - 卒業CTA押下後、community作成の待機室へ遷移
+
+#### 置いた仮定
+
+| # | 裁定 | 内容 |
+|---|---|---|
+| E14-P4-1 | **採用** | 初回のみ卒業CTAを唯一のprimaryにし、通常時は「もう1セット」をprimaryへ戻す |
+| E14-P4-2 | **置換** | server契約は増やさず、候補→初回強調表示済みをクライアントlocalStorageの小さな状態機械で一度だけ管理する |
+
+#### 設計への提案・気づいたこと
+
+- 「初回だけ」は`playedBefore`だけではsetResult時に失われるため、卒業導線自身の一度だけの状態を別に持つ必要がある。共有契約へ広げず、端末内の教育UI状態として閉じるのが最小
+- leave成功・create失敗は元ルームへ戻せないため、エラーをセットリザルトへ偽装せず、community作成sheetで作成だけ再試行する
+
+#### 詰まっている点
+
+- 実装上の詰まりなし
+- TU-03の観察テスト(E14 §4)は指定どおり開発者実施範囲。実装側の自動テストと375px実機確認は完了
 
 ## フェーズ 2: E5 ルール提案受付(RP-01・RP-02)
 
