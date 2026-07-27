@@ -33,6 +33,7 @@ function codeRule(
       hooks: {},
     },
     bundleHash: `${ruleId}-bundle`,
+    moduleUrl: `file:///rules/${ruleId}.js`,
   };
 }
 
@@ -94,9 +95,24 @@ describe('CX-04 rule registry', () => {
       { now: () => 2_000 },
     );
 
-    expect(service.availableRules().map(({ ruleId }) => ruleId)).toEqual([
+    const initiallyAvailable = service.availableRules();
+    expect(initiallyAvailable.map(({ ruleId }) => ruleId)).toEqual([
       'r0001-a',
       'r0002-b',
+    ]);
+    expect(service.aiRuleBundles(initiallyAvailable)).toEqual([
+      {
+        ruleId: 'r0001-a',
+        moduleUrl: 'file:///rules/r0001-a.js',
+        bundleHash: 'r0001-a-bundle',
+        contractVersion: 1,
+      },
+      {
+        ruleId: 'r0002-b',
+        moduleUrl: 'file:///rules/r0002-b.js',
+        bundleHash: 'r0002-b-bundle',
+        contractVersion: 1,
+      },
     ]);
     expect(service.disable('r0001-a', { reason: 'manual' })).toMatchObject({
       status: 'updated',

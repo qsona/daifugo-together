@@ -7,6 +7,7 @@ import {
   type RuleExecutionIssue,
   type RuleModule,
 } from '@daifugo/core';
+import type { AiRuleBundleRef } from '@daifugo/ai';
 
 import type {
   RuleDisabledReason,
@@ -26,6 +27,7 @@ type ManualDisabledReason = Extract<RuleDisabledReason, 'manual' | 'rollback'>;
 export interface CodeRuleRegistration {
   module: RuleModule;
   bundleHash: string;
+  moduleUrl: string;
 }
 
 export type RuleControlResult =
@@ -159,6 +161,25 @@ export class RuleRegistryService {
       });
     }
     return sortRuleChain(entries);
+  }
+
+  aiRuleBundles(entries: readonly RuleChainEntry[]): AiRuleBundleRef[] {
+    return entries.map((entry) => {
+      const registration = this.#codeById.get(entry.ruleId);
+      if (
+        registration?.length !== 1 ||
+        registration[0]!.bundleHash !== entry.bundleHash ||
+        registration[0]!.module.meta.contractVersion !== entry.contractVersion
+      ) {
+        throw new Error(`AI rule bundle is unavailable: ${entry.ruleId}`);
+      }
+      return {
+        ruleId: entry.ruleId,
+        moduleUrl: registration[0]!.moduleUrl,
+        bundleHash: entry.bundleHash,
+        contractVersion: entry.contractVersion,
+      };
+    });
   }
 
   get(ruleId: string): RuleControlResult {

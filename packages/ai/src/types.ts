@@ -1,4 +1,10 @@
-import type { Play, PlayerSnapshot } from '@daifugo/core';
+import type {
+  GameResult,
+  Play,
+  PlayerSnapshot,
+  RuleChainEntry,
+  RuleMemory,
+} from '@daifugo/core';
 
 export interface ThinkBudget {
   softMs: number;
@@ -32,10 +38,26 @@ export interface SearchStats {
   playouts: number;
   candidates: CandidateStats[];
   workerThread: boolean;
+  ruleIds?: string[];
 }
 
 export type AiFallback =
   'none' | 'partial-search' | 'heuristic' | 'engine-fallback';
+
+export interface AiRuleBundleRef {
+  ruleId: string;
+  moduleUrl: string;
+  bundleHash: string;
+  contractVersion: number;
+}
+
+export interface AiRuleContext {
+  ruleChain: RuleChainEntry[];
+  bundles: AiRuleBundleRef[];
+  gameMemory: RuleMemory;
+  setMemory: RuleMemory;
+  setHistory: GameResult[];
+}
 
 export interface DecideMoveInput {
   view: PlayerSnapshot;
@@ -43,6 +65,7 @@ export interface DecideMoveInput {
   budget: ThinkBudget;
   seed: string;
   difficulty: DifficultyProfile;
+  ruleContext?: AiRuleContext;
 }
 
 export interface AiDecision {

@@ -117,6 +117,8 @@ const app = createAppServer({
       },
     }),
     sessions: persistence.sessions,
+    rulePortForSet: (setId) => rules.rulePortForSet(setId),
+    aiRuleBundles: (entries) => rules.aiRuleBundles(entries),
     onError: (error) => {
       writeLog('error', 'socket_internal_error', errorFields(error));
     },

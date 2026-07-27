@@ -1,6 +1,7 @@
 import type { Play } from '@daifugo/core';
 
 import type {
+  AiRuleContext,
   DifficultyProfile,
   MctsConfig,
   SearchStats,
@@ -14,6 +15,7 @@ export interface SearchRequest {
   difficulty: DifficultyProfile;
   config: MctsConfig;
   seed: string;
+  ruleContext?: AiRuleContext;
 }
 
 export interface SearchResponse {

@@ -5,6 +5,7 @@ import {
   DEFAULT_THINK_BUDGET,
   NORMAL_DIFFICULTY,
   type AiPlayer,
+  type AiRuleBundleRef,
 } from '@daifugo/ai';
 import {
   buildPlayerSnapshot,
@@ -12,6 +13,7 @@ import {
   enumerateLegalPlays,
   NO_RULE_CHAIN_PORT,
   type CardId,
+  type RuleChainEntry,
   type RuleChainPort,
   type RuleRuntime,
 } from '@daifugo/core';
@@ -59,6 +61,8 @@ export interface RoomSocketGatewayOptions {
   createSetSeed?: () => string;
   ai?: AiPlayer;
   rulePort?: RuleChainPort;
+  rulePortForSet?: (setId: string) => RuleChainPort;
+  aiRuleBundles?: (entries: readonly RuleChainEntry[]) => AiRuleBundleRef[];
   decideTurn?: (state: RoomState, memberId: string) => Promise<CardId[] | null>;
   timers?: Pick<
     RoomTimerOptions,
@@ -224,7 +228,10 @@ export function attachRoomSocketGateway(
           ruleChain: engine.ruleChain,
         };
         const runtime: RuleRuntime = {
-          port: options.rulePort ?? NO_RULE_CHAIN_PORT,
+          port:
+            options.rulePortForSet?.(engine.setId) ??
+            options.rulePort ??
+            NO_RULE_CHAIN_PORT,
           setHistory: engine.results,
           setMemory: engine.setMemory,
         };
@@ -253,6 +260,13 @@ export function attachRoomSocketGateway(
             },
             seed: `${engine.setSeed}:room:${gameIndex}:${state.turnSeq}:${memberId}`,
             difficulty: NORMAL_DIFFICULTY,
+            ruleContext: {
+              ruleChain: structuredClone(engine.ruleChain),
+              bundles: options.aiRuleBundles?.(engine.ruleChain) ?? [],
+              gameMemory: structuredClone(game.private.memory),
+              setMemory: structuredClone(engine.setMemory),
+              setHistory: structuredClone(engine.results),
+            },
           },
           fallbackPlay: () => legalPlays[0]!,
           animationDelay: { minMs: 0, maxMs: 0 },

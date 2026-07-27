@@ -1,10 +1,14 @@
 import {
   buildPlayerSnapshot,
+  createInProcessRuleChainPort,
   enumerateLegalPlays,
   reduceSet,
   startGame,
   startSet,
   type GameConfig,
+  type RuleChainEntry,
+  type RuleModule,
+  type RuleRuntime,
   type SetAction,
   type SetState,
   type SnapshotContext,
@@ -13,6 +17,7 @@ import { describe, expect, it } from 'vitest';
 
 import { createAiPlayer } from './ai-player.js';
 import { sameCandidate } from './heuristic.js';
+import { rule as ai02RuleFixture } from './test-fixtures/ai02-rule.js';
 import { DEFAULT_THINK_BUDGET, NORMAL_DIFFICULTY } from './types.js';
 import { AiWorkerPool } from './worker-pool.js';
 
@@ -530,5 +535,132 @@ describe('AI-01', () => {
       await ai.close();
       await pool.close();
     }
+  }, 20_000);
+});
+
+describe('AI-02 rule following', () => {
+  it('worker内でも固定ルールbundleを読み、合法手だけで新ルール有効セットを完走する', async () => {
+    const module = ai02RuleFixture as RuleModule;
+    const ruleEntry: RuleChainEntry = {
+      ruleId: module.meta.ruleId,
+      name: module.meta.name,
+      position: 0,
+      priority: {
+        score: 0,
+        activatedAt: 0,
+        ruleId: module.meta.ruleId,
+      },
+      bundleHash: 'ai02-fixture-bundle',
+      contractVersion: module.meta.contractVersion,
+    };
+    const port = createInProcessRuleChainPort([module]);
+    let state = startSet(
+      {
+        setId: 'ai02-rule-set',
+        config: { gamesPerSet: 1, interimAutoAdvanceMs: 0 },
+        members: seats.map((id) => ({
+          id,
+          displayName: id,
+          isAI: true,
+        })),
+        ruleChain: [ruleEntry],
+        setSeed: 'ai02-rule-following',
+      },
+      port,
+    );
+    const ai = createAiPlayer({
+      search: { cutoffSteps: 4, rootCandidateCap: 4 },
+    });
+    let actions = 0;
+    let workerRuleObserved = false;
+    try {
+      while (state.phase.name !== 'setResult' && actions < 1_000) {
+        if (state.phase.name === 'interimResult') {
+          state = reduceSet(state, { type: 'advance' }, port).state;
+          actions += 1;
+          continue;
+        }
+        const game = state.currentGame;
+        const player = game?.public.turn;
+        if (!game || !player) throw new Error('Expected an active AI turn');
+        const config: GameConfig = {
+          gameIndex: state.phase.gameIndex,
+          seats,
+          gameSeed: `${state.setSeed}:${state.phase.gameIndex}`,
+          ruleChain: [ruleEntry],
+        };
+        const runtime: RuleRuntime = {
+          port,
+          setHistory: state.results,
+          setMemory: state.setMemory,
+        };
+        const legal = enumerateLegalPlays(config, game, player, runtime);
+        let action: SetAction;
+        if (legal.length === 0) {
+          action = { type: 'pass', player };
+        } else {
+          const decision = await ai.decideMove({
+            view: buildPlayerSnapshot(
+              config,
+              game,
+              snapshotContext(state),
+              player,
+              runtime,
+            ),
+            legalPlays: legal,
+            budget: {
+              softMs: 3,
+              hardMs: 1_000,
+              maxPlayouts: 1,
+              sliceMs: 1,
+            },
+            seed: `${state.setSeed}:${game.public.turnCount}:${player}`,
+            difficulty: NORMAL_DIFFICULTY,
+            ruleContext: {
+              ruleChain: [ruleEntry],
+              bundles: [
+                {
+                  ruleId: ruleEntry.ruleId,
+                  moduleUrl: new URL(
+                    './test-fixtures/ai02-rule.js',
+                    import.meta.url,
+                  ).href,
+                  bundleHash: ruleEntry.bundleHash,
+                  contractVersion: ruleEntry.contractVersion,
+                },
+              ],
+              gameMemory: game.private.memory,
+              setMemory: state.setMemory,
+              setHistory: state.results,
+            },
+          });
+          expect(decision.usedFallback).toBe('none');
+          if (decision.stats?.workerThread) {
+            expect(decision.stats.ruleIds).toEqual([ruleEntry.ruleId]);
+            workerRuleObserved = true;
+          }
+          expect(legal.some((play) => sameCandidate(play, decision.play))).toBe(
+            true,
+          );
+          action = {
+            type: 'play',
+            player,
+            cards: decision.play.cards.map((card) => card.id),
+          };
+        }
+        const transition = reduceSet(state, action, port);
+        expect(transition.rejections).toEqual([]);
+        state = transition.state;
+        actions += 1;
+      }
+    } finally {
+      await ai.close();
+    }
+
+    expect(state.phase.name).toBe('setResult');
+    expect(state.results).toHaveLength(1);
+    expect(state.results[0]?.firedRuleIds).toContain(ruleEntry.ruleId);
+    expect(workerRuleObserved).toBe(true);
+    expect(actions).toBeLessThan(1_000);
   }, 20_000);
 });

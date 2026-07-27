@@ -131,12 +131,12 @@ function determinize(view, seed, iteration) {
   };
 }
 
-function gameConfig(view, seed) {
+function gameConfig(view, seed, ruleChain) {
   return {
     gameIndex: view.gameIndex,
     seats: [...view.seats],
     gameSeed: seed,
-    ruleChain: [],
+    ruleChain,
   };
 }
 
@@ -285,7 +285,7 @@ function finalCandidate(stats, temperature, seed) {
   return strongestCandidate(stats);
 }
 
-function response(stats, payload, completed, done) {
+function response(stats, payload, completed, done, ruleIds) {
   const selected = finalCandidate(
     stats,
     payload.difficulty.temperature,
@@ -302,20 +302,92 @@ function response(stats, payload, completed, done) {
         meanReward: entry.reward / Math.max(1, entry.visits),
       })),
       workerThread: true,
+      ruleIds,
     },
   };
 }
 
-function search(payload, onProgress) {
+const moduleCache = new Map();
+
+function ruleModule(value) {
+  return (
+    value &&
+    typeof value === 'object' &&
+    value.meta &&
+    typeof value.meta === 'object' &&
+    value.hooks &&
+    typeof value.hooks === 'object'
+  );
+}
+
+async function loadRuleModules(ruleContext) {
+  if (!ruleContext) return [];
+  if (ruleContext.ruleChain.length !== ruleContext.bundles.length) {
+    throw new Error('AI rule bundle set differs from the fixed rule chain');
+  }
+  const bundlesById = new Map();
+  for (const bundle of ruleContext.bundles) {
+    if (bundlesById.has(bundle.ruleId)) {
+      throw new Error(`Duplicate AI rule bundle: ${bundle.ruleId}`);
+    }
+    const url = new URL(bundle.moduleUrl);
+    if (url.protocol !== 'file:') {
+      throw new Error(`AI rule bundle must be a local file: ${bundle.ruleId}`);
+    }
+    bundlesById.set(bundle.ruleId, bundle);
+  }
+  const modules = [];
+  for (const entry of ruleContext.ruleChain) {
+    const bundle = bundlesById.get(entry.ruleId);
+    if (
+      !bundle ||
+      bundle.bundleHash !== entry.bundleHash ||
+      bundle.contractVersion !== entry.contractVersion
+    ) {
+      throw new Error(`AI rule bundle metadata mismatch: ${entry.ruleId}`);
+    }
+    const cacheKey = `${bundle.bundleHash}:${bundle.moduleUrl}`;
+    let module = moduleCache.get(cacheKey);
+    if (!module) {
+      const loaded = await import(bundle.moduleUrl);
+      module = loaded.rule;
+      if (!ruleModule(module)) {
+        throw new Error(`AI rule bundle has no RuleModule: ${entry.ruleId}`);
+      }
+      moduleCache.set(cacheKey, module);
+    }
+    if (
+      module.meta.ruleId !== entry.ruleId ||
+      module.meta.contractVersion !== entry.contractVersion
+    ) {
+      throw new Error(`AI rule module contract mismatch: ${entry.ruleId}`);
+    }
+    modules.push(module);
+  }
+  return modules;
+}
+
+async function search(payload, onProgress) {
   if (payload.config.maxTreeDepth !== 1) {
     throw new Error('AI-01 supports maxTreeDepth=1 only');
   }
-  const config = gameConfig(payload.view, payload.seed);
+  const modules = await loadRuleModules(payload.ruleContext);
+  const ruleChain = structuredClone(payload.ruleContext?.ruleChain ?? []);
+  const port = core.createInProcessRuleChainPort(modules);
+  const config = gameConfig(payload.view, payload.seed, ruleChain);
   const api = core.createSimulationApi({
     config,
     snapshotContext: snapshotContext(payload.view),
+    runtime: {
+      port,
+      setHistory: structuredClone(payload.ruleContext?.setHistory ?? []),
+      setMemory: structuredClone(payload.ruleContext?.setMemory ?? {}),
+    },
   });
   const sample = determinize(payload.view, payload.seed, -1);
+  sample.private.memory = structuredClone(
+    payload.ruleContext?.gameMemory ?? {},
+  );
   const strength = api.getEffectiveStrengthOrder(api.createPosition(sample));
   const scaled = Math.floor(
     payload.budget.maxPlayouts * payload.difficulty.budgetScale,
@@ -348,6 +420,9 @@ function search(payload, onProgress) {
       payload.config.ucbC,
     );
     const world = determinize(payload.view, payload.seed, completed);
+    world.private.memory = structuredClone(
+      payload.ruleContext?.gameMemory ?? {},
+    );
     const reward = rollout(
       api,
       world,
@@ -364,11 +439,25 @@ function search(payload, onProgress) {
       count % progressBatch === 0 ||
       now - lastProgressAt >= payload.budget.sliceMs
     ) {
-      onProgress(response(stats, payload, count, false));
+      onProgress(
+        response(
+          stats,
+          payload,
+          count,
+          false,
+          ruleChain.map((entry) => entry.ruleId),
+        ),
+      );
       lastProgressAt = now;
     }
   }
-  return response(stats, payload, completed, completed === target);
+  return response(
+    stats,
+    payload,
+    completed,
+    completed === target,
+    ruleChain.map((entry) => entry.ruleId),
+  );
 }
 
 if (!parentPort) {
@@ -377,12 +466,12 @@ if (!parentPort) {
 
 parentPort.postMessage({ kind: 'ready' });
 
-parentPort.on('message', (message) => {
+parentPort.on('message', async (message) => {
   try {
     parentPort.postMessage({
       kind: 'result',
       id: message.id,
-      value: search(message.payload, (value) => {
+      value: await search(message.payload, (value) => {
         parentPort.postMessage({
           kind: 'progress',
           id: message.id,

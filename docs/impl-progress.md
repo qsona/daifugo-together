@@ -10,6 +10,7 @@
 - **フェーズ 2 / E7 CX-02 プロセス2完了**: subscription Codex CLIを使う共有skill、scaffold先行push/任意段階再開、全差分・履歴検収、1回retry、PR作成、失敗永続化まで実装。独立最終再レビューはコード・テスト範囲 `PASS` / 品質 `APPROVED` / 全指摘なし。実subscriptionでのルール生成・実PR作成は未実行
 - **フェーズ 2 / E7 CX-03 プロセス2完了、外部受入ゲート待ち**: trusted diff-guard、untrusted quality/rule-tests/simulation、ローカルCI監視を実装。独立完了再レビューはコード・自動テスト `PASS` / 品質 `APPROVED` / Critical・Importantなし。実repositoryのbranch protection/ruleset登録はworkflowのmain反映後
 - **フェーズ 2 / E7 CX-04 プロセス2実装・検証中**: 即時disable/enable、セット内障害隔離、24時間内3セットでの自動disable、版履歴と恒久revert同期、管理API、revert差分ガード、runbookまで実装。独立完了レビュー前
+- **フェーズ 2 / E2 AI-02 プロセス1実装中**: 固定rule chain・ローカルbundle参照・game/set memory・set historyをworkerへ直列化し、worker側で同じRuleModule runtimeを再構成。新ルール有効の1ゲームをworker AI 4席で合法手だけで完走する縦切りまで接続
 - E1〜E3 の実装記録は本書末尾の「並行進行」節、E13 は「E13」節。E4 の未解消の開発者判断は「詰まっている点」に残っている(1〜4・7・8・11)
 
 ### E-18 / C-2・C-3・C-6 再設計の反映(2026-07-27)
@@ -728,6 +729,30 @@ TS-02 から継続で未解決のもの:
 障害注入は、worker が探索エラーを返した場合の合法 heuristic fallback と同一 worker の次着手再利用、および終了コード 0 の crash → 再生成 → 待機ジョブ継続を12世代連続で確認する stress テストまで追加した。
 
 提案ルールを含むworker境界はAI-02（フェーズ2）へ維持する。`RuleRuntime.port` は関数を含みstructured clone不能なので直接渡さず、serializableなルールID・設定・setHistory・公開可能memoryを送り、worker側で同じbundleをimportしてruntimeを再構成する。決定化factoryもcore側へ寄せる。
+
+### AI-02 プロセス1（新ルールへの追従）
+
+- 方針はE02 §3.2どおり「AIはルールの意図を解釈せず、権威エンジンの合法手と同じルール適用後の世界で探索する」。ルールPRから`packages/ai`は変更しない
+- `AiRuleContext`にセット開始時の固定`RuleChainEntry[]`、ローカル`file:` module URL・bundle hash・contract version、game/set memory、set historyを追加した。関数をpostMessageせず、workerが同じRuleModuleをimportして`createInProcessRuleChainPort`と`createSimulationApi`を再構成する
+- workerはchainとbundle集合の1対1対応、重複、`file:`限定、bundle hash、contract version、module metaを検証する。不一致・import失敗は既存の合法heuristic fallbackへ落ちる
+- 本番のAI合法手列挙も、従来の`NO_RULE_CHAIN_PORT`固定からセット専用の権威portへ接続した。AIが返すroot手は引き続き権威側が列挙した`legalPlays`の要素に限定され、serverが再検証する
+- ユーザーストーリー確認: `packages/ai/src/ai-player.test.ts`の「worker内でも固定ルールbundleを読み、合法手だけで新ルール有効セットを完走する」で、毎playにEffectを返すfixtureルールを権威側とworker側の両方へ渡し、AI 4席・1ゲームをrejection 0で完走、worker統計のrule ID、set resultの発火rule IDを確認した
+- focused検証: AI/server typecheck成功。`ai-player.test.ts / rules.test.ts / socket-gateway.test.ts`: **3 files / 29 tests成功**。format・lint・AIネットワーク境界も成功
+
+#### 置いた仮定（方向性レビュー対象）
+
+| # | 仮定した内容 | なぜそう決めたか | 出典 | 覆ったときの影響範囲 |
+|---|---|---|---|---|
+| AI02-P1-1 | workerへ渡すbundle参照は、serverが検証・ロード済みのローカル`file:` URLとし、URL自体を公開契約には含めない | RuleRuntimeの関数はstructured clone不能。workerが同一デプロイ成果物をimportすればルール再実装を避けられる | E02冒頭改訂ノート・§3.2(c)、AI-01引継ぎ | `AiRuleBundleRef`、CX-05の静的registry/loader |
+| AI02-P1-2 | 初版は権威状態のgame/set memoryをworkerへ複製する | E02が初版方針として明記し、現契約にmemoryの公開/秘匿区分がないため | E02 §3.1(b)(f)-3・§6-3 | `AiRuleContext`。秘匿区分導入時はAI用projectionへ置換 |
+| AI02-P1-3 | bundle欠落・不一致・import失敗時は、ルールなしで探索を続けず合法heuristic fallbackへ落とす | 誤った世界で高コスト探索するより、権威`legalPlays`から即答して合法性・時間・停止性を守るため | E02 §3.2(d)-3/4 | worker loader、fallback計測。CX-04 incidentとの接続はプロセス2 |
+
+#### プロセス2に回したもの
+
+- CX-03のsimulation jobをrandom-legalから**実worker AI 4席・小予算**へ置き換え、新規のみ/全ルールの両構成を各200ゲーム×5 seedで検査する
+- AI込みハーネスの`illegalPlay / nonTermination / timeout / exception`とfallback率・playouts/moveを集計し、悪性fixtureが正しくfailするメタテストを追加する
+- bundle欠落・meta/hash/contract不一致、hook例外、全sample失敗、hard timeout、worker crash、複数ルール・memory継続をAI-02境界で回帰化する
+- CX-05の`packages/rules` loaderと`RuleRegistryService`へ実module URLを接続し、起動時同期・本番AI・対局権威が同じregistry snapshotを使う
 
 ### E2で見つけた設計書の不整合
 

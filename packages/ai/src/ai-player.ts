@@ -43,6 +43,9 @@ export function createAiPlayer(options: CreateAiPlayerOptions = {}): AiPlayer {
             difficulty: input.difficulty,
             config,
             seed: input.seed,
+            ...(input.ruleContext === undefined
+              ? {}
+              : { ruleContext: input.ruleContext }),
           },
           input.budget.hardMs,
         );
