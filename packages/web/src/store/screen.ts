@@ -9,6 +9,7 @@ export type ScreenId =
   | 'title'
   | 'menu'
   | 'proposal'
+  | 'myProposals'
   | 'waitingRoom'
   | 'game'
   | 'gameResult'

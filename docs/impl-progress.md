@@ -3,7 +3,7 @@
 ## 現在
 
 - **フェーズ 1 完了(2026-07-27)**: TS-02・E1・E2・E3・E4 は main に統合済み、E13 は本番デプロイと動作検証(DP-01・DP-03)まで完了(`https://daifugo-together.fly.dev/`)。残りは DP-02 の仕上げ(GitHub Environment `production` + `FLY_API_TOKEN` 登録と初回 CD 実行確認)のみ
-- **フェーズ 2 / E5 RP-01・RP-02 完了**: E-18/C-3 の再設計(非同期受付、名前40/内容1000、投稿レート制限なし)まで反映済み。RP-03 は CX-02 依存のため E7 後に戻る
+- **フェーズ 2 / E5 RP-01・RP-02 完了、RP-03 プロセス1実装済み**: E-18/C-3 の非同期受付に加え、マイ提案API・未読/seen・画面7・メニューバッジを縦接続。独立方向性レビュー待ち
 - **C-5 追従完了**: E7 内包リトライの決定を反映し、`proposals.failed` を終端化。`failed` 遷移時に `attempt_count=1` を記録して同内容の再提案を即時解禁する
 - **フェーズ 2 / E6 YC-01〜03 プロセス2完了**: E-18 の非同期構成、ローカル判定ツール、イエローカード表示・停止・救済まで実装済み。修正後 judge eval は Luna/Sol とも 40/40、平均 6.40秒 / 6.23秒のため既定を **GPT-5.6 Sol medium** とした。独立 GPT-5.6 Sol 完了レビューは要件適合 `PASS` / 品質 `APPROVED`
 - **フェーズ 2 / E7 CX-01 プロセス2ほぼ完了**: 独立方向性レビュー `GO_WITH_FIXES` のImportant 4件と、初回完了レビューのImportant 2件を反映。完了再レビューはコード・自動テスト `PASS` / 品質 `APPROVED` / Critical・Importantなし。実app-server評価だけ明示許可待ち
@@ -847,6 +847,20 @@ TS-02 から継続で未解決のもの:
 
 - 実GitHub PR・main CD・本番SQLiteを用いた「skill起動・レビューとマージ・有効化」の3操作リハーサルは、実PRを作る明示許可と本番受入時に行う
 - RP-03の`proposals_seen_at`、mine/seen API、一覧・メニューバッジはE5側の残作業としてCX-05のrelease時刻へ接続する
+
+### E5 RP-03 プロセス1（マイ提案・状態通知）
+
+- `users.proposals_seen_at`をNULL許容の加算migrationで追加し、`GET /api/proposals/mine`はBearer tokenの本人提案だけを作成日時の新しい順で返す。各行と件数の未読は`status_changed_at > COALESCE(proposals_seen_at, 0)`で算出し、GET自体は既読化しない
+- `POST /api/proposals/seen`は既読時刻を単調増加で更新して204を返す。画面7は一覧取得後に明示seenを送り、状態5値、ローカル/オリジナル区分、却下・実装失敗理由、未読印、release日とrule ID導線を表示する。メニューはmineの`unreadCount`をバッジ表示する
+- 縦結合テストで、複数利用者の分離、新しい順、未訪問時の全件未読、GET非既読、seen後の消灯、seen後の状態変化だけの再点灯をHTTP越しに確認した。Webは画面表示・seen呼出し・clientのGET/POSTを回帰化した
+
+#### RP-03で置いた仮定・プロセス2送り
+
+| ID | 仮定・残作業 | 根拠 | プロセス2での扱い |
+|---|---|---|---|
+| E5-RP03-P1-1 | 画面7は一覧取得成功後にseenを送り、取得した行の未読印はその表示中だけ残す。メニューへ戻った時点で件数を0にする | GET自体を既読化しないAPI契約と、「画面7を開いたら既読」の両立 | seen失敗・再読込・並行状態変更の境界を追加検証 |
+| E5-RP03-P1-2 | E11未実装のためrelease導線はrule IDの表示までとし、画面遷移は後続E11で接続する | E05 §3.3(d)は`releasedRuleId`を前方参照とし、人気度・優先度もnull許容 | E11接続点を壊さない型/表示を確認 |
+| E5-RP03-P1-3 | `reason_text`があればそれを優先し、無ければC-6のcode別固定文言へfallbackする | E05 §3.3(c)の表示仕様とC-6確定理由セット | 全理由code、長文、空文字の表示を網羅 |
 
 ### E2で見つけた設計書の不整合
 

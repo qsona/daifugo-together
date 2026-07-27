@@ -130,6 +130,111 @@ describe('proposal vertical slice', () => {
     ]);
   });
 
+  it('自分の提案だけを新しい順で返し、明示seen後の状態変化だけを未読にする', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'daifugo-proposal-mine-'));
+    directories.push(directory);
+    const userIds = ['author-mine', 'author-other'];
+    const tokens = ['proposal-token-mine', 'proposal-token-other'];
+    const persistence = new SqlitePersistence(
+      join(directory, 'proposal.sqlite'),
+      {
+        createUserId: () => userIds.shift()!,
+        createToken: () => tokens.shift()!,
+      },
+    );
+    persistenceInstances.push(persistence);
+    const mine = persistence.sessions.resolve(undefined);
+    const other = persistence.sessions.resolve(undefined);
+    let now = 1_000;
+    const proposalIds = [
+      '00000000Z8AAAAAAAAAAAAAA01',
+      '00000000Z8AAAAAAAAAAAAAA02',
+      '00000000Z8AAAAAAAAAAAAAA03',
+    ];
+    const service = new ProposalSubmissionService(persistence.proposals, {
+      signals: NOOP_SIGNALS,
+      now: () => now,
+      createId: () => proposalIds.shift()!,
+    });
+    await service.submit({
+      token: mine.userToken,
+      ip: '127.0.0.1',
+      body: { kind: 'original', name: '古い提案', body: '古い本文' },
+    });
+    now = 1_100;
+    await service.submit({
+      token: other.userToken,
+      ip: '127.0.0.1',
+      body: { kind: 'original', name: '他人の提案', body: '見せない本文' },
+    });
+    now = 1_200;
+    await service.submit({
+      token: mine.userToken,
+      ip: '127.0.0.1',
+      body: { kind: 'local', name: '新しい提案', body: '新しい本文' },
+    });
+    const app = createAppServer({
+      webDistDir: directory,
+      proposals: service,
+    });
+    apps.push(app);
+    const port = await app.listen(0, '127.0.0.1');
+    const baseUrl = `http://127.0.0.1:${String(port)}`;
+    const headers = { authorization: `Bearer ${mine.userToken}` };
+
+    const first = await fetch(`${baseUrl}/api/proposals/mine`, { headers });
+    expect(first.status).toBe(200);
+    await expect(first.json()).resolves.toMatchObject({
+      unreadCount: 2,
+      items: [
+        { name: '新しい提案', unread: true },
+        { name: '古い提案', unread: true },
+      ],
+    });
+    const second = await fetch(`${baseUrl}/api/proposals/mine`, { headers });
+    await expect(second.json()).resolves.toMatchObject({ unreadCount: 2 });
+
+    now = 2_000;
+    const seen = await fetch(`${baseUrl}/api/proposals/seen`, {
+      method: 'POST',
+      headers,
+    });
+    expect(seen.status).toBe(204);
+    const afterSeen = await fetch(`${baseUrl}/api/proposals/mine`, { headers });
+    await expect(afterSeen.json()).resolves.toMatchObject({
+      unreadCount: 0,
+      items: [{ unread: false }, { unread: false }],
+    });
+
+    expect(
+      persistence.proposals.transitionProposal(
+        '00000000Z8AAAAAAAAAAAAAA01',
+        'screening',
+        'rejected',
+        { reasonCode: 'out_of_scope', reasonText: '対象外です' },
+        3_000,
+      ),
+    ).toBe('transitioned');
+    const changed = await fetch(`${baseUrl}/api/proposals/mine`, { headers });
+    await expect(changed.json()).resolves.toMatchObject({
+      unreadCount: 1,
+      items: [
+        { name: '新しい提案', unread: false },
+        {
+          name: '古い提案',
+          status: 'rejected',
+          reason: { code: 'out_of_scope', text: '対象外です' },
+          unread: true,
+        },
+      ],
+    });
+    expect(
+      await fetch(`${baseUrl}/api/proposals/mine`, {
+        headers: { authorization: `Bearer ${other.userToken}` },
+      }).then((response) => response.json()),
+    ).toMatchObject({ items: [{ name: '他人の提案' }] });
+  });
+
   it('HTTP境界でmethod・認証・JSON・body上限・区分整合を拒否する', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'daifugo-proposal-http-'));
     directories.push(directory);

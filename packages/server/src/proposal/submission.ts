@@ -1,6 +1,7 @@
 import {
   validateProposal,
   type CreateProposalResponse,
+  type MyProposalsResponse,
   type NormalizedProposal,
   type ProposalValidationError,
 } from '@daifugo/core';
@@ -36,6 +37,17 @@ export interface ProposalSubmissionPort {
     ip: string;
     body: unknown;
   }): Promise<ProposalSubmissionResult>;
+  mine(
+    token: string | null,
+  ): Promise<
+    | { status: 200; body: MyProposalsResponse }
+    | { status: 401; body: { error: 'unauthorized' } }
+  >;
+  seen(
+    token: string | null,
+  ): Promise<
+    { status: 204 } | { status: 401; body: { error: 'unauthorized' } }
+  >;
 }
 
 export class ProposalSubmissionService implements ProposalSubmissionPort {
@@ -122,5 +134,36 @@ export class ProposalSubmissionService implements ProposalSubmissionPort {
       }
       throw error;
     }
+  }
+
+  async mine(
+    token: string | null,
+  ): Promise<
+    | { status: 200; body: MyProposalsResponse }
+    | { status: 401; body: { error: 'unauthorized' } }
+  > {
+    if (!token) {
+      return { status: 401, body: { error: 'unauthorized' } };
+    }
+    const authorId = this.#repository.authorIdForToken(token);
+    return authorId
+      ? { status: 200, body: this.#repository.mine(authorId) }
+      : { status: 401, body: { error: 'unauthorized' } };
+  }
+
+  async seen(
+    token: string | null,
+  ): Promise<
+    { status: 204 } | { status: 401; body: { error: 'unauthorized' } }
+  > {
+    if (!token) {
+      return { status: 401, body: { error: 'unauthorized' } };
+    }
+    const authorId = this.#repository.authorIdForToken(token);
+    if (!authorId) {
+      return { status: 401, body: { error: 'unauthorized' } };
+    }
+    this.#repository.markSeen(authorId, this.#now());
+    return { status: 204 };
   }
 }

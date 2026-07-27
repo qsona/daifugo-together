@@ -523,14 +523,34 @@ export function createAppServer(options: AppServerOptions): AppServer {
     response: ServerResponse,
   ): Promise<boolean> => {
     const pathname = new URL(request.url ?? '/', 'http://localhost').pathname;
-    if (pathname !== '/api/proposals') return false;
-    if (request.method !== 'POST') {
-      response.setHeader('allow', 'POST');
+    const isCreate = pathname === '/api/proposals';
+    const isMine = pathname === '/api/proposals/mine';
+    const isSeen = pathname === '/api/proposals/seen';
+    if (!isCreate && !isMine && !isSeen) return false;
+    const allowedMethod = isMine ? 'GET' : 'POST';
+    if (request.method !== allowedMethod) {
+      response.setHeader('allow', allowedMethod);
       writeJson(response, 405, { error: 'method_not_allowed' });
       return true;
     }
     if (!options.proposals) {
       writeJson(response, 503, { error: 'proposal_service_unavailable' });
+      return true;
+    }
+    if (isMine) {
+      const result = await options.proposals.mine(bearerToken(request));
+      writeJson(response, result.status, result.body);
+      return true;
+    }
+    if (isSeen) {
+      const result = await options.proposals.seen(bearerToken(request));
+      if (result.status === 204) {
+        response.statusCode = 204;
+        response.setHeader('cache-control', 'no-store');
+        response.end();
+      } else {
+        writeJson(response, result.status, result.body);
+      }
       return true;
     }
     let body: unknown;

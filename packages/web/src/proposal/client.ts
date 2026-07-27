@@ -2,6 +2,7 @@ import type {
   CreateCardAppealResponse,
   CreateProposalRequest,
   CreateProposalResponse,
+  MyProposalsResponse,
   ProposalValidationError,
   YellowCardSummary,
 } from '@daifugo/core';
@@ -26,6 +27,8 @@ export class ProposalApiError extends Error {
 
 export interface ProposalApi {
   submit(request: CreateProposalRequest): Promise<CreateProposalResponse>;
+  mine?(): Promise<MyProposalsResponse>;
+  markProposalsSeen?(): Promise<void>;
   getYellowCards?(): Promise<YellowCardSummary>;
   appealYellowCard?(
     cardId: number,
@@ -85,6 +88,15 @@ export class ProposalClient implements ProposalApi {
   async getYellowCards(): Promise<YellowCardSummary> {
     const response = await this.#authenticatedFetch('/api/me/yellow-cards');
     return (await response.json()) as YellowCardSummary;
+  }
+
+  async mine(): Promise<MyProposalsResponse> {
+    const response = await this.#authenticatedFetch('/api/proposals/mine');
+    return (await response.json()) as MyProposalsResponse;
+  }
+
+  async markProposalsSeen(): Promise<void> {
+    await this.#authenticatedFetch('/api/proposals/seen', { method: 'POST' });
   }
 
   async appealYellowCard(

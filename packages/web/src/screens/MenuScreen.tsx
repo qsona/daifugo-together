@@ -1,6 +1,7 @@
 import { BrandHero, HillDivider } from '../components/BrandHero';
 import { Button } from '../components/Button';
 
+import styles from './MenuScreen.module.css';
 import screen from './screen.module.css';
 
 type MenuScreenProps = {
@@ -9,6 +10,7 @@ type MenuScreenProps = {
   onEncyclopedia: () => void;
   onMyProposals: () => void;
   onHowToPlay: () => void;
+  unreadProposalCount?: number;
 };
 
 /**
@@ -22,6 +24,7 @@ export function MenuScreen({
   onEncyclopedia,
   onMyProposals,
   onHowToPlay,
+  unreadProposalCount = 0,
 }: MenuScreenProps) {
   return (
     <div className={screen.screen}>
@@ -39,6 +42,11 @@ export function MenuScreen({
         <div className={screen.row}>
           <Button size="small" onClick={onMyProposals}>
             マイ提案
+            {unreadProposalCount > 0 && (
+              <span className={styles.badge} aria-label="未読提案">
+                {unreadProposalCount > 99 ? '99+' : unreadProposalCount}
+              </span>
+            )}
           </Button>
           <Button size="small" onClick={onHowToPlay}>
             あそびかた

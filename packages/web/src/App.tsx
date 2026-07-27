@@ -24,6 +24,7 @@ import {
 import { GameResultScreen } from './screens/GameResultScreen';
 import { GameScreen } from './screens/GameScreen';
 import { MenuScreen } from './screens/MenuScreen';
+import { MyProposalsScreen } from './screens/MyProposalsScreen';
 import {
   getBrowserMultiplayerClient,
   type MultiplayerClient,
@@ -65,6 +66,8 @@ const DEMO_PROPOSAL_API: ProposalApi = {
       statusChangedAt: Date.now(),
     },
   }),
+  mine: async () => ({ items: [], unreadCount: 0 }),
+  markProposalsSeen: async () => undefined,
 };
 
 /**
@@ -135,7 +138,7 @@ function DemoApp() {
             }}
             onPropose={() => go('proposal')}
             onEncyclopedia={() => undefined}
-            onMyProposals={() => undefined}
+            onMyProposals={() => go('myProposals')}
             onHowToPlay={() => undefined}
           />
           {isChoosingRoom && (
@@ -159,6 +162,11 @@ function DemoApp() {
     case 'proposal':
       return (
         <ProposalFormScreen api={DEMO_PROPOSAL_API} onBack={() => go('menu')} />
+      );
+
+    case 'myProposals':
+      return (
+        <MyProposalsScreen api={DEMO_PROPOSAL_API} onBack={() => go('menu')} />
       );
 
     case 'waitingRoom':
@@ -445,11 +453,27 @@ function ConnectedApp({ client }: { client: MultiplayerClient }) {
   const [selectedCardIds, setSelectedCardIds] = useState<readonly string[]>([]);
   const [funRating, setFunRating] = useState<SetFunRating | null>(null);
   const [ruleVotes, setRuleVotes] = useState(DEMO_FIRED_RULES);
+  const [unreadProposalCount, setUnreadProposalCount] = useState(0);
+  const proposalApi = getBrowserProposalClient();
   const room = state.room;
 
   useEffect(() => {
     setSelectedCardIds((selected) => reconcileSelectedCardIds(selected, room));
   }, [room]);
+
+  useEffect(() => {
+    if (current !== 'menu' || !proposalApi.mine) return;
+    let active = true;
+    void proposalApi
+      .mine()
+      .then((response) => {
+        if (active) setUnreadProposalCount(response.unreadCount);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [current, proposalApi]);
 
   const invoke = (operation: Promise<unknown>) => {
     void operation.catch(() => undefined);
@@ -620,14 +644,24 @@ function ConnectedApp({ client }: { client: MultiplayerClient }) {
       />,
     );
   }
+  if (current === 'myProposals') {
+    return show(
+      <MyProposalsScreen
+        api={proposalApi}
+        onBack={() => go('menu')}
+        onUnreadCountChange={setUnreadProposalCount}
+      />,
+    );
+  }
   return show(
     <>
       <MenuScreen
         onPlay={() => setIsChoosingRoom(true)}
         onPropose={() => go('proposal')}
         onEncyclopedia={() => undefined}
-        onMyProposals={() => undefined}
+        onMyProposals={() => go('myProposals')}
         onHowToPlay={() => undefined}
+        unreadProposalCount={unreadProposalCount}
       />
       {isChoosingRoom && (
         <PlaySheet

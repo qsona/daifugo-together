@@ -80,6 +80,11 @@ export interface ProposalListItem {
   statusChangedAt: number;
 }
 
+export interface MyProposalsResponse {
+  items: ProposalListItem[];
+  unreadCount: number;
+}
+
 export type YellowCardInfo =
   | {
       verdict: 'card';

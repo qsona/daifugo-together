@@ -4,6 +4,7 @@ import {
   prefectureName,
   proposalDedupText,
   type NormalizedProposal,
+  type MyProposalsResponse,
   type PrefectureCode,
   type ProposalKind,
   type ProposalListItem,
@@ -106,7 +107,7 @@ export function proposalContentHash(proposal: NormalizedProposal): string {
   return createHash('sha256').update(proposalDedupText(proposal)).digest('hex');
 }
 
-function toListItem(row: ProposalRow): ProposalListItem {
+function toListItem(row: ProposalRow, seenAt = 0): ProposalListItem {
   const reason =
     row.reason_code === null
       ? null
@@ -126,7 +127,7 @@ function toListItem(row: ProposalRow): ProposalListItem {
     releasedRuleId: row.rule_id,
     popularity: null,
     priorityRank: null,
-    unread: true,
+    unread: row.status_changed_at > seenAt,
     createdAt: row.created_at,
     statusChangedAt: row.status_changed_at,
   };
@@ -211,6 +212,43 @@ export class ProposalRepository {
       .prepare('SELECT user_id FROM users WHERE user_token = ?')
       .get(token) as { user_id: string } | undefined;
     return row?.user_id ?? null;
+  }
+
+  mine(authorId: string): MyProposalsResponse {
+    const seenAt =
+      (
+        this.#sqlite
+          .prepare(
+            `SELECT COALESCE(proposals_seen_at, 0) AS seen_at
+             FROM users WHERE user_id = ?`,
+          )
+          .get(authorId) as { seen_at: number } | undefined
+      )?.seen_at ?? 0;
+    const items = (
+      this.#sqlite
+        .prepare(
+          `SELECT * FROM proposals
+           WHERE author_id = ?
+           ORDER BY created_at DESC, id DESC`,
+        )
+        .all(authorId) as ProposalRow[]
+    ).map((row) => toListItem(row, seenAt));
+    return {
+      items,
+      unreadCount: items.filter((item) => item.unread).length,
+    };
+  }
+
+  markSeen(authorId: string, now: number): boolean {
+    return (
+      this.#sqlite
+        .prepare(
+          `UPDATE users
+           SET proposals_seen_at = MAX(COALESCE(proposals_seen_at, 0), ?)
+           WHERE user_id = ?`,
+        )
+        .run(now, authorId).changes === 1
+    );
   }
 
   suspendedUntil(authorId: string): number | null {

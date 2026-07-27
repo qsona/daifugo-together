@@ -151,4 +151,41 @@ describe('ProposalClient', () => {
       },
     );
   });
+
+  it('マイ提案をGETし、明示seenだけをPOSTする', async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ items: [], unreadCount: 2 }), {
+          status: 200,
+        }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    const client = new ProposalClient(
+      'https://example.test',
+      { getItem: () => 'shared-session-token' },
+      fetcher,
+    );
+
+    await expect(client.mine()).resolves.toEqual({
+      items: [],
+      unreadCount: 2,
+    });
+    await expect(client.markProposalsSeen()).resolves.toBeUndefined();
+    expect(fetcher).toHaveBeenNthCalledWith(
+      1,
+      'https://example.test/api/proposals/mine',
+      {
+        headers: { authorization: 'Bearer shared-session-token' },
+      },
+    );
+    expect(fetcher).toHaveBeenNthCalledWith(
+      2,
+      'https://example.test/api/proposals/seen',
+      {
+        method: 'POST',
+        headers: { authorization: 'Bearer shared-session-token' },
+      },
+    );
+  });
 });

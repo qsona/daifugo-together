@@ -32,6 +32,7 @@ const users = sqliteTable('users', {
   userId: text('user_id').primaryKey(),
   userToken: text('user_token').notNull().unique(),
   displayName: text('display_name').notNull(),
+  proposalsSeenAt: integer('proposals_seen_at'),
   createdAt: integer('created_at').notNull(),
 });
 
@@ -188,6 +189,7 @@ export class SqlitePersistence implements RoomPersistencePort {
         user_id TEXT PRIMARY KEY,
         user_token TEXT NOT NULL UNIQUE,
         display_name TEXT NOT NULL,
+        proposals_seen_at INTEGER,
         created_at INTEGER NOT NULL
       );
       CREATE TABLE IF NOT EXISTS replay_records (
@@ -240,6 +242,14 @@ export class SqlitePersistence implements RoomPersistencePort {
         WHERE status IN ('screening', 'implementing')
           OR (status = 'failed' AND attempt_count = 0);
     `);
+    const userColumns = this.#sqlite
+      .prepare("PRAGMA table_info('users')")
+      .all() as Array<{ name: string }>;
+    if (!userColumns.some(({ name }) => name === 'proposals_seen_at')) {
+      this.#sqlite.exec(
+        'ALTER TABLE users ADD COLUMN proposals_seen_at INTEGER',
+      );
+    }
     const proposalColumns = this.#sqlite
       .prepare("PRAGMA table_info('proposals')")
       .all() as Array<{ name: string }>;
