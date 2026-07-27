@@ -4,12 +4,16 @@ E6 の L3 判定は従量課金 API を使わず、開発者 PC の Codex app-se
 
 ## 準備
 
-サーバーとローカル PC に同じ `ADMIN_PIPELINE_TOKEN` を設定する。32 文字未満はサーバー起動時に拒否される。トークンはコマンドライン引数にせず環境変数で渡す。
+サーバーとローカル PC に同じ `ADMIN_PIPELINE_TOKEN` を設定する。32 文字未満はサーバー起動時に拒否される。トークンはコマンドライン引数にせず、リポジトリ直下の Git 管理外ファイル `.env.local` に保存する。
 
-```bash
-export ADMIN_PIPELINE_TOKEN='<32文字以上のランダム値>'
-export DAIFUGO_ADMIN_URL='https://daifugo-together.fly.dev'
+```dotenv
+ADMIN_PIPELINE_TOKEN=<サーバーと共有する32文字以上のランダム値>
+DAIFUGO_ADMIN_URL=https://daifugo-together.fly.dev
+ADMIN_PIPELINE_URL=https://daifugo-together.fly.dev
+RULE_REPOSITORY_URL=git@github.com:qsona/daifugo-together.git
 ```
+
+`DAIFUGO_ADMIN_URL` は `judge` / `confirm`、`ADMIN_PIPELINE_URL` と `RULE_REPOSITORY_URL` は `implement*` が使う。`packages/pipeline` の各運用コマンドは、このファイルがあれば自動で読み込む。シェルで同名の環境変数を明示した場合は、その値を優先する。`.env.local` は必ず Git 管理外のまま、ファイルモード `0600` で保持する。
 
 macOS では ChatGPT アプリ同梱の Codex を優先して使う。それ以外の場所にあるバイナリを使う場合だけ `CODEX_BIN` を設定する。
 

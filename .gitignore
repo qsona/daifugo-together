@@ -6,6 +6,10 @@ coverage/
 *.tsbuildinfo
 .DS_Store
 packages/rules/generated/
+.worktrees/
+
+# ローカル管理用の秘密値
+.env.local
 
 # Claude Code のローカル作業データ(launch.json だけ共有する)
 .claude/*
