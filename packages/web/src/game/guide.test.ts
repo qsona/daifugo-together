@@ -120,15 +120,9 @@ describe('TU-03: reduceGuide', () => {
     expect(next.cue).toBe('pairAvailable');
   });
 
-  it('出せないカードのタップは初戦に1回だけ返し、2戦目では無効になる', () => {
-    const first = step(createGuideState(), {
-      type: 'illegalTap',
-      gameNo: 1,
-    });
-    expect(first.cue).toBe('illegalTap');
-    expect(step(first.state, { type: 'illegalTap', gameNo: 1 }).cue).toBeNull();
+  it('2戦目ではガイドを返さない', () => {
     expect(
-      step(createGuideState(), { type: 'illegalTap', gameNo: 2 }).cue,
+      step(createGuideState(), snapshot('room:1', { gameNo: 2 })).cue,
     ).toBeNull();
   });
 });

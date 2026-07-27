@@ -468,6 +468,7 @@ function ConnectedApp({
   const [funRating, setFunRating] = useState<SetFunRating | null>(null);
   const [ruleVotes, setRuleVotes] = useState(DEMO_FIRED_RULES);
   const guideState = useRef(createGuideState());
+  const guideSessionKey = useRef<string | null>(null);
   const [guideCue, setGuideCue] = useState<GuideCue | null>(null);
   const [playedBefore, setPlayedBefore] = useState(() =>
     hasPlayedBefore(storage),
@@ -480,6 +481,10 @@ function ConnectedApp({
     room.game?.gameNo === 1 &&
     room.members.filter((member) => !member.isAI && !member.departed).length ===
       1;
+  const tutorialSessionKey =
+    tutorialEligible && room?.game
+      ? `${room.roomId}:${String(room.game.gameNo)}`
+      : null;
 
   useEffect(() => {
     setSelectedCardIds((selected) => reconcileSelectedCardIds(selected, room));
@@ -494,6 +499,13 @@ function ConnectedApp({
       setPlayedBefore(true);
     }
   }, [playedBefore, room, storage]);
+
+  useEffect(() => {
+    if (guideSessionKey.current === tutorialSessionKey) return;
+    guideSessionKey.current = tutorialSessionKey;
+    guideState.current = createGuideState();
+    setGuideCue(null);
+  }, [tutorialSessionKey]);
 
   useEffect(() => {
     if (!tutorialEligible || !room?.game || guideCue) return;
@@ -601,15 +613,6 @@ function ConnectedApp({
           setSelectedCardIds((ids) =>
             ids.includes(id) ? ids.filter((item) => item !== id) : [...ids, id],
           );
-        }}
-        onDimmedCardTap={() => {
-          if (!tutorialEligible || guideCue) return;
-          const result = reduceGuide(guideState.current, {
-            type: 'illegalTap',
-            gameNo: game.gameNo,
-          });
-          guideState.current = result.state;
-          if (result.cue) setGuideCue(result.cue);
         }}
         onPlay={() => {
           if (!game.turn || !legalSelection) return;

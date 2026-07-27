@@ -1,39 +1,29 @@
 import type { Play, RoomGameEvent } from '@daifugo/core';
 
 export type GuideCue =
-  | 'firstTurn'
-  | 'followTurn'
-  | 'pairAvailable'
-  | 'noLegalMove'
-  | 'illegalTap'
-  | 'fieldCleared';
+  'firstTurn' | 'followTurn' | 'pairAvailable' | 'noLegalMove' | 'fieldCleared';
 
 export type GuideState = {
   shown: readonly GuideCue[];
-  seenSnapshots: readonly string[];
+  lastSnapshotKey: string | null;
   lastEventSeq: number;
   hasSeenOwnTurn: boolean;
 };
 
-export type GuideInput =
-  | {
-      type: 'snapshot';
-      key: string;
-      gameNo: number;
-      isMyTurn: boolean;
-      fieldCardCount: number;
-      legalMoves: readonly Play[] | null;
-      events: readonly RoomGameEvent[];
-    }
-  | {
-      type: 'illegalTap';
-      gameNo: number;
-    };
+export type GuideInput = {
+  type: 'snapshot';
+  key: string;
+  gameNo: number;
+  isMyTurn: boolean;
+  fieldCardCount: number;
+  legalMoves: readonly Play[] | null;
+  events: readonly RoomGameEvent[];
+};
 
 export function createGuideState(): GuideState {
   return {
     shown: [],
-    seenSnapshots: [],
+    lastSnapshotKey: null,
     lastEventSeq: 0,
     hasSeenOwnTurn: false,
   };
@@ -56,11 +46,7 @@ export function reduceGuide(
 ): { state: GuideState; cue: GuideCue | null } {
   if (input.gameNo !== 1) return { state, cue: null };
 
-  if (input.type === 'illegalTap') {
-    return show(state, 'illegalTap');
-  }
-
-  if (state.seenSnapshots.includes(input.key)) {
+  if (state.lastSnapshotKey === input.key) {
     return { state, cue: null };
   }
   const lastEventSeq = Math.max(
@@ -69,7 +55,7 @@ export function reduceGuide(
   );
   const nextState: GuideState = {
     ...state,
-    seenSnapshots: [...state.seenSnapshots, input.key],
+    lastSnapshotKey: input.key,
     lastEventSeq,
     hasSeenOwnTurn: state.hasSeenOwnTurn || input.isMyTurn,
   };

@@ -220,6 +220,37 @@ describe('pure room reducer', () => {
     ).not.toBe(0);
   });
 
+  it('basic soloでも2セット目は人間をseat 0へ固定しない', () => {
+    const secondSet = {
+      ...createRoomState({
+        roomId: 'basic-second-set',
+        inviteCode: 'BASIC-S03',
+        mode: 'basic' as const,
+        owner: {
+          memberId: 'member-1',
+          userId: 'private-user-1',
+          displayName: 'ホスト',
+        },
+        now: 100,
+      }),
+      setNo: 1,
+    };
+    const started = reduceRoom(
+      secondSet,
+      {
+        type: 'start',
+        memberId: 'member-1',
+        now: 1_000,
+        setSeed: 'v3a-second',
+      },
+      { random: () => 0 },
+    ).state;
+
+    expect(
+      started.members.find((member) => member.memberId === 'member-1')?.seatId,
+    ).not.toBe(0);
+  });
+
   it('モードをstate/viewへ通し、きほんでは入力されたルールを空にする', () => {
     const availableRule: RuleChainEntry = {
       ruleId: 'community-rule',

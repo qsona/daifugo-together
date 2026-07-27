@@ -477,7 +477,7 @@ function tutorialHintRoom(
   legalMoves: NonNullable<
     NonNullable<import('@daifugo/core').PlayerRoomView['game']>['legalMoves']
   > | null,
-) {
+): import('@daifugo/core').PlayerRoomView {
   const three = {
     kind: 'natural',
     id: 'S03',
@@ -543,6 +543,35 @@ function tutorialHintClient(
     subscribe: () => () => undefined,
     snapshot: () => state,
   } as unknown as MultiplayerClient;
+}
+
+function observableTutorialClient(
+  initialRoom: import('@daifugo/core').PlayerRoomView,
+): {
+  client: MultiplayerClient;
+  setRoom(room: import('@daifugo/core').PlayerRoomView | null): void;
+} {
+  let state: MultiplayerState = {
+    connection: 'ready',
+    displayName: 'ホスト',
+    room: initialRoom,
+    roomClosedReason: null,
+    error: null,
+  };
+  const listeners = new Set<() => void>();
+  return {
+    client: {
+      subscribe: (listener: () => void) => {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+      snapshot: () => state,
+    } as unknown as MultiplayerClient,
+    setRoom(room) {
+      state = { ...state, room };
+      for (const listener of listeners) listener();
+    },
+  };
 }
 
 describe('TU-02: きほんの部屋のカードヒント統合', () => {
@@ -676,8 +705,89 @@ describe('TU-03: はじめての1戦のガイド', () => {
 
     first.unmount();
     const secondGame = tutorialHintRoom('basic', []);
-    secondGame.game.gameNo = 2;
+    secondGame.game!.gameNo = 2;
     render(<App client={tutorialHintClient(secondGame)} />);
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(
+      screen.queryByLabelText('カードの強さ: 左がよわい、右がつよい'),
+    ).toBeNull();
+  });
+
+  it('未完走で退出して別の初回basic soloへ入り直すとガイドを最初から表示する', async () => {
+    const firstRoom = tutorialHintRoom('basic', []);
+    const observable = observableTutorialClient(firstRoom);
+    render(<App client={observable.client} />);
+    expect(await screen.findByRole('status')).toBeTruthy();
+
+    act(() => observable.setRoom(null));
+    expect(screen.queryByRole('status')).toBeNull();
+
+    const nextRoom = tutorialHintRoom('basic', []);
+    nextRoom.roomId = 'tutorial-room-2';
+    act(() => observable.setRoom(nextRoom));
+
+    expect(await screen.findByRole('status')).toBeTruthy();
+  });
+
+  it('初戦終了から2戦目へ進むと一言と強さ目盛りを消す', async () => {
+    const firstRoom = tutorialHintRoom('basic', []);
+    const observable = observableTutorialClient(firstRoom);
+    render(<App client={observable.client} />);
+    expect(await screen.findByRole('status')).toBeTruthy();
+
+    const intermission = structuredClone(firstRoom);
+    intermission.v += 1;
+    intermission.game!.status = 'intermission';
+    intermission.game!.intermission = {
+      durationMs: 15_000,
+      endsAt: Date.now() + 15_000,
+    };
+    intermission.game!.turn = null;
+    intermission.game!.previousResults = [
+      {
+        gameNo: 1,
+        standings: [{ seat: 0, rank: 1, title: '大富豪', points: 5 }],
+        firedRuleIds: [],
+      },
+    ];
+    act(() => observable.setRoom(intermission));
+
+    const secondGame = structuredClone(firstRoom);
+    secondGame.v += 2;
+    secondGame.game!.gameNo = 2;
+    act(() => observable.setRoom(secondGame));
+
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(
+      screen.queryByLabelText('カードの強さ: 左がよわい、右がつよい'),
+    ).toBeNull();
+  });
+
+  it('communityとbasic人間複数では一言も強さ目盛りも表示しない', () => {
+    const community = render(
+      <App client={tutorialHintClient(tutorialHintRoom('community', []))} />,
+    );
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(
+      screen.queryByLabelText('カードの強さ: 左がよわい、右がつよい'),
+    ).toBeNull();
+
+    community.unmount();
+    const basicMulti = tutorialHintRoom('basic', []);
+    basicMulti.members.push({
+      memberId: 'member-2',
+      seatId: 1,
+      displayName: 'ゲスト',
+      isAI: false,
+      isHost: false,
+      connected: true,
+      aiActing: false,
+      departed: false,
+      handCount: 2,
+      finishedRank: null,
+      wantsNextSet: null,
+    });
+    render(<App client={tutorialHintClient(basicMulti)} />);
     expect(screen.queryByRole('status')).toBeNull();
     expect(
       screen.queryByLabelText('カードの強さ: 左がよわい、右がつよい'),

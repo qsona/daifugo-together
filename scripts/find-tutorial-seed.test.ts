@@ -41,6 +41,24 @@ describe('TU-03: チュートリアルseedの静的条件', () => {
     expect(isTutorialSeedCandidate(assessment)).toBe(false);
   });
 
+  it('♦3があってもペアがなければ候補から外す', () => {
+    const assessment = {
+      ...assessTutorialSeed('tutorial-11'),
+      hasPair: false,
+    };
+
+    expect(isTutorialSeedCandidate(assessment)).toBe(false);
+  });
+
+  it('♦3とペアがあっても強さ上位2席でなければ候補から外す', () => {
+    const assessment = {
+      ...assessTutorialSeed('tutorial-11'),
+      strengthRank: 3,
+    };
+
+    expect(isTutorialSeedCandidate(assessment)).toBe(false);
+  });
+
   it('同じseedの判定は毎回同じになる', () => {
     expect(assessTutorialSeed('tutorial-11')).toEqual(
       assessTutorialSeed('tutorial-11'),

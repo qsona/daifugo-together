@@ -56,19 +56,6 @@ export function GuideMessage({ cue }: { cue: GuideCue }) {
           せないときは「パス」
         </>
       );
-    case 'illegalTap':
-      return (
-        <>
-          <ruby>
-            場<rt>ば</rt>
-          </ruby>
-          より つよいカードだけ{' '}
-          <ruby>
-            出<rt>だ</rt>
-          </ruby>
-          せるよ
-        </>
-      );
     case 'fieldCleared':
       return (
         <>
