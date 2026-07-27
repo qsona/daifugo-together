@@ -2,14 +2,21 @@ import { access, mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import type { PipelineJob, QueuedImplementation } from '@daifugo/server';
+import type {
+  PipelineJob,
+  QueuedImplementation,
+  StoredRule,
+  StoredRuleVersion,
+} from '@daifugo/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { PipelineJobPort } from './implementation-driver.js';
+import type { RuleReleasePort } from './implementation-api.js';
 import {
   prepareImplementationRetry,
   prepareImplementationWorkspace,
   recordMergedImplementation,
+  releaseDeployedRule,
   removeCompletedWorkspace,
   runTransient,
   verifyGitHubPublisher,
@@ -131,6 +138,43 @@ function retryJobs(
         },
       };
     },
+  };
+}
+
+function storedRule(
+  status: StoredRule['status'] = 'disabled',
+  disabledReason: StoredRule['disabledReason'] = 'pending_enable',
+): StoredRule {
+  return {
+    id: 'r0001-yagiri',
+    slug: 'yagiri',
+    name: '八切り',
+    description: '8を含むプレイの直後に場を流す。',
+    kind: 'local',
+    prefecture: '埼玉県',
+    proposalId: 'proposal-1',
+    status,
+    disabledReason,
+    createdAt: 1,
+    updatedAt: 1,
+  };
+}
+
+function storedVersion(
+  options: Partial<StoredRuleVersion> = {},
+): StoredRuleVersion {
+  return {
+    id: 1,
+    ruleId: 'r0001-yagiri',
+    version: 1,
+    contractVersion: 1,
+    prNumber: 42,
+    mergeSha: 'c'.repeat(40),
+    bundleHash: 'd'.repeat(64),
+    isCurrent: true,
+    revertedAt: null,
+    createdAt: 1,
+    ...options,
   };
 }
 
@@ -297,6 +341,217 @@ describe('implementation CLI workflow', () => {
       }),
     ).resolves.toMatchObject({ status: 'already_recorded' });
     expect(update).not.toHaveBeenCalled();
+  });
+
+  it('deployと一時API障害を待ち、provenance一致後にruleを有効化する', async () => {
+    const current = item('merged', {
+      prNumber: 42,
+      headSha: 'b'.repeat(40),
+      mergeSha: 'c'.repeat(40),
+      updatedAt: 1_000,
+    });
+    let now = 1_000;
+    const get = vi
+      .fn<RuleReleasePort['get']>()
+      .mockResolvedValueOnce({ status: 'not_found' })
+      .mockRejectedValueOnce(new Error('temporary network failure'))
+      .mockResolvedValueOnce({
+        status: 'found',
+        rule: storedRule(),
+        versions: [storedVersion()],
+      });
+    const enable = vi.fn<RuleReleasePort['enable']>().mockResolvedValue({
+      status: 'updated',
+      rule: storedRule('active', null),
+    });
+
+    await expect(
+      releaseDeployedRule({
+        jobs: { resume: () => current },
+        rules: { get, enable },
+        jobId: 1,
+        maxWaitMs: 2_000,
+        pollIntervalMs: 100,
+        now: () => now,
+        wait: async (delay) => {
+          now += delay;
+        },
+      }),
+    ).resolves.toEqual({
+      status: 'released',
+      jobId: 1,
+      ruleId: 'r0001-yagiri',
+    });
+    expect(get).toHaveBeenCalledTimes(3);
+    expect(enable).toHaveBeenCalledOnce();
+  });
+
+  it('provenance不一致を有効化せずpendingとして返し、48時間超を通知する', async () => {
+    const now = 48 * 60 * 60 * 1_000 + 2;
+    const current = item('merged', {
+      prNumber: 42,
+      mergeSha: 'c'.repeat(40),
+      updatedAt: 1,
+    });
+    const enable = vi.fn<RuleReleasePort['enable']>();
+
+    await expect(
+      releaseDeployedRule({
+        jobs: { resume: () => current },
+        rules: {
+          get: async () => ({
+            status: 'found',
+            rule: storedRule(),
+            versions: [storedVersion({ mergeSha: 'e'.repeat(40) })],
+          }),
+          enable,
+        },
+        jobId: 1,
+        maxWaitMs: 0,
+        now: () => now,
+      }),
+    ).resolves.toEqual({
+      status: 'pending',
+      jobId: 1,
+      ruleId: 'r0001-yagiri',
+      reason: 'provenance_mismatch',
+      reminder: true,
+    });
+    expect(enable).not.toHaveBeenCalled();
+  });
+
+  it('readiness確認はprovenance一致をreadyとして返すだけで有効化しない', async () => {
+    const current = item('merged', {
+      prNumber: 42,
+      mergeSha: 'c'.repeat(40),
+    });
+    const enable = vi.fn<RuleReleasePort['enable']>();
+
+    await expect(
+      releaseDeployedRule({
+        jobs: { resume: () => current },
+        rules: {
+          get: async () => ({
+            status: 'found',
+            rule: storedRule(),
+            versions: [storedVersion()],
+          }),
+          enable,
+        },
+        jobId: 1,
+        enable: false,
+        maxWaitMs: 0,
+      }),
+    ).resolves.toEqual({
+      status: 'ready',
+      jobId: 1,
+      ruleId: 'r0001-yagiri',
+    });
+    expect(enable).not.toHaveBeenCalled();
+  });
+
+  it('enable応答消失後のactive ruleを冪等に再確認してreleaseを完了する', async () => {
+    const current = item('merged', {
+      prNumber: 42,
+      mergeSha: 'c'.repeat(40),
+    });
+    let now = 0;
+    const get = vi
+      .fn<RuleReleasePort['get']>()
+      .mockResolvedValueOnce({
+        status: 'found',
+        rule: storedRule(),
+        versions: [storedVersion()],
+      })
+      .mockResolvedValueOnce({
+        status: 'found',
+        rule: storedRule('active', null),
+        versions: [storedVersion()],
+      });
+    const enable = vi
+      .fn<RuleReleasePort['enable']>()
+      .mockRejectedValueOnce(new Error('response lost'))
+      .mockResolvedValueOnce({
+        status: 'unchanged',
+        rule: storedRule('active', null),
+      });
+
+    await expect(
+      releaseDeployedRule({
+        jobs: { resume: () => current },
+        rules: { get, enable },
+        jobId: 1,
+        maxWaitMs: 100,
+        pollIntervalMs: 10,
+        now: () => now,
+        wait: async (delay) => {
+          now += delay;
+        },
+      }),
+    ).resolves.toMatchObject({ status: 'released' });
+    expect(enable).toHaveBeenCalledTimes(2);
+  });
+
+  it('done jobは手動disable後も再有効化せずrelease済みとして扱う', async () => {
+    const current = item('done', {
+      prNumber: 42,
+      mergeSha: 'c'.repeat(40),
+    });
+    const enable = vi.fn<RuleReleasePort['enable']>();
+
+    await expect(
+      releaseDeployedRule({
+        jobs: { resume: () => current },
+        rules: {
+          get: async () => ({
+            status: 'found',
+            rule: storedRule('disabled', 'manual'),
+            versions: [storedVersion()],
+          }),
+          enable,
+        },
+        jobId: 1,
+        maxWaitMs: 0,
+      }),
+    ).resolves.toMatchObject({ status: 'already_released' });
+    expect(enable).not.toHaveBeenCalled();
+  });
+
+  it('恒久APIエラーと不正なrule状態を再試行せず拒否する', async () => {
+    const current = item('merged', {
+      prNumber: 42,
+      mergeSha: 'c'.repeat(40),
+    });
+    const { ImplementationApiError } = await import('./implementation-api.js');
+    await expect(
+      releaseDeployedRule({
+        jobs: { resume: () => current },
+        rules: {
+          get: async () => {
+            throw new ImplementationApiError('unauthorized', 401);
+          },
+          enable: vi.fn(),
+        },
+        jobId: 1,
+        maxWaitMs: 0,
+      }),
+    ).rejects.toThrow('unauthorized');
+
+    await expect(
+      releaseDeployedRule({
+        jobs: { resume: () => current },
+        rules: {
+          get: async () => ({
+            status: 'found',
+            rule: storedRule('disabled', 'manual'),
+            versions: [storedVersion()],
+          }),
+          enable: vi.fn(),
+        },
+        jobId: 1,
+        maxWaitMs: 0,
+      }),
+    ).rejects.toThrow('deployed rule is not pending enable');
   });
 
   it('旧DBのmerged jobだけをGitHub再検証後に同phaseでbackfillする', async () => {

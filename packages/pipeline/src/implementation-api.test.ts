@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   HttpPipelineJobPort,
+  HttpRuleReleasePort,
   ImplementationApiError,
 } from './implementation-api.js';
 
@@ -204,5 +205,123 @@ describe('HttpPipelineJobPort', () => {
       message: 'unauthorized',
       status: 401,
     } satisfies Partial<ImplementationApiError>);
+  });
+});
+
+describe('HttpRuleReleasePort', () => {
+  it('Bearer認証付きでruleを取得し、有効化する', async () => {
+    const requests: Array<{
+      method: string | undefined;
+      path: string;
+      authorization: string | undefined;
+    }> = [];
+    const rule = {
+      id: 'r0001-yagiri',
+      slug: 'yagiri',
+      name: '八切り',
+      description: '8を含むプレイの直後に場を流す。',
+      kind: 'local',
+      prefecture: '埼玉県',
+      proposalId: 'proposal-1',
+      status: 'disabled',
+      disabledReason: 'pending_enable',
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    const baseUrl = await listen((request, response) => {
+      requests.push({
+        method: request.method,
+        path: request.url ?? '',
+        authorization: request.headers.authorization,
+      });
+      response.setHeader('content-type', 'application/json');
+      if (request.method === 'GET') {
+        response.end(
+          JSON.stringify({
+            status: 'found',
+            rule,
+            versions: [
+              {
+                id: 1,
+                ruleId: rule.id,
+                version: 1,
+                contractVersion: 1,
+                prNumber: 42,
+                mergeSha: 'c'.repeat(40),
+                bundleHash: 'd'.repeat(64),
+                isCurrent: true,
+                revertedAt: null,
+                createdAt: 1,
+              },
+            ],
+          }),
+        );
+      } else {
+        response.end(
+          JSON.stringify({
+            status: 'updated',
+            rule: { ...rule, status: 'active', disabledReason: null },
+          }),
+        );
+      }
+    });
+    const rules = new HttpRuleReleasePort({
+      baseUrl: `${baseUrl}/`,
+      token: 'local-admin-token',
+    });
+
+    await expect(rules.get('r0001-yagiri')).resolves.toMatchObject({
+      status: 'found',
+      rule: { status: 'disabled' },
+    });
+    await expect(rules.enable('r0001-yagiri')).resolves.toMatchObject({
+      status: 'updated',
+      rule: { status: 'active' },
+    });
+    expect(requests).toEqual([
+      {
+        method: 'GET',
+        path: '/admin/rules/r0001-yagiri',
+        authorization: 'Bearer local-admin-token',
+      },
+      {
+        method: 'POST',
+        path: '/admin/rules/r0001-yagiri/enable',
+        authorization: 'Bearer local-admin-token',
+      },
+    ]);
+  });
+
+  it('not_found/conflictを契約値として返し、不正応答を拒否する', async () => {
+    let count = 0;
+    const baseUrl = await listen((_request, response) => {
+      response.setHeader('content-type', 'application/json');
+      count += 1;
+      if (count === 1) {
+        response.statusCode = 404;
+        response.end(JSON.stringify({ status: 'not_found' }));
+      } else if (count === 2) {
+        response.statusCode = 409;
+        response.end(
+          JSON.stringify({ status: 'conflict', error: 'release_pending' }),
+        );
+      } else {
+        response.end(
+          JSON.stringify({ status: 'found', rule: {}, versions: [] }),
+        );
+      }
+    });
+    const rules = new HttpRuleReleasePort({ baseUrl, token: 'token' });
+
+    await expect(rules.get('missing')).resolves.toEqual({
+      status: 'not_found',
+    });
+    await expect(rules.enable('pending')).resolves.toEqual({
+      status: 'conflict',
+      error: 'release_pending',
+    });
+    await expect(rules.get('invalid')).rejects.toThrow(
+      'invalid rule lookup response',
+    );
   });
 });

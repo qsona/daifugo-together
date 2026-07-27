@@ -4,7 +4,13 @@ import { join } from 'node:path';
 import type { QueuedImplementation } from '@daifugo/server';
 
 import type { PipelineJobPort } from './implementation-driver.js';
+import {
+  ImplementationApiError,
+  type RuleReleasePort,
+} from './implementation-api.js';
 import type { ProcessPort, ProcessResult } from './process.js';
+
+const RELEASE_REMINDER_MS = 48 * 60 * 60 * 1_000;
 
 export async function runTransient(
   process: ProcessPort,
@@ -173,6 +179,144 @@ export async function recordMergedImplementation(options: {
     throw new Error(`merge transition failed: ${updated.status}`);
   }
   return { status: 'recorded', job: updated.job };
+}
+
+export type ReleaseDeployedRuleResult =
+  | {
+      status: 'ready' | 'released' | 'already_released';
+      jobId: number;
+      ruleId: string;
+    }
+  | {
+      status: 'pending';
+      jobId: number;
+      ruleId: string;
+      reason: 'not_deployed' | 'provenance_mismatch' | 'api_unavailable';
+      reminder: boolean;
+    };
+
+export async function releaseDeployedRule(options: {
+  jobs: Pick<PipelineJobPort, 'resume'>;
+  rules: RuleReleasePort;
+  jobId: number;
+  maxWaitMs?: number;
+  pollIntervalMs?: number;
+  enable?: boolean;
+  now?: () => number;
+  wait?: (delayMs: number) => Promise<void>;
+}): Promise<ReleaseDeployedRuleResult> {
+  const item = await options.jobs.resume(options.jobId);
+  if (!item) throw new Error('release job was not found');
+  const job = item.job;
+  if (
+    (job.phase !== 'merged' && job.phase !== 'done') ||
+    job.prNumber === null ||
+    job.mergeSha === null
+  ) {
+    throw new Error('job is not ready for deployed rule release');
+  }
+  const now = options.now ?? Date.now;
+  const wait =
+    options.wait ??
+    ((delayMs: number) =>
+      new Promise<void>((resolve) => {
+        setTimeout(resolve, delayMs);
+      }));
+  const maxWaitMs = options.maxWaitMs ?? 15 * 60 * 1_000;
+  const pollIntervalMs = options.pollIntervalMs ?? 10_000;
+  const startedAt = now();
+  let reason: Extract<
+    ReleaseDeployedRuleResult,
+    { status: 'pending' }
+  >['reason'];
+  while (true) {
+    try {
+      const lookup = await options.rules.get(job.ruleId);
+      if (lookup.status === 'found') {
+        const current = lookup.versions.find(
+          (version) => version.isCurrent && version.revertedAt === null,
+        );
+        const provenanceMatches =
+          current !== undefined &&
+          current.prNumber === job.prNumber &&
+          current.mergeSha === job.mergeSha &&
+          typeof current.bundleHash === 'string' &&
+          /^[0-9a-f]{64}$/u.test(current.bundleHash);
+        if (provenanceMatches) {
+          if (job.phase === 'done') {
+            return {
+              status: 'already_released',
+              jobId: job.id,
+              ruleId: job.ruleId,
+            };
+          }
+          const pendingEnable =
+            lookup.rule.status === 'disabled' &&
+            lookup.rule.disabledReason === 'pending_enable';
+          const idempotentEnable = lookup.rule.status === 'active';
+          if (!pendingEnable && !idempotentEnable) {
+            throw new Error(
+              `deployed rule is not pending enable: ${lookup.rule.status}/${String(
+                lookup.rule.disabledReason,
+              )}`,
+            );
+          }
+          if (options.enable === false) {
+            return {
+              status: 'ready',
+              jobId: job.id,
+              ruleId: job.ruleId,
+            };
+          }
+          const enabled = await options.rules.enable(job.ruleId);
+          if (
+            (enabled.status === 'updated' || enabled.status === 'unchanged') &&
+            enabled.rule.status === 'active'
+          ) {
+            return {
+              status: 'released',
+              jobId: job.id,
+              ruleId: job.ruleId,
+            };
+          }
+          if (enabled.status !== 'not_found') {
+            throw new Error(
+              `rule enable failed: ${enabled.status}${
+                'error' in enabled ? `/${enabled.error}` : ''
+              }`,
+            );
+          }
+          reason = 'not_deployed';
+        } else {
+          reason = 'provenance_mismatch';
+        }
+      } else {
+        reason = 'not_deployed';
+      }
+    } catch (error) {
+      if (
+        (error instanceof Error &&
+          (error.message.startsWith('deployed rule is not pending enable') ||
+            error.message.startsWith('rule enable failed'))) ||
+        (error instanceof ImplementationApiError &&
+          error.status !== undefined &&
+          ![404, 429, 500, 502, 503, 504].includes(error.status))
+      ) {
+        throw error;
+      }
+      reason = 'api_unavailable';
+    }
+    if (now() - startedAt >= maxWaitMs) {
+      return {
+        status: 'pending',
+        jobId: job.id,
+        ruleId: job.ruleId,
+        reason,
+        reminder: now() - job.updatedAt >= RELEASE_REMINDER_MS,
+      };
+    }
+    await wait(Math.min(pollIntervalMs, maxWaitMs - (now() - startedAt)));
+  }
 }
 
 export async function prepareImplementationRetry(options: {

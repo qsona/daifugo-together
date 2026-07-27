@@ -11,7 +11,7 @@
 - **フェーズ 2 / E7 CX-03 プロセス2完了、外部受入ゲート待ち**: trusted diff-guard、untrusted quality/rule-tests/simulation、ローカルCI監視を実装。独立完了再レビューはコード・自動テスト `PASS` / 品質 `APPROVED` / Critical・Importantなし。実repositoryのbranch protection/ruleset登録はworkflowのmain反映後
 - **フェーズ 2 / E7 CX-04 プロセス2コード完了**: 独立再レビューはコード・自動テスト範囲 `PASS` / 品質 `APPROVED` / Critical・Importantなし。実CD/revertリハーサル、通知経路、CX-05完全registry接続は外部・後続ゲート
 - **フェーズ 2 / E2 AI-02 プロセス2コード完了**: workerへ権威runtime snapshotと実SHA-256検証済みbundleを渡し、E1 simulation generatorをworker AI 4席で駆動。独立完了再レビューは要件 `PASS` / 品質 `APPROVED` / Critical・Important・Minorなし
-- **フェーズ 2 / E7 CX-05 プロセス2実装・レビュー前**: GitHub検証済みPR head/merge SHA、デプロイbundle hash、current未revert版を結ぶfail-closed同期へ補強。初回公開の原子的遷移、旧image復活防止、ファイルDB再起動を回帰化
+- **フェーズ 2 / E7 CX-05 プロセス2完了レビュー修正済み**: 完了レビューのImportant 1件だったデプロイ検知・第三操作の有効化・48時間リマインダーを共有skill/CLIへ追加。独立指摘解消レビュー待ち。実GitHub/CD/本番リハーサルは外部受入ゲート
 - E1〜E3 の実装記録は本書末尾の「並行進行」節、E13 は「E13」節。E4 の未解消の開発者判断は「詰まっている点」に残っている(1〜4・7・8・11)
 
 ### E-18 / C-2・C-3・C-6 再設計の反映(2026-07-27)
@@ -832,6 +832,13 @@ TS-02 から継続で未解決のもの:
 - runtime照合がproposalとjobの許可状態を独立に見ていたため、強制的に作った`active + implementing/merged`不整合行をロードできた。同期で許す組を`implementing+merged` / `released+done`だけに限定し、active runtimeは後者だけを許すよう補強した
 - 追加focused検証は3 files / 27 testsとserver/pipeline typecheckが成功。修正後は同じレビュー担当で指摘解消を再確認する
 - 再レビューで実際の旧schemaはmerge時に`head_sha`をmerge commitで上書きしていたことを追加再現した。旧`head_sha`がGitHubのmerge commitと一致するときだけ、同じCASで`head_sha`を`headRefOid`へ正規化し、`merge_sha`を補完するよう修正した。2 files / 19 tests、pipeline typecheck、lint、差分検査が成功
+
+#### CX-05 完了レビューと第三操作の追加
+
+- 新規コンテキストの独立 GPT-5.6 Sol 完了レビューは、registry同期・provenance・初回公開transaction・re-enable・revert/旧image・部分障害・runtime fail-closed・冪等性・複数roomをPASSとした。一方、共有skill/CLIが`implement:merged`で止まり、デプロイ検知と開発者承認後の有効化を第三操作として実行できない点をImportant 1件とした
+- 読み取り専用`implement:release-status`はデプロイ後のcurrent未revert版についてPR番号・merge SHA・bundle hash・`pending_enable`を照合し、`ready`になるまで一時API障害と未デプロイを最大15分pollする。`provenance_mismatch`は有効化せず、mergedから48時間経過したpendingには`reminder: true`を返す
+- skillは`release-status`成功後に開発者へ明示承認を求め、承認後だけ`implement:release`を実行する。release側でも同じprovenanceを再照合してadmin enableを呼ぶ。応答消失後のactive再確認、done/手動disableの非再有効化、恒久HTTPエラー、再実行を回帰化した
+- 修正後の全体`CI=true pnpm verify`はformat/lint/design/typecheck、64 files / 442 tests、全package buildまで成功。実GitHub/CD/本番での3操作実績はコード完了判定とは分け、外部受入ゲートに残す
 
 #### CX-05の残る外部・後続ゲート
 

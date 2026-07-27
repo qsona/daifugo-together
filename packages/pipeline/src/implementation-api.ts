@@ -1,4 +1,9 @@
-import type { PipelineJob, QueuedImplementation } from '@daifugo/server';
+import type {
+  PipelineJob,
+  QueuedImplementation,
+  StoredRule,
+  StoredRuleVersion,
+} from '@daifugo/server';
 
 import type { PipelineJobPort } from './implementation-driver.js';
 
@@ -21,6 +26,44 @@ function messages(value: unknown): value is Record<string, string> {
   return (
     parsed !== null &&
     Object.values(parsed).every((item) => typeof item === 'string')
+  );
+}
+
+function storedRule(value: unknown): value is StoredRule {
+  const rule = object(value);
+  return (
+    rule !== null &&
+    typeof rule.id === 'string' &&
+    typeof rule.slug === 'string' &&
+    typeof rule.name === 'string' &&
+    typeof rule.description === 'string' &&
+    (rule.kind === 'local' || rule.kind === 'original') &&
+    (rule.prefecture === null || typeof rule.prefecture === 'string') &&
+    typeof rule.proposalId === 'string' &&
+    ['active', 'disabled', 'removed'].includes(String(rule.status)) &&
+    (rule.disabledReason === null ||
+      ['manual', 'auto_incident', 'rollback', 'pending_enable'].includes(
+        String(rule.disabledReason),
+      )) &&
+    typeof rule.createdAt === 'number' &&
+    typeof rule.updatedAt === 'number'
+  );
+}
+
+function storedRuleVersion(value: unknown): value is StoredRuleVersion {
+  const version = object(value);
+  return (
+    version !== null &&
+    Number.isSafeInteger(version.id) &&
+    typeof version.ruleId === 'string' &&
+    Number.isSafeInteger(version.version) &&
+    Number.isSafeInteger(version.contractVersion) &&
+    (version.prNumber === null || Number.isSafeInteger(version.prNumber)) &&
+    (version.mergeSha === null || typeof version.mergeSha === 'string') &&
+    (version.bundleHash === null || typeof version.bundleHash === 'string') &&
+    typeof version.isCurrent === 'boolean' &&
+    (version.revertedAt === null || typeof version.revertedAt === 'number') &&
+    typeof version.createdAt === 'number'
   );
 }
 
@@ -215,5 +258,135 @@ export class HttpPipelineJobPort implements PipelineJobPort {
       throw new ImplementationApiError('invalid job-failure response');
     }
     return response as Awaited<ReturnType<PipelineJobPort['fail']>>;
+  }
+}
+
+export type RuleReleaseLookup =
+  | {
+      status: 'found';
+      rule: StoredRule;
+      versions: StoredRuleVersion[];
+    }
+  | { status: 'not_found' };
+
+export type RuleReleaseEnableResult =
+  | { status: 'updated' | 'unchanged'; rule: StoredRule }
+  | { status: 'not_found' }
+  | { status: 'conflict'; error: string };
+
+export interface RuleReleasePort {
+  get(ruleId: string): Promise<RuleReleaseLookup>;
+  enable(ruleId: string): Promise<RuleReleaseEnableResult>;
+}
+
+export class HttpRuleReleasePort implements RuleReleasePort {
+  readonly #baseUrl: string;
+  readonly #token: string;
+  readonly #fetch: typeof fetch;
+
+  constructor(options: {
+    baseUrl: string;
+    token: string;
+    fetch?: typeof fetch;
+  }) {
+    this.#baseUrl = options.baseUrl.replace(/\/+$/u, '');
+    this.#token = options.token;
+    this.#fetch = options.fetch ?? fetch;
+  }
+
+  async #request(path: string, init?: RequestInit): Promise<unknown> {
+    const response = await this.#fetch(`${this.#baseUrl}${path}`, {
+      ...init,
+      headers: {
+        authorization: `Bearer ${this.#token}`,
+      },
+    });
+    let body: unknown;
+    try {
+      body = await response.json();
+    } catch {
+      throw new ImplementationApiError(
+        'rule API returned non-JSON response',
+        response.status,
+      );
+    }
+    if (!response.ok) {
+      const error = object(body)?.error;
+      throw new ImplementationApiError(
+        typeof error === 'string' ? error : 'rule API request failed',
+        response.status,
+      );
+    }
+    return body;
+  }
+
+  async get(ruleId: string): Promise<RuleReleaseLookup> {
+    try {
+      const response = object(
+        await this.#request(`/admin/rules/${encodeURIComponent(ruleId)}`),
+      );
+      if (
+        response?.status !== 'found' ||
+        !storedRule(response.rule) ||
+        !Array.isArray(response.versions) ||
+        !response.versions.every(storedRuleVersion)
+      ) {
+        throw new ImplementationApiError('invalid rule lookup response');
+      }
+      return response as unknown as Extract<
+        RuleReleaseLookup,
+        { status: 'found' }
+      >;
+    } catch (error) {
+      if (error instanceof ImplementationApiError && error.status === 404) {
+        return { status: 'not_found' };
+      }
+      throw error;
+    }
+  }
+
+  async enable(ruleId: string): Promise<RuleReleaseEnableResult> {
+    const httpResponse = await this.#fetch(
+      `${this.#baseUrl}/admin/rules/${encodeURIComponent(ruleId)}/enable`,
+      {
+        method: 'POST',
+        headers: { authorization: `Bearer ${this.#token}` },
+      },
+    );
+    let body: unknown;
+    try {
+      body = await httpResponse.json();
+    } catch {
+      throw new ImplementationApiError(
+        'rule API returned non-JSON response',
+        httpResponse.status,
+      );
+    }
+    const response = object(body);
+    if (response?.status === 'not_found' && httpResponse.status === 404) {
+      return { status: 'not_found' };
+    }
+    if (
+      response?.status === 'conflict' &&
+      httpResponse.status === 409 &&
+      typeof response.error === 'string'
+    ) {
+      return { status: 'conflict', error: response.error };
+    }
+    if (!httpResponse.ok) {
+      throw new ImplementationApiError(
+        typeof response?.error === 'string'
+          ? response.error
+          : 'rule API request failed',
+        httpResponse.status,
+      );
+    }
+    if (
+      (response?.status === 'updated' || response?.status === 'unchanged') &&
+      storedRule(response.rule)
+    ) {
+      return { status: response.status, rule: response.rule };
+    }
+    throw new ImplementationApiError('invalid rule enable response');
   }
 }

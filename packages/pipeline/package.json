@@ -22,6 +22,8 @@
     "implement:fail": "pnpm build && node dist/implement-cli.js fail",
     "implement:checks": "pnpm build && node dist/ci-cli.js",
     "implement:merged": "pnpm build && node dist/implement-cli.js merged",
+    "implement:release-status": "pnpm build && node dist/implement-cli.js release-status",
+    "implement:release": "pnpm build && node dist/implement-cli.js release",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {

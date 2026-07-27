@@ -5,11 +5,15 @@ import type { QueuedImplementation } from '@daifugo/server';
 
 import { SubscriptionCodexRunner } from './codex-runner.js';
 import { GitImplementationPublisher } from './git-publisher.js';
-import { HttpPipelineJobPort } from './implementation-api.js';
+import {
+  HttpPipelineJobPort,
+  HttpRuleReleasePort,
+} from './implementation-api.js';
 import {
   prepareImplementationRetry,
   prepareImplementationWorkspace,
   recordMergedImplementation,
+  releaseDeployedRule,
   removeCompletedWorkspace,
   verifyGitHubPublisher,
 } from './implementation-cli-workflow.js';
@@ -22,10 +26,19 @@ function requiredEnvironment(name: string): string {
   return value;
 }
 
+function optionalDuration(name: string): number | undefined {
+  const raw = process.env[name]?.trim();
+  if (!raw) return undefined;
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new Error(`${name} must be a non-negative integer`);
+  }
+  return value;
+}
+
 async function main(): Promise<void> {
   const baseUrl = requiredEnvironment('ADMIN_PIPELINE_URL');
   const token = requiredEnvironment('ADMIN_PIPELINE_TOKEN');
-  const repositoryUrl = requiredEnvironment('RULE_REPOSITORY_URL');
   const jobs = new HttpPipelineJobPort({
     baseUrl,
     token,
@@ -50,6 +63,29 @@ async function main(): Promise<void> {
     process.stdout.write(`${JSON.stringify({ result })}\n`);
     return;
   }
+  if (process.argv[2] === 'release-status' || process.argv[2] === 'release') {
+    const mode = process.argv[2];
+    const jobId = Number(process.argv[3]);
+    if (!Number.isSafeInteger(jobId) || jobId <= 0) {
+      throw new Error(`usage: implement-cli ${mode} JOB_ID`);
+    }
+    const maxWaitMs = optionalDuration('IMPLEMENT_RELEASE_WAIT_MS');
+    const pollIntervalMs = optionalDuration('IMPLEMENT_RELEASE_POLL_MS');
+    if (pollIntervalMs === 0) {
+      throw new Error('IMPLEMENT_RELEASE_POLL_MS must be greater than zero');
+    }
+    const result = await releaseDeployedRule({
+      jobs,
+      rules: new HttpRuleReleasePort({ baseUrl, token }),
+      jobId,
+      enable: mode === 'release',
+      ...(maxWaitMs === undefined ? {} : { maxWaitMs }),
+      ...(pollIntervalMs === undefined ? {} : { pollIntervalMs }),
+    });
+    process.stdout.write(`${JSON.stringify({ result })}\n`);
+    return;
+  }
+  const repositoryUrl = requiredEnvironment('RULE_REPOSITORY_URL');
   await verifyGitHubPublisher({
     process: commands,
     repositoryUrl,
