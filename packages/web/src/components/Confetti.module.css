@@ -1,0 +1,54 @@
+/* インゲーム部品: 1 位の発表に添える紙吹雪 */
+
+.field {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.piece {
+  position: absolute;
+  top: -12px;
+  width: 8px;
+  height: 12px;
+  border: var(--border-thin) solid var(--color-border-strong);
+  animation-name: confetti-fall;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+.red {
+  background: var(--color-red-500);
+}
+
+.green {
+  background: var(--color-green-500);
+}
+
+.blue {
+  background: var(--color-blue-400);
+}
+
+.gold {
+  background: var(--color-gold-400);
+}
+
+@keyframes confetti-fall {
+  from {
+    transform: translateY(0) rotate(0deg);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(240px) rotate(540deg);
+    opacity: 0;
+  }
+}
+
+/* 動きを減らす設定では DOM ごと出さないが、CSS 側でも念のため止める。 */
+@media (prefers-reduced-motion: reduce) {
+  .piece {
+    display: none;
+    animation: none;
+  }
+}
