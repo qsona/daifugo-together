@@ -1,5 +1,7 @@
 import { resolve } from 'node:path';
 
+import { loadRuleCodeBundles } from '@daifugo/rules';
+
 import { createAppServer } from './app-server.js';
 import { InjectionStaticAnalyzer } from './injection/detector.js';
 import { LocalScreeningService } from './injection/local-screening.js';
@@ -48,7 +50,8 @@ const adminPipelineToken = process.env.ADMIN_PIPELINE_TOKEN;
 if (adminPipelineToken !== undefined && adminPipelineToken.length < 32) {
   throw new Error('ADMIN_PIPELINE_TOKEN must be at least 32 characters');
 }
-const rules = new RuleRegistryService(persistence.rules, [], {
+const codeRules = await loadRuleCodeBundles();
+const rules = new RuleRegistryService(persistence.rules, codeRules, {
   onAutoDisable: (rule, incident) => {
     writeLog('error', 'rule_auto_disabled', {
       ruleId: rule.id,
@@ -63,9 +66,9 @@ const rules = new RuleRegistryService(persistence.rules, [], {
     });
   },
 });
-// CX-05 will run reconcileRevertedCode only after it has loaded the complete
-// static code registry. An empty registry is not proof that every current rule
-// was reverted, so startup must remain fail-safe until that wiring exists.
+for (const rule of rules.reconcileRevertedCode()) {
+  writeLog('info', 'rule_revert_reconciled', { ruleId: rule.id });
+}
 const app = createAppServer({
   webDistDir: resolve(process.env.WEB_DIST_DIR ?? 'packages/web/dist'),
   checkDatabase: () => persistence.checkHealth(),
@@ -118,6 +121,8 @@ const app = createAppServer({
     }),
     sessions: persistence.sessions,
     rulePortForSet: (setId) => rules.rulePortForSet(setId),
+    effectiveRuleChainForSet: (setId, entries) =>
+      rules.effectiveRuleChainForSet(setId, entries),
     aiRuleBundles: (entries) => rules.aiRuleBundles(entries),
     onError: (error) => {
       writeLog('error', 'socket_internal_error', errorFields(error));

@@ -178,8 +178,21 @@ export class RuleRegistryService {
         moduleUrl: registration[0]!.moduleUrl,
         bundleHash: entry.bundleHash,
         contractVersion: entry.contractVersion,
+        meta: structuredClone(registration[0]!.module.meta),
       };
     });
+  }
+
+  effectiveRuleChainForSet(
+    setId: string,
+    entries: readonly RuleChainEntry[],
+  ): RuleChainEntry[] {
+    const disabled = this.#ports.get(setId)?.disabled;
+    return structuredClone(
+      disabled
+        ? entries.filter((entry) => !disabled.has(entry.ruleId))
+        : [...entries],
+    );
   }
 
   get(ruleId: string): RuleControlResult {

@@ -1,7 +1,7 @@
 import { resolve } from 'node:path';
 
-import { loadRuleModules } from './loader.js';
-import { runRuleSimulations, simulationViolations } from './runner.js';
+import { loadRuleBundles } from './loader.js';
+import { runAiRuleSimulations, simulationViolations } from './runner.js';
 
 function argument(name: string): string | undefined {
   const index = process.argv.indexOf(name);
@@ -27,8 +27,13 @@ async function main(): Promise<void> {
   const rulesRoot = resolve(argument('--rules-root') ?? 'packages/rules');
   const games = positiveInteger('--games', 200);
   const seeds = positiveInteger('--seeds', 5);
-  const modules = await loadRuleModules({ rulesRoot, newRuleId });
-  const runs = runRuleSimulations({ modules, newRuleId, games, seeds });
+  const bundles = await loadRuleBundles({ rulesRoot, newRuleId });
+  const runs = await runAiRuleSimulations({
+    bundles,
+    newRuleId,
+    games,
+    seeds,
+  });
   const violations = simulationViolations(runs);
   process.stdout.write(
     `${JSON.stringify({ newRuleId, games, seeds, runs, violations })}\n`,

@@ -19,7 +19,12 @@ import {
 } from '@daifugo/core';
 import type { Server, Socket } from 'socket.io';
 
-import { runAiTurn, type AiTurnLog, type AiTurnMetric } from '../ai-turn.js';
+import {
+  runAiTurn,
+  withResolvedRuleBundles,
+  type AiTurnLog,
+  type AiTurnMetric,
+} from '../ai-turn.js';
 import { RoomManager } from './manager.js';
 import type {
   Ack,
@@ -62,6 +67,10 @@ export interface RoomSocketGatewayOptions {
   ai?: AiPlayer;
   rulePort?: RuleChainPort;
   rulePortForSet?: (setId: string) => RuleChainPort;
+  effectiveRuleChainForSet?: (
+    setId: string,
+    entries: readonly RuleChainEntry[],
+  ) => RuleChainEntry[];
   aiRuleBundles?: (entries: readonly RuleChainEntry[]) => AiRuleBundleRef[];
   decideTurn?: (state: RoomState, memberId: string) => Promise<CardId[] | null>;
   timers?: Pick<
@@ -112,6 +121,18 @@ function roomFailure(
     return failure(transition.error?.code ?? 'INTERNAL');
   }
   return undefined;
+}
+
+function projectRuleMemory(
+  memory: RuleRuntime['setMemory'],
+  entries: readonly RuleChainEntry[],
+): RuleRuntime['setMemory'] {
+  const active = new Set(entries.map((entry) => entry.ruleId));
+  return Object.fromEntries(
+    Object.entries(memory)
+      .filter(([ruleId]) => active.has(ruleId))
+      .map(([ruleId, namespace]) => [ruleId, structuredClone(namespace)]),
+  );
 }
 
 export function attachRoomSocketGateway(
@@ -221,12 +242,6 @@ export function attachRoomSocketGateway(
           return null;
         }
         const gameIndex = engine.phase.gameIndex;
-        const config = {
-          gameIndex,
-          seats: engine.members.map((member) => member.id),
-          gameSeed: `${engine.setSeed}:${gameIndex}`,
-          ruleChain: engine.ruleChain,
-        };
         const runtime: RuleRuntime = {
           port:
             options.rulePortForSet?.(engine.setId) ??
@@ -235,8 +250,20 @@ export function attachRoomSocketGateway(
           setHistory: engine.results,
           setMemory: engine.setMemory,
         };
+        const effectiveRules = () =>
+          options.effectiveRuleChainForSet?.(engine.setId, engine.ruleChain) ??
+          engine.ruleChain;
+        let ruleChain = effectiveRules();
+        let config = {
+          gameIndex,
+          seats: engine.members.map((member) => member.id),
+          gameSeed: `${engine.setSeed}:${gameIndex}`,
+          ruleChain,
+        };
         const legalPlays = enumerateLegalPlays(config, game, memberId, runtime);
         if (legalPlays.length === 0) return null;
+        ruleChain = effectiveRules();
+        config = { ...config, ruleChain };
         const view = buildPlayerSnapshot(
           config,
           game,
@@ -249,8 +276,21 @@ export function attachRoomSocketGateway(
           memberId,
           runtime,
         );
+        ruleChain = effectiveRules();
+        const ruleContext = {
+          ruleChain: structuredClone(ruleChain),
+          bundles: [] as AiRuleBundleRef[],
+          gameSeed: config.gameSeed,
+          gameMemory: projectRuleMemory(game.private.memory, ruleChain),
+          hookCalls: structuredClone(game.private.hookCalls),
+          setMemory: projectRuleMemory(engine.setMemory, ruleChain),
+        };
+        const resolveBundles = options.aiRuleBundles;
+        const turnAi = resolveBundles
+          ? withResolvedRuleBundles(ai, resolveBundles)
+          : ai;
         const result = await runAiTurn({
-          ai,
+          ai: turnAi,
           input: {
             view,
             legalPlays,
@@ -260,13 +300,7 @@ export function attachRoomSocketGateway(
             },
             seed: `${engine.setSeed}:room:${gameIndex}:${state.turnSeq}:${memberId}`,
             difficulty: NORMAL_DIFFICULTY,
-            ruleContext: {
-              ruleChain: structuredClone(engine.ruleChain),
-              bundles: options.aiRuleBundles?.(engine.ruleChain) ?? [],
-              gameMemory: structuredClone(game.private.memory),
-              setMemory: structuredClone(engine.setMemory),
-              setHistory: structuredClone(engine.results),
-            },
+            ruleContext,
           },
           fallbackPlay: () => legalPlays[0]!,
           animationDelay: { minMs: 0, maxMs: 0 },

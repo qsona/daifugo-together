@@ -2,7 +2,12 @@ import type { AiPlayer, DecideMoveInput } from '@daifugo/ai';
 import type { Play } from '@daifugo/core';
 import { describe, expect, it } from 'vitest';
 
-import { runAiTurn, type AiTurnLog, type AiTurnMetric } from './ai-turn.js';
+import {
+  runAiTurn,
+  withResolvedRuleBundles,
+  type AiTurnLog,
+  type AiTurnMetric,
+} from './ai-turn.js';
 
 const plays: Play[] = [
   {
@@ -148,6 +153,47 @@ describe('server AI turn boundary', () => {
     expect(result.decision.play).toEqual(plays[1]);
     expect(result.decision.usedFallback).toBe('engine-fallback');
     expect(result.watchdogTriggered).toBe(false);
+    expect(metrics).toContainEqual(
+      expect.objectContaining({
+        name: 'ai_fallback_total',
+        labels: {
+          fallback: 'engine-fallback',
+          watchdog: false,
+        },
+      }),
+    );
+  });
+
+  it('rule bundle解決の同期例外もengine fallback境界で継続・計測する', async () => {
+    const metrics: AiTurnMetric[] = [];
+    const result = await runAiTurn({
+      ai: withResolvedRuleBundles(
+        player(async () => {
+          throw new Error('underlying AI must not run');
+        }),
+        () => {
+          throw new Error('static rule registry unavailable');
+        },
+      ),
+      input: {
+        ...input,
+        ruleContext: {
+          ruleChain: [],
+          bundles: [],
+          gameSeed: 'authority-seed',
+          gameMemory: {},
+          hookCalls: {},
+          setMemory: {},
+        },
+      },
+      fallbackPlay: () => plays[1]!,
+      animationDelay: { minMs: 0, maxMs: 0 },
+      sleep: async () => {},
+      onMetric: (metric) => metrics.push(metric),
+    });
+
+    expect(result.decision.play).toEqual(plays[1]);
+    expect(result.decision.usedFallback).toBe('engine-fallback');
     expect(metrics).toContainEqual(
       expect.objectContaining({
         name: 'ai_fallback_total',

@@ -4,13 +4,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "prebuild": "pnpm --filter @daifugo/core build && pnpm --filter @daifugo/rules build",
+    "prebuild": "pnpm --filter @daifugo/ai... build && pnpm --filter @daifugo/rules build",
     "build": "tsc -p tsconfig.build.json",
-    "pretypecheck": "pnpm --filter @daifugo/core build",
+    "pretypecheck": "pnpm --filter @daifugo/ai... build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "start": "pnpm build && node dist/cli.js"
   },
   "dependencies": {
+    "@daifugo/ai": "workspace:*",
     "@daifugo/core": "workspace:*"
   },
   "devDependencies": {

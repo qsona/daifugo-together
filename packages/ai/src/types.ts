@@ -1,8 +1,8 @@
 import type {
-  GameResult,
   Play,
   PlayerSnapshot,
   RuleChainEntry,
+  RuleMeta,
   RuleMemory,
 } from '@daifugo/core';
 
@@ -39,6 +39,7 @@ export interface SearchStats {
   candidates: CandidateStats[];
   workerThread: boolean;
   ruleIds?: string[];
+  effectiveStrengthInverted?: boolean;
 }
 
 export type AiFallback =
@@ -49,14 +50,16 @@ export interface AiRuleBundleRef {
   moduleUrl: string;
   bundleHash: string;
   contractVersion: number;
+  meta: RuleMeta;
 }
 
 export interface AiRuleContext {
   ruleChain: RuleChainEntry[];
   bundles: AiRuleBundleRef[];
+  gameSeed: string;
   gameMemory: RuleMemory;
+  hookCalls: Record<string, number>;
   setMemory: RuleMemory;
-  setHistory: GameResult[];
 }
 
 export interface DecideMoveInput {

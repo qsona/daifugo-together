@@ -110,12 +110,14 @@ describe('CX-04 rule registry', () => {
         moduleUrl: 'file:///rules/r0001-a.js',
         bundleHash: 'r0001-a-bundle',
         contractVersion: 1,
+        meta: codeRule('r0001-a', 'ルールA').module.meta,
       },
       {
         ruleId: 'r0002-b',
         moduleUrl: 'file:///rules/r0002-b.js',
         bundleHash: 'r0002-b-bundle',
         contractVersion: 1,
+        meta: codeRule('r0002-b', 'ルールB').module.meta,
       },
     ]);
     expect(service.disable('r0001-a', { reason: 'manual' })).toMatchObject({
@@ -469,6 +471,14 @@ describe('CX-04 rule registry', () => {
     expect(report.invariantViolations).toEqual([]);
     expect(brokenCalls).toBe(1);
     expect(healthyCalls).toBe(3);
+    expect(
+      service
+        .effectiveRuleChainForSet(
+          'set-runtime',
+          service.availableRules('set-runtime'),
+        )
+        .map((entry) => entry.ruleId),
+    ).toEqual(['r0002-b']);
     expect(persistence.rules.incidents('r0001-a')).toMatchObject([
       {
         setId: 'set-runtime',

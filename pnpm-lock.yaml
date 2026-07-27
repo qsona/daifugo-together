@@ -74,7 +74,15 @@ importers:
         specifier: ^26.0.0
         version: 26.1.1
 
-  packages/rules: {}
+  packages/rules:
+    dependencies:
+      '@daifugo/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      '@types/node':
+        specifier: ^26.0.0
+        version: 26.1.1
 
   packages/server:
     dependencies:
@@ -84,6 +92,9 @@ importers:
       '@daifugo/core':
         specifier: workspace:*
         version: link:../core
+      '@daifugo/rules':
+        specifier: workspace:*
+        version: link:../rules
       better-sqlite3:
         specifier: 13.0.1
         version: 13.0.1
@@ -106,6 +117,9 @@ importers:
 
   packages/sim:
     dependencies:
+      '@daifugo/ai':
+        specifier: workspace:*
+        version: link:../ai
       '@daifugo/core':
         specifier: workspace:*
         version: link:../core

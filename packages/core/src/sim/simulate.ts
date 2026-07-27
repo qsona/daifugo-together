@@ -1,5 +1,6 @@
 import { reduceSet, startSetTransition } from '../set/set-reducer.js';
 import type { SetAction, SetState, SetTransition } from '../set/types.js';
+import type { GameConfig } from '../game/types.js';
 import {
   NO_RULE_CHAIN_PORT,
   type RuleChainPort,
@@ -7,6 +8,7 @@ import {
 } from '../rules/chain.js';
 import type { RuleChainEntry } from '../rules/contract.js';
 import { enumerateLegalPlays } from '../play/candidates.js';
+import type { Play } from '../play/play.js';
 import { randomInt, seedRng, type RngState } from '../rng/rng.js';
 
 export interface SimulateOptions {
@@ -15,6 +17,7 @@ export interface SimulateOptions {
   ruleChain: RuleChainEntry[];
   port?: RuleChainPort;
   botPolicy?: 'randomLegal';
+  gamesPerSet?: number;
 }
 
 export interface SimReport {
@@ -48,7 +51,7 @@ export function summarizeFailsafes(
   };
 }
 
-function gameConfig(state: SetState) {
+function gameConfig(state: SetState): GameConfig {
   const gameIndex =
     state.phase.name === 'setResult'
       ? Math.max(0, state.results.length - 1)
@@ -69,38 +72,14 @@ function runtime(state: SetState, port: RuleChainPort): RuleRuntime {
   };
 }
 
-function chooseAction(
-  state: SetState,
-  port: RuleChainPort,
-  initialRng: RngState,
-): { action: SetAction; rng: RngState } {
-  const game = state.currentGame;
-  if (!game || state.phase.name !== 'gameInProgress') {
-    return { action: { type: 'advance' }, rng: initialRng };
-  }
-  const player = game.public.turn;
-  if (!player) {
-    throw new Error('Simulation has no active turn');
-  }
-  const plays = enumerateLegalPlays(
-    gameConfig(state),
-    game,
-    player,
-    runtime(state, port),
-  );
-  const choices: SetAction[] = plays.map((play) => ({
-    type: 'play',
-    player,
-    cards: play.cards.map((card) => card.id),
-  }));
-  if (game.public.field.current) {
-    choices.push({ type: 'pass', player });
-  }
-  if (choices.length === 0) {
-    throw new Error('Simulation found no legal action');
-  }
-  const selected = randomInt(initialRng, choices.length);
-  return { action: choices[selected.value]!, rng: selected.state };
+export interface SimulationDecision {
+  setIndex: number;
+  state: SetState;
+  config: GameConfig;
+  runtime: RuleRuntime;
+  player: string;
+  legalPlays: Play[];
+  canPass: boolean;
 }
 
 function invariantProblems(state: SetState): string[] {
@@ -153,14 +132,15 @@ function invalidEffectProblems(
   });
 }
 
-export function simulate(options: SimulateOptions): SimReport {
+export function* createSimulationRun(
+  options: SimulateOptions,
+): Generator<SimulationDecision, SimReport, SetAction> {
   if (!Number.isSafeInteger(options.games) || options.games < 0) {
     throw new Error('games must be a non-negative safe integer');
   }
   const port = options.port ?? NO_RULE_CHAIN_PORT;
   const invariantViolations: SimReport['invariantViolations'] = [];
   const ruleFiredCounts: Record<string, number> = {};
-  let rng = seedRng(`${options.seed}:bot`);
   let completed = 0;
   let completedGames = 0;
   let totalTurns = 0;
@@ -172,7 +152,10 @@ export function simulate(options: SimulateOptions): SimReport {
     const started = startSetTransition(
       {
         setId: `sim-${setIndex}`,
-        config: { gamesPerSet: 3, interimAutoAdvanceMs: 0 },
+        config: {
+          gamesPerSet: options.gamesPerSet ?? 3,
+          interimAutoAdvanceMs: 0,
+        },
         members: ['p1', 'p2', 'p3', 'p4'].map((id) => ({
           id,
           displayName: id,
@@ -205,9 +188,33 @@ export function simulate(options: SimulateOptions): SimReport {
     let actions = 0;
     while (state.phase.name !== 'setResult' && actions < 10_000) {
       const beforeResults = state.results.length;
-      const selected = chooseAction(state, port, rng);
-      rng = selected.rng;
-      const transition = reduceSet(state, selected.action, port);
+      let action: SetAction;
+      if (state.phase.name !== 'gameInProgress' || !state.currentGame) {
+        action = { type: 'advance' };
+      } else {
+        const player = state.currentGame.public.turn;
+        if (!player) {
+          throw new Error('Simulation has no active turn');
+        }
+        const config = gameConfig(state);
+        const ruleRuntime = runtime(state, port);
+        const legalPlays = enumerateLegalPlays(
+          config,
+          state.currentGame,
+          player,
+          ruleRuntime,
+        );
+        action = yield {
+          setIndex,
+          state,
+          config,
+          runtime: ruleRuntime,
+          player,
+          legalPlays,
+          canPass: state.currentGame.public.field.current !== undefined,
+        };
+      }
+      const transition = reduceSet(state, action, port);
       const failsafes = summarizeFailsafes(transition.events);
       failsafeActivations += failsafes.total;
       leadNoLegalMoveActivations += failsafes.leadNoLegalMove;
@@ -281,4 +288,28 @@ export function simulate(options: SimulateOptions): SimReport {
     avgTurnsPerGame: completedGames === 0 ? 0 : totalTurns / completedGames,
     ruleFiredCounts,
   };
+}
+
+export function simulate(options: SimulateOptions): SimReport {
+  let rng: RngState = seedRng(`${options.seed}:bot`);
+  const run = createSimulationRun(options);
+  let step = run.next();
+  while (!step.done) {
+    const decision = step.value;
+    const choices: SetAction[] = decision.legalPlays.map((play) => ({
+      type: 'play',
+      player: decision.player,
+      cards: play.cards.map((card) => card.id),
+    }));
+    if (decision.canPass) {
+      choices.push({ type: 'pass', player: decision.player });
+    }
+    if (choices.length === 0) {
+      throw new Error('Simulation found no legal action');
+    }
+    const selected = randomInt(rng, choices.length);
+    rng = selected.state;
+    step = run.next(choices[selected.value]!);
+  }
+  return step.value;
 }

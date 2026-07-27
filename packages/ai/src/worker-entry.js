@@ -1,4 +1,7 @@
 import { parentPort } from 'node:worker_threads';
+import { createHash } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import { isDeepStrictEqual } from 'node:util';
 
 const core = await import(
   new URL('../../core/dist/index.js', import.meta.url).href
@@ -131,11 +134,11 @@ function determinize(view, seed, iteration) {
   };
 }
 
-function gameConfig(view, seed, ruleChain) {
+function gameConfig(view, gameSeed, ruleChain) {
   return {
     gameIndex: view.gameIndex,
     seats: [...view.seats],
-    gameSeed: seed,
+    gameSeed,
     ruleChain,
   };
 }
@@ -285,7 +288,14 @@ function finalCandidate(stats, temperature, seed) {
   return strongestCandidate(stats);
 }
 
-function response(stats, payload, completed, done, ruleIds) {
+function response(
+  stats,
+  payload,
+  completed,
+  done,
+  ruleIds,
+  effectiveStrengthInverted,
+) {
   const selected = finalCandidate(
     stats,
     payload.difficulty.temperature,
@@ -303,11 +313,13 @@ function response(stats, payload, completed, done, ruleIds) {
       })),
       workerThread: true,
       ruleIds,
+      effectiveStrengthInverted,
     },
   };
 }
 
 const moduleCache = new Map();
+const verifiedSourceCache = new Set();
 
 function ruleModule(value) {
   return (
@@ -334,6 +346,22 @@ async function loadRuleModules(ruleContext) {
     if (url.protocol !== 'file:') {
       throw new Error(`AI rule bundle must be a local file: ${bundle.ruleId}`);
     }
+    if (!/^[a-f0-9]{64}$/u.test(bundle.bundleHash)) {
+      throw new Error(`AI rule bundle hash must be sha256: ${bundle.ruleId}`);
+    }
+    const verificationKey = `${bundle.bundleHash}:${bundle.moduleUrl}`;
+    if (!verifiedSourceCache.has(verificationKey)) {
+      const sourceUrl = new URL(url);
+      sourceUrl.search = '';
+      sourceUrl.hash = '';
+      const actualHash = createHash('sha256')
+        .update(await readFile(sourceUrl))
+        .digest('hex');
+      if (actualHash !== bundle.bundleHash) {
+        throw new Error(`AI rule bundle content mismatch: ${bundle.ruleId}`);
+      }
+      verifiedSourceCache.add(verificationKey);
+    }
     bundlesById.set(bundle.ruleId, bundle);
   }
   const modules = [];
@@ -342,14 +370,19 @@ async function loadRuleModules(ruleContext) {
     if (
       !bundle ||
       bundle.bundleHash !== entry.bundleHash ||
-      bundle.contractVersion !== entry.contractVersion
+      bundle.contractVersion !== entry.contractVersion ||
+      bundle.meta.ruleId !== entry.ruleId ||
+      bundle.meta.name !== entry.name ||
+      bundle.meta.contractVersion !== entry.contractVersion
     ) {
       throw new Error(`AI rule bundle metadata mismatch: ${entry.ruleId}`);
     }
     const cacheKey = `${bundle.bundleHash}:${bundle.moduleUrl}`;
     let module = moduleCache.get(cacheKey);
     if (!module) {
-      const loaded = await import(bundle.moduleUrl);
+      const importUrl = new URL(bundle.moduleUrl);
+      importUrl.searchParams.set('bundleHash', bundle.bundleHash);
+      const loaded = await import(importUrl.href);
       module = loaded.rule;
       if (!ruleModule(module)) {
         throw new Error(`AI rule bundle has no RuleModule: ${entry.ruleId}`);
@@ -358,7 +391,8 @@ async function loadRuleModules(ruleContext) {
     }
     if (
       module.meta.ruleId !== entry.ruleId ||
-      module.meta.contractVersion !== entry.contractVersion
+      module.meta.contractVersion !== entry.contractVersion ||
+      !isDeepStrictEqual(module.meta, bundle.meta)
     ) {
       throw new Error(`AI rule module contract mismatch: ${entry.ruleId}`);
     }
@@ -373,14 +407,30 @@ async function search(payload, onProgress) {
   }
   const modules = await loadRuleModules(payload.ruleContext);
   const ruleChain = structuredClone(payload.ruleContext?.ruleChain ?? []);
-  const port = core.createInProcessRuleChainPort(modules);
-  const config = gameConfig(payload.view, payload.seed, ruleChain);
+  let ruleIssue;
+  const port = core.createInProcessRuleChainPort(modules, {
+    onIssue(issue) {
+      ruleIssue ??= issue;
+    },
+  });
+  const throwIfRuleFailed = () => {
+    if (ruleIssue) {
+      throw new Error(
+        `AI rule execution failed: ${ruleIssue.ruleId}/${ruleIssue.hook}/${ruleIssue.reason}`,
+      );
+    }
+  };
+  const config = gameConfig(
+    payload.view,
+    payload.ruleContext?.gameSeed ?? payload.seed,
+    ruleChain,
+  );
   const api = core.createSimulationApi({
     config,
     snapshotContext: snapshotContext(payload.view),
     runtime: {
       port,
-      setHistory: structuredClone(payload.ruleContext?.setHistory ?? []),
+      setHistory: structuredClone(payload.view.setResults),
       setMemory: structuredClone(payload.ruleContext?.setMemory ?? {}),
     },
   });
@@ -388,7 +438,14 @@ async function search(payload, onProgress) {
   sample.private.memory = structuredClone(
     payload.ruleContext?.gameMemory ?? {},
   );
+  sample.private.hookCalls = structuredClone(
+    payload.ruleContext?.hookCalls ?? {},
+  );
   const strength = api.getEffectiveStrengthOrder(api.createPosition(sample));
+  throwIfRuleFailed();
+  const effectiveStrengthInverted =
+    strength.ranking.join(',') ===
+    [...core.BASE_STRENGTH_ORDER.ranking].reverse().join(',');
   const scaled = Math.floor(
     payload.budget.maxPlayouts * payload.difficulty.budgetScale,
   );
@@ -423,6 +480,9 @@ async function search(payload, onProgress) {
     world.private.memory = structuredClone(
       payload.ruleContext?.gameMemory ?? {},
     );
+    world.private.hookCalls = structuredClone(
+      payload.ruleContext?.hookCalls ?? {},
+    );
     const reward = rollout(
       api,
       world,
@@ -430,6 +490,7 @@ async function search(payload, onProgress) {
       payload,
       completed,
     );
+    throwIfRuleFailed();
     stats[candidateIndex].visits += 1;
     stats[candidateIndex].reward += reward;
     const count = completed + 1;
@@ -446,6 +507,7 @@ async function search(payload, onProgress) {
           count,
           false,
           ruleChain.map((entry) => entry.ruleId),
+          effectiveStrengthInverted,
         ),
       );
       lastProgressAt = now;
@@ -457,6 +519,7 @@ async function search(payload, onProgress) {
     completed,
     completed === target,
     ruleChain.map((entry) => entry.ruleId),
+    effectiveStrengthInverted,
   );
 }
 

@@ -2,6 +2,7 @@ import type {
   AiDecision,
   AiFallback,
   AiPlayer,
+  AiRuleBundleRef,
   DecideMoveInput,
 } from '@daifugo/ai';
 import { samePlay, type Play } from '@daifugo/core';
@@ -51,6 +52,28 @@ export interface AiTurnResult {
   watchdogTriggered: boolean;
   wallMs: number;
   animationDelayMs: number;
+}
+
+export function withResolvedRuleBundles(
+  ai: AiPlayer,
+  resolveBundles: (
+    entries: NonNullable<DecideMoveInput['ruleContext']>['ruleChain'],
+  ) => AiRuleBundleRef[],
+): AiPlayer {
+  return {
+    async decideMove(input) {
+      if (!input.ruleContext) return ai.decideMove(input);
+      const bundles = resolveBundles(input.ruleContext.ruleChain);
+      return ai.decideMove({
+        ...input,
+        ruleContext: {
+          ...input.ruleContext,
+          bundles,
+        },
+      });
+    },
+    close: async () => undefined,
+  };
 }
 
 type SettledDecision =

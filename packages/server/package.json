@@ -10,9 +10,9 @@
     }
   },
   "scripts": {
-    "prebuild": "pnpm --filter @daifugo/ai... build",
+    "prebuild": "pnpm --filter @daifugo/ai... build && pnpm --filter @daifugo/rules build",
     "build": "tsc -p tsconfig.build.json",
-    "pretypecheck": "pnpm --filter @daifugo/ai... build",
+    "pretypecheck": "pnpm --filter @daifugo/ai... build && pnpm --filter @daifugo/rules build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "start": "node dist/bin.js",
     "ops:list-appeals": "pnpm build && node dist/ops.js list-appeals",
@@ -23,6 +23,7 @@
   "dependencies": {
     "@daifugo/ai": "workspace:*",
     "@daifugo/core": "workspace:*",
+    "@daifugo/rules": "workspace:*",
     "better-sqlite3": "13.0.1",
     "drizzle-orm": "0.45.2",
     "socket.io": "^4.8.3"

@@ -10,7 +10,16 @@
     }
   },
   "scripts": {
+    "generate:registry": "node scripts/generate-registry.mjs",
+    "prebuild": "pnpm generate:registry",
     "build": "tsc -p tsconfig.build.json",
+    "pretypecheck": "pnpm generate:registry",
     "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@daifugo/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0"
   }
 }

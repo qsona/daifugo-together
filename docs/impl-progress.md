@@ -9,8 +9,8 @@
 - **フェーズ 2 / E7 CX-01 プロセス2ほぼ完了**: 独立方向性レビュー `GO_WITH_FIXES` のImportant 4件と、初回完了レビューのImportant 2件を反映。完了再レビューはコード・自動テスト `PASS` / 品質 `APPROVED` / Critical・Importantなし。実app-server評価だけ明示許可待ち
 - **フェーズ 2 / E7 CX-02 プロセス2完了**: subscription Codex CLIを使う共有skill、scaffold先行push/任意段階再開、全差分・履歴検収、1回retry、PR作成、失敗永続化まで実装。独立最終再レビューはコード・テスト範囲 `PASS` / 品質 `APPROVED` / 全指摘なし。実subscriptionでのルール生成・実PR作成は未実行
 - **フェーズ 2 / E7 CX-03 プロセス2完了、外部受入ゲート待ち**: trusted diff-guard、untrusted quality/rule-tests/simulation、ローカルCI監視を実装。独立完了再レビューはコード・自動テスト `PASS` / 品質 `APPROVED` / Critical・Importantなし。実repositoryのbranch protection/ruleset登録はworkflowのmain反映後
-- **フェーズ 2 / E7 CX-04 プロセス2レビュー修正中**: 即時disable/enable、セット内障害隔離、24時間内3セットでの自動disable、版履歴と恒久revert同期、管理API、revert差分ガード、runbookまで実装。独立完了レビューのCritical 1件・Important 2件を修正し、再レビュー待ち
-- **フェーズ 2 / E2 AI-02 プロセス1実装中**: 固定rule chain・ローカルbundle参照・game/set memory・set historyをworkerへ直列化し、worker側で同じRuleModule runtimeを再構成。新ルール有効の1ゲームをworker AI 4席で合法手だけで完走する縦切りまで接続
+- **フェーズ 2 / E7 CX-04 プロセス2コード完了**: 独立再レビューはコード・自動テスト範囲 `PASS` / 品質 `APPROVED` / Critical・Importantなし。実CD/revertリハーサル、通知経路、CX-05完全registry接続は外部・後続ゲート
+- **フェーズ 2 / E2 AI-02 プロセス2実装完了・独立レビュー待ち**: workerへ権威runtime snapshotと実SHA-256検証済みbundleを渡し、E1 simulation generatorをworker AI 4席で駆動。CX-03 CLIのnew-only/all-rules検査をAI版へ切替済み。全体`pnpm verify`は61 files / 417 testsを含め成功
 - E1〜E3 の実装記録は本書末尾の「並行進行」節、E13 は「E13」節。E4 の未解消の開発者判断は「詰まっている点」に残っている(1〜4・7・8・11)
 
 ### E-18 / C-2・C-3・C-6 再設計の反映(2026-07-27)
@@ -761,6 +761,31 @@ TS-02 から継続で未解決のもの:
 - AI込みハーネスの`illegalPlay / nonTermination / timeout / exception`とfallback率・playouts/moveを集計し、悪性fixtureが正しくfailするメタテストを追加する
 - bundle欠落・meta/hash/contract不一致、hook例外、全sample失敗、hard timeout、worker crash、複数ルール・memory継続をAI-02境界で回帰化する
 - CX-05の`packages/rules` loaderと`RuleRegistryService`へ実module URLを接続し、起動時同期・本番AI・対局権威が同じregistry snapshotを使う
+
+#### 方向性レビューとプロセス2反映
+
+- 独立 GPT-5.6 Sol の方向性判定は **GO_WITH_FIXES**。中心方針は採用し、Important 5件をprocess2冒頭で反映した
+- 権威側とworker側の意味一致: `AiRuleContext`を権威runtime snapshotとして、対局の`gameSeed`・現在の`hookCalls`・game/set memory・セット内で障害隔離済みの実効rule chainを渡す。`setHistory`の二重入力は削除し、workerは`PlayerSnapshot.setResults`を単一の正として使う
+- memoryは実効chainのrule ID名前空間だけをworkerへ投影する。初版のKV複製はレビュー裁定どおり暫定採用だが、秘匿区分がない現契約では「チートなし」の完全保証にならない点を維持する
+- bundle同一性: `packages/rules`のビルド前generatorが全ruleを静的importするregistryを生成し、ロードしたcompiled JS bytesのSHA-256、module URL、moduleを同じregistrationに束ねる。workerは`file:`、64桁SHA-256、実bytes、chain/ref、contract/metaを検証してからhash付きURLでimport/cacheする
+- 障害fallback: workerのnative hook例外・不正返値を`onIssue`で探索失敗へ昇格し、bundle/hash/import失敗と同じ合法heuristic fallbackへ落とす。server側bundle resolverも`runAiTurn`の失敗境界内へ移し、同期例外を`engine-fallback`として計測する
+- 空registryの危険なrevert同期は一旦削除し、その後、生成済み静的registryのロード成功を完全性境界として再接続した。ハードコードした`[]`を「全コード削除」と解釈する経路はない
+- 縦切りfixtureはannounceだけでなくgame memoryと決定的RNGを使って強さ順を反転する。authority viewとworker統計の実効強さが一致し、実ルール効果を観測する。bundle実体不一致、hook例外、次着手回復も回帰化した
+
+#### AI込みCX-03 simulation
+
+- E1の既存`simulate`を、同じset reducer・カード保存・終局・Effect不変条件検査を所有する`createSimulationRun` generatorへ分離した。従来random-legalはgeneratorの同期consumer、AI-02はasync consumerであり、対局ループと検査を二重実装しない
+- `packages/sim`の実行CLIを`runAiRuleSimulations`へ切り替えた。new-only / all-rulesの2構成、指定games × 5 seed、worker AI 4席・小予算で実行し、不正手、非終局、Effect/hook障害、fallback、1手wall timeをCI違反へまとめる
+- E02の「200 games」と既存coreの「3ゲームset数」の単位差を解消するため、CI runnerは`gamesPerSet=1`を明示する。CLIの`--games 200`は各構成・各seedで正確に200ゲームを表す
+- `packages/sim` loaderもcompiled ruleの実bytes SHA-256とmodule URLを同時に返し、CI authority portとworkerが同じbundle集合を使う
+- focused検証: AI/server/sim/core typecheck成功。AI fallback・rule registry・AI turn・simulation/loaderを含む対象テスト成功。最終の全体`pnpm verify`もformat/lint/design/typecheck、61 files / 417 tests、全package buildまで成功
+- TypeScript buildが素のJavaScriptである`worker-entry.js`を`dist`へ出力しない問題を検出し、AI packageのbuildでruntimeファイルを明示コピーするよう修正した。source testだけでなく配布成果物でもworker実体が必ず揃う
+
+#### 残る外部・後続ゲート
+
+- 実生成ルールを含む200ゲーム×5 seed×2構成のCI所要時間は最初のrule PRで実測し、workflowの10分timeout内でbudget/並列度を較正する
+- CX-05のDB同期（コードにありDBにないruleの`pending_enable`登録）、提案`released`遷移、実デプロイ後の有効化は次ストーリーで接続する
+- 実repositoryのruleset/required checks、実subscription Codex、実PR・CDリハーサルは従来どおり開発者権限を要する外部受入ゲート
 
 ### E2で見つけた設計書の不整合
 

@@ -1,3 +1,6 @@
+import { createHash } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+
 import {
   buildPlayerSnapshot,
   createInProcessRuleChainPort,
@@ -541,6 +544,10 @@ describe('AI-01', () => {
 describe('AI-02 rule following', () => {
   it('worker内でも固定ルールbundleを読み、合法手だけで新ルール有効セットを完走する', async () => {
     const module = ai02RuleFixture as RuleModule;
+    const moduleUrl = new URL('./test-fixtures/ai02-rule.js', import.meta.url);
+    const bundleHash = createHash('sha256')
+      .update(await readFile(moduleUrl))
+      .digest('hex');
     const ruleEntry: RuleChainEntry = {
       ruleId: module.meta.ruleId,
       name: module.meta.name,
@@ -550,7 +557,7 @@ describe('AI-02 rule following', () => {
         activatedAt: 0,
         ruleId: module.meta.ruleId,
       },
-      bundleHash: 'ai02-fixture-bundle',
+      bundleHash,
       contractVersion: module.meta.contractVersion,
     };
     const port = createInProcessRuleChainPort([module]);
@@ -564,10 +571,28 @@ describe('AI-02 rule following', () => {
           isAI: true,
         })),
         ruleChain: [ruleEntry],
-        setSeed: 'ai02-rule-following',
+        setSeed: 'authority-0',
       },
       port,
     );
+    if (!state.currentGame) throw new Error('Expected an active game');
+    state = {
+      ...state,
+      currentGame: {
+        ...state.currentGame,
+        private: {
+          ...state.currentGame.private,
+          memory: {
+            ...state.currentGame.private.memory,
+            [ruleEntry.ruleId]: { force: true },
+          },
+          hookCalls: {
+            ...state.currentGame.private.hookCalls,
+            [`${ruleEntry.ruleId}:modifyStrength`]: 7,
+          },
+        },
+      },
+    };
     const ai = createAiPlayer({
       search: { cutoffSteps: 4, rootCandidateCap: 4 },
     });
@@ -599,14 +624,15 @@ describe('AI-02 rule following', () => {
         if (legal.length === 0) {
           action = { type: 'pass', player };
         } else {
+          const view = buildPlayerSnapshot(
+            config,
+            game,
+            snapshotContext(state),
+            player,
+            runtime,
+          );
           const decision = await ai.decideMove({
-            view: buildPlayerSnapshot(
-              config,
-              game,
-              snapshotContext(state),
-              player,
-              runtime,
-            ),
+            view,
             legalPlays: legal,
             budget: {
               softMs: 3,
@@ -614,29 +640,32 @@ describe('AI-02 rule following', () => {
               maxPlayouts: 1,
               sliceMs: 1,
             },
-            seed: `${state.setSeed}:${game.public.turnCount}:${player}`,
+            seed: 'move-0',
             difficulty: NORMAL_DIFFICULTY,
             ruleContext: {
               ruleChain: [ruleEntry],
               bundles: [
                 {
                   ruleId: ruleEntry.ruleId,
-                  moduleUrl: new URL(
-                    './test-fixtures/ai02-rule.js',
-                    import.meta.url,
-                  ).href,
+                  moduleUrl: moduleUrl.href,
                   bundleHash: ruleEntry.bundleHash,
                   contractVersion: ruleEntry.contractVersion,
+                  meta: module.meta,
                 },
               ],
+              gameSeed: config.gameSeed,
               gameMemory: game.private.memory,
+              hookCalls: game.private.hookCalls,
               setMemory: state.setMemory,
-              setHistory: state.results,
             },
           });
           expect(decision.usedFallback).toBe('none');
           if (decision.stats?.workerThread) {
             expect(decision.stats.ruleIds).toEqual([ruleEntry.ruleId]);
+            expect(view.strengthNote.inverted).toBe(true);
+            expect(decision.stats.effectiveStrengthInverted).toBe(
+              view.strengthNote.inverted,
+            );
             workerRuleObserved = true;
           }
           expect(legal.some((play) => sameCandidate(play, decision.play))).toBe(
@@ -663,4 +692,136 @@ describe('AI-02 rule following', () => {
     expect(workerRuleObserved).toBe(true);
     expect(actions).toBeLessThan(1_000);
   }, 20_000);
+
+  it('bundle実体不一致とworker hook例外を合法heuristic fallbackへ落とす', async () => {
+    const module = ai02RuleFixture as RuleModule;
+    const moduleUrl = new URL('./test-fixtures/ai02-rule.js', import.meta.url);
+    const bundleHash = createHash('sha256')
+      .update(await readFile(moduleUrl))
+      .digest('hex');
+    const ruleEntry: RuleChainEntry = {
+      ruleId: module.meta.ruleId,
+      name: module.meta.name,
+      position: 0,
+      priority: {
+        score: 0,
+        activatedAt: 0,
+        ruleId: module.meta.ruleId,
+      },
+      bundleHash,
+      contractVersion: module.meta.contractVersion,
+    };
+    const config: GameConfig = {
+      gameIndex: 0,
+      seats,
+      gameSeed: 'ai02-fallback-authority',
+      ruleChain: [ruleEntry],
+    };
+    const port = createInProcessRuleChainPort([module]);
+    const started = startGame(config, {
+      port,
+      setHistory: [],
+      setMemory: {},
+    }).state;
+    const player = started.public.turn;
+    if (!player) throw new Error('Expected an opening player');
+    const legalPlays = enumerateLegalPlays(config, started, player, {
+      port,
+      setHistory: [],
+      setMemory: {},
+    });
+    expect(legalPlays.length).toBeGreaterThan(1);
+    const view = buildPlayerSnapshot(
+      config,
+      started,
+      {
+        setId: 'ai02-fallback-set',
+        setPhase: { name: 'gameInProgress', gameIndex: 0 },
+        members: seats.map((id) => ({
+          id,
+          displayName: id,
+          isAI: true,
+        })),
+        setResults: [],
+      },
+      player,
+      { port, setHistory: [], setMemory: {} },
+    );
+    const baseRuleContext = {
+      ruleChain: [ruleEntry],
+      bundles: [
+        {
+          ruleId: ruleEntry.ruleId,
+          moduleUrl: moduleUrl.href,
+          bundleHash,
+          contractVersion: ruleEntry.contractVersion,
+          meta: module.meta,
+        },
+      ],
+      gameSeed: config.gameSeed,
+      gameMemory: {},
+      hookCalls: started.private.hookCalls,
+      setMemory: {},
+    };
+    const ai = createAiPlayer({
+      search: { cutoffSteps: 1, rootCandidateCap: 2 },
+    });
+    try {
+      const input = {
+        view,
+        legalPlays,
+        budget: {
+          softMs: 3,
+          hardMs: 1_000,
+          maxPlayouts: 1,
+          sliceMs: 1,
+        },
+        seed: 'ai02-fallback-move',
+        difficulty: NORMAL_DIFFICULTY,
+      };
+      const mismatched = await ai.decideMove({
+        ...input,
+        ruleContext: {
+          ...baseRuleContext,
+          ruleChain: [
+            {
+              ...ruleEntry,
+              bundleHash: '0'.repeat(64),
+            },
+          ],
+          bundles: [
+            {
+              ...baseRuleContext.bundles[0]!,
+              bundleHash: '0'.repeat(64),
+            },
+          ],
+        },
+      });
+      const hookFailed = await ai.decideMove({
+        ...input,
+        ruleContext: {
+          ...baseRuleContext,
+          gameMemory: {
+            [ruleEntry.ruleId]: { throw: true },
+          },
+        },
+      });
+      const recovered = await ai.decideMove({
+        ...input,
+        ruleContext: {
+          ...baseRuleContext,
+          gameMemory: {
+            [ruleEntry.ruleId]: { force: true },
+          },
+        },
+      });
+
+      expect(mismatched.usedFallback).toBe('heuristic');
+      expect(hookFailed.usedFallback).toBe('heuristic');
+      expect(recovered.usedFallback).toBe('none');
+      expect(recovered.stats?.effectiveStrengthInverted).toBe(true);
+    } finally {
+      await ai.close();
+    }
+  });
 });
