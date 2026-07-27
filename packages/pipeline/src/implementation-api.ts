@@ -38,6 +38,9 @@ function pipelineJob(value: unknown): value is PipelineJob {
     Number.isSafeInteger(job.ciRerun) &&
     typeof job.ruleId === 'string' &&
     typeof job.slug === 'string' &&
+    (job.mergeSha === null ||
+      (typeof job.mergeSha === 'string' &&
+        /^[0-9a-f]{40}$/u.test(job.mergeSha))) &&
     typeof job.createdAt === 'number' &&
     typeof job.updatedAt === 'number'
   );

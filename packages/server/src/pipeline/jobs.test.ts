@@ -210,7 +210,33 @@ describe('CX-02 pipeline jobs', () => {
         to: 'implementing',
       }),
     ).toEqual({ status: 'conflict', error: 'stale_job_phase' });
-    expect(persistence.pipeline.job(item.job.id)?.phase).toBe('pr_open');
+    expect(
+      jobs.update(item.job.id, {
+        from: 'pr_open',
+        to: 'merged',
+      }),
+    ).toEqual({
+      status: 'invalid',
+      error: 'missing_job_transition_fields',
+    });
+    expect(
+      jobs.update(item.job.id, {
+        from: 'pr_open',
+        to: 'merged',
+        mergeSha: 'c'.repeat(40),
+      }),
+    ).toMatchObject({
+      status: 'updated',
+      job: {
+        phase: 'merged',
+        headSha: 'b'.repeat(40),
+        mergeSha: 'c'.repeat(40),
+      },
+    });
+    expect(jobs.resume(item.job.id)).toMatchObject({
+      job: { phase: 'merged', mergeSha: 'c'.repeat(40) },
+    });
+    expect(persistence.pipeline.job(item.job.id)?.phase).toBe('merged');
   });
 
   it('遷移に必要な固定点を欠く更新を拒否する', async () => {

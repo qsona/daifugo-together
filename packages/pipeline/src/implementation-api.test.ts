@@ -37,6 +37,7 @@ const item = {
     branch: null,
     prNumber: null,
     headSha: null,
+    mergeSha: null,
     scaffoldSha: null,
     promptVersion: null,
     errorCode: null,

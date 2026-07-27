@@ -9,6 +9,7 @@ import { HttpPipelineJobPort } from './implementation-api.js';
 import {
   prepareImplementationRetry,
   prepareImplementationWorkspace,
+  recordMergedImplementation,
   removeCompletedWorkspace,
   verifyGitHubPublisher,
 } from './implementation-cli-workflow.js';
@@ -57,6 +58,20 @@ async function main(): Promise<void> {
       : {}),
     cwd: process.cwd(),
   });
+  if (process.argv[2] === 'merged') {
+    const jobId = Number(process.argv[3]);
+    if (!Number.isSafeInteger(jobId) || jobId <= 0) {
+      throw new Error('usage: implement-cli merged JOB_ID');
+    }
+    const result = await recordMergedImplementation({
+      jobs,
+      process: commands,
+      cwd: process.cwd(),
+      jobId,
+    });
+    process.stdout.write(`${JSON.stringify({ result })}\n`);
+    return;
+  }
   const retryId =
     process.argv[2] === 'retry' ? Number(process.argv[3]) : undefined;
   let retryItem: QueuedImplementation | null = null;
@@ -87,7 +102,11 @@ async function main(): Promise<void> {
     process.stdout.write(`${JSON.stringify({ status: 'idle' })}\n`);
     return;
   }
-  if (item.job.phase === 'pr_open') {
+  if (
+    item.job.phase === 'pr_open' ||
+    item.job.phase === 'merged' ||
+    item.job.phase === 'done'
+  ) {
     process.stdout.write(
       `${JSON.stringify({
         workspace: null,

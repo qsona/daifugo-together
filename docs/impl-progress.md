@@ -10,8 +10,8 @@
 - **フェーズ 2 / E7 CX-02 プロセス2完了**: subscription Codex CLIを使う共有skill、scaffold先行push/任意段階再開、全差分・履歴検収、1回retry、PR作成、失敗永続化まで実装。独立最終再レビューはコード・テスト範囲 `PASS` / 品質 `APPROVED` / 全指摘なし。実subscriptionでのルール生成・実PR作成は未実行
 - **フェーズ 2 / E7 CX-03 プロセス2完了、外部受入ゲート待ち**: trusted diff-guard、untrusted quality/rule-tests/simulation、ローカルCI監視を実装。独立完了再レビューはコード・自動テスト `PASS` / 品質 `APPROVED` / Critical・Importantなし。実repositoryのbranch protection/ruleset登録はworkflowのmain反映後
 - **フェーズ 2 / E7 CX-04 プロセス2コード完了**: 独立再レビューはコード・自動テスト範囲 `PASS` / 品質 `APPROVED` / Critical・Importantなし。実CD/revertリハーサル、通知経路、CX-05完全registry接続は外部・後続ゲート
-- **フェーズ 2 / E2 AI-02 プロセス2レビュー修正・再レビュー中**: workerへ権威runtime snapshotと実SHA-256検証済みbundleを渡し、E1 simulation generatorをworker AI 4席で駆動。初回独立レビューの配布物・CI時間上限・`cardsMoved`決定化の指摘を修正済み
-- **フェーズ 2 / E7 CX-05 プロセス1実装中**: 静的registryの起動時同期、`pending_enable`登録、管理API有効化時のproposal `released`・pipeline job `done`との原子的遷移、次セットでの実発動を縦に接続
+- **フェーズ 2 / E2 AI-02 プロセス2コード完了**: workerへ権威runtime snapshotと実SHA-256検証済みbundleを渡し、E1 simulation generatorをworker AI 4席で駆動。独立完了再レビューは要件 `PASS` / 品質 `APPROVED` / Critical・Important・Minorなし
+- **フェーズ 2 / E7 CX-05 プロセス2実装・レビュー前**: GitHub検証済みPR head/merge SHA、デプロイbundle hash、current未revert版を結ぶfail-closed同期へ補強。初回公開の原子的遷移、旧image復活防止、ファイルDB再起動を回帰化
 - E1〜E3 の実装記録は本書末尾の「並行進行」節、E13 は「E13」節。E4 の未解消の開発者判断は「詰まっている点」に残っている(1〜4・7・8・11)
 
 ### E-18 / C-2・C-3・C-6 再設計の反映(2026-07-27)
@@ -784,6 +784,7 @@ TS-02 から継続で未解決のもの:
 - 独立完了レビューは初回`PARTIAL / CHANGES_REQUESTED`。Docker runtimeに新規依存`packages/rules/dist`が欠ける配布物不備、CIが500/600msを許す時間不変条件の緩和、公開`cardsMoved`後の既知カードzoneをworkerが復元しない権威差の3件を検出した
 - Dockerfileへrules成果物を追加し、runtime workspace成果物の列挙テストを追加。CI workerは`hardMs=150`、1手wall上限200msへ締めた。レビュアーのNode 26実測はnew-only/all-rules × 5 seed × 200 games = 2,000 games、83,698 AI着手、201.01秒、最大59.51ms、fallback/違反0
 - worker決定化は`played`・`fieldCleared`・公開`cardsMoved`を順に反映し、既知カードを現在のhand/field/discardへ固定する。非公開hand-to-hand移動では既知性を解除し、最終hand/discard数と52枚保存が合わなければ合法heuristic fallbackへ落とす。public→hand→publicの両方向を強さ順の観測差で回帰化した
+- 修正コミット`02c15bd`の独立 GPT-5.6 Sol 再レビューは、要件 **PASS** / 品質 **APPROVED** / Critical・Important・Minorなし。focused 3 files / 18 tests、AI/simulation typecheck、lint/format、差分検査も再実行された
 
 #### 残る外部・後続ゲート
 
@@ -805,6 +806,29 @@ TS-02 から継続で未解決のもの:
 | E7-CX05-P1-2 | PR番号とmerge SHAはデプロイ先DBに既存の`pipeline_jobs`を正とする | 人間承認フローで`pr_open → merged`時に両値が記録され、proposalIdでコードmetaと結合できる | 欠落時fail-closed、再起動・旧DB migration、トランザクション障害注入を網羅 |
 | E7-CX05-P1-3 | RP-03通知はE05確定案Aどおりproposalの状態変更時刻を用いる。release logは運営観測用で、別outboxは作らない | E05 §3.3は一覧内バッジ+メニューバッジを推奨・確定 | RP-03画面/APIとの結合はE5残作業で検証 |
 | E7-CX05-P1-4 | 実CD・実ルールPR・「開発者操作3点」の実績はローカルFakeでは代替しない | CX-05受け入れ条件が実績を要求し、GitHub/Fly/開発者承認が必要 | DP-02完了後の外部受入リハーサルとして記録 |
+
+#### CX-05 プロセス1レビュー
+
+- 独立 GPT-5.6 Sol の方向性判定は **GO_WITH_FIXES**。Criticalなし、Important 3件をプロセス2の先頭へ採用した
+- 初回公開前の`disabled/pending_enable`へ一般disableを許すと、後のenableがruleだけをactiveにしてproposal/jobを未完了に残す問題を再現。pendingへの一般disableを409相当で拒否し、初回公開か再enableかはproposal/jobの組状態で判定する方針へ変更した
+- 恒久revert済みの同一versionを旧デプロイが再登録・再enableできる問題を再現。enableと対局ロードはcurrent・未revert・version・contract・PR・merge SHA・bundle hashの完全一致を必須にした
+- `pipeline_jobs`だけをmerge provenanceの正とした仮定 E7-CX05-P1-2 は**変更**。PR作成時head SHAとGitHubの実merge commitを分離保存し、共有skillが同じレビュー・マージ操作内でGitHubを照合して`pr_open → merged`を記録する。デプロイ成果物の実bytes SHA-256は`rule_versions.bundle_hash`へ固定する
+- Minor 2件も採用。同期結果はtransaction commit後にだけ成功配列へ追加し、release後の運用ログ失敗は既にcommit済みのHTTP成功を500へ変えない
+
+#### CX-05 プロセス2実装
+
+- `pipeline_jobs.merge_sha`を加算migrationで追加。`head_sha`はレビュー済みPR head、`merge_sha`はGitHubの`mergeCommit.oid`として分離した。`implement:merged`はPRの`MERGED`状態・`mergedAt`・head一致・merge commit形式を検証し、記録済み時もGitHubと再照合して冪等に終了する
+- 実装skillはgreen確認後に開発者へレビュー・マージを依頼し、同じ対話内で`implement:merged`を実行するよう更新した。自動mergeはせず、開発者操作3点の数え方も維持する
+- `rule_versions.bundle_hash`を加算migrationで追加。同一versionのupsertによるrevert解除を廃止し、既存版のprovenance変更を拒否する。旧DBのcurrent/未revert版だけは、既存PR・merge SHA・contractが完全一致するときに限ってbundle hashを1回補完する
+- 起動時同期、enable、対局開始時ロードの3境界すべてで、コードmeta/slug、current未revert版、version/contract、PR/merge SHA、実bundle hashを照合する。不一致ruleだけを`load_failure`として外し、正常ruleの同期・対局は継続する
+- pending同期→再起動→初回enable→再起動、pendingへのdisable拒否、恒久revert後の旧image、同一version bundle差替え、部分transaction失敗、ログcallback失敗、複数ruleの部分失敗をファイルSQLiteで回帰化した
+- 実ruleディレクトリfixtureで静的registry generatorを実行するテストを追加し、そこでディレクトリからslugを落とす正規表現の既存escape誤りも検出・修正した。複数roomが同じ有効chainを固定することも検証した
+- focused検証は6 files / 41 tests、server/pipeline typecheck、変更ファイルlint、`git diff --check`が成功。全体`CI=true pnpm verify`もformat/lint/design/typecheck、64 files / 431 tests、全package buildまで成功した。初回全体実行ではAI simulationが並列負荷下で41手中1回だけ150ms fallbackとなったが、単独5連続と全体再実行は成功しており、GitHub上の長時間性能ゲートで継続観測する
+
+#### CX-05の残る外部・後続ゲート
+
+- 実GitHub PR・main CD・本番SQLiteを用いた「skill起動・レビューとマージ・有効化」の3操作リハーサルは、実PRを作る明示許可と本番受入時に行う
+- RP-03の`proposals_seen_at`、mine/seen API、一覧・メニューバッジはE5側の残作業としてCX-05のrelease時刻へ接続する
 
 ### E2で見つけた設計書の不整合
 

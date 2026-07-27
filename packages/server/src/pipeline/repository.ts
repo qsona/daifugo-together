@@ -84,6 +84,7 @@ export interface PipelineJob {
   branch: string | null;
   prNumber: number | null;
   headSha: string | null;
+  mergeSha: string | null;
   scaffoldSha: string | null;
   promptVersion: string | null;
   errorCode: string | null;
@@ -175,6 +176,7 @@ type PipelineJobRow = {
   branch: string | null;
   pr_number: number | null;
   head_sha: string | null;
+  merge_sha: string | null;
   scaffold_sha: string | null;
   prompt_version: string | null;
   error_code: string | null;
@@ -225,6 +227,7 @@ function storedJob(row: PipelineJobRow): PipelineJob {
     branch: row.branch,
     prNumber: row.pr_number,
     headSha: row.head_sha,
+    mergeSha: row.merge_sha,
     scaffoldSha: row.scaffold_sha,
     promptVersion: row.prompt_version,
     errorCode: row.error_code,
@@ -301,6 +304,7 @@ export class PipelineRepository {
         branch TEXT,
         pr_number INTEGER,
         head_sha TEXT,
+        merge_sha TEXT,
         scaffold_sha TEXT,
         prompt_version TEXT,
         error_code TEXT,
@@ -321,6 +325,12 @@ export class PipelineRepository {
     }
     if (!judgementColumns.some(({ name }) => name === 'run_id')) {
       this.#sqlite.exec('ALTER TABLE judgements ADD COLUMN run_id TEXT');
+    }
+    const pipelineJobColumns = this.#sqlite
+      .prepare("PRAGMA table_info('pipeline_jobs')")
+      .all() as Array<{ name: string }>;
+    if (!pipelineJobColumns.some(({ name }) => name === 'merge_sha')) {
+      this.#sqlite.exec('ALTER TABLE pipeline_jobs ADD COLUMN merge_sha TEXT');
     }
     this.#sqlite.exec(`
       DROP INDEX IF EXISTS idx_judgements_ai_source_check;
@@ -622,7 +632,7 @@ export class PipelineRepository {
          JOIN proposal_checks pc ON pc.proposal_id = pj.proposal_id
          JOIN judgements j ON j.proposal_id = pj.proposal_id
          WHERE pj.id = ?
-           AND pj.phase IN ('queued', 'implementing', 'pr_open')
+           AND pj.phase IN ('queued', 'implementing', 'pr_open', 'merged', 'done')
            AND pc.final_verdict = 'pass'
            AND pc.id = (
              SELECT MAX(pc2.id) FROM proposal_checks pc2
@@ -670,6 +680,7 @@ export class PipelineRepository {
       branch?: string;
       prNumber?: number;
       headSha?: string;
+      mergeSha?: string;
       scaffoldSha?: string;
       promptVersion?: string;
       errorCode?: string;
@@ -683,6 +694,7 @@ export class PipelineRepository {
          SET phase = ?, branch = COALESCE(?, branch),
              pr_number = COALESCE(?, pr_number),
              head_sha = COALESCE(?, head_sha),
+             merge_sha = COALESCE(?, merge_sha),
              scaffold_sha = COALESCE(?, scaffold_sha),
              prompt_version = COALESCE(?, prompt_version),
              error_code = ?, error_note = ?, updated_at = ?
@@ -693,6 +705,7 @@ export class PipelineRepository {
         patch.branch ?? null,
         patch.prNumber ?? null,
         patch.headSha ?? null,
+        patch.mergeSha ?? null,
         patch.scaffoldSha ?? null,
         patch.promptVersion ?? null,
         patch.errorCode ?? null,
@@ -714,7 +727,7 @@ export class PipelineRepository {
       .prepare(
         `UPDATE pipeline_jobs
          SET phase = 'implementing', attempt = attempt + 1,
-             branch = NULL, pr_number = NULL, head_sha = NULL,
+             branch = NULL, pr_number = NULL, head_sha = NULL, merge_sha = NULL,
              scaffold_sha = NULL, prompt_version = NULL,
              error_code = NULL, error_note = NULL, updated_at = ?
          WHERE id = ? AND phase = ? AND attempt = ? AND attempt < 2`,

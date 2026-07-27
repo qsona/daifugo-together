@@ -94,12 +94,14 @@ export class PipelineJobService {
     }
     const branch = text(value?.branch, 200);
     const headSha = gitSha(value?.headSha);
+    const mergeSha = gitSha(value?.mergeSha);
     const scaffoldSha = gitSha(value?.scaffoldSha);
     const promptVersion = text(value?.promptVersion, 100);
     const prNumber = value?.prNumber;
     if (
       (value?.branch !== undefined && branch === undefined) ||
       (value?.headSha !== undefined && headSha === undefined) ||
+      (value?.mergeSha !== undefined && mergeSha === undefined) ||
       (value?.scaffoldSha !== undefined && scaffoldSha === undefined) ||
       (value?.promptVersion !== undefined && promptVersion === undefined) ||
       (prNumber !== undefined &&
@@ -128,7 +130,11 @@ export class PipelineJobService {
           current.scaffoldSha === null ||
           current.promptVersion === null)) ||
       (from === 'implementing' && to !== 'implementing' && to !== 'pr_open') ||
-      (from === 'pr_open' && (to !== 'merged' || headSha === undefined)) ||
+      (from === 'pr_open' &&
+        (to !== 'merged' ||
+          mergeSha === undefined ||
+          current.headSha === null ||
+          current.prNumber === null)) ||
       (from === 'merged' && to !== 'done')
     ) {
       return { status: 'invalid', error: 'missing_job_transition_fields' };
@@ -140,6 +146,7 @@ export class PipelineJobService {
       {
         ...(branch ? { branch } : {}),
         ...(headSha ? { headSha } : {}),
+        ...(mergeSha ? { mergeSha } : {}),
         ...(scaffoldSha ? { scaffoldSha } : {}),
         ...(promptVersion ? { promptVersion } : {}),
         ...(typeof prNumber === 'number' ? { prNumber } : {}),

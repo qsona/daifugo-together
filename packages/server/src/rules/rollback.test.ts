@@ -63,6 +63,7 @@ function seed(path: string): SqlitePersistence {
     contractVersion: 1,
     prNumber: 42,
     mergeSha: 'a'.repeat(40),
+    bundleHash: 'b'.repeat(64),
     now: 1_001,
   });
   return persistence;
@@ -103,19 +104,25 @@ describe('CX-04 permanent rollback reconciliation', () => {
     });
   });
 
-  it('同じversionの起動時同期を再実行してもversion行を重複させない', () => {
+  it('同じversionの再登録を拒否して既存provenanceを変更しない', () => {
     const persistence = seed(databasePath());
-    persistence.rules.registerVersion({
-      ruleId: 'r0001-rollback',
-      version: 1,
-      contractVersion: 1,
-      prNumber: 42,
-      mergeSha: 'a'.repeat(40),
-      now: 2_000,
-    });
+    expect(() =>
+      persistence.rules.registerVersion({
+        ruleId: 'r0001-rollback',
+        version: 1,
+        contractVersion: 1,
+        prNumber: 99,
+        mergeSha: 'c'.repeat(40),
+        bundleHash: 'd'.repeat(64),
+        now: 2_000,
+      }),
+    ).toThrow();
     expect(persistence.rules.versions('r0001-rollback')).toHaveLength(1);
     expect(persistence.rules.versions('r0001-rollback')[0]).toMatchObject({
       version: 1,
+      prNumber: 42,
+      mergeSha: 'a'.repeat(40),
+      bundleHash: 'b'.repeat(64),
       isCurrent: true,
       revertedAt: null,
     });

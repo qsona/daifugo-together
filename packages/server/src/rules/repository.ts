@@ -61,6 +61,7 @@ export interface StoredRuleVersion {
   contractVersion: number;
   prNumber: number | null;
   mergeSha: string | null;
+  bundleHash: string | null;
   isCurrent: boolean;
   revertedAt: number | null;
   createdAt: number;
@@ -104,6 +105,7 @@ type RuleVersionRow = {
   contract_version: number;
   pr_number: number | null;
   merge_sha: string | null;
+  bundle_hash: string | null;
   is_current: number;
   reverted_at: number | null;
   created_at: number;
@@ -144,6 +146,7 @@ function storedVersion(row: RuleVersionRow): StoredRuleVersion {
     contractVersion: row.contract_version,
     prNumber: row.pr_number,
     mergeSha: row.merge_sha,
+    bundleHash: row.bundle_hash,
     isCurrent: row.is_current === 1,
     revertedAt: row.reverted_at,
     createdAt: row.created_at,
@@ -189,6 +192,7 @@ export class RuleRepository {
         contract_version INTEGER NOT NULL,
         pr_number INTEGER,
         merge_sha TEXT,
+        bundle_hash TEXT,
         is_current INTEGER NOT NULL DEFAULT 1 CHECK (is_current IN (0, 1)),
         reverted_at INTEGER,
         created_at INTEGER NOT NULL,
@@ -212,6 +216,14 @@ export class RuleRepository {
       CREATE INDEX IF NOT EXISTS idx_rule_incidents_window
         ON rule_incidents(rule_id, created_at, set_id);
     `);
+    const versionColumns = this.#sqlite
+      .prepare("PRAGMA table_info('rule_versions')")
+      .all() as Array<{ name: string }>;
+    if (!versionColumns.some(({ name }) => name === 'bundle_hash')) {
+      this.#sqlite.exec(
+        'ALTER TABLE rule_versions ADD COLUMN bundle_hash TEXT',
+      );
+    }
   }
 
   transaction<T>(operation: () => T): T {
@@ -344,6 +356,7 @@ export class RuleRepository {
     contractVersion: number;
     prNumber: number | null;
     mergeSha: string | null;
+    bundleHash: string;
     now: number;
   }): StoredRuleVersion {
     return this.transaction(() => {
@@ -357,14 +370,8 @@ export class RuleRepository {
         .prepare(
           `INSERT INTO rule_versions (
              rule_id, version, contract_version, pr_number, merge_sha,
-             is_current, created_at
-           ) VALUES (?, ?, ?, ?, ?, 1, ?)
-           ON CONFLICT(rule_id, version) DO UPDATE SET
-             contract_version = excluded.contract_version,
-             pr_number = excluded.pr_number,
-             merge_sha = excluded.merge_sha,
-             is_current = 1,
-             reverted_at = NULL`,
+             bundle_hash, is_current, created_at
+           ) VALUES (?, ?, ?, ?, ?, ?, 1, ?)`,
         )
         .run(
           input.ruleId,
@@ -372,6 +379,7 @@ export class RuleRepository {
           input.contractVersion,
           input.prNumber,
           input.mergeSha,
+          input.bundleHash,
           input.now,
         );
       return this.versions(input.ruleId).find(
@@ -389,6 +397,43 @@ export class RuleRepository {
         )
         .all(ruleId) as RuleVersionRow[]
     ).map(storedVersion);
+  }
+
+  currentVersion(ruleId: string): StoredRuleVersion | null {
+    const row = this.#sqlite
+      .prepare(
+        `SELECT * FROM rule_versions
+         WHERE rule_id = ? AND is_current = 1 AND reverted_at IS NULL`,
+      )
+      .get(ruleId) as RuleVersionRow | undefined;
+    return row ? storedVersion(row) : null;
+  }
+
+  attestLegacyBundle(input: {
+    ruleId: string;
+    version: number;
+    contractVersion: number;
+    prNumber: number;
+    mergeSha: string;
+    bundleHash: string;
+  }): StoredRuleVersion | null {
+    const result = this.#sqlite
+      .prepare(
+        `UPDATE rule_versions
+         SET bundle_hash = ?
+         WHERE rule_id = ? AND version = ? AND contract_version = ?
+           AND pr_number = ? AND merge_sha = ?
+           AND is_current = 1 AND reverted_at IS NULL AND bundle_hash IS NULL`,
+      )
+      .run(
+        input.bundleHash,
+        input.ruleId,
+        input.version,
+        input.contractVersion,
+        input.prNumber,
+        input.mergeSha,
+      );
+    return result.changes === 1 ? this.currentVersion(input.ruleId) : null;
   }
 
   markMissingCodeReverted(

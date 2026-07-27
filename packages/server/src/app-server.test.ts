@@ -260,6 +260,7 @@ describe('production app server', () => {
         branch: 'rule/r0001-yagiri',
         prNumber: null,
         headSha: null,
+        mergeSha: null,
         scaffoldSha: null,
         promptVersion: 'cx02-v3',
         errorCode: null,

@@ -16,6 +16,7 @@ const item = {
     branch: 'rule/r0001-yagiri',
     prNumber: 42,
     headSha: 'b'.repeat(40),
+    mergeSha: null,
     scaffoldSha: 'a'.repeat(40),
     promptVersion: 'cx02-v3',
     errorCode: null,

@@ -9,6 +9,7 @@ import type { PipelineJobPort } from './implementation-driver.js';
 import {
   prepareImplementationRetry,
   prepareImplementationWorkspace,
+  recordMergedImplementation,
   removeCompletedWorkspace,
   runTransient,
   verifyGitHubPublisher,
@@ -54,6 +55,7 @@ function item(
       branch: 'rule/r0001-yagiri',
       prNumber: null,
       headSha: null,
+      mergeSha: null,
       scaffoldSha: 'a'.repeat(40),
       promptVersion: 'cx02-v3',
       errorCode: null,
@@ -123,6 +125,7 @@ function retryJobs(
           branch: null,
           prNumber: null,
           headSha: null,
+          mergeSha: null,
           scaffoldSha: null,
           promptVersion: null,
         },
@@ -181,6 +184,119 @@ describe('implementation CLI workflow', () => {
     ).resolves.toMatchObject({ exitCode: 0 });
     expect(calls).toBe(3);
     expect(waits).toEqual([100, 200]);
+  });
+
+  it('GitHubのreview済みheadとmerge commitを照合してmergedを記録する', async () => {
+    const current = item('pr_open', {
+      prNumber: 42,
+      headSha: 'b'.repeat(40),
+    });
+    const updates: unknown[] = [];
+    const jobs: Pick<PipelineJobPort, 'resume' | 'update'> = {
+      resume: () => current,
+      update: (_jobId, input) => {
+        updates.push(input);
+        return {
+          status: 'updated',
+          job: {
+            ...current.job,
+            phase: 'merged',
+            mergeSha: 'c'.repeat(40),
+          },
+        };
+      },
+    };
+    const process = processPort(async () =>
+      result(0, {
+        stdout: JSON.stringify({
+          state: 'MERGED',
+          mergedAt: '2026-07-27T00:00:00Z',
+          headRefOid: 'b'.repeat(40),
+          mergeCommit: { oid: 'c'.repeat(40) },
+        }),
+      }),
+    );
+
+    await expect(
+      recordMergedImplementation({
+        jobs,
+        process,
+        cwd: '/repo',
+        jobId: 1,
+      }),
+    ).resolves.toMatchObject({
+      status: 'recorded',
+      job: { phase: 'merged', mergeSha: 'c'.repeat(40) },
+    });
+    expect(updates).toEqual([
+      {
+        from: 'pr_open',
+        to: 'merged',
+        mergeSha: 'c'.repeat(40),
+      },
+    ]);
+    expect(process.inputs[0]).toMatchObject({
+      command: 'gh',
+      args: [
+        'pr',
+        'view',
+        '42',
+        '--json',
+        'state,mergedAt,mergeCommit,headRefOid',
+      ],
+    });
+  });
+
+  it('異なるPR headを拒否し、記録済みmergeは副作用なく再検証する', async () => {
+    const current = item('pr_open', {
+      prNumber: 42,
+      headSha: 'b'.repeat(40),
+    });
+    const mismatched = processPort(async () =>
+      result(0, {
+        stdout: JSON.stringify({
+          state: 'MERGED',
+          mergedAt: '2026-07-27T00:00:00Z',
+          headRefOid: 'd'.repeat(40),
+          mergeCommit: { oid: 'c'.repeat(40) },
+        }),
+      }),
+    );
+    const update = vi.fn();
+    await expect(
+      recordMergedImplementation({
+        jobs: { resume: () => current, update },
+        process: mismatched,
+        cwd: '/repo',
+        jobId: 1,
+      }),
+    ).rejects.toThrow('reviewed job head');
+    expect(update).not.toHaveBeenCalled();
+
+    const recorded = item('merged', {
+      prNumber: 42,
+      headSha: 'b'.repeat(40),
+      mergeSha: 'c'.repeat(40),
+    });
+    const matching = processPort(async () =>
+      result(0, {
+        stdout: JSON.stringify({
+          state: 'MERGED',
+          mergedAt: '2026-07-27T00:00:00Z',
+          headRefOid: 'b'.repeat(40),
+          mergeCommit: { oid: 'c'.repeat(40) },
+        }),
+      }),
+    );
+    await expect(
+      recordMergedImplementation({
+        jobs: { resume: () => recorded, update },
+        process: matching,
+        cwd: '/repo',
+        jobId: 1,
+      }),
+    ).resolves.toMatchObject({ status: 'already_recorded' });
+    expect(update).not.toHaveBeenCalled();
   });
 
   it('pr_open attempt 1を旧PR close、旧branch delete後にattempt 2へ進める', async () => {

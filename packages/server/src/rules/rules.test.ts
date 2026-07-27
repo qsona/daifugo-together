@@ -36,7 +36,7 @@ function codeRule(
       },
       hooks: {},
     },
-    bundleHash: `${ruleId}-bundle`,
+    bundleHash: 'b'.repeat(64),
     moduleUrl: `file:///rules/${ruleId}.js`,
     slug: ruleId.replace(/^r\d{4,}-/u, ''),
     version: 1,
@@ -110,14 +110,14 @@ describe('CX-04 rule registry', () => {
       {
         ruleId: 'r0001-a',
         moduleUrl: 'file:///rules/r0001-a.js',
-        bundleHash: 'r0001-a-bundle',
+        bundleHash: 'b'.repeat(64),
         contractVersion: 1,
         meta: codeRule('r0001-a', 'ルールA').module.meta,
       },
       {
         ruleId: 'r0002-b',
         moduleUrl: 'file:///rules/r0002-b.js',
-        bundleHash: 'r0002-b-bundle',
+        bundleHash: 'b'.repeat(64),
         contractVersion: 1,
         meta: codeRule('r0002-b', 'ルールB').module.meta,
       },
@@ -189,6 +189,51 @@ describe('CX-04 rule registry', () => {
     expect(started?.state.fixedRules?.map(({ ruleId }) => ruleId)).toEqual([
       'r0002-b',
     ]);
+  });
+
+  it('同時期に開始する複数roomへ同じ有効rule chainを配る', () => {
+    const { persistence, register } = setup();
+    register({ id: 'r0001-a', slug: 'a', name: 'ルールA' });
+    register({ id: 'r0002-b', slug: 'b', name: 'ルールB' });
+    const service = new RuleRegistryService(
+      persistence.rules,
+      [codeRule('r0002-b', 'ルールB'), codeRule('r0001-a', 'ルールA')],
+      { now: () => 2_000 },
+    );
+    let roomSequence = 0;
+    let memberSequence = 0;
+    let randomSequence = 0;
+    const rooms = new RoomManager({
+      availableRules: () => service.availableRules(),
+      createRoomId: () => `shared-rule-room-${String(++roomSequence)}`,
+      createMemberId: () => `shared-rule-member-${String(++memberSequence)}`,
+      randomIndex: (size) => randomSequence++ % size,
+      reducer: { random: () => 0.999_999 },
+    });
+    const first = rooms.create({ userId: 'host-a', displayName: 'A' });
+    const second = rooms.create({ userId: 'host-b', displayName: 'B' });
+    expect(first.ok && second.ok).toBe(true);
+    if (!first.ok || !second.ok) return;
+
+    const firstStarted = rooms.apply(first.value.room.roomId, {
+      type: 'start',
+      memberId: first.value.member.memberId,
+      now: 3_000,
+      setSeed: 'shared-rules-a',
+    });
+    const secondStarted = rooms.apply(second.value.room.roomId, {
+      type: 'start',
+      memberId: second.value.member.memberId,
+      now: 3_001,
+      setSeed: 'shared-rules-b',
+    });
+
+    expect(firstStarted?.state.fixedRules).toEqual(
+      secondStarted?.state.fixedRules,
+    );
+    expect(firstStarted?.state.fixedRules?.map(({ ruleId }) => ruleId)).toEqual(
+      ['r0001-a', 'r0002-b'],
+    );
   });
 
   it('不正reason・未知rule・removed ruleを状態別に拒否する', () => {
@@ -650,7 +695,11 @@ describe('CX-05 rule release', () => {
       job.id,
       'queued',
       'merged',
-      { prNumber: 42, headSha: 'a'.repeat(40) },
+      {
+        prNumber: 42,
+        headSha: 'a'.repeat(40),
+        mergeSha: 'c'.repeat(40),
+      },
       1_300,
     );
 
@@ -682,7 +731,8 @@ describe('CX-05 rule release', () => {
         ruleId: 'r0001-a',
         version: 1,
         prNumber: 42,
-        mergeSha: 'a'.repeat(40),
+        mergeSha: 'c'.repeat(40),
+        bundleHash: 'b'.repeat(64),
         isCurrent: true,
       },
     ]);

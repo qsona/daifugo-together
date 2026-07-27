@@ -1,8 +1,15 @@
 import { mkdir, readdir, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const packageRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
+const rootArgument = process.argv.indexOf('--root');
+const packageRoot =
+  rootArgument === -1
+    ? join(dirname(fileURLToPath(import.meta.url)), '..')
+    : resolve(process.argv[rootArgument + 1] ?? '');
+if (rootArgument !== -1 && !process.argv[rootArgument + 1]) {
+  throw new Error('--root requires a package directory');
+}
 const generatedDir = join(packageRoot, 'generated');
 const ruleDirectory = /^r\d{4,}-[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const directories = (await readdir(packageRoot, { withFileTypes: true }))
@@ -15,7 +22,7 @@ const imports = directories.map(
 );
 const registrations = directories.map(
   (directory, index) =>
-    `  { module: rule${String(index)}, moduleUrl: new URL('../${directory}/rule.js', import.meta.url).href, slug: '${directory.replace(/^r\\d{4,}-/u, '')}', version: 1 },`,
+    `  { module: rule${String(index)}, moduleUrl: new URL('../${directory}/rule.js', import.meta.url).href, slug: '${directory.replace(/^r\d{4,}-/u, '')}', version: 1 },`,
 );
 const source = `${imports.join('\n')}
 

@@ -78,6 +78,84 @@ export async function verifyGitHubPublisher(options: {
   return login;
 }
 
+export async function recordMergedImplementation(options: {
+  jobs: Pick<PipelineJobPort, 'resume' | 'update'>;
+  process: ProcessPort;
+  cwd: string;
+  jobId: number;
+  wait?: (delayMs: number) => Promise<void>;
+}): Promise<{
+  status: 'recorded' | 'already_recorded';
+  job: QueuedImplementation['job'];
+}> {
+  const item = await options.jobs.resume(options.jobId);
+  if (!item) throw new Error('merge job was not found');
+  const job = item.job;
+  if (
+    (job.phase !== 'pr_open' &&
+      job.phase !== 'merged' &&
+      job.phase !== 'done') ||
+    job.prNumber === null ||
+    job.headSha === null
+  ) {
+    throw new Error('job is not awaiting or recording a PR merge');
+  }
+  const viewed = await runTransient(
+    options.process,
+    {
+      command: 'gh',
+      args: [
+        'pr',
+        'view',
+        String(job.prNumber),
+        '--json',
+        'state,mergedAt,mergeCommit,headRefOid',
+      ],
+      cwd: options.cwd,
+      timeoutMs: 60_000,
+    },
+    {
+      ...(options.wait ? { wait: options.wait } : {}),
+    },
+  );
+  if (failed(viewed)) {
+    throw new Error(viewed.stderr.trim() || 'could not inspect merged PR');
+  }
+  const pr = JSON.parse(viewed.stdout) as {
+    state?: string;
+    mergedAt?: string | null;
+    headRefOid?: string;
+    mergeCommit?: { oid?: string } | null;
+  };
+  const mergeSha = pr.mergeCommit?.oid;
+  if (
+    pr.state !== 'MERGED' ||
+    typeof pr.mergedAt !== 'string' ||
+    !mergeSha ||
+    !/^[0-9a-f]{40}$/u.test(mergeSha)
+  ) {
+    throw new Error('PR has not been merged with a verifiable merge commit');
+  }
+  if (pr.headRefOid !== job.headSha) {
+    throw new Error('merged PR head does not match the reviewed job head');
+  }
+  if (job.phase === 'merged' || job.phase === 'done') {
+    if (job.mergeSha !== mergeSha) {
+      throw new Error('recorded merge commit does not match GitHub');
+    }
+    return { status: 'already_recorded', job };
+  }
+  const updated = await options.jobs.update(job.id, {
+    from: 'pr_open',
+    to: 'merged',
+    mergeSha,
+  });
+  if (updated.status !== 'updated') {
+    throw new Error(`merge transition failed: ${updated.status}`);
+  }
+  return { status: 'recorded', job: updated.job };
+}
+
 export async function prepareImplementationRetry(options: {
   jobs: Pick<PipelineJobPort, 'resume' | 'retry'>;
   process: ProcessPort;
