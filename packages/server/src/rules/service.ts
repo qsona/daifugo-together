@@ -10,6 +10,14 @@ import {
 import type { AiRuleBundleRef } from '@daifugo/ai';
 
 import type {
+  PipelineJob,
+  PipelineRepository,
+} from '../pipeline/repository.js';
+import type {
+  ProposalRepository,
+  StoredProposal,
+} from '../proposal/repository.js';
+import type {
   RuleDisabledReason,
   RuleIncidentType,
   RuleRepository,
@@ -28,6 +36,8 @@ export interface CodeRuleRegistration {
   module: RuleModule;
   bundleHash: string;
   moduleUrl: string;
+  slug: string;
+  version: number;
 }
 
 export type RuleControlResult =
@@ -42,7 +52,11 @@ export type RuleControlResult =
   | { status: 'not_found' }
   | {
       status: 'conflict';
-      error: 'rule_removed' | 'rule_unavailable' | 'status_changed';
+      error:
+        | 'rule_removed'
+        | 'rule_unavailable'
+        | 'release_unavailable'
+        | 'status_changed';
     }
   | { status: 'invalid'; error: 'invalid_reason' };
 
@@ -51,6 +65,29 @@ export interface RecordedRuleIncident {
   inserted: boolean;
   autoDisabled: StoredRule | null;
 }
+
+export interface RuleRegistrySyncFailure {
+  ruleId: string;
+  detail: string;
+}
+
+export interface RuleRegistrySyncResult {
+  registered: StoredRule[];
+  versions: StoredRuleVersion[];
+  reverted: StoredRule[];
+  failures: RuleRegistrySyncFailure[];
+}
+
+type ProposalReleaseRepository = Pick<
+  ProposalRepository,
+  'findById' | 'transitionProposal'
+>;
+type PipelineReleaseRepository = Pick<
+  PipelineRepository,
+  'jobForProposal' | 'transitionJob'
+>;
+
+class ReleaseConflict extends Error {}
 
 function disabledReason(value: unknown): ManualDisabledReason | null {
   if (
@@ -101,6 +138,9 @@ export class RuleRegistryService {
     ((rule: StoredRule, incident: StoredRuleIncident) => void) | undefined;
   readonly #onLoadFailure:
     ((rule: StoredRule, incident: StoredRuleIncident) => void) | undefined;
+  readonly #onReleased: ((rule: StoredRule) => void) | undefined;
+  readonly #proposals: ProposalReleaseRepository | undefined;
+  readonly #pipeline: PipelineReleaseRepository | undefined;
   readonly #ports = new Map<
     string,
     { port: RuleChainPort; disabled: Set<string> }
@@ -113,6 +153,9 @@ export class RuleRegistryService {
       now?: () => number;
       onAutoDisable?: (rule: StoredRule, incident: StoredRuleIncident) => void;
       onLoadFailure?: (rule: StoredRule, incident: StoredRuleIncident) => void;
+      onReleased?: (rule: StoredRule) => void;
+      proposals?: ProposalReleaseRepository;
+      pipeline?: PipelineReleaseRepository;
     } = {},
   ) {
     this.#repository = repository;
@@ -125,6 +168,81 @@ export class RuleRegistryService {
     this.#now = options.now ?? Date.now;
     this.#onAutoDisable = options.onAutoDisable;
     this.#onLoadFailure = options.onLoadFailure;
+    this.#onReleased = options.onReleased;
+    this.#proposals = options.proposals;
+    this.#pipeline = options.pipeline;
+  }
+
+  synchronizeCodeRegistry(): RuleRegistrySyncResult {
+    const registered: StoredRule[] = [];
+    const versions: StoredRuleVersion[] = [];
+    const failures: RuleRegistrySyncFailure[] = [];
+    const codeRuleIds = new Set(this.#codeById.keys());
+    for (const [ruleId, registrations] of this.#codeById) {
+      if (registrations.length !== 1) {
+        failures.push({ ruleId, detail: 'duplicate code modules' });
+        continue;
+      }
+      const registration = registrations[0]!;
+      const meta = registration.module.meta;
+      const source = this.#releaseSource(meta.proposalId);
+      const sourceIssue = this.#releaseSourceIssue(registration, source);
+      if (sourceIssue) {
+        failures.push({ ruleId, detail: sourceIssue });
+        continue;
+      }
+      const now = this.#now();
+      try {
+        this.#repository.transaction(() => {
+          let rule = this.#repository.get(ruleId);
+          if (!rule) {
+            rule = this.#repository.register({
+              id: ruleId,
+              slug: registration.slug,
+              name: meta.name,
+              description: meta.description,
+              kind: meta.kind,
+              prefecture: meta.prefecture ?? null,
+              proposalId: meta.proposalId,
+              status: 'disabled',
+              disabledReason: 'pending_enable',
+              now,
+            });
+            registered.push(rule);
+          }
+          if (
+            !this.#repository
+              .versions(ruleId)
+              .some(({ version }) => version === registration.version)
+          ) {
+            versions.push(
+              this.#repository.registerVersion({
+                ruleId,
+                version: registration.version,
+                contractVersion: meta.contractVersion,
+                prNumber: source!.job.prNumber,
+                mergeSha: source!.job.headSha,
+                now,
+              }),
+            );
+          }
+        });
+      } catch (error) {
+        failures.push({
+          ruleId,
+          detail: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+    return {
+      registered,
+      versions,
+      reverted: this.#repository.markMissingCodeReverted(
+        codeRuleIds,
+        this.#now(),
+      ),
+      failures,
+    };
   }
 
   availableRules(setId?: string): RuleChainEntry[] {
@@ -244,16 +362,35 @@ export class RuleRegistryService {
     if (existing.status === 'active') {
       return { status: 'unchanged', rule: existing };
     }
-    const transition = this.#repository.transition({
-      ruleId,
-      expectedStatuses: ['disabled'],
-      nextStatus: 'active',
-      disabledReason: null,
-      now: this.#now(),
-    });
-    return transition.changed && transition.rule
-      ? { status: 'updated', rule: transition.rule }
-      : { status: 'conflict', error: 'status_changed' };
+    const now = this.#now();
+    try {
+      const result = this.#repository.transaction(() => {
+        if (existing.disabledReason === 'pending_enable') {
+          this.#releaseProposal(existing, now);
+        }
+        const transition = this.#repository.transition({
+          ruleId,
+          expectedStatuses: ['disabled'],
+          nextStatus: 'active',
+          disabledReason: null,
+          now,
+        });
+        if (!transition.changed || !transition.rule) {
+          throw new ReleaseConflict('rule status changed');
+        }
+        return { status: 'updated', rule: transition.rule } as const;
+      });
+      if (existing.disabledReason === 'pending_enable') {
+        this.#onReleased?.(result.rule);
+      }
+      return result;
+    } catch (error) {
+      return error instanceof ReleaseConflict
+        ? { status: 'conflict', error: 'release_unavailable' }
+        : (() => {
+            throw error;
+          })();
+    }
   }
 
   recordIncident(input: {
@@ -343,5 +480,87 @@ export class RuleRegistryService {
       new Set(this.#codeById.keys()),
       this.#now(),
     );
+  }
+
+  #releaseSource(
+    proposalId: string,
+  ): { proposal: StoredProposal; job: PipelineJob } | null {
+    const proposal = this.#proposals?.findById(proposalId);
+    const job = this.#pipeline?.jobForProposal(proposalId);
+    return proposal && job ? { proposal, job } : null;
+  }
+
+  #releaseSourceIssue(
+    registration: CodeRuleRegistration,
+    source: { proposal: StoredProposal; job: PipelineJob } | null,
+  ): string | null {
+    const meta = registration.module.meta;
+    if (!source) return 'proposal or pipeline job is missing';
+    if (
+      source.proposal.status !== 'implementing' &&
+      source.proposal.status !== 'released'
+    ) {
+      return `proposal is not releasable: ${source.proposal.status}`;
+    }
+    if (source.job.phase !== 'merged' && source.job.phase !== 'done') {
+      return `pipeline job is not deployed: ${source.job.phase}`;
+    }
+    if (
+      source.job.ruleId !== meta.ruleId ||
+      source.job.slug !== registration.slug ||
+      source.job.proposalId !== meta.proposalId
+    ) {
+      return 'pipeline job does not match code metadata';
+    }
+    if (
+      source.proposal.id !== meta.proposalId ||
+      source.proposal.kind !== meta.kind
+    ) {
+      return 'proposal does not match code metadata';
+    }
+    if (
+      !Number.isSafeInteger(registration.version) ||
+      registration.version < 1
+    ) {
+      return 'invalid rule version';
+    }
+    return null;
+  }
+
+  #releaseProposal(rule: StoredRule, now: number): void {
+    const source = this.#releaseSource(rule.proposalId);
+    if (!source || source.job.ruleId !== rule.id) {
+      throw new ReleaseConflict('release source is unavailable');
+    }
+    if (
+      source.proposal.status === 'released' &&
+      source.proposal.ruleId === rule.id &&
+      source.job.phase === 'done'
+    ) {
+      return;
+    }
+    if (
+      source.proposal.status !== 'implementing' ||
+      source.job.phase !== 'merged'
+    ) {
+      throw new ReleaseConflict('release source is not ready');
+    }
+    const job = this.#pipeline!.transitionJob(
+      source.job.id,
+      'merged',
+      'done',
+      {},
+      now,
+    );
+    const proposal = this.#proposals!.transitionProposal(
+      rule.proposalId,
+      'implementing',
+      'released',
+      { ruleId: rule.id },
+      now,
+    );
+    if (!job || proposal !== 'transitioned') {
+      throw new ReleaseConflict('release transition failed');
+    }
   }
 }

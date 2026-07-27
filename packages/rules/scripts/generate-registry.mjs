@@ -15,7 +15,7 @@ const imports = directories.map(
 );
 const registrations = directories.map(
   (directory, index) =>
-    `  { module: rule${String(index)}, moduleUrl: new URL('../${directory}/rule.js', import.meta.url).href },`,
+    `  { module: rule${String(index)}, moduleUrl: new URL('../${directory}/rule.js', import.meta.url).href, slug: '${directory.replace(/^r\\d{4,}-/u, '')}', version: 1 },`,
 );
 const source = `${imports.join('\n')}
 
@@ -24,6 +24,8 @@ import type { RuleModule } from '@daifugo/core';
 export const generatedRuleLocations: {
   module: RuleModule;
   moduleUrl: string;
+  slug: string;
+  version: number;
 }[] = [
 ${registrations.join('\n')}
 ];

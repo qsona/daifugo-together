@@ -52,6 +52,8 @@ if (adminPipelineToken !== undefined && adminPipelineToken.length < 32) {
 }
 const codeRules = await loadRuleCodeBundles();
 const rules = new RuleRegistryService(persistence.rules, codeRules, {
+  proposals: persistence.proposals,
+  pipeline: persistence.pipeline,
   onAutoDisable: (rule, incident) => {
     writeLog('error', 'rule_auto_disabled', {
       ruleId: rule.id,
@@ -65,9 +67,28 @@ const rules = new RuleRegistryService(persistence.rules, codeRules, {
       detail: incident.detail,
     });
   },
+  onReleased: (rule) => {
+    writeLog('info', 'rule_released', {
+      ruleId: rule.id,
+      proposalId: rule.proposalId,
+    });
+  },
 });
-for (const rule of rules.reconcileRevertedCode()) {
+const registrySync = rules.synchronizeCodeRegistry();
+for (const rule of registrySync.registered) {
+  writeLog('info', 'rule_pending_enable_registered', { ruleId: rule.id });
+}
+for (const version of registrySync.versions) {
+  writeLog('info', 'rule_version_registered', {
+    ruleId: version.ruleId,
+    version: version.version,
+  });
+}
+for (const rule of registrySync.reverted) {
   writeLog('info', 'rule_revert_reconciled', { ruleId: rule.id });
+}
+for (const failure of registrySync.failures) {
+  writeLog('error', 'rule_registry_sync_failed', { ...failure });
 }
 const app = createAppServer({
   webDistDir: resolve(process.env.WEB_DIST_DIR ?? 'packages/web/dist'),

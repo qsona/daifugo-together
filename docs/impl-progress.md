@@ -11,6 +11,7 @@
 - **フェーズ 2 / E7 CX-03 プロセス2完了、外部受入ゲート待ち**: trusted diff-guard、untrusted quality/rule-tests/simulation、ローカルCI監視を実装。独立完了再レビューはコード・自動テスト `PASS` / 品質 `APPROVED` / Critical・Importantなし。実repositoryのbranch protection/ruleset登録はworkflowのmain反映後
 - **フェーズ 2 / E7 CX-04 プロセス2コード完了**: 独立再レビューはコード・自動テスト範囲 `PASS` / 品質 `APPROVED` / Critical・Importantなし。実CD/revertリハーサル、通知経路、CX-05完全registry接続は外部・後続ゲート
 - **フェーズ 2 / E2 AI-02 プロセス2実装完了・独立レビュー待ち**: workerへ権威runtime snapshotと実SHA-256検証済みbundleを渡し、E1 simulation generatorをworker AI 4席で駆動。CX-03 CLIのnew-only/all-rules検査をAI版へ切替済み。全体`pnpm verify`は61 files / 417 testsを含め成功
+- **フェーズ 2 / E7 CX-05 プロセス1実装中**: 静的registryの起動時同期、`pending_enable`登録、管理API有効化時のproposal `released`・pipeline job `done`との原子的遷移、次セットでの実発動を縦に接続
 - E1〜E3 の実装記録は本書末尾の「並行進行」節、E13 は「E13」節。E4 の未解消の開発者判断は「詰まっている点」に残っている(1〜4・7・8・11)
 
 ### E-18 / C-2・C-3・C-6 再設計の反映(2026-07-27)
@@ -786,6 +787,21 @@ TS-02 から継続で未解決のもの:
 - 実生成ルールを含む200ゲーム×5 seed×2構成のCI所要時間は最初のrule PRで実測し、workflowの10分timeout内でbudget/並列度を較正する
 - CX-05のDB同期（コードにありDBにないruleの`pending_enable`登録）、提案`released`遷移、実デプロイ後の有効化は次ストーリーで接続する
 - 実repositoryのruleset/required checks、実subscription Codex、実PR・CDリハーサルは従来どおり開発者権限を要する外部受入ゲート
+
+### CX-05 プロセス1（ゲームへの反映）
+
+- `packages/rules`の生成registryに、ルールmodule・実bundle hash・module URLに加えて、ディレクトリ由来のslugと初期versionを束ねた。サーバー起動時はこの完全なregistryとproposal / pipeline jobを照合し、コードにありDBにないルールを`disabled/pending_enable`で登録して`rule_versions`へPR番号・merge SHAを保存する
+- 管理APIの初回enableは、`rules: disabled → active`、`proposals: implementing → released`、`pipeline_jobs: merged → done`を同じSQLite transactionで確定する。proposalの`status_changed_at`がRP-03の一覧内通知・未読表示の正であり、別通知基盤は作らない
+- 結合テストでは、merged jobを持つコードruleの起動時同期 → pending確認 → enable → released/done確認 → 次セット開始 → `afterPlay`の`ruleFired`発生までを通した。同期とenableの再実行は重複行・重複通知を作らない
+
+#### CX-05で置いた仮定・プロセス2送り
+
+| ID | 仮定・残作業 | 根拠 | プロセス2での扱い |
+|---|---|---|---|
+| E7-CX05-P1-1 | 初期スコープは新規ルールのみなのでregistryのversionは1。slugは`r{番号}-{slug}`ディレクトリから生成する | E07 §5.1-3は既存ルール更新を初期スコープ外としている | 不正ディレクトリ・job/meta不一致・部分同期からの回復を追加検証 |
+| E7-CX05-P1-2 | PR番号とmerge SHAはデプロイ先DBに既存の`pipeline_jobs`を正とする | 人間承認フローで`pr_open → merged`時に両値が記録され、proposalIdでコードmetaと結合できる | 欠落時fail-closed、再起動・旧DB migration、トランザクション障害注入を網羅 |
+| E7-CX05-P1-3 | RP-03通知はE05確定案Aどおりproposalの状態変更時刻を用いる。release logは運営観測用で、別outboxは作らない | E05 §3.3は一覧内バッジ+メニューバッジを推奨・確定 | RP-03画面/APIとの結合はE5残作業で検証 |
+| E7-CX05-P1-4 | 実CD・実ルールPR・「開発者操作3点」の実績はローカルFakeでは代替しない | CX-05受け入れ条件が実績を要求し、GitHub/Fly/開発者承認が必要 | DP-02完了後の外部受入リハーサルとして記録 |
 
 ### E2で見つけた設計書の不整合
 

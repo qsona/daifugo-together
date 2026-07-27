@@ -38,6 +38,8 @@ function codeRule(
     },
     bundleHash: `${ruleId}-bundle`,
     moduleUrl: `file:///rules/${ruleId}.js`,
+    slug: ruleId.replace(/^r\d{4,}-/u, ''),
+    version: 1,
   };
 }
 
@@ -604,5 +606,167 @@ describe('CX-04 rule registry', () => {
     });
     expect(acted?.accepted).toBe(true);
     expect(afterPlayCalls).toBe(0);
+  });
+});
+
+describe('CX-05 rule release', () => {
+  it('デプロイ済みコードをpending_enable登録し、有効化とreleasedを原子的に確定する', () => {
+    const { persistence } = setup();
+    const proposal = persistence.proposals.findById('proposal-r0001-a');
+    expect(proposal).toBeNull();
+
+    const session = persistence.sessions.resolve('rule-author-token-0001');
+    const normalized = {
+      kind: 'original' as const,
+      prefectureCode: null,
+      name: 'ルールA',
+      body: 'ルールAの提案本文',
+    };
+    persistence.proposals.create({
+      authorId: session.userId,
+      proposal: normalized,
+      contentHash: proposalContentHash(normalized),
+      now: 1_000,
+      id: 'proposal-r0001-a',
+      commitSignals: () => undefined,
+    });
+    expect(
+      persistence.proposals.transitionProposal(
+        'proposal-r0001-a',
+        'screening',
+        'implementing',
+        {},
+        1_100,
+      ),
+    ).toBe('transitioned');
+    const job = persistence.pipeline.createQueuedJob(
+      'proposal-r0001-a',
+      'a',
+      'prompt-v1',
+      1_200,
+    );
+    expect(job.ruleId).toBe('r0001-a');
+    persistence.pipeline.transitionJob(
+      job.id,
+      'queued',
+      'merged',
+      { prNumber: 42, headSha: 'a'.repeat(40) },
+      1_300,
+    );
+
+    const onReleased = vi.fn();
+    const registration = codeRule('r0001-a', 'ルールA', {
+      messages: { fired: 'ルールA!' },
+    });
+    registration.module.hooks.afterPlay = () => [
+      { type: 'announce', messageKey: 'fired' },
+    ];
+    const service = new RuleRegistryService(persistence.rules, [registration], {
+      now: () => 2_000,
+      proposals: persistence.proposals,
+      pipeline: persistence.pipeline,
+      onReleased,
+    });
+    const synchronized = service.synchronizeCodeRegistry();
+
+    expect(synchronized.failures).toEqual([]);
+    expect(synchronized.registered).toMatchObject([
+      {
+        id: 'r0001-a',
+        status: 'disabled',
+        disabledReason: 'pending_enable',
+      },
+    ]);
+    expect(synchronized.versions).toMatchObject([
+      {
+        ruleId: 'r0001-a',
+        version: 1,
+        prNumber: 42,
+        mergeSha: 'a'.repeat(40),
+        isCurrent: true,
+      },
+    ]);
+    expect(service.availableRules()).toEqual([]);
+
+    expect(service.enable('r0001-a')).toMatchObject({
+      status: 'updated',
+      rule: { status: 'active', disabledReason: null },
+    });
+    expect(persistence.proposals.findById('proposal-r0001-a')).toMatchObject({
+      status: 'released',
+      ruleId: 'r0001-a',
+      statusChangedAt: 2_000,
+    });
+    expect(persistence.pipeline.job(job.id)).toMatchObject({ phase: 'done' });
+    expect(service.availableRules().map(({ ruleId }) => ruleId)).toEqual([
+      'r0001-a',
+    ]);
+    expect(onReleased).toHaveBeenCalledTimes(1);
+
+    let memberSequence = 0;
+    const rooms = new RoomManager({
+      availableRules: (setId) => service.availableRules(setId),
+      createRoomId: () => 'released-rule-room',
+      createMemberId: () => `released-member-${String(++memberSequence)}`,
+      randomIndex: () => 0,
+      reducer: {
+        random: () => 0.999_999,
+        rulePortForSet: (setId) => service.rulePortForSet(setId),
+        releaseRulePort: (setId) => service.releaseRulePort(setId),
+      },
+    });
+    const created = rooms.create({
+      userId: 'release-host',
+      displayName: 'ホスト',
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const started = rooms.apply(created.value.room.roomId, {
+      type: 'start',
+      memberId: created.value.member.memberId,
+      now: 2_100,
+      setSeed: 'released-rule-set',
+    });
+    expect(started?.state.fixedRules?.map(({ ruleId }) => ruleId)).toEqual([
+      'r0001-a',
+    ]);
+    const engine = started?.state.engine;
+    expect(engine?.phase.name).toBe('gameInProgress');
+    if (!started || !engine || engine.phase.name !== 'gameInProgress') return;
+    const player = engine.currentGame!.public.turn!;
+    const legal = enumerateLegalPlays(
+      {
+        gameIndex: engine.phase.gameIndex,
+        seats: engine.members.map((member) => member.id),
+        gameSeed: `${engine.setSeed}:${String(engine.phase.gameIndex)}`,
+        ruleChain: engine.ruleChain,
+      },
+      engine.currentGame!,
+      player,
+    );
+    const played = rooms.apply(started.state.roomId, {
+      type: 'play',
+      memberId: player,
+      turnSeq: started.state.turnSeq,
+      cards: legal[0]!.cards.map((card) => card.id),
+      now: 2_101,
+    });
+    expect(played?.accepted).toBe(true);
+    expect(played?.state.lastEvents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ t: 'ruleFired', ruleId: 'r0001-a' }),
+      ]),
+    );
+
+    expect(service.synchronizeCodeRegistry()).toMatchObject({
+      registered: [],
+      versions: [],
+      failures: [],
+    });
+    expect(service.enable('r0001-a')).toMatchObject({
+      status: 'unchanged',
+      rule: { status: 'active' },
+    });
+    expect(onReleased).toHaveBeenCalledTimes(1);
   });
 });
