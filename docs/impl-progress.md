@@ -1169,6 +1169,7 @@ TS-02 から継続で未解決のもの:
 - DS-02の段重ね・短時間・chip方針を方向性レビューどおり採用し、4件超は3枚のリボンに加えて残りの全ルール名をコンパクト表示する。逐次1.5秒や実況ログへの巻き戻しは行わない
 - process2重点検証はcore/server/webの6 files / 97 tests、およびcore/server/web typecheckが成功。旧DB migration、同一SQLite再起動、正確なcount、信頼済み名称、表示経路例外、混在優先順、failsafe、最終手、stale seq、後続queue、別room既見、5件同時を含む
 - localhost許可付きの全体`CI=true pnpm verify`はformat/lint/design/typecheck、75 files / 525 tests、全package buildまで成功。sandbox内の初回だけHTTP/Socket系が`listen EPERM`になったため、同一コマンドを制限外で再実行して全件通過した
+- 新規コンテキストの独立 GPT-5.6 Sol 完了レビューは **GO**、Critical / Important / Minorすべてなし。方向性レビューのImportant 6件はすべて **CLOSED**。Roomイベントの`trigger`/`gameIndex`はE07の例示的な単体イベントではなく、E03/E12の権威snapshot・単調`seq`・現在game状態で因果と順序を表す既存契約を正として追加しない裁定も承認された
 
 ### E2で見つけた設計書の不整合
 
