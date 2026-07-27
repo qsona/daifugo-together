@@ -108,7 +108,11 @@ async function approvedProposal() {
     throw new Error('developer approval setup failed');
   }
   return {
-    jobs: new PipelineJobService(persistence.pipeline, () => ++now),
+    jobs: new PipelineJobService(
+      persistence.pipeline,
+      persistence.proposals,
+      () => ++now,
+    ),
     persistence,
     proposal,
   };
@@ -122,8 +126,9 @@ describe('CX-02 pipeline jobs', () => {
       job: {
         proposalId: proposal.id,
         phase: 'queued',
-        ruleId: 'r0001',
+        ruleId: 'r0001-yagiri',
         slug: 'yagiri',
+        promptVersion: null,
       },
       proposal: {
         id: proposal.id,
@@ -155,6 +160,7 @@ describe('CX-02 pipeline jobs', () => {
         to: 'implementing',
         branch: 'rule/r0001-yagiri',
         scaffoldSha: 'a'.repeat(40),
+        promptVersion: 'cx02-v1',
       }),
     ).toMatchObject({
       status: 'updated',
@@ -162,15 +168,107 @@ describe('CX-02 pipeline jobs', () => {
         phase: 'implementing',
         branch: 'rule/r0001-yagiri',
         scaffoldSha: 'a'.repeat(40),
+        promptVersion: 'cx02-v1',
       },
     });
     expect(jobs.next()).toBeNull();
+    expect(jobs.resume(item.job.id)).toMatchObject({
+      job: { phase: 'implementing', scaffoldSha: 'a'.repeat(40) },
+      passedCheckId: expect.any(Number),
+      approvedJudgementId: expect.any(Number),
+    });
+    expect(jobs.active()).toEqual([
+      expect.objectContaining({ id: item.job.id, phase: 'implementing' }),
+    ]);
+    expect(
+      jobs.update(item.job.id, {
+        from: 'implementing',
+        to: 'pr_open',
+      }),
+    ).toEqual({
+      status: 'invalid',
+      error: 'missing_job_transition_fields',
+    });
+    expect(
+      jobs.update(item.job.id, {
+        from: 'implementing',
+        to: 'pr_open',
+        prNumber: 42,
+        headSha: 'b'.repeat(40),
+      }),
+    ).toMatchObject({
+      status: 'updated',
+      job: {
+        phase: 'pr_open',
+        prNumber: 42,
+        headSha: 'b'.repeat(40),
+      },
+    });
     expect(
       jobs.update(item.job.id, {
         from: 'queued',
         to: 'implementing',
       }),
     ).toEqual({ status: 'conflict', error: 'stale_job_phase' });
-    expect(persistence.pipeline.job(item.job.id)?.phase).toBe('implementing');
+    expect(persistence.pipeline.job(item.job.id)?.phase).toBe('pr_open');
+  });
+
+  it('遷移に必要な固定点を欠く更新を拒否する', async () => {
+    const { jobs, persistence } = await approvedProposal();
+    const item = jobs.next();
+    if (!item) throw new Error('queued job missing');
+
+    expect(
+      jobs.update(item.job.id, {
+        from: 'queued',
+        to: 'implementing',
+        branch: 'rule/wrong',
+        scaffoldSha: 'a'.repeat(40),
+        promptVersion: 'cx02-v1',
+      }),
+    ).toEqual({
+      status: 'invalid',
+      error: 'missing_job_transition_fields',
+    });
+    expect(persistence.pipeline.job(item.job.id)?.phase).toBe('queued');
+  });
+
+  it('内部失敗区分とユーザー向けimplementation_failedを同時に確定する', async () => {
+    const { jobs, persistence, proposal } = await approvedProposal();
+    const item = jobs.next();
+    if (!item) throw new Error('queued job missing');
+    jobs.update(item.job.id, {
+      from: 'queued',
+      to: 'implementing',
+      branch: 'rule/r0001-yagiri',
+      scaffoldSha: 'a'.repeat(40),
+      promptVersion: 'cx02-v1',
+    });
+
+    expect(
+      jobs.fail(item.job.id, {
+        from: 'implementing',
+        errorCode: 'inspect_violation',
+        errorNote: 'SPEC.json changed',
+      }),
+    ).toMatchObject({
+      status: 'failed',
+      job: {
+        phase: 'failed',
+        errorCode: 'inspect_violation',
+        errorNote: 'SPEC.json changed',
+      },
+    });
+    expect(persistence.proposals.findById(proposal.id)).toMatchObject({
+      status: 'failed',
+      reasonCode: 'implementation_failed',
+      attemptCount: 1,
+    });
+    expect(
+      jobs.fail(item.job.id, {
+        from: 'implementing',
+        errorCode: 'inspect_violation',
+      }),
+    ).toMatchObject({ status: 'already_failed' });
   });
 });

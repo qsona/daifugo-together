@@ -3,16 +3,27 @@ import type { QueuedImplementation } from '@daifugo/server';
 import { createRuleScaffold, type ScaffoldResult } from './scaffold.js';
 import { inspectGeneratedRule } from './inspector.js';
 
+export const IMPLEMENTATION_PROMPT_VERSION = 'cx02-v1';
+
 export interface CodexRunner {
-  run(input: {
-    directory: string;
-    promptPath: string;
-  }): Promise<{ status: 'completed' } | { status: 'failed'; error: string }>;
+  run(input: { directory: string; promptPath: string }): Promise<
+    | { status: 'completed' }
+    | {
+        status: 'failed';
+        code: 'infra' | 'codex_timeout' | 'codex_empty';
+        error: string;
+      }
+  >;
 }
 
 export type ImplementationResult =
   | { status: 'ready'; scaffold: ScaffoldResult }
-  | { status: 'codex_failed'; error: string; scaffold: ScaffoldResult }
+  | {
+      status: 'codex_failed';
+      code: 'infra' | 'codex_timeout' | 'codex_empty';
+      error: string;
+      scaffold: ScaffoldResult;
+    }
   | {
       status: 'inspect_failed';
       violations: string[];
@@ -44,7 +55,12 @@ export async function implementScaffold(options: {
     promptPath: options.promptPath,
   });
   if (generated.status === 'failed') {
-    return { status: 'codex_failed', error: generated.error, scaffold };
+    return {
+      status: 'codex_failed',
+      code: generated.code,
+      error: generated.error,
+      scaffold,
+    };
   }
   const inspection = await inspectGeneratedRule(scaffold);
   return inspection.ok

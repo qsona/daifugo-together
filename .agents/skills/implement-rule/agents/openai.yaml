@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Implement Approved Rule'
+  short_description: 'Run the approved rule implementation pipeline safely'
+  default_prompt: 'Use $implement-rule to implement the next approved rule proposal.'

@@ -548,7 +548,7 @@ export class PipelineRepository {
     if (proposalNumber === null || proposalNumber === undefined) {
       throw new Error('proposal_number_missing');
     }
-    const ruleId = `r${String(proposalNumber).padStart(4, '0')}`;
+    const ruleId = `r${String(proposalNumber).padStart(4, '0')}-${slug}`;
     const insertion = this.#sqlite
       .prepare(
         `INSERT INTO pipeline_jobs (
@@ -574,15 +574,31 @@ export class PipelineRepository {
     return row ? storedJob(row) : null;
   }
 
+  activeJobs(): PipelineJob[] {
+    return (
+      this.#sqlite
+        .prepare(
+          `SELECT * FROM pipeline_jobs
+           WHERE phase IN ('implementing', 'pr_open')
+           ORDER BY created_at ASC, id ASC`,
+        )
+        .all() as PipelineJobRow[]
+    ).map(storedJob);
+  }
+
   nextQueued(): QueuedImplementation | null {
     const row = this.#sqlite
       .prepare(
-        `SELECT pj.id AS job_id, pc.id AS check_id, j.id AS judgement_id
+        `SELECT pj.id AS job_id
          FROM pipeline_jobs pj
          JOIN proposal_checks pc ON pc.proposal_id = pj.proposal_id
          JOIN judgements j ON j.proposal_id = pj.proposal_id
          WHERE pj.phase = 'queued'
            AND pc.final_verdict = 'pass'
+           AND pc.id = (
+             SELECT MAX(pc2.id) FROM proposal_checks pc2
+             WHERE pc2.proposal_id = pj.proposal_id
+           )
            AND j.id = (
              SELECT MAX(j2.id) FROM judgements j2
              WHERE j2.proposal_id = pj.proposal_id
@@ -594,10 +610,37 @@ export class PipelineRepository {
          ORDER BY pj.created_at ASC, pj.id ASC
          LIMIT 1`,
       )
-      .get() as
+      .get() as { job_id: number } | undefined;
+    return row ? this.implementation(row.job_id) : null;
+  }
+
+  implementation(jobId: number): QueuedImplementation | null {
+    const row = this.#sqlite
+      .prepare(
+        `SELECT pj.id AS job_id, pc.id AS check_id, j.id AS judgement_id
+         FROM pipeline_jobs pj
+         JOIN proposal_checks pc ON pc.proposal_id = pj.proposal_id
+         JOIN judgements j ON j.proposal_id = pj.proposal_id
+         WHERE pj.id = ?
+           AND pj.phase IN ('queued', 'implementing', 'pr_open')
+           AND pc.final_verdict = 'pass'
+           AND pc.id = (
+             SELECT MAX(pc2.id) FROM proposal_checks pc2
+             WHERE pc2.proposal_id = pj.proposal_id
+           )
+           AND j.id = (
+             SELECT MAX(j2.id) FROM judgements j2
+             WHERE j2.proposal_id = pj.proposal_id
+           )
+           AND j.verdict = 'approve'
+           AND j.decided_by = 'developer'
+           AND j.spec_json IS NOT NULL
+           AND j.scaffold_meta_json IS NOT NULL`,
+      )
+      .get(jobId) as
       { job_id: number; check_id: number; judgement_id: number } | undefined;
     if (!row) return null;
-    const job = this.job(row.job_id);
+    const job = this.job(jobId);
     if (!job) return null;
     const proposal = this.#proposals.findById(job.proposalId);
     const judgement = this.judgement(row.judgement_id);
@@ -628,6 +671,7 @@ export class PipelineRepository {
       prNumber?: number;
       headSha?: string;
       scaffoldSha?: string;
+      promptVersion?: string;
       errorCode?: string;
       errorNote?: string;
     },
@@ -640,6 +684,7 @@ export class PipelineRepository {
              pr_number = COALESCE(?, pr_number),
              head_sha = COALESCE(?, head_sha),
              scaffold_sha = COALESCE(?, scaffold_sha),
+             prompt_version = COALESCE(?, prompt_version),
              error_code = ?, error_note = ?, updated_at = ?
          WHERE id = ? AND phase = ?`,
       )
@@ -649,6 +694,7 @@ export class PipelineRepository {
         patch.prNumber ?? null,
         patch.headSha ?? null,
         patch.scaffoldSha ?? null,
+        patch.promptVersion ?? null,
         patch.errorCode ?? null,
         patch.errorNote ?? null,
         now,

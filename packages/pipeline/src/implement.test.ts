@@ -29,13 +29,13 @@ function queued(): QueuedImplementation {
       phase: 'queued',
       attempt: 1,
       ciRerun: 0,
-      ruleId: 'r0001',
+      ruleId: 'r0001-yagiri',
       slug: 'yagiri',
       branch: null,
       prNumber: null,
       headSha: null,
       scaffoldSha: null,
-      promptVersion: 'cx01-v1',
+      promptVersion: null,
       errorCode: null,
       errorNote: null,
       createdAt: 1,
@@ -77,12 +77,16 @@ describe('CX-02 implementation vertical slice', () => {
     let current = item.job;
     const jobs: PipelineJobPort = {
       next: () => (current.phase === 'queued' ? item : null),
+      resume: () => null,
       update: (_jobId, input) => {
         const value = input as {
-          from: 'queued';
-          to: 'implementing';
-          branch: string;
-          scaffoldSha: string;
+          from: typeof current.phase;
+          to: typeof current.phase;
+          branch?: string;
+          scaffoldSha?: string;
+          promptVersion?: string;
+          prNumber?: number;
+          headSha?: string;
         };
         if (current.phase !== value.from) {
           return { status: 'conflict', error: 'stale_job_phase' };
@@ -90,12 +94,16 @@ describe('CX-02 implementation vertical slice', () => {
         current = {
           ...current,
           phase: value.to,
-          branch: value.branch,
-          scaffoldSha: value.scaffoldSha,
+          branch: value.branch ?? current.branch,
+          scaffoldSha: value.scaffoldSha ?? current.scaffoldSha,
+          promptVersion: value.promptVersion ?? current.promptVersion,
+          prNumber: value.prNumber ?? current.prNumber,
+          headSha: value.headSha ?? current.headSha,
           updatedAt: 2,
         };
         return { status: 'updated', job: current };
       },
+      fail: () => ({ status: 'invalid', error: 'unexpected_failure' }),
     };
     const result = await runNextImplementation({
       jobs,
@@ -112,6 +120,11 @@ describe('CX-02 implementation vertical slice', () => {
             scaffoldSha: 'a'.repeat(40),
           };
         },
+        inspect: async () => [],
+        publishImplementation: async () => ({
+          prNumber: 42,
+          headSha: 'b'.repeat(40),
+        }),
       },
       runner: {
         run: async ({ directory }) => {
@@ -132,9 +145,11 @@ describe('CX-02 implementation vertical slice', () => {
       status: 'ready',
       proposalId: 'proposal-1',
       job: {
-        phase: 'implementing',
+        phase: 'pr_open',
         branch: 'rule/r0001-yagiri',
         scaffoldSha: 'a'.repeat(40),
+        prNumber: 42,
+        headSha: 'b'.repeat(40),
       },
     });
     expect(jobs.next()).toBeNull();
@@ -167,8 +182,7 @@ describe('CX-02 implementation vertical slice', () => {
     expect(
       JSON.parse(await readFile(result.scaffold.metaPath, 'utf8')),
     ).toMatchObject({
-      id: 'r0001',
-      slug: 'yagiri',
+      ruleId: 'r0001-yagiri',
       proposalId: 'proposal-1',
       prefecture: '埼玉県',
     });

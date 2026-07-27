@@ -181,9 +181,9 @@ describe('CX-01 judgement and VERDICT_CONFIRMATION', () => {
     expect(persistence.pipeline.pendingConfirmations()).toEqual([]);
     expect(persistence.pipeline.jobForProposal(proposal.id)).toMatchObject({
       phase: 'queued',
-      ruleId: 'r0001',
+      ruleId: 'r0001-yagiri',
       slug: 'yagiri',
-      promptVersion: 'cx01-v1',
+      promptVersion: null,
     });
     expect(persistence.pipeline.existingRules()).toEqual([
       {
@@ -373,7 +373,7 @@ describe('CX-01 judgement and VERDICT_CONFIRMATION', () => {
       scaffoldMeta: { ...scaffoldMeta(), slug: 'second-rule' },
     });
     expect(persistence.pipeline.jobForProposal(second.id)?.ruleId).toBe(
-      'r0002',
+      'r0002-second-rule',
     );
 
     const firstAi = pipeline.recordAi(proposal.id, aiApprove());
@@ -385,7 +385,7 @@ describe('CX-01 judgement and VERDICT_CONFIRMATION', () => {
       scaffoldMeta: scaffoldMeta(),
     });
     expect(persistence.pipeline.jobForProposal(proposal.id)?.ruleId).toBe(
-      'r0001',
+      'r0001-yagiri',
     );
   });
 

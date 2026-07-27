@@ -6,7 +6,8 @@
 - **フェーズ 2 / E5 RP-01・RP-02 完了**: E-18/C-3 の再設計(非同期受付、名前40/内容1000、投稿レート制限なし)まで反映済み。RP-03 は CX-02 依存のため E7 後に戻る
 - **C-5 追従完了**: E7 内包リトライの決定を反映し、`proposals.failed` を終端化。`failed` 遷移時に `attempt_count=1` を記録して同内容の再提案を即時解禁する
 - **フェーズ 2 / E6 YC-01〜03 プロセス2完了**: E-18 の非同期構成、ローカル判定ツール、イエローカード表示・停止・救済まで実装済み。修正後 judge eval は Luna/Sol とも 40/40、平均 6.40秒 / 6.23秒のため既定を **GPT-5.6 Sol medium** とした。独立 GPT-5.6 Sol 完了レビューは要件適合 `PASS` / 品質 `APPROVED`
-- **フェーズ 2 / E7 CX-01 プロセス2ほぼ完了**: 独立方向性レビュー `GO_WITH_FIXES` のImportant 4件と、初回完了レビューのImportant 2件を反映。実app-server評価だけ明示許可待ちで、完了再レビュー中
+- **フェーズ 2 / E7 CX-01 プロセス2ほぼ完了**: 独立方向性レビュー `GO_WITH_FIXES` のImportant 4件と、初回完了レビューのImportant 2件を反映。完了再レビューはコード・自動テスト `PASS` / 品質 `APPROVED` / Critical・Importantなし。実app-server評価だけ明示許可待ち
+- **フェーズ 2 / E7 CX-02 プロセス2実装完了・独立完了レビュー待ち**: subscription Codex CLIを使う共有skill、scaffold先行push/再開、全差分・履歴検収、PR作成、失敗永続化まで実装。実subscriptionでのルール生成・実PR作成は未実行
 - E1〜E3 の実装記録は本書末尾の「並行進行」節、E13 は「E13」節。E4 の未解消の開発者判断は「詰まっている点」に残っている(1〜4・7・8・11)
 
 ### E-18 / C-2・C-3・C-6 再設計の反映(2026-07-27)
@@ -235,12 +236,13 @@ E3 マージ後の実プレーで開発者から 4 件の指摘を受け、反�
 - 独立 GPT-5.6 Sol の初回判定: 要件適合 `PARTIAL` / 品質 `NEEDS_FIXES`。Criticalなし、Important 2件
 - Important 1（確認待ちによる飢餓）: E6/CX-01/確認待ちを作成順に統合した一覧へ先に `limit` をかけていたため、古い確認待ちが自動判定枠を消費していた。E6/CX-01だけを抽出してからlimitを適用し、確認待ちは枠外で全件表示するよう修正。確認待ち101件の後ろにあるE6/CX-01が選ばれる回帰を追加
 - Important 2（障害・復旧回帰）: CX判定バッチをテスト可能な関数へ分離し、不正出力2回打ち切り、App Server障害3回再試行、1件失敗後の後続継続、同一run ID維持を回帰化。加えて、SQLite triggerでjob作成を強制失敗させた承認transaction rollback、確認の並行再送冪等、SQLite再起動後の未処理再取得を追加
-- 修正コミット: `73b31ea`。独立完了再レビュー中
+- 修正コミット: `73b31ea`
+- 独立完了再レビュー: コード・自動テスト要件 `PASS` / 品質 `APPROVED` / Critical・Importantなし。実モデル評価未実施だけを理由に全体要件適合は `PARTIAL`
 - 実app-server評価は明示許可待ちのため未実行のまま。実モデル精度を除くコード・永続化・運用境界を再レビュー対象とした
 
 ### CX-02 プロセス1
 
-- 状態: FakeCodexRunner を使う縦切り実装まで完了。独立方向性レビュー待ち
+- 状態: FakeCodexRunner を使う縦切り実装、独立方向性レビュー、プロセス2実装まで完了。独立完了レビュー待ち
 - ユーザーストーリーの確認:
   - `packages/server/src/pipeline/jobs.test.ts` で、E6 pass + 開発者SPEC承認済みの `queued` jobだけを払い出し、提案・承認済みSPEC・scaffoldメタを同じjobへ結びつけることを確認
   - `packages/pipeline/src/implement.test.ts` で、払い出し → 不変 `meta.json` / `SPEC.json` scaffold → Fake publisherによるscaffold SHA固定 → compare-and-setで `implementing` claim → FakeCodexRunnerによる `rule.ts` / `rule.test.ts` 生成 → 検収、を縦に確認
@@ -277,6 +279,26 @@ E3 マージ後の実プレーで開発者から 4 件の指摘を受け、反�
 - `CI=true pnpm --filter @daifugo/pipeline typecheck`: 成功
 - `CI=true pnpm exec vitest run packages/pipeline/src/implement.test.ts packages/server/src/pipeline/jobs.test.ts packages/server/src/pipeline/service.test.ts`: **3 files / 16 tests 成功**
 - `CI=true pnpm exec vitest run packages/server/src/app-server.test.ts`: localhost bind可能な環境で **1 file / 5 tests 成功**
+
+#### プロセス1方向性レビューとプロセス2反映
+
+- 独立 GPT-5.6 Sol の判定: **GO_WITH_FIXES**。Criticalなし、Important 4件
+- Important 1（非同期Port）: `PipelineJobPort` を Promise 対応にし、Bearer保護された実HTTP adapterを追加。next/update/fail/resumeの契約をローカルHTTPで検証した
+- Important 2（RuleMeta）: E12/E1の上位契約を正として、`meta.json` を `RuleMeta` と同じ `ruleId` に統一。公開rule IDとディレクトリ名を `r0001-yagiri` 形式にし、都道府県なしではpropertyを省略する
+- Important 3（状態不変条件）: `queued → implementing` は決定的branch、40/64桁scaffold SHA、CX-02 prompt versionを必須化。`implementing → pr_open` はPR番号/head SHAと既存固定点を必須化し、欠落・古いphaseを拒否する
+- Important 4（prompt version）: CX-01の判定prompt versionをqueued jobへ引き継がず、scaffold claim時に `cx02-v1` を記録する
+- subscription実行: `SubscriptionCodexRunner` は認証済みローカル `codex exec` のみを `workspace-write` / ephemeral / 20分timeoutで起動する。LLM SDK・API key・専用隔離は使用しない。timeout/異常終了/生成物なしを内部区分へ写像する
+- workspace/GitHub: shallow clone、決定的branch、`meta.json`/`SPEC.json` のscaffold commit先行push、remote branchからの中断再開、scaffold祖先・blob・全worktree差分検収、生成commit/push、既存PR回復または `rule-change` PR作成を実装した
+- 失敗境界: `/admin/pipeline/jobs/{id}/fail` を追加。内部区分は `pipeline_jobs.error_code` に保存し、同じSQLite transactionで提案を公開理由 `implementation_failed`、`attempt_count=1` にする。最終失敗は開発者がskillから明示確定し、自動では打ち切らない
+- 共有skill: `.agents/skills/implement-rule` を追加。次job実行、`implementing` job再開、最終失敗確定を分離し、Codex/GitHub認証がなければGUIで迂回しない手順にした
+- 先行job警告: next APIは既存 `implementing` / `pr_open` jobをwarningとして返す。`GET /admin/pipeline/jobs/{id}` と `implement:resume` で中断jobを再取得できる
+
+#### プロセス2の検証
+
+- 対象実テスト: `CI=true pnpm exec vitest run ...`: **6 files / 19 tests 成功**。実ローカルHTTP、bare Git remoteへのscaffold push・別cloneからの回復、全差分検収、生成commit/push、Fake `gh` PR契約を含む
+- 全体 `CI=true pnpm verify`: **51 files / 335 tests 成功**。format / lint / design lint / 全package typecheck・buildも成功。AI boundary検査は `no LLM SDK or network I/O`
+- skill validatorはfrontmatter/YAMLを手動確認済み。公式 `quick_validate.py` は実行したが、利用可能なPython環境にPyYAMLがなくスクリプト自体が起動不能だった
+- 未実行: 実Codex subscriptionでの提案1件の生成、実GitHubへのbranch push/PR作成。外部状態を変える実ジョブは存在せず、自動テストではFake/ローカルremoteに限定した
 - `CI=true pnpm verify`: **48 files / 326 tests 成功**。format / lint / design lint / 全package typecheck・buildも成功
 
 ## 完了したストーリー

@@ -60,7 +60,10 @@ export interface AppServerOptions {
       | 'confirmCxRejection'
       | 'approveSpec'
     >;
-    jobs: Pick<PipelineJobService, 'next' | 'update'>;
+    jobs: Pick<
+      PipelineJobService,
+      'next' | 'active' | 'resume' | 'update' | 'fail'
+    >;
   };
 }
 
@@ -193,19 +196,30 @@ export function createAppServer(options: AppServerOptions): AppServer {
       /^\/admin\/proposals\/([^/]+)\/approve-spec$/u.exec(pathname);
     const jobUpdateMatch =
       /^\/admin\/pipeline\/jobs\/([1-9]\d*)\/update$/u.exec(pathname);
+    const jobFailMatch = /^\/admin\/pipeline\/jobs\/([1-9]\d*)\/fail$/u.exec(
+      pathname,
+    );
+    const jobGetMatch = /^\/admin\/pipeline\/jobs\/([1-9]\d*)$/u.exec(pathname);
     if (
       !isListing &&
       !isNextJob &&
       !checkMatch &&
       !judgeMatch &&
       !approveSpecMatch &&
-      !jobUpdateMatch
+      !jobUpdateMatch &&
+      !jobFailMatch &&
+      !jobGetMatch
     ) {
       return false;
     }
     const configuration = checkMatch
       ? options.adminScreening
-      : judgeMatch || approveSpecMatch || isNextJob || jobUpdateMatch
+      : judgeMatch ||
+          approveSpecMatch ||
+          isNextJob ||
+          jobUpdateMatch ||
+          jobFailMatch ||
+          jobGetMatch
         ? options.adminPipeline
         : (options.adminScreening ?? options.adminPipeline);
     if (!configuration) {
@@ -261,7 +275,27 @@ export function createAppServer(options: AppServerOptions): AppServer {
         return true;
       }
       const item = options.adminPipeline!.jobs.next();
-      writeJson(response, 200, { item });
+      const warnings = options
+        .adminPipeline!.jobs.active()
+        .map(
+          (job) =>
+            `job ${String(job.id)} (${job.ruleId}) is already ${job.phase}`,
+        );
+      writeJson(response, 200, { item, warnings });
+      return true;
+    }
+    if (jobGetMatch) {
+      if (request.method !== 'GET') {
+        response.setHeader('allow', 'GET');
+        writeJson(response, 405, { error: 'method_not_allowed' });
+        return true;
+      }
+      const item = options.adminPipeline!.jobs.resume(Number(jobGetMatch[1]));
+      writeJson(
+        response,
+        item ? 200 : 404,
+        item ? { item } : { error: 'not_found' },
+      );
       return true;
     }
     if (request.method !== 'POST') {
@@ -288,6 +322,8 @@ export function createAppServer(options: AppServerOptions): AppServer {
         Number(jobUpdateMatch[1]),
         body,
       );
+    } else if (jobFailMatch) {
+      result = options.adminPipeline!.jobs.fail(Number(jobFailMatch[1]), body);
     } else if (checkMatch) {
       result = options.adminScreening!.service.record(proposalId, body);
     } else if (approveSpecMatch) {
@@ -326,11 +362,15 @@ export function createAppServer(options: AppServerOptions): AppServer {
               ? 200
               : result.status === 'updated'
                 ? 200
-                : result.status === 'not_found'
-                  ? 404
-                  : result.status === 'conflict'
-                    ? 409
-                    : 400,
+                : result.status === 'failed'
+                  ? 200
+                  : result.status === 'already_failed'
+                    ? 200
+                    : result.status === 'not_found'
+                      ? 404
+                      : result.status === 'conflict'
+                        ? 409
+                        : 400,
       result,
     );
     return true;

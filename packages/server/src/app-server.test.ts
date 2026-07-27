@@ -255,17 +255,26 @@ describe('production app server', () => {
         phase: 'implementing' as const,
         attempt: 1,
         ciRerun: 0,
-        ruleId: 'r0001',
+        ruleId: 'r0001-yagiri',
         slug: 'yagiri',
         branch: 'rule/r0001-yagiri',
         prNumber: null,
         headSha: null,
         scaffoldSha: null,
-        promptVersion: 'cx01-v1',
+        promptVersion: 'cx02-v1',
         errorCode: null,
         errorNote: null,
         createdAt: 1,
         updatedAt: 2,
+      },
+    }));
+    const failJob = vi.fn(() => ({
+      status: 'failed' as const,
+      job: {
+        ...updateJob().job,
+        phase: 'failed' as const,
+        errorCode: 'inspect_violation',
+        errorNote: 'unexpected file',
       },
     }));
     const app = createAppServer({
@@ -289,7 +298,10 @@ describe('production app server', () => {
         },
         jobs: {
           next: nextJob,
+          active: () => [],
+          resume: () => null,
           update: updateJob,
+          fail: failJob,
         },
       },
     });
@@ -366,7 +378,7 @@ describe('production app server', () => {
       headers: { authorization: 'Bearer admin-token' },
     });
     expect(next.status).toBe(200);
-    await expect(next.json()).resolves.toEqual({ item: null });
+    await expect(next.json()).resolves.toEqual({ item: null, warnings: [] });
     expect(nextJob).toHaveBeenCalledOnce();
 
     const updated = await fetch(`${baseUrl}/admin/pipeline/jobs/1/update`, {
@@ -379,6 +391,8 @@ describe('production app server', () => {
         from: 'queued',
         to: 'implementing',
         branch: 'rule/r0001-yagiri',
+        scaffoldSha: 'a'.repeat(40),
+        promptVersion: 'cx02-v1',
       }),
     });
     expect(updated.status).toBe(200);
@@ -386,6 +400,27 @@ describe('production app server', () => {
       from: 'queued',
       to: 'implementing',
       branch: 'rule/r0001-yagiri',
+      scaffoldSha: 'a'.repeat(40),
+      promptVersion: 'cx02-v1',
+    });
+
+    const failed = await fetch(`${baseUrl}/admin/pipeline/jobs/1/fail`, {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer admin-token',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: 'implementing',
+        errorCode: 'inspect_violation',
+        errorNote: 'unexpected file',
+      }),
+    });
+    expect(failed.status).toBe(200);
+    expect(failJob).toHaveBeenCalledWith(1, {
+      from: 'implementing',
+      errorCode: 'inspect_violation',
+      errorNote: 'unexpected file',
     });
   });
 });

@@ -657,7 +657,7 @@ export class PipelineJudgementService {
       const job = this.#pipeline.createQueuedJob(
         proposalId,
         approvedScaffoldMeta.slug,
-        source.promptVersion,
+        null,
         this.#now(),
       );
       const transitioned = this.#proposals.transitionProposal(

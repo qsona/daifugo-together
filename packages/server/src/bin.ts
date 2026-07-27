@@ -73,7 +73,10 @@ const app = createAppServer({
             persistence.proposals,
             persistence.injection,
           ),
-          jobs: new PipelineJobService(persistence.pipeline),
+          jobs: new PipelineJobService(
+            persistence.pipeline,
+            persistence.proposals,
+          ),
         },
       }
     : {}),

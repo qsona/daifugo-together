@@ -2,6 +2,7 @@ import type { PipelineJob, QueuedImplementation } from '@daifugo/server';
 
 import {
   type CodexRunner,
+  IMPLEMENTATION_PROMPT_VERSION,
   implementScaffold,
   type ImplementationResult,
 } from './implement.js';
@@ -12,10 +13,20 @@ type JobUpdateResult =
   | { status: 'not_found' }
   | { status: 'invalid'; error: string }
   | { status: 'conflict'; error: string };
+type JobFailResult =
+  | { status: 'failed'; job: PipelineJob }
+  | { status: 'already_failed'; job: PipelineJob }
+  | { status: 'not_found' }
+  | { status: 'invalid'; error: string }
+  | { status: 'conflict'; error: string };
+
+type Awaitable<T> = T | Promise<T>;
 
 export interface PipelineJobPort {
-  next(): QueuedImplementation | null;
-  update(jobId: number, input: unknown): JobUpdateResult;
+  next(): Awaitable<QueuedImplementation | null>;
+  resume(jobId: number): Awaitable<QueuedImplementation | null>;
+  update(jobId: number, input: unknown): Awaitable<JobUpdateResult>;
+  fail(jobId: number, input: unknown): Awaitable<JobFailResult>;
 }
 
 export interface ScaffoldPublisher {
@@ -23,6 +34,18 @@ export interface ScaffoldPublisher {
     item: QueuedImplementation;
     scaffold: ScaffoldResult;
   }): Promise<{ branch: string; scaffoldSha: string }>;
+  inspect(input: {
+    item: QueuedImplementation;
+    scaffold: ScaffoldResult;
+    branch: string;
+    scaffoldSha: string;
+  }): Promise<string[]>;
+  publishImplementation(input: {
+    item: QueuedImplementation;
+    scaffold: ScaffoldResult;
+    branch: string;
+    scaffoldSha: string;
+  }): Promise<{ prNumber: number; headSha: string }>;
 }
 
 export type RunNextImplementationResult =
@@ -46,18 +69,28 @@ export async function runNextImplementation(options: {
   runner: CodexRunner;
   rulesRoot: string;
   promptPath: string;
+  item?: QueuedImplementation;
 }): Promise<RunNextImplementationResult> {
-  const item = options.jobs.next();
+  const item = options.item ?? (await options.jobs.next());
   if (!item) return { status: 'idle' };
 
   const scaffold = await createRuleScaffold(item, options.rulesRoot);
   const published = await options.publisher.publish({ item, scaffold });
-  const claimed = options.jobs.update(item.job.id, {
-    from: 'queued',
-    to: 'implementing',
-    branch: published.branch,
-    scaffoldSha: published.scaffoldSha,
-  });
+  const claimed =
+    item.job.phase === 'queued'
+      ? await options.jobs.update(item.job.id, {
+          from: 'queued',
+          to: 'implementing',
+          branch: published.branch,
+          scaffoldSha: published.scaffoldSha,
+          promptVersion: IMPLEMENTATION_PROMPT_VERSION,
+        })
+      : item.job.phase === 'implementing' &&
+          item.job.branch === published.branch &&
+          item.job.scaffoldSha === published.scaffoldSha &&
+          item.job.promptVersion === IMPLEMENTATION_PROMPT_VERSION
+        ? ({ status: 'updated', job: item.job } as const)
+        : ({ status: 'conflict', error: 'resume_state_mismatch' } as const);
   if (claimed.status !== 'updated') {
     return {
       status: 'claim_failed',
@@ -66,15 +99,48 @@ export async function runNextImplementation(options: {
       result: claimed,
     };
   }
+  let finalJob = claimed.job;
 
-  const result = await implementScaffold({
+  let result = await implementScaffold({
     scaffold,
     promptPath: options.promptPath,
     runner: options.runner,
   });
+  if (result.status === 'ready') {
+    const violations = await options.publisher.inspect({
+      item,
+      scaffold,
+      ...published,
+    });
+    if (violations.length > 0) {
+      result = { status: 'inspect_failed', violations, scaffold };
+    }
+  }
+  if (result.status === 'ready') {
+    const pullRequest = await options.publisher.publishImplementation({
+      item,
+      scaffold,
+      ...published,
+    });
+    const opened = await options.jobs.update(item.job.id, {
+      from: 'implementing',
+      to: 'pr_open',
+      prNumber: pullRequest.prNumber,
+      headSha: pullRequest.headSha,
+    });
+    if (opened.status !== 'updated') {
+      return {
+        status: 'claim_failed',
+        jobId: item.job.id,
+        proposalId: item.proposal.id,
+        result: opened,
+      };
+    }
+    finalJob = opened.job;
+  }
   return {
     status: result.status,
-    job: claimed.job,
+    job: finalJob,
     proposalId: item.proposal.id,
     result,
   };

@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import type { QueuedImplementation } from '@daifugo/server';
+import type { RuleMeta } from '@daifugo/core';
 
 export interface ScaffoldResult {
   directory: string;
@@ -44,24 +45,23 @@ export async function createRuleScaffold(
   item: QueuedImplementation,
   rulesRoot: string,
 ): Promise<ScaffoldResult> {
-  const directory = join(
-    rulesRoot,
-    `${item.job.ruleId}-${item.scaffoldMeta.slug}`,
-  );
+  const directory = join(rulesRoot, item.job.ruleId);
   await mkdir(directory, { recursive: true });
   const metaPath = join(directory, 'meta.json');
   const specPath = join(directory, 'SPEC.json');
-  const meta = json({
-    id: item.job.ruleId,
-    slug: item.scaffoldMeta.slug,
+  const ruleMeta: RuleMeta = {
+    ruleId: item.job.ruleId,
     name: item.spec.name,
     description: item.spec.summary,
     kind: item.proposal.kind,
-    prefecture: item.proposal.prefecture,
+    ...(item.proposal.prefecture === null
+      ? {}
+      : { prefecture: item.proposal.prefecture }),
     proposalId: item.proposal.id,
     contractVersion: 1,
     messages: item.scaffoldMeta.messages,
-  });
+  };
+  const meta = json(ruleMeta);
   const spec = json(item.spec);
   await writeImmutable(metaPath, meta);
   await writeImmutable(specPath, spec);
