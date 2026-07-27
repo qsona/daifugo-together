@@ -1560,3 +1560,122 @@ describe('TU-01: 既プレイ端末の記録', () => {
     expect(stored.get(PLAYED_BEFORE_STORAGE_KEY)).toBe('true');
   });
 });
+
+function finalGameRoom(
+  finalGame: NonNullable<
+    import('@daifugo/core').PlayerRoomView['setResult']
+  >['finalGame'],
+): import('@daifugo/core').PlayerRoomView {
+  return {
+    v: 20,
+    roomId: 'final-room',
+    inviteCode: '01234',
+    mode: 'community',
+    phase: 'setResult',
+    members: [
+      {
+        memberId: 'member-1',
+        seatId: 0,
+        displayName: 'ホスト',
+        isAI: false,
+        isHost: true,
+        connected: true,
+        aiActing: false,
+        departed: false,
+        handCount: 0,
+        finishedRank: 1,
+        wantsNextSet: false,
+      },
+      {
+        memberId: 'member-2',
+        seatId: 1,
+        displayName: 'プレイヤーB',
+        isAI: true,
+        isHost: false,
+        connected: true,
+        aiActing: false,
+        departed: false,
+        handCount: 0,
+        finishedRank: 2,
+        wantsNextSet: true,
+      },
+    ],
+    you: { memberId: 'member-1', seatId: 0 },
+    activeRules: [],
+    game: null,
+    setResult: {
+      standings: [
+        {
+          memberId: 'member-1',
+          totalRank: 1,
+          title: '大富豪',
+          ranks: [1, 2, 1],
+          points: 13,
+        },
+        {
+          memberId: 'member-2',
+          totalRank: 2,
+          title: '富豪',
+          ranks: [2, 1, 2],
+          points: 10,
+        },
+      ],
+      finalGame,
+      firedRules: [],
+      respondBy: 1_800_000_000_000,
+    },
+    events: [],
+  } satisfies import('@daifugo/core').PlayerRoomView;
+}
+
+const FINAL_GAME = {
+  gameNo: 3,
+  standings: [
+    { seat: 0 as const, rank: 1 as const, title: '大富豪' as const, points: 5 },
+    { seat: 1 as const, rank: 2 as const, title: '富豪' as const, points: 3 },
+  ],
+  firedRuleIds: [],
+};
+
+describe('セット最終戦のリザルト', () => {
+  // 直前の describe が後片付けしない描画を残すので、始める前にも掃除する。
+  beforeEach(cleanup);
+  afterEach(cleanup);
+
+  it('setResultに入るとまず最終戦の結果を出し、押すとセットリザルトへ進む', async () => {
+    const user = userEvent.setup();
+    const observable = observableTutorialClient(finalGameRoom(FINAL_GAME));
+    render(<App client={observable.client} />);
+
+    expect(screen.getByText('第3戦 おわり')).toBeTruthy();
+    expect(screen.getByText('+5')).toBeTruthy();
+    expect(screen.queryByText('セットリザルト')).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'セット結果へ' }));
+
+    expect(screen.getByText('セットリザルト')).toBeTruthy();
+    expect(screen.getByText('13点')).toBeTruthy();
+  });
+
+  it('進んだあとの更新で最終戦の結果へ巻き戻らない', async () => {
+    const user = userEvent.setup();
+    const observable = observableTutorialClient(finalGameRoom(FINAL_GAME));
+    render(<App client={observable.client} />);
+
+    await user.click(screen.getByRole('button', { name: 'セット結果へ' }));
+    act(() => {
+      observable.setRoom({ ...finalGameRoom(FINAL_GAME), v: 21 });
+    });
+
+    expect(screen.getByText('セットリザルト')).toBeTruthy();
+    expect(screen.queryByText('第3戦 おわり')).toBeNull();
+  });
+
+  it('最終戦の結果が無いセットでは直接セットリザルトを出す', () => {
+    const observable = observableTutorialClient(finalGameRoom(null));
+    render(<App client={observable.client} />);
+
+    expect(screen.getByText('セットリザルト')).toBeTruthy();
+    expect(screen.queryByText(/おわり/)).toBeNull();
+  });
+});
