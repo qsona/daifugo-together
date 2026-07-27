@@ -328,7 +328,7 @@ describe('proposal vertical slice', () => {
     ).toBe('forbidden');
   });
 
-  it('failedのリトライを1回に制限し、枠切れ後は同内容の再提案を許可する', async () => {
+  it('failedを終端化し、失敗確定後は同内容の再提案を許可する', async () => {
     const persistence = new SqlitePersistence(':memory:', {
       createUserId: () => 'author-retry',
       createToken: () => 'proposal-token-retry',
@@ -374,15 +374,6 @@ describe('proposal vertical slice', () => {
       ),
     ).toBe('transitioned');
 
-    const duplicate = await service.submit({
-      token: session.userToken,
-      ip: '127.0.0.1',
-      body: request,
-    });
-    expect(duplicate.body).toMatchObject({
-      outcome: 'accepted',
-      proposal: { id },
-    });
     expect(
       persistence.proposals.transitionProposal(
         id,
@@ -391,31 +382,13 @@ describe('proposal vertical slice', () => {
         {},
         4_300,
       ),
-    ).toBe('transitioned');
+    ).toBe('forbidden');
     expect(persistence.proposals.findById(id)).toMatchObject({
-      status: 'implementing',
+      status: 'failed',
       attemptCount: 1,
-      reasonCode: null,
-      reasonText: null,
+      reasonCode: 'ci_failed',
+      reasonText: 'CIに失敗しました',
     });
-    expect(
-      persistence.proposals.transitionProposal(
-        id,
-        'implementing',
-        'failed',
-        { reasonCode: 'retry_exhausted', reasonText: '再試行も失敗しました' },
-        4_400,
-      ),
-    ).toBe('transitioned');
-    expect(
-      persistence.proposals.transitionProposal(
-        id,
-        'failed',
-        'implementing',
-        {},
-        4_500,
-      ),
-    ).toBe('noop');
 
     const resubmitted = await service.submit({
       token: session.userToken,

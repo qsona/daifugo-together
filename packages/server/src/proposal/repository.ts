@@ -156,7 +156,6 @@ const ALLOWED_TRANSITIONS = new Set([
   'screening:rejected',
   'implementing:released',
   'implementing:failed',
-  'failed:implementing',
 ]);
 
 function validPatch(
@@ -272,7 +271,7 @@ export class ProposalRepository {
     if (!ALLOWED_TRANSITIONS.has(`${from}:${to}`) || !validPatch(to, patch)) {
       return 'forbidden';
     }
-    const retry = from === 'failed' && to === 'implementing';
+    const failed = to === 'failed';
     const terminalReason = to === 'rejected' || to === 'failed';
     const released = to === 'released';
     const result = this.#sqlite
@@ -281,24 +280,22 @@ export class ProposalRepository {
          SET status = ?,
              status_changed_at = ?,
              updated_at = ?,
-             attempt_count = attempt_count + ?,
+             attempt_count = CASE WHEN ? = 1 THEN 1 ELSE attempt_count END,
              reason_code = ?,
              reason_text = ?,
              rule_id = ?
-         WHERE id = ? AND status = ?
-           AND (? = 0 OR attempt_count = 0)`,
+         WHERE id = ? AND status = ?`,
       )
       .run(
         to,
         now,
         now,
-        retry ? 1 : 0,
+        failed ? 1 : 0,
         terminalReason ? patch.reasonCode!.trim() : null,
         terminalReason ? patch.reasonText!.trim() : null,
         released ? patch.ruleId!.trim() : null,
         id,
         from,
-        retry ? 1 : 0,
       );
     return result.changes === 1 ? 'transitioned' : 'noop';
   }

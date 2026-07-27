@@ -4,6 +4,7 @@
 
 - **フェーズ 1 完了(2026-07-27)**: TS-02・E1・E2・E3・E4 は main に統合済み、E13 は本番デプロイと動作検証(DP-01・DP-03)まで完了(`https://daifugo-together.fly.dev/`)。残りは DP-02 の仕上げ(GitHub Environment `production` + `FLY_API_TOKEN` 登録と初回 CD 実行確認)のみ
 - **フェーズ 2 / E5 RP-01・RP-02 完了**: プロセス1の独立 GPT-5.6 Sol レビュー(`GO_WITH_FIXES`)を反映し、プロセス2の独立完了レビューは要件適合 `PASS` / 品質 `APPROVED`。RP-03 は CX-02 依存のため E7 後に戻る
+- **C-5 追従完了**: E7 内包リトライの決定を反映し、`proposals.failed` を終端化。`failed` 遷移時に `attempt_count=1` を記録して同内容の再提案を即時解禁する
 - E1〜E3 の実装記録は本書末尾の「並行進行」節、E13 は「E13」節。E4 の未解消の開発者判断は「詰まっている点」に残っている(1〜4・7・8・11)
 
 ## フェーズ 2: E5 ルール提案受付(RP-01・RP-02)
@@ -32,7 +33,7 @@
 |---|---|---|---|
 | E5-P1-1 | ルール名上限は **12 文字**、本文は 400 文字 | **採用** | decision-log E-14 と RuleCutIn の表示制約を正とする。core 定数・画面カウンタ・境界テストへ反映済み |
 | E5-P1-2 | E6 の値(ユーザー5件/時・20件/日、IP 20件/時)をメモリ内 sliding window で実装 | **採用(初期構成限定)** | E12 の単一プロセス構成では妥当。再起動で履歴が消える弱点を明記し、`ProposalRateLimitPort` で永続ストアへ交換可能にした |
-| E5-P1-3 | C-5 は E05 の「リトライ可能 failed も部分ユニーク索引に含める」方式を暫定採用 | **要人間判断** | E05 と E07 のモデルが食い違う。decision-log の状態は変えず、E7 レビューまで E05 契約を暫定実装した。索引 predicate・重複検索・retry guard が裁定時の変更範囲 |
+| E5-P1-3 | C-5 は E05 の「リトライ可能 failed も部分ユニーク索引に含める」方式を暫定採用 | **E7 内包モデルで決定・反映済み** | `failed → implementing` を廃止し、`failed` 遷移時に `attempt_count=1` を記録。同内容の再提案を即時解禁した。E7 内部の再試行は `pipeline_jobs.attempt` が管理する |
 | E5-P1-4 | HTTP 認証は `Authorization: Bearer <Socket.IOで発行済みの匿名token>` | **採用** | 既存の匿名本人性を URL に露出せず HTTP と Socket.IO で共有できる。Cookie 化時は Web client/API と CSRF 対策が変更範囲 |
 
 #### プロセス1レビューの結果と反映
@@ -66,7 +67,7 @@
 - Minor: UI は入力を NFC 正規化する前にコードポイント上限で切っていたため、`e + combining acute` のような分解文字12個が、サーバーなら NFC 後12文字で受理できるのに UI では6文字へ短縮されていた
   - 対応: NFC 正規化後の値をコードポイント上限で切るよう変更し、分解文字12個が合成済み12文字として残る回帰テストを追加
 - 最終 `pnpm verify`: **34 files / 244 tests 成功**。format / lint / design lint / typecheck / 全 package build も成功
-- 確認を後続へ渡すもの: E6 の実検査証跡ストアと E7 の実ワーカー接続、C-5 の最終裁定。いずれも今回の RP-01/RP-02 のスコープ外
+- 確認を後続へ渡すもの: E6 の実検査証跡ストアと E7 の実ワーカー接続。C-5 は 2026-07-27 の決定を反映済み
 
 ### 開発者レビューの反映(2026-07-26・プロセス2 のあと)
 
@@ -274,7 +275,7 @@ TS-02 の仮定 4 件は `decision-log.md` §G に裁定記録として移った
 9. **`og:image` の絶対 URL**(仮定 17)。デプロイ先が決まったら差し替えが要る。→ **解消**: E13 で本番 URL(`https://daifugo-together.fly.dev/`)の絶対 URL へ確定済み(本書 E13 節)。
 10. **Git remote が無いため GitHub Actions 上での CI 実行は未確認**(TS-02 から継続)。ローカルの `pnpm verify` 相当までは確認済み。→ **解消**: リポジトリを GitHub(public、A-2)へ公開済みで、CI は GitHub Actions 上で実行されている(実行速度差の吸収 `a48448f`)。
 11. **実機のノッチ/ホームインジケータでの見え** は未確認(E04 §3.1(d) のとおり持ち越し)。ブラウザでは `env(safe-area-inset-*)` が 0 になるため、セーフエリアの効きそのものは検証できていない。
-12. **decision-log C-5 の failed リトライモデルは要人間判断。** E05 は `failed → implementing` を1回だけ許可し、その間は同一内容を重複扱いにする一方、E07 は implementing 内部の再試行を示唆している。E7 レビューでどちらを正とするか決める必要がある。E5 は契約を変えず前者を暫定実装しており、裁定時の変更範囲は `idx_proposals_inflight_dedupe`、`findInflight`、`transitionProposal` と対応テスト。
+12. **decision-log C-5 は E7 内包モデルで決定・反映済み。** `failed → implementing` は廃止し、`failed` 遷移時に `attempt_count=1` を記録して部分ユニーク索引から即時に外す。再試行は E7 の `pipeline_jobs.attempt` 内で扱う。
 
 TS-02 から継続で未解決のもの:
 
