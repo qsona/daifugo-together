@@ -27,6 +27,20 @@ type CountRow = { key: string | null; count: number };
 export type ScreeningQueueStage =
   'awaiting_l3' | 'awaiting_cx01' | 'awaiting_developer_confirmation';
 
+export interface QueuePage<T> {
+  items: T[];
+  total: number;
+  limit: number;
+  offset: number;
+  truncated: boolean;
+}
+
+export interface DeveloperConfirmationCounts {
+  e6Rejected: number;
+  cx01Rejected: number;
+  specApproved: number;
+}
+
 export interface OperationsStatus {
   generatedAt: number;
   proposals: {
@@ -37,6 +51,7 @@ export interface OperationsStatus {
     l3: Record<L3Verdict, number>;
     cx01: Record<JudgementVerdict, number>;
     developer: Record<JudgementVerdict, number>;
+    developerSources: DeveloperConfirmationCounts;
   };
   pipeline: {
     total: number;
@@ -44,13 +59,13 @@ export interface OperationsStatus {
     failuresByCode: Record<string, number>;
   };
   queue: {
-    screening: Array<{
+    screening: QueuePage<{
       proposalId: string;
       name: string;
       stage: ScreeningQueueStage;
       createdAt: number;
     }>;
-    implementation: Array<{
+    implementation: QueuePage<{
       jobId: number;
       proposalId: string;
       name: string;
@@ -75,6 +90,7 @@ export interface OperationsFunnel {
     l3: Record<L3Verdict, number>;
     cx01: Record<JudgementVerdict, number>;
     developer: Record<JudgementVerdict, number>;
+    developerSources: DeveloperConfirmationCounts;
   };
   rates: {
     /**
@@ -128,9 +144,17 @@ export class OperationsRepository {
     this.#sqlite = sqlite;
   }
 
-  status(now = Date.now(), queueLimit = 20): OperationsStatus {
-    if (!Number.isSafeInteger(queueLimit) || queueLimit <= 0) {
-      throw new Error('queueLimit must be a positive integer');
+  status(
+    now = Date.now(),
+    page: { limit?: number; offset?: number } = {},
+  ): OperationsStatus {
+    const limit = page.limit ?? 20;
+    const offset = page.offset ?? 0;
+    if (!Number.isSafeInteger(limit) || limit <= 0 || limit > 1_000) {
+      throw new Error('limit must be an integer between 1 and 1000');
+    }
+    if (!Number.isSafeInteger(offset) || offset < 0) {
+      throw new Error('offset must be a non-negative integer');
     }
     const proposalRows = this.#group(
       'SELECT status AS key, COUNT(*) AS count FROM proposals GROUP BY status',
@@ -153,23 +177,39 @@ export class OperationsRepository {
           JUDGEMENT_VERDICTS,
           this.#latestJudgements('developer'),
         ),
+        developerSources: this.#developerConfirmationCounts(),
       },
       pipeline: {
         total: Object.values(byPhase).reduce((sum, count) => sum + count, 0),
         byPhase,
         failuresByCode: openCounts(
           this.#group(
-            `SELECT error_code AS key, COUNT(*) AS count
-             FROM pipeline_jobs
-             WHERE phase = 'failed'
-             GROUP BY error_code
-             ORDER BY error_code`,
+            `SELECT COALESCE(pj.error_code, 'unclassified') AS key,
+                    COUNT(*) AS count
+             FROM proposals p
+             LEFT JOIN pipeline_jobs pj ON pj.proposal_id = p.id
+             WHERE p.status = 'failed'
+             GROUP BY key
+             ORDER BY key`,
           ),
         ),
       },
       queue: {
-        screening: this.#screeningQueue(queueLimit),
-        implementation: this.#implementationQueue(queueLimit),
+        screening: this.#page(
+          this.#screeningQueue(limit, offset),
+          byStatus.screening,
+          limit,
+          offset,
+        ),
+        implementation: this.#page(
+          this.#implementationQueue(limit, offset),
+          byPhase.queued +
+            byPhase.implementing +
+            byPhase.pr_open +
+            byPhase.merged,
+          limit,
+          offset,
+        ),
       },
     };
   }
@@ -205,7 +245,8 @@ export class OperationsRepository {
       byStatus,
       rejectionReasons: openCounts(
         this.#group(
-          `SELECT reason_code AS key, COUNT(*) AS count
+          `SELECT COALESCE(reason_code, 'unclassified') AS key,
+                  COUNT(*) AS count
            FROM proposals
            WHERE status = 'rejected'
              AND created_at >= ? AND created_at < ?
@@ -216,10 +257,11 @@ export class OperationsRepository {
       ),
       implementationFailures: openCounts(
         this.#group(
-          `SELECT pj.error_code AS key, COUNT(*) AS count
-           FROM pipeline_jobs pj
-           JOIN proposals p ON p.id = pj.proposal_id
-           WHERE pj.phase = 'failed'
+          `SELECT COALESCE(pj.error_code, 'unclassified') AS key,
+                  COUNT(*) AS count
+           FROM proposals p
+           LEFT JOIN pipeline_jobs pj ON pj.proposal_id = p.id
+           WHERE p.status = 'failed'
              AND p.created_at >= ? AND p.created_at < ?
            GROUP BY pj.error_code
            ORDER BY pj.error_code`,
@@ -236,6 +278,7 @@ export class OperationsRepository {
           JUDGEMENT_VERDICTS,
           this.#latestJudgements('developer', parameters),
         ),
+        developerSources: this.#developerConfirmationCounts(parameters),
       },
       rates: {
         terminalOutcomes: ratio(byStatus.released, terminal),
@@ -273,6 +316,11 @@ export class OperationsRepository {
        FROM judgements j
        JOIN proposals p ON p.id = j.proposal_id
        WHERE j.decided_by = '${actor}'
+         ${
+           actor === 'developer'
+             ? 'AND (j.source_check_id IS NOT NULL OR j.source_judgement_id IS NOT NULL)'
+             : ''
+         }
          AND j.id = (
            SELECT MAX(j2.id)
            FROM judgements j2
@@ -285,7 +333,55 @@ export class OperationsRepository {
     );
   }
 
-  #screeningQueue(limit: number): OperationsStatus['queue']['screening'] {
+  #developerConfirmationCounts(
+    parameters?: readonly [number, number],
+  ): DeveloperConfirmationCounts {
+    const rows = this.#group(
+      `SELECT
+         CASE
+           WHEN j.source_check_id IS NOT NULL AND j.verdict = 'reject'
+             THEN 'e6Rejected'
+           WHEN j.source_judgement_id IS NOT NULL AND j.verdict = 'reject'
+             THEN 'cx01Rejected'
+           WHEN j.source_judgement_id IS NOT NULL AND j.verdict = 'approve'
+             THEN 'specApproved'
+         END AS key,
+         COUNT(*) AS count
+       FROM judgements j
+       JOIN proposals p ON p.id = j.proposal_id
+       WHERE j.decided_by = 'developer'
+         AND (j.source_check_id IS NOT NULL OR j.source_judgement_id IS NOT NULL)
+         ${parameters ? 'AND p.created_at >= ? AND p.created_at < ?' : ''}
+       GROUP BY key`,
+      parameters,
+    );
+    const counts = openCounts(rows);
+    return {
+      e6Rejected: counts.e6Rejected ?? 0,
+      cx01Rejected: counts.cx01Rejected ?? 0,
+      specApproved: counts.specApproved ?? 0,
+    };
+  }
+
+  #page<T>(
+    items: T[],
+    total: number,
+    limit: number,
+    offset: number,
+  ): QueuePage<T> {
+    return {
+      items,
+      total,
+      limit,
+      offset,
+      truncated: offset + items.length < total,
+    };
+  }
+
+  #screeningQueue(
+    limit: number,
+    offset: number,
+  ): OperationsStatus['queue']['screening']['items'] {
     const rows = this.#sqlite
       .prepare(
         `SELECT p.id, p.name, p.created_at,
@@ -304,9 +400,9 @@ export class OperationsRepository {
          FROM proposals p
          WHERE p.status = 'screening'
          ORDER BY p.created_at ASC, p.id ASC
-         LIMIT ?`,
+         LIMIT ? OFFSET ?`,
       )
-      .all(limit) as Array<{
+      .all(limit, offset) as Array<{
       id: string;
       name: string;
       created_at: number;
@@ -328,7 +424,8 @@ export class OperationsRepository {
 
   #implementationQueue(
     limit: number,
-  ): OperationsStatus['queue']['implementation'] {
+    offset: number,
+  ): OperationsStatus['queue']['implementation']['items'] {
     return (
       this.#sqlite
         .prepare(
@@ -338,9 +435,9 @@ export class OperationsRepository {
            JOIN proposals p ON p.id = pj.proposal_id
            WHERE pj.phase IN ('queued', 'implementing', 'pr_open', 'merged')
            ORDER BY pj.created_at ASC, pj.id ASC
-           LIMIT ?`,
+           LIMIT ? OFFSET ?`,
         )
-        .all(limit) as Array<{
+        .all(limit, offset) as Array<{
         id: number;
         proposal_id: string;
         name: string;

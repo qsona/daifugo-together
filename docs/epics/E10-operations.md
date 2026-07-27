@@ -5,7 +5,7 @@
 - 改訂: 2026-07-24 確定済みの E05(提案受付)・E08(評価・淘汰)の設計に合わせて計測方式を再構成(遮断は E6 検査ログを読む二源集計 / 評価は 3 値 rating / 排除は rule_eliminations を読む / テーブル名を game_sets・set_rules に修正)
 - 一次情報源: `docs/企画書.md`(§8 / §9-8 / §10 / §11)、`docs/product-backlog.md`(OP-01〜OP-04)、`docs/epics/E12-tech-stack.md`(§4.4 / §4.7 / §6)、`docs/epics/E05-rule-proposal.md`(proposals・状態機械)、`docs/epics/E08-evaluation.md`(game_sets・set_rules・set_evaluations・rule_evaluations・rule_eliminations)
 
-> **実装時改訂ノート(2026-07-27、E-18/C-2/C-6/G-8〜G-12 を反映):** フェーズ2の実装ではこのノートを本文中の旧前提より優先する。判定・実装は開発者マシン上のローカルツール/skillから人間承認で起動し、従量課金APIもサーバー常駐workerも使わない。このためOP-01のレートgovernor、`settings`のcodex上限、`ops_events.codex_started`は作らない。キュー・試行・内部失敗の正準ソースは既存`pipeline_jobs`、投稿の正準ソースは全送信で行を作る`proposals`、L3/CX-01/開発者確定は`proposal_checks`/`judgements`とする。ユーザー向け実装失敗は`implementation_failed`の一値、内部内訳は`pipeline_jobs.error_code`から集計する。OP-01はキュー可視化として実装し、遊ばれている時間帯を避けるE-15は人間が起動時刻を選ぶ運用で満たす。D-4が未決の間は単一の「採用率」を固定せず、分母を明記した終端結果ベースと全投稿ベースを併記する。§1〜§5の`ops_events`/`settings`/governor/二源遮断集計に関する記述は履歴として残す。
+> **実装時の仮置き改訂ノート(2026-07-27、E-18/C-2/C-6/G-8〜G-12 を反映):** フェーズ2のコード実装ではこのノートを本文中の旧前提より優先するが、decision-logの未決項目を実装者が決定するものではない。判定・実装は開発者マシン上のローカルツール/skillから人間承認で起動し、従量課金APIもサーバー常駐workerも使わない。このため現時点ではOP-01のレートgovernor、`settings`のcodex上限、`ops_events.codex_started`は作らない。キュー・試行・内部失敗の正準ソースは既存`pipeline_jobs`、投稿の正準ソースは全送信で行を作る`proposals`、L3/CX-01/開発者確定は`proposal_checks`/`judgements`とする。ユーザー向け実装失敗は`implementation_failed`の一値、内部内訳は`pipeline_jobs.error_code`から集計する。OP-01はキュー可視化として先行実装する。E-15で実際にdrainを起こすのはCodex起動ではなくマージ後のデプロイなので、その時刻を人間が選ぶ運用とするかは正式裁定を待つ。D-4が未決の間は単一の「採用率」を固定せず、分母を明記した終端結果ベースと全投稿ベースを併記する。D-5の解消とOP-01受け入れ条件の改訂も開発者裁定待ち。§1〜§5の`ops_events`/`settings`/governor/二源遮断集計に関する記述は履歴として残す。
 
 ---
 

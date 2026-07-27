@@ -1,11 +1,14 @@
 import { resolve } from 'node:path';
 
 import { SqlitePersistence } from './persistence.js';
+import {
+  nonNegativeIntegerOption,
+  optionValue,
+  parseSince,
+} from './operations/cli.js';
 
 function option(name: string): string | null {
-  const index = process.argv.indexOf(name);
-  const value = index >= 0 ? process.argv[index + 1] : undefined;
-  return value && !value.startsWith('--') ? value : null;
+  return optionValue(process.argv, name);
 }
 
 function requiredOption(name: string): string {
@@ -29,16 +32,17 @@ const persistence = new SqlitePersistence(
 
 try {
   if (command === 'status') {
+    const limit = nonNegativeIntegerOption(process.argv, '--limit', 20, 1_000);
+    if (limit === 0) throw new Error('--limit must be greater than zero');
+    const offset = nonNegativeIntegerOption(process.argv, '--offset', 0);
     process.stdout.write(
-      `${JSON.stringify(persistence.operations.status(Date.now()))}\n`,
+      `${JSON.stringify(
+        persistence.operations.status(Date.now(), { limit, offset }),
+      )}\n`,
     );
   } else if (command === 'funnel') {
     const now = Date.now();
-    const sinceOption = option('--since');
-    const since =
-      sinceOption === null
-        ? now - 30 * 24 * 60 * 60 * 1_000
-        : Date.parse(sinceOption);
+    const since = parseSince(option('--since'), now);
     if (!Number.isSafeInteger(since) || since < 0 || since >= now) {
       throw new Error('--since must be an ISO date before now');
     }

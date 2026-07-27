@@ -1187,6 +1187,17 @@ TS-02 から継続で未解決のもの:
 | E10-P1-2 | D-4確定までは`adoptionRate`という単一値を公開しない | decision-log D-4が未決。どちらも正確な生データから導出可能 | 分母別の2値と生件数を維持し、決定後に正準aliasを追加できる形にする |
 | E10-P1-3 | CLI出力は既存opsコマンドに合わせたJSON 1行を正とする | 個人開発者向けで機械処理もしやすく、専用UIを作らないE10方針に合う | `--detail`相当が常時含まれる情報量と秘匿境界をレビューする |
 
+#### E10 独立方向性レビューとプロセス2
+
+- 新規コンテキストの独立 GPT-5.6 Sol 方向性レビューは **GO**、Criticalなし。governor/`ops_events`/codex用`settings`を増やさず既存台帳を正準にする方向、全投稿一源、D-4を固定しない2率、C-6の内外分離、秘匿境界は妥当と裁定された
+- Important 1「本番imageでbuild付きCLIを実行できない」は、`node packages/server/dist/ops.js`を本番入口、build付き`ops:dev`を開発入口へ分離して解消した。実build後に空SQLiteへroot開発CLIとdist直接CLIを通し、runbookへ両コマンドとDB path注意を記録した
+- Important 2「日付だけの`--since`がUTCになる」は、日付だけをJST 00:00、日時を`Z`/明示offset必須として解消した。JST境界、offset/Z、timezone欠落、存在しない日付、既定30日をテストする
+- Minorの20件固定は`--limit`（最大1000）/`--offset`、`total`/`truncated`を追加して解消した。21件同時刻をID順に2ページで取得し、`queued`/`implementing`/`pr_open`/`merged`とattempt 2を回帰化した
+- E6確定却下/CX-01確定却下/SPEC承認をsource別に集計し、AI再判定は最新だけを数える。内部failure 6区分と台帳欠損`unclassified`の合計が`failed`総数に一致する回帰を追加した
+- Important 3のうちD-5解消、OP-01受け入れ条件改訂、E-15をマージ/デプロイ時刻の人間選択として正式化する裁定は、実装者がdecision-logを変更せず**開発者判断待ち**として残す。コードは非強制の読み取り専用なので、裁定後にgovernor撤回等の破壊的手戻りは生じない
+- process2重点検証はoperations/pipeline/persistenceの5 files / 32 testsとserver typecheckが成功。全体`CI=true pnpm verify`もformat/lint/design/typecheck、77 files / 535 tests、全package buildまで成功した
+- 本番配布物の入口は通常build後に`node packages/server/dist/ops.js status/funnel`をbuildなしで実行して成功した。Docker runtime imageの実buildも試みたが、ローカルDocker daemonが停止中で接続できず未実施。Dockerfileはproduction dependenciesとserver/core/rules等の`dist`をruntimeへコピーする既存構成で、runbookは本番でpnpm/buildを要求しない
+
 ### E2で見つけた設計書の不整合
 
 - 冒頭改訂ノートは探索を `worker_threads` 1〜2本で実行すると決定済みだが、§3.1(d)・§4.4・§6-5には「初期はホスト直列、兆候が出たらworkerへ移行」という旧記述が残る。実装は改訂ノートを正とした。
