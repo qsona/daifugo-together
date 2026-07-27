@@ -132,11 +132,18 @@ export async function recordMergedImplementation(options: {
     pr.state !== 'MERGED' ||
     typeof pr.mergedAt !== 'string' ||
     !mergeSha ||
-    !/^[0-9a-f]{40}$/u.test(mergeSha)
+    !/^[0-9a-f]{40}$/u.test(mergeSha) ||
+    !pr.headRefOid ||
+    !/^[0-9a-f]{40}$/u.test(pr.headRefOid)
   ) {
     throw new Error('PR has not been merged with a verifiable merge commit');
   }
-  if (pr.headRefOid !== job.headSha) {
+  const reviewedHeadMatches = pr.headRefOid === job.headSha;
+  const legacyMergeStoredAsHead =
+    (job.phase === 'merged' || job.phase === 'done') &&
+    job.mergeSha === null &&
+    job.headSha === mergeSha;
+  if (!reviewedHeadMatches && !legacyMergeStoredAsHead) {
     throw new Error('merged PR head does not match the reviewed job head');
   }
   if (job.phase === 'merged' || job.phase === 'done') {
@@ -145,6 +152,7 @@ export async function recordMergedImplementation(options: {
         from: job.phase,
         to: job.phase,
         mergeSha,
+        ...(legacyMergeStoredAsHead ? { headSha: pr.headRefOid } : {}),
       });
       if (updated.status !== 'updated') {
         throw new Error(`merge backfill failed: ${updated.status}`);

@@ -280,12 +280,12 @@ describe('CX-02 pipeline jobs', () => {
       item.job.id,
       'pr_open',
       'merged',
-      {},
+      { headSha: 'c'.repeat(40) },
       2_000,
     );
     expect(persistence.pipeline.job(item.job.id)).toMatchObject({
       phase: 'merged',
-      headSha: 'b'.repeat(40),
+      headSha: 'c'.repeat(40),
       mergeSha: null,
     });
 
@@ -293,11 +293,16 @@ describe('CX-02 pipeline jobs', () => {
       jobs.update(item.job.id, {
         from: 'merged',
         to: 'merged',
+        headSha: 'b'.repeat(40),
         mergeSha: 'c'.repeat(40),
       }),
     ).toMatchObject({
       status: 'updated',
-      job: { phase: 'merged', mergeSha: 'c'.repeat(40) },
+      job: {
+        phase: 'merged',
+        headSha: 'b'.repeat(40),
+        mergeSha: 'c'.repeat(40),
+      },
     });
     expect(
       jobs.update(item.job.id, {

@@ -831,6 +831,7 @@ TS-02 から継続で未解決のもの:
 - 旧DBへ`pipeline_jobs.merge_sha`列を追加すると既存`merged/done`行がNULLになり、当初の`implement:merged`ではGitHub照合後も補完できなかった。GitHubのreview済みheadと実merge commitが一致した場合に限り、NULLの既存行を`merged→merged` / `done→done`の同phase CASで補完する。非NULL値の上書きは拒否する
 - runtime照合がproposalとjobの許可状態を独立に見ていたため、強制的に作った`active + implementing/merged`不整合行をロードできた。同期で許す組を`implementing+merged` / `released+done`だけに限定し、active runtimeは後者だけを許すよう補強した
 - 追加focused検証は3 files / 27 testsとserver/pipeline typecheckが成功。修正後は同じレビュー担当で指摘解消を再確認する
+- 再レビューで実際の旧schemaはmerge時に`head_sha`をmerge commitで上書きしていたことを追加再現した。旧`head_sha`がGitHubのmerge commitと一致するときだけ、同じCASで`head_sha`を`headRefOid`へ正規化し、`merge_sha`を補完するよう修正した。2 files / 19 tests、pipeline typecheck、lint、差分検査が成功
 
 #### CX-05の残る外部・後続ゲート
 

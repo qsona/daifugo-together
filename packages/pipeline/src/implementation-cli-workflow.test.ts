@@ -302,7 +302,7 @@ describe('implementation CLI workflow', () => {
   it('旧DBのmerged jobだけをGitHub再検証後に同phaseでbackfillする', async () => {
     const legacy = item('merged', {
       prNumber: 42,
-      headSha: 'b'.repeat(40),
+      headSha: 'c'.repeat(40),
       mergeSha: null,
     });
     const update = vi.fn(() => ({
@@ -334,6 +334,7 @@ describe('implementation CLI workflow', () => {
     expect(update).toHaveBeenCalledWith(1, {
       from: 'merged',
       to: 'merged',
+      headSha: 'b'.repeat(40),
       mergeSha: 'c'.repeat(40),
     });
   });
