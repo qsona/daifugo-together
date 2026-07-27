@@ -190,6 +190,47 @@ afterEach(async () => {
 });
 
 describe('Socket.IO room gateway', () => {
+  it('きほんの1人部屋の初戦は探索済みseedでseat 0に教材配牌を届ける', async () => {
+    const harness = await createHarness();
+    const owner = await connect(harness);
+    const created = await emitAck<
+      'room:create',
+      { roomId: string; inviteCode: string }
+    >(owner.client, 'room:create', { mode: 'basic' });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+
+    const startedState = once<PlayerRoomView>((resolve) =>
+      owner.client.once('room:state', (view) => {
+        if (view.phase === 'playing') resolve(view);
+      }),
+    );
+    await emitAck<'room:start', Record<string, never>>(
+      owner.client,
+      'room:start',
+      {},
+    );
+    const view = await startedState;
+
+    expect(view.you.seatId).toBe(0);
+    expect(view.game?.turn).toMatchObject({ seat: 0, deadlineAt: null });
+    expect(view.game?.yourHand.map((card) => card.id)).toEqual([
+      'D03',
+      'C03',
+      'H05',
+      'S07',
+      'D07',
+      'C08',
+      'HJ',
+      'SK',
+      'DK',
+      'SA',
+      'S02',
+      'H02',
+      'D02',
+    ]);
+  });
+
   it('create→join→startを実ソケットで直列化し、受信者以外の手札を漏らさない', async () => {
     const harness = await createHarness();
     const owner = await connect(harness);

@@ -179,8 +179,15 @@ function aiMembers(
 function withSeats(
   members: readonly RoomMember[],
   random: () => number,
+  fixedHumanFirst = false,
 ): RoomMember[] {
-  return shuffled(members, random).map((member, index) => ({
+  const ordered = fixedHumanFirst
+    ? [
+        ...members.filter((member) => !member.isAI),
+        ...members.filter((member) => member.isAI),
+      ]
+    : shuffled(members, random);
+  return ordered.map((member, index) => ({
     ...member,
     seatId: SEATS[index]!,
   }));
@@ -329,7 +336,11 @@ function startSet(
     input.now,
   );
   const random = options.random ?? Math.random;
-  const members = withSeats([...preparedHumans, ...addedAi], random);
+  const members = withSeats(
+    [...preparedHumans, ...addedAi],
+    random,
+    state.mode === 'basic' && preparedHumans.length === 1 && state.setNo === 0,
+  );
   const fixedRules = structuredClone(availableRules);
   const setNo = state.setNo + 1;
   const started = startSetTransition(
@@ -364,6 +375,7 @@ function startSet(
       turnDeadlineAt: deadlineAtForTurn(
         started.state,
         settlement.members,
+        state.mode,
         input.now,
         options,
       ),
@@ -406,6 +418,7 @@ function phaseAfterSettlement(
 function deadlineAtForTurn(
   engine: SetTransition['state'],
   members: readonly RoomMember[],
+  mode: RoomState['mode'],
   now: number,
   options: RoomReducerOptions,
 ): number | null {
@@ -419,6 +432,13 @@ function deadlineAtForTurn(
     (candidate) => candidate.memberId === engine.currentGame?.public.turn,
   );
   if (!member || member.isAI || member.departed) {
+    return null;
+  }
+  const isBasicSolo =
+    mode === 'basic' &&
+    members.filter((candidate) => !candidate.isAI && !candidate.departed)
+      .length === 1;
+  if (member.connected && isBasicSolo) {
     return null;
   }
   return (
@@ -799,7 +819,13 @@ function connectionChanged(
     {
       members,
       turnDeadlineAt: state.engine
-        ? deadlineAtForTurn(state.engine, members, action.now, options)
+        ? deadlineAtForTurn(
+            state.engine,
+            members,
+            state.mode,
+            action.now,
+            options,
+          )
         : null,
       abandonAt,
     },
@@ -917,6 +943,7 @@ function gameAction(
       turnDeadlineAt: deadlineAtForTurn(
         transition.state,
         settlement.members,
+        state.mode,
         action.now,
         options,
       ),
@@ -979,6 +1006,7 @@ function advanceIntermission(
       turnDeadlineAt: deadlineAtForTurn(
         transition.state,
         settlement.members,
+        state.mode,
         action.now,
         options,
       ),

@@ -35,6 +35,7 @@ import {
   RoomTimerCoordinator,
 } from './timers.js';
 import type { RoomTimerOptions } from './timers.js';
+import { setSeedForRoomStart } from './tutorial.js';
 import type { RoomState, RoomTransition } from './types.js';
 import { viewFor } from './view.js';
 
@@ -62,7 +63,13 @@ export interface RoomSocketGatewayOptions {
   decideTurn?: (state: RoomState, memberId: string) => Promise<CardId[] | null>;
   timers?: Pick<
     RoomTimerOptions,
-    'setTimer' | 'clearTimer' | 'random' | 'aiDelayMinMs' | 'aiDelayMaxMs'
+    | 'setTimer'
+    | 'clearTimer'
+    | 'random'
+    | 'aiDelayMinMs'
+    | 'aiDelayMaxMs'
+    | 'basicAiDelayMinMs'
+    | 'basicAiDelayMaxMs'
   >;
   joinRateLimit?: {
     maxAttempts: number;
@@ -451,7 +458,7 @@ export function attachRoomSocketGateway(
           type: 'start',
           memberId: current.member.memberId,
           now: now(),
-          setSeed: createSetSeed(),
+          setSeed: setSeedForRoomStart(current.room, createSetSeed),
         });
         const error = roomFailure(transition);
         if (error) {

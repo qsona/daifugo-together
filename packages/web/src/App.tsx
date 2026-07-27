@@ -1,6 +1,12 @@
 import type { PlayerRoomView } from '@daifugo/core';
 import type { ReactNode } from 'react';
-import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 
 import type { CardView } from './components/Card';
 import type { MemberView as MemberListView } from './components/MemberList';
@@ -37,6 +43,7 @@ import { TitleScreen } from './screens/TitleScreen';
 import { WaitingRoomScreen } from './screens/WaitingRoomScreen';
 import { useScreenStore } from './store/screen';
 import { deriveCardHints } from './game/hints';
+import { createGuideState, reduceGuide, type GuideCue } from './game/guide';
 import {
   getPlayedBeforeStorage,
   hasPlayedBefore,
@@ -460,10 +467,19 @@ function ConnectedApp({
   const [selectedCardIds, setSelectedCardIds] = useState<readonly string[]>([]);
   const [funRating, setFunRating] = useState<SetFunRating | null>(null);
   const [ruleVotes, setRuleVotes] = useState(DEMO_FIRED_RULES);
+  const guideState = useRef(createGuideState());
+  const [guideCue, setGuideCue] = useState<GuideCue | null>(null);
   const [playedBefore, setPlayedBefore] = useState(() =>
     hasPlayedBefore(storage),
   );
   const room = state.room;
+  const tutorialEligible =
+    !playedBefore &&
+    room?.mode === 'basic' &&
+    room.phase === 'playing' &&
+    room.game?.gameNo === 1 &&
+    room.members.filter((member) => !member.isAI && !member.departed).length ===
+      1;
 
   useEffect(() => {
     setSelectedCardIds((selected) => reconcileSelectedCardIds(selected, room));
@@ -478,6 +494,27 @@ function ConnectedApp({
       setPlayedBefore(true);
     }
   }, [playedBefore, room, storage]);
+
+  useEffect(() => {
+    if (!tutorialEligible || !room?.game || guideCue) return;
+    const result = reduceGuide(guideState.current, {
+      type: 'snapshot',
+      key: `${room.roomId}:${String(room.v)}`,
+      gameNo: room.game.gameNo,
+      isMyTurn: room.game.turn?.seat === room.you.seatId,
+      fieldCardCount: room.game.field.cards.length,
+      legalMoves: room.game.legalMoves,
+      events: room.events,
+    });
+    guideState.current = result.state;
+    if (result.cue) setGuideCue(result.cue);
+  }, [guideCue, room, tutorialEligible]);
+
+  useEffect(() => {
+    if (!guideCue) return;
+    const timer = window.setTimeout(() => setGuideCue(null), 3_000);
+    return () => window.clearTimeout(timer);
+  }, [guideCue]);
 
   const invoke = (operation: Promise<unknown>) => {
     void operation.catch(() => undefined);
@@ -553,6 +590,8 @@ function ConnectedApp({
         hand={cards(game.yourHand)}
         selectedCardIds={selectedCardIds}
         {...(cardHints ? { cardHints } : {})}
+        guideCue={tutorialEligible ? guideCue : null}
+        showStrengthScale={tutorialEligible}
         isMyTurn={game.turn?.seat === room.you.seatId}
         canPlay={legalSelection}
         canPass={game.field.cards.length > 0}
@@ -562,6 +601,15 @@ function ConnectedApp({
           setSelectedCardIds((ids) =>
             ids.includes(id) ? ids.filter((item) => item !== id) : [...ids, id],
           );
+        }}
+        onDimmedCardTap={() => {
+          if (!tutorialEligible || guideCue) return;
+          const result = reduceGuide(guideState.current, {
+            type: 'illegalTap',
+            gameNo: game.gameNo,
+          });
+          guideState.current = result.state;
+          if (result.cue) setGuideCue(result.cue);
         }}
         onPlay={() => {
           if (!game.turn || !legalSelection) return;

@@ -628,6 +628,63 @@ describe('TU-02: きほんの部屋のカードヒント統合', () => {
   });
 });
 
+describe('TU-03: はじめての1戦のガイド', () => {
+  afterEach(cleanup);
+
+  it('未プレイのbasic 1人初戦だけ、一言と強さ目盛りを表示する', async () => {
+    const three = {
+      kind: 'natural',
+      id: 'S03',
+      suit: 'spade',
+      rank: '3',
+    } as const;
+    const legalMove: import('@daifugo/core').Play = {
+      kind: 'single',
+      cards: [three],
+      count: 1,
+      repRank: '3',
+    };
+    render(
+      <App
+        client={tutorialHintClient(tutorialHintRoom('basic', [legalMove]))}
+      />,
+    );
+
+    const guide = await screen.findByRole('status');
+    expect(guide.textContent).toContain('すきなカードを 1 枚まい えらんで');
+    expect(guide.querySelectorAll('ruby')).toHaveLength(2);
+    expect(
+      screen.getByLabelText('カードの強さ: 左がよわい、右がつよい'),
+    ).toBeTruthy();
+  });
+
+  it('既プレイ端末と2戦目では、一言も強さ目盛りも表示しない', () => {
+    const playedStorage = {
+      getItem: () => 'true',
+      setItem: () => undefined,
+    };
+    const first = render(
+      <App
+        client={tutorialHintClient(tutorialHintRoom('basic', []))}
+        storage={playedStorage}
+      />,
+    );
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(
+      screen.queryByLabelText('カードの強さ: 左がよわい、右がつよい'),
+    ).toBeNull();
+
+    first.unmount();
+    const secondGame = tutorialHintRoom('basic', []);
+    secondGame.game.gameNo = 2;
+    render(<App client={tutorialHintClient(secondGame)} />);
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(
+      screen.queryByLabelText('カードの強さ: 左がよわい、右がつよい'),
+    ).toBeNull();
+  });
+});
+
 describe('TU-01: 既プレイ端末の記録', () => {
   it('1戦完了のスナップショットを受けるとlocalStorageへ記録する', () => {
     const stored = new Map<string, string>();

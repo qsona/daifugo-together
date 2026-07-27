@@ -6,12 +6,14 @@ import { AppBar } from '../components/AppBar';
 import { Button } from '../components/Button';
 import type { CardView } from '../components/Card';
 import { HandTray } from '../components/HandTray';
+import { GuideMessage } from '../components/GuideMessage';
 import { RuleCutIn } from '../components/RuleCutIn';
 import type { RuleActivation } from '../components/RuleCutIn';
 import { Table } from '../components/Table';
 import type { TableSeat } from '../components/Table';
 import { Toast } from '../components/Toast';
 import type { CardHint } from '../game/hints';
+import type { GuideCue } from '../game/guide';
 import { cx } from '../lib/cx';
 
 import styles from './GameScreen.module.css';
@@ -51,6 +53,8 @@ type GameScreenProps = {
   hand: readonly CardView[];
   selectedCardIds: readonly string[];
   cardHints?: ReadonlyMap<string, CardHint>;
+  guideCue?: GuideCue | null;
+  showStrengthScale?: boolean;
   isMyTurn: boolean;
   canPlay?: boolean;
   canPass?: boolean;
@@ -81,6 +85,8 @@ export function GameScreen({
   hand,
   selectedCardIds,
   cardHints,
+  guideCue = null,
+  showStrengthScale = false,
   isMyTurn,
   canPlay,
   canPass = true,
@@ -122,6 +128,7 @@ export function GameScreen({
           cards={hand}
           selectedIds={selectedCardIds}
           {...(cardHints ? { cardHints } : {})}
+          showStrengthScale={showStrengthScale}
           onToggle={onToggleCard}
           {...(onDimmedCardTap ? { onDimmedCardTap } : {})}
           actions={
@@ -140,12 +147,18 @@ export function GameScreen({
           }
         />
       </main>
-      {finishNotice && (
+      {(finishNotice || guideCue) && (
         <div className={styles.noticeLayer}>
-          <Toast variant="warn">
-            {finishNotice.isSelf ? 'あなた' : finishNotice.name}が
-            {finishNotice.rank}位であがり!
-          </Toast>
+          {finishNotice ? (
+            <Toast variant="warn">
+              {finishNotice.isSelf ? 'あなた' : finishNotice.name}が
+              {finishNotice.rank}位であがり!
+            </Toast>
+          ) : guideCue ? (
+            <Toast variant="guide">
+              <GuideMessage cue={guideCue} />
+            </Toast>
+          ) : null}
         </div>
       )}
       <RuleCutIn activations={activations} onDone={onCutInDone} />

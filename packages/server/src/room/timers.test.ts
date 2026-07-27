@@ -249,6 +249,52 @@ describe('RoomTimerCoordinator', () => {
     ]);
   });
 
+  it('きほんの1人AI戦だけAIの間合いを3秒以上にし、communityの既定値は変えない', () => {
+    const started = reduceRoom(
+      state(),
+      {
+        type: 'start',
+        memberId: 'member-1',
+        now: 1_000,
+        setSeed: 'timer-mode-set',
+      },
+      { random: () => 0.999_999 },
+    ).state;
+    const memberId = started.members.find((member) => member.isAI)!.memberId;
+    const automated: RoomState = {
+      ...started,
+      engine: {
+        ...started.engine!,
+        currentGame: {
+          ...started.engine!.currentGame!,
+          public: {
+            ...started.engine!.currentGame!.public,
+            turn: memberId,
+          },
+        },
+      },
+      turnDeadlineAt: null,
+    };
+    const delays = (roomState: RoomState) => {
+      const room = authority(roomState);
+      const timers: FakeTimer[] = [];
+      const coordinator = new RoomTimerCoordinator(room.api, {
+        random: () => 0,
+        decideTurn: async () => ['D03'],
+        setTimer: (callback, delayMs) => {
+          const timer = { callback, delayMs, cleared: false };
+          timers.push(timer);
+          return timer;
+        },
+      });
+      coordinator.sync(roomState);
+      return timers[0]?.delayMs;
+    };
+
+    expect(delays(automated)).toBe(800);
+    expect(delays({ ...automated, mode: 'basic' })).toBe(3_000);
+  });
+
   it('AI決定中に本人操作でturnSeqが進んだら、古い決定を破棄する', async () => {
     const started = reduceRoom(
       state(),

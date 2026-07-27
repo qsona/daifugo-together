@@ -5,8 +5,8 @@ import { cx } from '../lib/cx';
 import styles from './Toast.module.css';
 
 type ToastProps = {
-  /** ok=完了通知 / warn=注意・強調(ルール発動など)。 */
-  variant?: 'ok' | 'warn';
+  /** ok=完了通知 / warn=注意・強調 / guide=初戦の一言。 */
+  variant?: 'ok' | 'warn' | 'guide';
   children: ReactNode;
 };
 
@@ -29,6 +29,21 @@ export function Toast({ variant = 'ok', children }: ToastProps) {
             strokeLinecap="round"
           >
             <path d="M1.5 5.5 4 8l4.5-6" />
+          </svg>
+        )}
+        {variant === 'guide' && (
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 12 12"
+            fill="none"
+            stroke="var(--color-navy-800)"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M6 1.5v1M6 9.5v1M1.5 6h1M9.5 6h1" />
+            <circle cx="6" cy="6" r="2.2" />
           </svg>
         )}
       </span>

@@ -45,6 +45,8 @@ export interface RoomTimerOptions {
   random?: () => number;
   aiDelayMinMs?: number;
   aiDelayMaxMs?: number;
+  basicAiDelayMinMs?: number;
+  basicAiDelayMaxMs?: number;
   onTransition?: (
     previous: RoomState,
     transition: RoomTransition,
@@ -85,6 +87,8 @@ export class RoomTimerCoordinator {
   readonly #random: () => number;
   readonly #aiDelayMinMs: number;
   readonly #aiDelayMaxMs: number;
+  readonly #basicAiDelayMinMs: number;
+  readonly #basicAiDelayMaxMs: number;
   readonly #onTransition: NonNullable<RoomTimerOptions['onTransition']>;
   readonly #onError: NonNullable<RoomTimerOptions['onError']>;
   readonly #scheduled = new Map<string, ScheduledRoomTimer>();
@@ -105,11 +109,17 @@ export class RoomTimerCoordinator {
     this.#random = options.random ?? Math.random;
     this.#aiDelayMinMs = options.aiDelayMinMs ?? 800;
     this.#aiDelayMaxMs = options.aiDelayMaxMs ?? 2_500;
+    this.#basicAiDelayMinMs = options.basicAiDelayMinMs ?? 3_000;
+    this.#basicAiDelayMaxMs = options.basicAiDelayMaxMs ?? 4_500;
     if (
       !Number.isFinite(this.#aiDelayMinMs) ||
       !Number.isFinite(this.#aiDelayMaxMs) ||
       this.#aiDelayMinMs < 0 ||
-      this.#aiDelayMaxMs < this.#aiDelayMinMs
+      this.#aiDelayMaxMs < this.#aiDelayMinMs ||
+      !Number.isFinite(this.#basicAiDelayMinMs) ||
+      !Number.isFinite(this.#basicAiDelayMaxMs) ||
+      this.#basicAiDelayMinMs < 0 ||
+      this.#basicAiDelayMaxMs < this.#basicAiDelayMinMs
     ) {
       throw new Error('Invalid AI room delay range');
     }
@@ -216,7 +226,7 @@ export class RoomTimerCoordinator {
           state.turnDeadlineAt ?? 'ai-delay',
         ].join(':'),
         delayMs: automated
-          ? this.#aiDelay()
+          ? this.#aiDelay(state)
           : Math.max(0, state.turnDeadlineAt! - this.#now()),
         kind: 'turn',
       };
@@ -308,7 +318,7 @@ export class RoomTimerCoordinator {
     }
   }
 
-  #aiDelay(): number {
+  #aiDelay(state: RoomState): number {
     let sample = 0.5;
     try {
       const value = this.#random();
@@ -318,9 +328,13 @@ export class RoomTimerCoordinator {
     } catch {
       // Stable midpoint fallback keeps the room progressing.
     }
-    return Math.round(
-      this.#aiDelayMinMs + (this.#aiDelayMaxMs - this.#aiDelayMinMs) * sample,
-    );
+    const isBasicSolo =
+      state.mode === 'basic' &&
+      state.members.filter((member) => !member.isAI && !member.departed)
+        .length === 1;
+    const minMs = isBasicSolo ? this.#basicAiDelayMinMs : this.#aiDelayMinMs;
+    const maxMs = isBasicSolo ? this.#basicAiDelayMaxMs : this.#aiDelayMaxMs;
+    return Math.round(minMs + (maxMs - minMs) * sample);
   }
 }
 
