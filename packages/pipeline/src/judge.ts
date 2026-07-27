@@ -10,6 +10,8 @@ import {
   type PipelineMutationResult,
 } from '@daifugo/server';
 import { CodexCxJudge } from './app-server-judge.js';
+import { runCxJudgementBatch } from './cx-batch.js';
+import { selectPipelineWork } from './queue-selection.js';
 
 type ScreeningItem =
   | ({ stage: 'e6' } & PendingLocalScreening)
@@ -146,9 +148,11 @@ const attempts = positiveIntegerOption(
 );
 const reasoningEffort = effort();
 const listUrl = new URL('/admin/pipeline/screening', baseUrl);
-const items = pendingItems(await requestJson(listUrl, token)).slice(0, limit);
+const listed = pendingItems(await requestJson(listUrl, token));
+const selected = selectPipelineWork(listed, limit);
+const items = selected.actionable;
 
-if (items.length === 0) {
+if (items.length === 0 && selected.confirmations.length === 0) {
   process.stdout.write(`${JSON.stringify({ status: 'idle', processed: 0 })}\n`);
 } else {
   const e6Items = items.filter(
@@ -224,90 +228,63 @@ if (items.length === 0) {
     );
     cxItems = [...cxItems, ...newlyEligible];
   }
-  const cxSummary = {
-    processed: cxItems.length,
-    recorded: 0,
-    alreadyRecorded: 0,
-    failed: 0,
-  };
-  for (const item of cxItems) {
-    let complete = false;
-    const runId = randomUUID();
-    for (let attempt = 1; attempt <= attempts && !complete; attempt += 1) {
-      let rpc: StdioAppServerRpc | null = null;
+  const cxSummary = await runCxJudgementBatch({
+    items: cxItems,
+    attempts,
+    createRunId: randomUUID,
+    judge: async (item) => {
+      const rpc = await StdioAppServerRpc.start({
+        ...(process.env.CODEX_BIN ? { codexBin: process.env.CODEX_BIN } : {}),
+        timeoutMs,
+      });
       try {
-        rpc = await StdioAppServerRpc.start({
-          ...(process.env.CODEX_BIN ? { codexBin: process.env.CODEX_BIN } : {}),
-          timeoutMs,
-        });
-        const judgement = await new CodexCxJudge({
+        return await new CodexCxJudge({
           rpc,
           model,
           effort: reasoningEffort,
         }).judge(item);
-        const result = pipelineResult(
-          await requestJson(
-            new URL(
-              `/admin/proposals/${encodeURIComponent(item.proposal.id)}/judge`,
-              baseUrl,
-            ),
-            token,
-            {
-              method: 'POST',
-              body: JSON.stringify({
-                action: 'record_ai',
-                payload: { ...judgement, runId },
-              }),
-            },
-          ),
-        );
-        if (result.status === 'recorded') cxSummary.recorded += 1;
-        else if (result.status === 'already_recorded') {
-          cxSummary.alreadyRecorded += 1;
-        } else {
-          throw new Error(`CX-01 record failed: ${result.status}`);
-        }
-        process.stdout.write(
-          `${JSON.stringify({
-            stage: 'cx01',
-            proposalId: item.proposal.id,
-            status: result.status,
-            attempt,
-            verdict:
-              result.status === 'recorded' ||
-              result.status === 'already_recorded'
-                ? result.judgement.verdict
-                : undefined,
-            model,
-          })}\n`,
-        );
-        complete = true;
-      } catch (error) {
-        const invalidOutput =
-          error instanceof Error &&
-          (error.message.includes('invalid structured output') ||
-            error.message.includes('non-JSON output'));
-        const finalAttempt =
-          attempt >= attempts || (invalidOutput && attempt >= 2);
-        process[finalAttempt ? 'stderr' : 'stdout'].write(
-          `${JSON.stringify({
-            stage: 'cx01',
-            proposalId: item.proposal.id,
-            status: finalAttempt ? 'failed' : 'retrying',
-            attempt,
-            error: error instanceof Error ? error.message : String(error),
-            model,
-          })}\n`,
-        );
-        if (finalAttempt) {
-          cxSummary.failed += 1;
-          complete = true;
-        }
       } finally {
-        rpc?.close();
+        rpc.close();
       }
-    }
-  }
+    },
+    record: async (item, judgement, runId) =>
+      pipelineResult(
+        await requestJson(
+          new URL(
+            `/admin/proposals/${encodeURIComponent(item.proposal.id)}/judge`,
+            baseUrl,
+          ),
+          token,
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              action: 'record_ai',
+              payload: { ...judgement, runId },
+            }),
+          },
+        ),
+      ),
+    onEvent: (event) => {
+      process[event.status === 'failed' ? 'stderr' : 'stdout'].write(
+        `${JSON.stringify({
+          stage: 'cx01',
+          proposalId: event.proposalId,
+          status: event.status,
+          attempt: event.attempt,
+          ...(event.result ? { verdict: event.result.judgement.verdict } : {}),
+          ...(event.error
+            ? {
+                error:
+                  event.error instanceof Error
+                    ? event.error.message
+                    : String(event.error),
+              }
+            : {}),
+          model,
+        })}\n`,
+      );
+    },
+  });
   const confirmations = pendingItems(await requestJson(listUrl, token)).filter(
     (item): item is Extract<ScreeningItem, { stage: 'confirmation' }> =>
       item.stage === 'confirmation',

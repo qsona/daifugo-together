@@ -1,3 +1,8 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { InjectionStaticAnalyzer } from '../injection/detector.js';
@@ -8,9 +13,13 @@ import { ProposalSubmissionService } from '../proposal/submission.js';
 import { PipelineJudgementService } from './service.js';
 
 const instances: SqlitePersistence[] = [];
+const directories: string[] = [];
 
 afterEach(() => {
   for (const instance of instances.splice(0)) instance.close();
+  for (const directory of directories.splice(0)) {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 function spec(name = '八切り') {
@@ -53,10 +62,10 @@ function aiApprove() {
   };
 }
 
-async function setup() {
+async function setup(path = ':memory:') {
   let now = 1_000;
   let id = 0;
-  const persistence = new SqlitePersistence(':memory:', {
+  const persistence = new SqlitePersistence(path, {
     createUserId: () => 'pipeline-user',
     createToken: () => 'pipeline-token-0001',
   });
@@ -508,5 +517,117 @@ describe('CX-01 judgement and VERDICT_CONFIRMATION', () => {
       verdict: 'reject',
       runId: 'run-re-evaluation',
     });
+  });
+
+  it('SPEC承認の途中失敗時にjudgement・job・statusを全てrollbackする', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'pipeline-rollback-'));
+    directories.push(directory);
+    const databasePath = join(directory, 'pipeline.sqlite');
+    const { persistence, proposal, local, pipeline } =
+      await setup(databasePath);
+    local.record(proposal.id, {
+      verdict: 'clean',
+      reason: '通常の提案',
+      evidence: null,
+      model: 'gpt-5.6-sol',
+      latencyMs: 5,
+    });
+    const recorded = pipeline.recordAi(proposal.id, aiApprove());
+    if (recorded.status !== 'recorded') return;
+
+    const database = new Database(databasePath);
+    database.exec(`
+      CREATE TRIGGER force_pipeline_job_failure
+      BEFORE INSERT ON pipeline_jobs
+      BEGIN
+        SELECT RAISE(ABORT, 'forced pipeline job failure');
+      END;
+    `);
+    database.close();
+
+    expect(() =>
+      pipeline.approveSpec(proposal.id, {
+        judgementId: recorded.judgement.id,
+        actor: 'developer',
+        spec: spec(),
+        scaffoldMeta: scaffoldMeta(),
+      }),
+    ).toThrow('forced pipeline job failure');
+    expect(persistence.pipeline.jobForProposal(proposal.id)).toBeNull();
+    expect(
+      persistence.pipeline.developerConfirmation(
+        proposal.id,
+        recorded.judgement.id,
+        null,
+      ),
+    ).toBeNull();
+    expect(persistence.proposals.findById(proposal.id)?.status).toBe(
+      'screening',
+    );
+    expect(persistence.pipeline.pendingConfirmations()).toMatchObject([
+      {
+        source: 'cx01',
+        proposal: { id: proposal.id },
+        judgement: { id: recorded.judgement.id },
+      },
+    ]);
+  });
+
+  it('同じSPEC確認の並行再送は1件だけ確定し、もう1件を冪等応答にする', async () => {
+    const { proposal, local, pipeline } = await setup();
+    local.record(proposal.id, {
+      verdict: 'clean',
+      reason: '通常の提案',
+      evidence: null,
+      model: 'gpt-5.6-sol',
+      latencyMs: 5,
+    });
+    const recorded = pipeline.recordAi(proposal.id, aiApprove());
+    if (recorded.status !== 'recorded') return;
+    const input = {
+      judgementId: recorded.judgement.id,
+      actor: 'developer',
+      spec: spec(),
+      scaffoldMeta: scaffoldMeta(),
+    };
+
+    const results = await Promise.all([
+      Promise.resolve().then(() => pipeline.approveSpec(proposal.id, input)),
+      Promise.resolve().then(() => pipeline.approveSpec(proposal.id, input)),
+    ]);
+    expect(results.map(({ status }) => status).sort()).toEqual([
+      'already_confirmed',
+      'confirmed',
+    ]);
+  });
+
+  it('プロセス再起動後も未処理のE6 pass提案を再取得する', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'pipeline-restart-'));
+    directories.push(directory);
+    const databasePath = join(directory, 'pipeline.sqlite');
+    const { persistence, proposal, local } = await setup(databasePath);
+    local.record(proposal.id, {
+      verdict: 'clean',
+      reason: '通常の提案',
+      evidence: null,
+      model: 'gpt-5.6-sol',
+      latencyMs: 5,
+    });
+
+    instances.splice(instances.indexOf(persistence), 1);
+    persistence.close();
+    const restarted = new SqlitePersistence(databasePath);
+    instances.push(restarted);
+    const pipeline = new PipelineJudgementService(
+      restarted.pipeline,
+      restarted.proposals,
+      restarted.injection,
+    );
+    expect(pipeline.pending()).toMatchObject([
+      {
+        proposal: { id: proposal.id },
+        check: { finalVerdict: 'pass' },
+      },
+    ]);
   });
 });
