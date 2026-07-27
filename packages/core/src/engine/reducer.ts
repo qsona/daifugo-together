@@ -522,6 +522,27 @@ function reducePlay(
     interpreted.play,
   );
   nextState = effects.state;
+  const announcedAfterPlay = new Set(
+    effects.events.flatMap((event) =>
+      event.type === 'ruleFired' ? [event.ruleId] : [],
+    ),
+  );
+  events.push(
+    ...evaluated.influenced
+      .filter((ruleId) => !announcedAfterPlay.has(ruleId))
+      .sort(
+        (left, right) =>
+          (config.ruleChain.find((entry) => entry.ruleId === left)?.position ??
+            Number.MAX_SAFE_INTEGER) -
+          (config.ruleChain.find((entry) => entry.ruleId === right)?.position ??
+            Number.MAX_SAFE_INTEGER),
+      )
+      .map((ruleId) => ({
+        type: 'ruleFired' as const,
+        ruleId,
+        messageKey: '',
+      })),
+  );
   events.push(...effects.events);
 
   if (nextState.public.turnCount > TURN_LIMIT) {

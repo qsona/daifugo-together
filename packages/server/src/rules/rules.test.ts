@@ -1,9 +1,19 @@
-import { enumerateLegalPlays, simulate, type RuleModule } from '@daifugo/core';
+import {
+  enumerateLegalPlays,
+  simulate,
+  TITLE_BY_STANDING,
+  type GameResult,
+  type RuleModule,
+  type SetOutcome,
+  type Standing,
+} from '@daifugo/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { SqlitePersistence } from '../persistence.js';
 import { proposalContentHash } from '../proposal/repository.js';
 import { RoomManager } from '../room/manager.js';
+import type { RoomState } from '../room/types.js';
+import { viewFor } from '../room/view.js';
 import type { RegisterRuleInput } from './repository.js';
 import {
   AUTO_DISABLE_WINDOW_MS,
@@ -807,6 +817,57 @@ describe('CX-05 rule release', () => {
         expect.objectContaining({ t: 'ruleFired', ruleId: 'r0001-a' }),
       ]),
     );
+    expect(viewFor(played!.state, player).events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          t: 'ruleFired',
+          ruleId: 'r0001-a',
+          name: 'ルールA',
+          messageKey: 'fired',
+        }),
+      ]),
+    );
+    const firedResult = {
+      gameIndex: 0,
+      standings: engine.members.map((member, index) => {
+        const standing = (index + 1) as Standing;
+        return {
+          player: member.id,
+          standing,
+          title: TITLE_BY_STANDING[standing],
+        };
+      }),
+      firedRuleIds: ['r0001-a'],
+    } satisfies GameResult;
+    const outcome = {
+      setId: engine.setId,
+      standings: firedResult.standings.map((standing) => ({
+        player: standing.player,
+        totalStanding: standing.standing,
+        title: standing.title,
+        points: 1,
+      })),
+      members: engine.members,
+      wasActiveRuleIds: ['r0001-a'],
+      firedRuleIds: ['r0001-a'],
+      results: [firedResult],
+      completion: 'drained',
+      gamesPlayed: 1,
+    } satisfies SetOutcome;
+    const setResultState = {
+      ...played!.state,
+      phase: 'setResult',
+      setRespondBy: 3_000,
+      engine: {
+        ...played!.state.engine!,
+        phase: { name: 'setResult' },
+        results: [firedResult],
+        outcome,
+      },
+    } satisfies RoomState;
+    expect(viewFor(setResultState, player).setResult?.firedRules).toEqual([
+      { ruleId: 'r0001-a', ruleName: 'ルールA', count: 1 },
+    ]);
 
     expect(service.synchronizeCodeRegistry()).toMatchObject({
       registered: [],

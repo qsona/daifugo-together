@@ -12,6 +12,7 @@ import type { CardView } from './components/Card';
 import type { MemberView as MemberListView } from './components/MemberList';
 import type { RankView } from './components/RankRow';
 import type { TableSeat } from './components/Table';
+import type { RuleActivation } from './components/RuleCutIn';
 import type { SeatFinish } from './screens/GameScreen';
 import type { RuleVote, SetFunRating } from './screens/SetResultScreen';
 import {
@@ -474,9 +475,18 @@ function ConnectedApp({
   const [isChoosingRoom, setIsChoosingRoom] = useState(false);
   const [selectedCardIds, setSelectedCardIds] = useState<readonly string[]>([]);
   const [funRating, setFunRating] = useState<SetFunRating | null>(null);
-  const [ruleVotes, setRuleVotes] = useState(DEMO_FIRED_RULES);
   const [unreadProposalCount, setUnreadProposalCount] = useState(0);
   const proposalApi = getBrowserProposalClient();
+  const ruleEventRoomId = useRef<string | null>(null);
+  const lastRuleEventSeq = useRef(0);
+  const seenRuleIds = useRef(new Set<string>());
+  const [activationVolleys, setActivationVolleys] = useState<
+    readonly (readonly RuleActivation[])[]
+  >([]);
+  const [lastActivation, setLastActivation] = useState<{
+    name: string;
+    count: number;
+  } | null>(null);
   const guideState = useRef(createGuideState());
   const guideSessionKey = useRef<string | null>(null);
   const [guideCue, setGuideCue] = useState<GuideCue | null>(null);
@@ -498,6 +508,41 @@ function ConnectedApp({
 
   useEffect(() => {
     setSelectedCardIds((selected) => reconcileSelectedCardIds(selected, room));
+  }, [room]);
+
+  useEffect(() => {
+    if (!room) return;
+    if (ruleEventRoomId.current !== room.roomId) {
+      ruleEventRoomId.current = room.roomId;
+      lastRuleEventSeq.current = 0;
+      setActivationVolleys([]);
+      setLastActivation(null);
+    }
+    const fired = room.events.filter(
+      (event) =>
+        event.t === 'ruleFired' && event.seq > lastRuleEventSeq.current,
+    );
+    if (fired.length === 0) return;
+    lastRuleEventSeq.current = Math.max(
+      lastRuleEventSeq.current,
+      ...fired.map((event) => event.seq),
+    );
+    const unique = new Map<string, RuleActivation>();
+    for (const event of fired) {
+      if (event.t !== 'ruleFired') continue;
+      const isFirstSeen = !seenRuleIds.current.has(event.ruleId);
+      seenRuleIds.current.add(event.ruleId);
+      if (!unique.has(event.ruleId)) {
+        unique.set(event.ruleId, {
+          ruleId: event.ruleId,
+          name: event.name,
+          isFirstSeen,
+        });
+      }
+    }
+    if (unique.size > 0) {
+      setActivationVolleys((volleys) => [...volleys, [...unique.values()]]);
+    }
   }, [room]);
 
   useEffect(() => {
@@ -555,6 +600,16 @@ function ConnectedApp({
   const invoke = (operation: Promise<unknown>) => {
     void operation.catch(() => undefined);
   };
+  const activations = activationVolleys[0] ?? [];
+  const finishRuleCutIn = useCallback(() => {
+    if (activations.length > 0) {
+      setLastActivation({
+        name: activations.at(-1)!.name,
+        count: activations.length,
+      });
+    }
+    setActivationVolleys((volleys) => volleys.slice(1));
+  }, [activations]);
   const show = (content: ReactNode) => (
     <ConnectionStatus state={state}>{content}</ConnectionStatus>
   );
@@ -620,9 +675,9 @@ function ConnectedApp({
               : leadMember.displayName
             : null
         }
-        activations={[]}
-        onCutInDone={() => undefined}
-        lastActivation={null}
+        activations={activations}
+        onCutInDone={finishRuleCutIn}
+        lastActivation={lastActivation}
         hand={cards(game.yourHand)}
         selectedCardIds={selectedCardIds}
         {...(cardHints ? { cardHints } : {})}
@@ -691,15 +746,13 @@ function ConnectedApp({
       <SetResultScreen
         ranks={setRanks(room)}
         funRating={funRating}
-        firedRules={ruleVotes}
+        firedRules={(room.setResult?.firedRules ?? []).map((rule) => ({
+          ruleId: rule.ruleId,
+          name: rule.ruleName,
+          vote: null,
+        }))}
         onChangeFunRating={setFunRating}
-        onVoteRule={(ruleId, vote) => {
-          setRuleVotes((rules) =>
-            rules.map((rule) =>
-              rule.ruleId === ruleId ? { ...rule, vote } : rule,
-            ),
-          );
-        }}
+        onVoteRule={() => undefined}
         onPlayAgain={() => {
           invoke(client.continueRoom());
         }}

@@ -911,11 +911,13 @@ export function executeEffectHook(
       }
     }
   }
+  const announcedRules = new Set<string>();
   for (const entry of batch.entries) {
     if (
       entry.effect.type === 'announce' &&
       entry.resolution.status === 'adopted'
     ) {
+      announcedRules.add(entry.ruleId);
       events.push({
         type: 'ruleFired',
         ruleId: entry.ruleId,
@@ -924,6 +926,21 @@ export function executeEffectHook(
           ? {}
           : { params: entry.effect.params }),
       });
+    }
+  }
+  for (const [ruleId, ruleEntries] of Map.groupBy(
+    batch.entries,
+    (entry) => entry.ruleId,
+  )) {
+    if (
+      !announcedRules.has(ruleId) &&
+      ruleEntries.some(
+        (entry) =>
+          entry.effect.type !== 'announce' &&
+          ['adopted', 'deduped'].includes(entry.resolution.status),
+      )
+    ) {
+      events.push({ type: 'ruleFired', ruleId, messageKey: '' });
     }
   }
 

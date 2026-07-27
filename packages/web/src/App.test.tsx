@@ -657,6 +657,88 @@ describe('TU-02: きほんの部屋のカードヒント統合', () => {
   });
 });
 
+describe('CX-06: 実ルール発動イベントの演出', () => {
+  afterEach(cleanup);
+
+  it('新しいruleFiredを一度だけカットインし、完了後に発動の痕跡を残す', async () => {
+    const user = userEvent.setup();
+    const initial = {
+      ...tutorialHintRoom('community', []),
+      activeRules: [{ ruleId: 'r0001-revolution', name: '革命返し' }],
+    };
+    const observable = observableTutorialClient(initial);
+    render(<App client={observable.client} />);
+
+    act(() => {
+      observable.setRoom({
+        ...initial,
+        v: 5,
+        events: [
+          {
+            seq: 10,
+            t: 'ruleFired',
+            ruleId: 'r0001-revolution',
+            name: '革命返し',
+            messageKey: 'fired',
+          },
+        ],
+      });
+    });
+
+    expect(await screen.findByText('革命返し')).toBeTruthy();
+    expect(screen.getByText('NEW RULE')).toBeTruthy();
+
+    await user.click(screen.getByRole('button', { name: '演出をとばす' }));
+    expect(screen.getByRole('button', { name: '革命返し' })).toBeTruthy();
+
+    act(() => {
+      observable.setRoom({
+        ...initial,
+        v: 6,
+        events: [
+          {
+            seq: 10,
+            t: 'ruleFired',
+            ruleId: 'r0001-revolution',
+            name: '革命返し',
+            messageKey: 'fired',
+          },
+        ],
+      });
+    });
+    expect(screen.queryByRole('button', { name: '演出をとばす' })).toBeNull();
+  });
+
+  it('セット結果snapshotの発動ルールを評価機能なしでも一覧表示する', () => {
+    const initial = tutorialHintRoom('community', []);
+    render(
+      <App
+        client={tutorialHintClient({
+          ...initial,
+          phase: 'setResult',
+          game: null,
+          setResult: {
+            standings: [],
+            firedRules: [
+              {
+                ruleId: 'r0001-revolution',
+                ruleName: '革命返し',
+                count: 2,
+              },
+            ],
+            respondBy: 10_000,
+          },
+          events: [],
+        })}
+      />,
+    );
+
+    expect(screen.getByText('発動したルール')).toBeTruthy();
+    expect(screen.getByText('革命返し')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /高評価/ })).toBeNull();
+  });
+});
+
 describe('TU-03: はじめての1戦のガイド', () => {
   afterEach(cleanup);
 

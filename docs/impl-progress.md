@@ -1142,6 +1142,23 @@ TS-02 から継続で未解決のもの:
 - 新規コンテキストの独立 GPT-5.6 Sol 完了レビューは **GO**、Critical / Important / Minorすべてなし。方向性レビューのImportant（GET→状態変更→seen競合）とMinor（NULL理由文が生のreason codeになる問題）はともに **CLOSED**。本人分離、5状態ステッパー、C-6制約と全表示、旧SQLite migration、seen失敗時の一覧・未読維持、メニューバッジまで受け入れ確認済み
 - 修正後の全体`CI=true pnpm verify`はformat/lint/design/typecheck、66 files / 452 tests、全package buildまで成功。AI simulationのfallback率テストが初回だけ揺れたが、単独4/4と全体再実行452/452の双方で通過した
 
+### E7 CX-06 プロセス1（実ルール発動演出）
+
+- エンジンは採用された`announce`に加え、`announce`を返さない採用Effectと、実際に合法性・強さを変えたtransformにも名前fallback用の`ruleFired`を出す。棄却・superseded・非公開情報を含むannounceは発火扱いにしない
+- Roomの既存イベント列は固定ルールの`ruleId`を表示名へ解決し、全クライアントsnapshotへ同じ`seq`・`name`・`messageKey`を配る。実release済みルールを通すserver結合テストで、採用Effectから表示名付きイベントまで確認した
+- Connected Appは`seq`で重複排除し、同一遷移の発火を1ボレーへまとめて既存DS-02 `RuleCutIn`へ接続する。演出中の後続ボレーはキューへ積み、スキップ/時間完了後は直近ルールを卓上chipに残す。初見ルールは同一Appセッション内で`NEW RULE`表示する
+- `SetResultView.firedRules`を追加し、セット結果の`outcome.firedRuleIds`を固定ルール名と発火戦数へ変換する。E8の評価UIが無効でも「発動したルール」名一覧は表示する
+- process1 focused検証はcore/server/webの5 files / 89 tests、および追加後の4 files / 79 testsとserver/web typecheckが成功
+
+#### CX-06で置いた仮定・プロセス2送り
+
+| ID | 仮定・残作業 | 根拠 | プロセス2での扱い |
+|---|---|---|---|
+| E7-CX06-P1-1 | `RoomGameEvent.messageKey=''`を「ルール名のみ」の既存契約内sentinelとする | E12/E03の共有契約は`messageKey: string`、E07は非announce時の名前fallbackを要求するため | registry moduleの`meta.messages`で安全に解決済み文言を渡す境界と、空keyの正式扱いをレビュー |
+| E7-CX06-P1-2 | process1の`count`は「そのルールが発火した戦数」。同一戦の複数回発火は1件として一覧化する | 現`GameResult`の正規素材は`firedRuleIds`集合。ユーザーストーリーの一覧は成立する | Room/engineで実発火回数を集計し、`set_results.fired_rules`加算migrationと再起動永続化を実装 |
+| E7-CX06-P1-3 | 既存RuleCutInの同時最大3枚・約0.75〜1.11秒・3件超combo表示を縦導線に再利用する | DS-02実装済み部品は段重ねをトーンとして確定している一方、E07本文は1件ずつ約1.5秒・3件超ログ縮退と記述 | 独立方向性レビューでDS設計との優先関係を裁定し、後続キュー・4件以上・reduced-motion・取り落としを仕上げる |
+| E7-CX06-P1-4 | `NEW RULE`既見集合はAppプロセス内だけ保持する | 永続既見データ契約は設計にない。演出の成立に不要なDB/Storageを増やさない | 再接続・別room・同一rule再発火の境界を確認。永続化は要求がない限り追加しない |
+
 ### E2で見つけた設計書の不整合
 
 - 冒頭改訂ノートは探索を `worker_threads` 1〜2本で実行すると決定済みだが、§3.1(d)・§4.4・§6-5には「初期はホスト直列、兆候が出たらworkerへ移行」という旧記述が残る。実装は改訂ノートを正とした。

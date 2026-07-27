@@ -242,6 +242,8 @@ function setResultView(state: RoomState): SetResultView | null {
   ) {
     return null;
   }
+  const rules = state.fixedRules ?? state.availableRules;
+  const ruleNames = new Map(rules.map((rule) => [rule.ruleId, rule.name]));
   return {
     standings: engine.outcome.standings.map((standing) => ({
       memberId: standing.player,
@@ -253,6 +255,13 @@ function setResultView(state: RoomState): SetResultView | null {
             ?.standing ?? 4,
       ),
       points: standing.points,
+    })),
+    firedRules: engine.outcome.firedRuleIds.map((ruleId) => ({
+      ruleId,
+      ruleName: ruleNames.get(ruleId) ?? ruleId,
+      count: engine.results.filter((result) =>
+        result.firedRuleIds.includes(ruleId),
+      ).length,
     })),
     respondBy: state.setRespondBy,
   };

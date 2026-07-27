@@ -67,7 +67,11 @@ export function SetResultScreen({
                 { value: 'boring', label: 'つまらなかった' },
               ]}
             />
+          </>
+        )}
 
+        {firedRules.length > 0 && (
+          <>
             {/*
              * 「を評価」は 高評価/低評価 ボタンが並んでいる時点で自明なので名詞だけにする。
              * 使い方のヒント文は置かない(操作対象の上流の説明は読まれない。原則 1)。
@@ -77,23 +81,30 @@ export function SetResultScreen({
               {firedRules.map((rule) => (
                 <li key={rule.ruleId} className={styles.ruleVote}>
                   <span className={styles.ruleName}>{rule.name}</span>
-                  <VoteButton
-                    direction="up"
-                    selected={rule.vote === 'up'}
-                    onClick={() => {
-                      onVoteRule(rule.ruleId, rule.vote === 'up' ? null : 'up');
-                    }}
-                  />
-                  <VoteButton
-                    direction="down"
-                    selected={rule.vote === 'down'}
-                    onClick={() => {
-                      onVoteRule(
-                        rule.ruleId,
-                        rule.vote === 'down' ? null : 'down',
-                      );
-                    }}
-                  />
+                  {showEvaluation && (
+                    <>
+                      <VoteButton
+                        direction="up"
+                        selected={rule.vote === 'up'}
+                        onClick={() => {
+                          onVoteRule(
+                            rule.ruleId,
+                            rule.vote === 'up' ? null : 'up',
+                          );
+                        }}
+                      />
+                      <VoteButton
+                        direction="down"
+                        selected={rule.vote === 'down'}
+                        onClick={() => {
+                          onVoteRule(
+                            rule.ruleId,
+                            rule.vote === 'down' ? null : 'down',
+                          );
+                        }}
+                      />
+                    </>
+                  )}
                 </li>
               ))}
             </ul>

@@ -87,6 +87,42 @@ function oneCardState(ruleChain: RuleChainEntry[]): {
 }
 
 describe('GE-04 effect pipeline and lifecycle hooks', () => {
+  it('announceなしで採用されたEffectもルール名fallback用の発動eventを出す', () => {
+    const ruleEntry = entry('r0097-name-only');
+    const module: RuleModule = {
+      meta: {
+        ruleId: ruleEntry.ruleId,
+        name: '名前だけ演出',
+        description: 'announceを返さないfixture',
+        kind: 'original',
+        proposalId: 'fixture',
+        contractVersion: 1,
+        messages: {},
+      },
+      hooks: {
+        afterPlay: () => [{ type: 'reverseTurnOrder' }],
+      },
+    };
+    const fixture = oneCardState([ruleEntry]);
+
+    const transition = reduceGame(
+      fixture.config,
+      fixture.state,
+      {
+        type: 'play',
+        player: 'p1',
+        cards: [fixture.state.players.p1!.hand[0]!.id],
+      },
+      runtime(module),
+    );
+
+    expect(transition.events).toContainEqual({
+      type: 'ruleFired',
+      ruleId: ruleEntry.ruleId,
+      messageKey: '',
+    });
+  });
+
   it('不正Effectを返したルールは同じ遷移内の後続hookからも除外する', () => {
     const invalidEntry = entry('r0098-invalid-same-transition');
     const finisherEntry = {
@@ -1017,9 +1053,11 @@ describe('GE-04 effect pipeline and lifecycle hooks', () => {
         (candidate) => candidate.id === hiddenCard.id,
       ),
     ).toBe(true);
-    expect(transition.events.some((event) => event.type === 'ruleFired')).toBe(
-      false,
-    );
+    expect(transition.events).toContainEqual({
+      type: 'ruleFired',
+      ruleId: ruleEntry.ruleId,
+      messageKey: '',
+    });
     expect(transition.events).toContainEqual(
       expect.objectContaining({
         type: 'effectRejected',

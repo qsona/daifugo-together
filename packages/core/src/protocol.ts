@@ -151,6 +151,11 @@ export interface SetResultView {
     /** points はセット(3 戦)の合計順位点。 */
     points: number;
   }[];
+  firedRules: {
+    ruleId: string;
+    ruleName: string;
+    count: number;
+  }[];
   respondBy: number;
 }
 

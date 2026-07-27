@@ -30,6 +30,27 @@ describe('SetResultScreen phase boundary', () => {
     ).toBeTruthy();
   });
 
+  it('評価UIが無効でも、そのセットで発動したルール名を表示する', () => {
+    render(
+      <SetResultScreen
+        ranks={[]}
+        funRating={null}
+        firedRules={[
+          { ruleId: 'r0001-revolution', name: '革命返し', vote: null },
+        ]}
+        onChangeFunRating={() => undefined}
+        onVoteRule={() => undefined}
+        onPlayAgain={() => undefined}
+        onHome={() => undefined}
+        showEvaluation={false}
+      />,
+    );
+
+    expect(screen.getByText('発動したルール')).toBeTruthy();
+    expect(screen.getByText('革命返し')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /高評価/ })).toBeNull();
+  });
+
   it('順位行にセット合計点を出す', () => {
     render(
       <SetResultScreen
