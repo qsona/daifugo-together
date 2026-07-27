@@ -3,7 +3,9 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { App, reconcileSelectedCardIds } from './App';
+import type { MultiplayerClient, MultiplayerState } from './multiplayer/client';
 import { useScreenStore } from './store/screen';
+import { PLAYED_BEFORE_STORAGE_KEY } from './tutorial/played-before';
 
 const KEY_VISUAL_NAME = /毎日どこかで、新ルール。/;
 
@@ -91,10 +93,16 @@ describe('DS-02: フェーズ 1 の主要画面が 1 本の導線でつながる
     await user.click(screen.getByRole('button', { name: /はじめる/ }));
     await user.click(screen.getByRole('button', { name: 'あそぶ' }));
 
-    // 「あそぶ」は画面を挟まず二択のシートを開き、つくるなら待機画面へ直行する。
+    // 「あそぶ」はモードを選び、そのまま作る/入るの選択へ進む。
     expect(
       screen.getByRole('dialog', {
-        name: 'じぶんの部屋をつくるか、友だちの部屋にはいる',
+        name: 'あそぶモードをえらぶ',
+      }),
+    ).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: /きほん/ }));
+    expect(
+      screen.getByRole('dialog', {
+        name: 'じぶんの部屋をつくる',
       }),
     ).toBeTruthy();
     await user.click(
@@ -433,6 +441,7 @@ describe('MP-04: タイムアウト代行後の選択状態', () => {
       v: 2,
       roomId: 'room-1',
       inviteCode: 'ABCD-2345',
+      mode: 'community',
       phase: 'playing',
       members: [],
       you: { memberId: 'member-1', seatId: 0 },
@@ -460,5 +469,80 @@ describe('MP-04: タイムアウト代行後の選択状態', () => {
         events: [{ seq: 8, t: 'turnTimeout', seat: 0 }],
       }),
     ).toEqual([]);
+  });
+});
+
+describe('TU-01: 既プレイ端末の記録', () => {
+  it('1戦完了のスナップショットを受けるとlocalStorageへ記録する', () => {
+    const stored = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => stored.get(key) ?? null,
+      setItem: (key: string, value: string) => stored.set(key, value),
+    };
+    const room = {
+      v: 4,
+      roomId: 'tutorial-room',
+      inviteCode: 'ABCD-2345',
+      mode: 'basic',
+      phase: 'playing',
+      members: [
+        {
+          memberId: 'member-1',
+          seatId: 0,
+          displayName: 'ホスト',
+          isAI: false,
+          isHost: true,
+          connected: true,
+          aiActing: false,
+          departed: false,
+          handCount: 0,
+          finishedRank: 1,
+          wantsNextSet: null,
+        },
+      ],
+      you: { memberId: 'member-1', seatId: 0 },
+      activeRules: [],
+      game: {
+        gameNo: 1,
+        status: 'intermission',
+        intermission: { durationMs: 15_000, endsAt: Date.now() + 15_000 },
+        field: { cards: [], playedBySeat: null, passedSeats: [] },
+        turn: null,
+        history: [],
+        previousResults: [
+          {
+            gameNo: 1,
+            standings: [
+              {
+                seat: 0,
+                rank: 1,
+                title: '大富豪',
+                points: 5,
+              },
+            ],
+            firedRuleIds: [],
+          },
+        ],
+        yourHand: [],
+        legalMoves: null,
+      },
+      setResult: null,
+      events: [],
+    } satisfies import('@daifugo/core').PlayerRoomView;
+    const state: MultiplayerState = {
+      connection: 'ready',
+      displayName: 'ホスト',
+      room,
+      roomClosedReason: null,
+      error: null,
+    };
+    const client = {
+      subscribe: () => () => undefined,
+      snapshot: () => state,
+    } as unknown as MultiplayerClient;
+
+    render(<App client={client} storage={storage} />);
+
+    expect(stored.get(PLAYED_BEFORE_STORAGE_KEY)).toBe('true');
   });
 });

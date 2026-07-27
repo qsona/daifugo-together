@@ -37,6 +37,7 @@ export type RoomCloseReason =
   'noHumans' | 'lobbyExpired' | 'abandoned' | 'setEndedNoContinue';
 
 export type RoomPhase = 'waiting' | 'playing' | 'setResult' | 'closed';
+export type RoomMode = 'basic' | 'community';
 
 export interface MemberView {
   memberId: string;
@@ -157,6 +158,7 @@ export interface PlayerRoomView {
   v: number;
   roomId: string;
   inviteCode: string;
+  mode: RoomMode;
   phase: Exclude<RoomPhase, 'closed'>;
   members: MemberView[];
   you: { memberId: string; seatId: SeatId | null };
@@ -170,7 +172,9 @@ const emptyPayloadSchema = z.object({}).strict();
 const turnSeqSchema = z.number().int().nonnegative();
 
 export const clientPayloadSchemas = {
-  'room:create': emptyPayloadSchema,
+  'room:create': z
+    .object({ mode: z.enum(['basic', 'community']).optional() })
+    .strict(),
   'room:join': z.object({ inviteCode: z.string() }).strict(),
   'room:leave': emptyPayloadSchema,
   'room:start': emptyPayloadSchema,

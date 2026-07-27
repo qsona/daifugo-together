@@ -36,6 +36,11 @@ import { SetResultScreen } from './screens/SetResultScreen';
 import { TitleScreen } from './screens/TitleScreen';
 import { WaitingRoomScreen } from './screens/WaitingRoomScreen';
 import { useScreenStore } from './store/screen';
+import {
+  hasPlayedBefore,
+  markPlayedBefore,
+  type PlayedBeforeStorage,
+} from './tutorial/played-before';
 
 const DEMO_PROPOSAL_API: ProposalApi = {
   submit: async (request) => ({
@@ -72,7 +77,7 @@ const DEMO_PROPOSAL_API: ProposalApi = {
  * 各画面は表示専用で、ここが渡しているのは固定データ(`fixtures/demo`)。
  * サーバースナップショットの接続と合法手の判定は E1/E3 の責務。
  */
-function DemoApp() {
+function DemoApp({ storage }: { storage: PlayedBeforeStorage | undefined }) {
   const current = useScreenStore((state) => state.current);
   const go = useScreenStore((state) => state.go);
 
@@ -81,6 +86,7 @@ function DemoApp() {
   const [ruleVotes, setRuleVotes] = useState(DEMO_FIRED_RULES);
   /** 見本のカットインを順に再生するための位置。null は再生していない状態。 */
   const [isChoosingRoom, setIsChoosingRoom] = useState(false);
+  const [playedBefore] = useState(() => hasPlayedBefore(storage));
   const [volleyIndex, setVolleyIndex] = useState<number | null>(null);
   const [lastVolleyIndex, setLastVolleyIndex] = useState<number | null>(null);
 
@@ -140,6 +146,7 @@ function DemoApp() {
           />
           {isChoosingRoom && (
             <PlaySheet
+              playedBefore={playedBefore}
               onCreate={() => {
                 setIsChoosingRoom(false);
                 go('waitingRoom');
@@ -433,7 +440,13 @@ export function reconcileSelectedCardIds(
   return existing.length === selected.length ? selected : existing;
 }
 
-function ConnectedApp({ client }: { client: MultiplayerClient }) {
+function ConnectedApp({
+  client,
+  storage,
+}: {
+  client: MultiplayerClient;
+  storage: PlayedBeforeStorage | undefined;
+}) {
   const current = useScreenStore((state) => state.current);
   const go = useScreenStore((state) => state.go);
   const state = useSyncExternalStore(
@@ -445,11 +458,24 @@ function ConnectedApp({ client }: { client: MultiplayerClient }) {
   const [selectedCardIds, setSelectedCardIds] = useState<readonly string[]>([]);
   const [funRating, setFunRating] = useState<SetFunRating | null>(null);
   const [ruleVotes, setRuleVotes] = useState(DEMO_FIRED_RULES);
+  const [playedBefore, setPlayedBefore] = useState(() =>
+    hasPlayedBefore(storage),
+  );
   const room = state.room;
 
   useEffect(() => {
     setSelectedCardIds((selected) => reconcileSelectedCardIds(selected, room));
   }, [room]);
+
+  useEffect(() => {
+    const completedOneGame =
+      room?.phase === 'setResult' ||
+      (room?.game?.previousResults.length ?? 0) > 0;
+    if (!playedBefore && completedOneGame) {
+      markPlayedBefore(storage);
+      setPlayedBefore(true);
+    }
+  }, [playedBefore, room, storage]);
 
   const invoke = (operation: Promise<unknown>) => {
     void operation.catch(() => undefined);
@@ -631,9 +657,10 @@ function ConnectedApp({ client }: { client: MultiplayerClient }) {
       />
       {isChoosingRoom && (
         <PlaySheet
-          onCreate={() => {
+          playedBefore={playedBefore}
+          onCreate={(mode) => {
             invoke(
-              client.createRoom().then(() => {
+              client.createRoom(mode).then(() => {
                 setIsChoosingRoom(false);
               }),
             );
@@ -667,8 +694,10 @@ function friendlyError(error: string | null): string | null {
 
 export function App({
   client,
+  storage,
 }: {
   client?: MultiplayerClient | null;
+  storage?: PlayedBeforeStorage;
 } = {}) {
   const effectiveClient =
     client === undefined
@@ -676,9 +705,12 @@ export function App({
         ? null
         : getBrowserMultiplayerClient()
       : client;
+  const effectiveStorage =
+    storage ??
+    (import.meta.env.MODE === 'test' ? undefined : window.localStorage);
   return effectiveClient ? (
-    <ConnectedApp client={effectiveClient} />
+    <ConnectedApp client={effectiveClient} storage={effectiveStorage} />
   ) : (
-    <DemoApp />
+    <DemoApp storage={effectiveStorage} />
   );
 }

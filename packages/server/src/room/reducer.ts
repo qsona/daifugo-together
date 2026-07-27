@@ -33,6 +33,7 @@ export function createRoomState(input: CreateRoomInput): RoomState {
   return {
     roomId: input.roomId,
     inviteCode: input.inviteCode,
+    mode: input.mode,
     phase: 'waiting',
     members: [
       {
@@ -52,7 +53,8 @@ export function createRoomState(input: CreateRoomInput): RoomState {
         waitingDisconnectExpiresAt: null,
       },
     ],
-    availableRules: structuredClone(input.availableRules ?? []),
+    availableRules:
+      input.mode === 'basic' ? [] : structuredClone(input.availableRules ?? []),
     fixedRules: null,
     engine: null,
     v: 1,
@@ -296,9 +298,10 @@ function startSet(
   options: RoomReducerOptions,
   leadingEvents: RoomGameEventPayload[] = [],
 ): RoomTransition {
-  const availableRules = structuredClone(
-    input.availableRules ?? state.availableRules,
-  );
+  const availableRules =
+    state.mode === 'basic'
+      ? []
+      : structuredClone(input.availableRules ?? state.availableRules);
   const preparedHumans = humans.map((member) =>
     member.connected
       ? {

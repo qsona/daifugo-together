@@ -19,6 +19,7 @@ function state(): RoomState {
   return createRoomState({
     roomId: 'room-1',
     inviteCode: 'ABCD-2345',
+    mode: 'community',
     owner: {
       memberId: 'member-1',
       userId: 'user-1',

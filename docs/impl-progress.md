@@ -2,9 +2,61 @@
 
 ## 現在
 
+- **フェーズ 2 / E14 TU-01 プロセス1完了・方向性レビュー待ち**: `RoomMode` を共有契約から実 Socket・Room state/view・Web のモード選択導線まで通した。非空の `availableRules` スタブを使い、きほんの部屋が `continue` / `leave` / `expireSetResult` の各経路で 2 セット目へ進んでも有効ルール 0 件のままである回帰テストを追加済み
 - **フェーズ 1 完了(2026-07-27)**: TS-02・E1・E2・E3・E4 は main に統合済み、E13 は本番デプロイと動作検証(DP-01・DP-03)まで完了(`https://daifugo-together.fly.dev/`)。残りは DP-02 の仕上げ(GitHub Environment `production` + `FLY_API_TOKEN` 登録と初回 CD 実行確認)のみ
 - **フェーズ 2 / E5 RP-01・RP-02 完了**: プロセス1の独立 GPT-5.6 Sol レビュー(`GO_WITH_FIXES`)を反映し、プロセス2の独立完了レビューは要件適合 `PASS` / 品質 `APPROVED`。RP-03 は CX-02 依存のため E7 後に戻る
 - E1〜E3 の実装記録は本書末尾の「並行進行」節、E13 は「E13」節。E4 の未解消の開発者判断は「詰まっている点」に残っている(1〜4・7・8・11)
+
+## フェーズ 2: E14 チュートリアル(TU-01〜04)
+
+### TU-01 プロセス1
+
+- 状態: 縦切り実装完了・方向性レビュー待ち
+- ブランチ: `codex/e14-tutorial`
+- コミット: この記録を含むプロセス1コミット
+- ユーザーストーリーの確認:
+  - `packages/server/src/room/manager.test.ts` の「availableRulesが非空でも、きほんの部屋は有効ルールを空に固定する」と 3 経路の「2セット目へ進んでも、きほんの部屋はみんなのルールに化けない」で、非空ルール供給下でも初回・2 セット目とも `availableRules` / `fixedRules` / `engine.ruleChain` が空であることを確認
+  - `packages/server/src/room/socket-gateway.test.ts` で、`room:create({ mode: 'basic' })` が実 Socket.IO 経路を通り、作成者・参加者双方の `PlayerRoomView.mode` に `basic` が見えることを確認。モード未指定は `community` になることも確認
+  - `packages/web/src/screens/PlaySheet.test.tsx` と `App.test.tsx` で、モード選択から `createRoom(mode)` へ値が渡ること、未プレイ時だけタグが出ること、1 戦完了後に `daifugo.playedBefore=true` を保存することを確認
+  - 実ブラウザ 375×812 で、タイトル→メニュー→「あそぶ」→モード選択→きほん→部屋作成確認まで操作。タグが 1 行に収まり、`innerWidth=scrollWidth=375` / `innerHeight=scrollHeight=812` で横・縦の意図しないスクロールがないことを確認
+
+#### 実装した方向
+
+- 共有契約は E14 §2.1 の範囲だけを追加した: `RoomMode = 'basic' | 'community'`、任意の `room:create.mode`、必須の `PlayerRoomView.mode`
+- `RoomState.mode` をルール解決より先に置き、きほんでは作成時とセット更新時の両方でルール一覧を空にする。`RoomManager` と純粋 reducer の二重境界で守る
+- 旧クライアントの空 payload は Socket gateway で `community` へ既定化し、既存の `RoomManager.create(user)` も community として維持した
+- 入室者はモードを選ばない。最初の ChoiceSheet に「友だちの部屋にはいる」を並べ、作成者だけが「きほん / みんなのルール」を選ぶ
+- 既プレイ判定は `daifugo.playedBefore` だけを読み書きし、ゲーム間リザルトまたはセットリザルトを受けた時点で `true` にする
+
+#### 置いた仮定(方向性レビューで裁定してもらう)
+
+| # | 仮定した内容 | なぜそう決めたか | 出典 | 覆ったときの影響範囲 |
+|---|---|---|---|---|
+| E14-P1-1 | 入室導線はモード選択の同じ ChoiceSheet に置き、入室者はモード選択を経由しない | 「入る側はモードを選ばず部屋に従う」を、意味のない選択をさせずに守るため。作成者のモード選択は先頭に維持 | E14 §2.1、C-10 | `PlaySheet.tsx` と同テストのみ。ルーム契約・サーバーには影響なし |
+| E14-P1-2 | `playedBefore` はゲーム間リザルトまたはセットリザルトの snapshot を初めて受けた時点で書く | クライアントが権威的に「1 戦完了」を観測でき、再接続で既に完了済みでも取りこぼさない最小条件 | E14 §2.1 | `App.tsx` の保存条件とテスト。サーバー契約には影響なし |
+
+#### プロセス2に回したもの
+
+| ストーリー | 内容 | 理由 |
+|---|---|---|
+| TU-01 | `localStorage` の読み書きが例外になる環境でも対局画面を止めない防御 | プロセス1では通常ブラウザの縦導線と契約回帰を優先。保存失敗はタグが再表示されるだけでゲーム進行は壊れない |
+| TU-01 | C-10 の将来案「招待コード入力後、入室前に部屋モードを見せる」 | C-10 が未決で、現契約は入室前 preview を持たない。今回は承認済みの最小方式どおり部屋参加後の view で見せる |
+
+#### 検証
+
+- `CI=true pnpm verify`: 成功
+  - format / lint / design lint / typecheck / **35 files・256 tests** / 全 package build が成功
+- 対象テスト: **6 files・72 tests** 成功
+- 実 Socket.IO: `socket-gateway.test.ts` **10 tests** 成功
+- 実ブラウザ: 375×812、モード選択タグと作成導線を確認。横スクロールなし
+
+#### 設計への提案・気づいたこと
+
+- E03 §2.3 / E12 §4.3 への `RoomMode` 契約同期は decision-log E-19 のとおり未反映。実装側では E14 §2.1 を正として最小差分だけ入れ、保護対象の Epic 設計書は変更していない
+
+#### 詰まっている点
+
+- なし。C-10 は上記 E14-P1-1 の仮定で先行できている
 
 ## フェーズ 2: E5 ルール提案受付(RP-01・RP-02)
 

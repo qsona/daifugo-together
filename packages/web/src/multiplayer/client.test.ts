@@ -8,6 +8,7 @@ function room(v: number): PlayerRoomView {
     v,
     roomId: 'room-1',
     inviteCode: 'ABCD-2345',
+    mode: 'community',
     phase: 'waiting',
     members: [
       {
@@ -122,6 +123,22 @@ describe('MultiplayerClient', () => {
     expect(client.snapshot()).toMatchObject({
       room: null,
       roomClosedReason: 'abandoned',
+    });
+  });
+
+  it('部屋作成時に選んだモードを送信する', async () => {
+    const socket = new FakeSocket();
+    const client = new MultiplayerClient(
+      'http://example.test',
+      { getItem: () => null, setItem: () => undefined },
+      () => socket as never,
+    );
+
+    await client.createRoom('basic');
+
+    expect(socket.emitted.at(-1)).toEqual({
+      event: 'room:create',
+      payload: { mode: 'basic' },
     });
   });
 });

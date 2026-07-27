@@ -278,6 +278,7 @@ export function viewFor(
     v: state.v,
     roomId: state.roomId,
     inviteCode: state.inviteCode,
+    mode: state.mode,
     phase: state.phase,
     members: memberViews(state),
     you: {

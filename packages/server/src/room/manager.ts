@@ -1,6 +1,6 @@
 import { randomInt, randomUUID } from 'node:crypto';
 
-import type { RuleChainEntry } from '@daifugo/core';
+import type { RoomMode, RuleChainEntry } from '@daifugo/core';
 
 import { createRoomState, reduceRoom } from './reducer.js';
 import type {
@@ -216,7 +216,10 @@ export class RoomManager {
     return results;
   }
 
-  create(user: RoomUser): RoomManagerResult<RoomMembership> {
+  create(
+    user: RoomUser,
+    input: { mode: RoomMode } = { mode: 'community' },
+  ): RoomManagerResult<RoomMembership> {
     if (this.findByUser(user.userId)) {
       return { ok: false, code: 'ALREADY_IN_ROOM' };
     }
@@ -227,12 +230,14 @@ export class RoomManager {
     const room = createRoomState({
       roomId: this.#options.createRoomId(),
       inviteCode,
+      mode: input.mode,
       owner: {
         memberId: this.#options.createMemberId(),
         userId: user.userId,
         displayName: user.displayName,
       },
-      availableRules: this.#options.availableRules?.() ?? [],
+      availableRules:
+        input.mode === 'basic' ? [] : (this.#options.availableRules?.() ?? []),
       now: this.#options.now(),
       ...(this.#options.reducer?.lobbyTtlMs === undefined
         ? {}
@@ -294,6 +299,7 @@ export class RoomManager {
       (action.type === 'continue' ||
         action.type === 'leave' ||
         action.type === 'expireSetResult') &&
+      room.mode === 'community' &&
       this.#options.availableRules
         ? {
             ...action,

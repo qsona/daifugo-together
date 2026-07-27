@@ -200,7 +200,7 @@ describe('Socket.IO room gateway', () => {
     const created = await emitAck<
       'room:create',
       { roomId: string; inviteCode: string }
-    >(owner.client, 'room:create', {});
+    >(owner.client, 'room:create', { mode: 'basic' });
     expect(created.ok).toBe(true);
     if (!created.ok) return;
 
@@ -239,6 +239,8 @@ describe('Socket.IO room gateway', () => {
     ]);
     expect(ownerView.phase).toBe('playing');
     expect(guestView.phase).toBe('playing');
+    expect(ownerView.mode).toBe('basic');
+    expect(guestView.mode).toBe('basic');
 
     const authority = harness.gateway.rooms.get(created.value.roomId)!;
     for (const view of [ownerView, guestView]) {
@@ -252,6 +254,22 @@ describe('Socket.IO room gateway', () => {
         }
       }
     }
+  });
+
+  it('旧クライアントのモード未指定はcommunityとして扱う', async () => {
+    const harness = await createHarness();
+    const owner = await connect(harness);
+    const roomState = once<PlayerRoomView>((resolve) =>
+      owner.client.once('room:state', resolve),
+    );
+
+    const created = await emitAck<
+      'room:create',
+      { roomId: string; inviteCode: string }
+    >(owner.client, 'room:create', {});
+
+    expect(created.ok).toBe(true);
+    expect((await roomState).mode).toBe('community');
   });
 
   it('同一tokenの後勝ち接続で旧socketをsupersedeし、最新snapshotへ再アタッチする', async () => {

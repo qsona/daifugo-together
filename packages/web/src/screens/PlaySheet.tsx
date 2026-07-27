@@ -1,37 +1,47 @@
+import type { RoomMode } from '@daifugo/core';
 import { useState } from 'react';
 
 import { Button } from '../components/Button';
 import { ChoiceSheet } from '../components/ChoiceSheet';
 import { InputField } from '../components/Field';
+import { Tag } from '../components/Tag';
 
 import styles from './PlaySheet.module.css';
 
 type PlaySheetProps = {
-  onCreate: () => void;
+  onCreate: (mode: RoomMode) => void;
   onJoin: (code: string) => void;
   onClose: () => void;
+  playedBefore?: boolean;
   error?: string | null;
 };
 
 /**
- * 「あそぶ」を押したときに下から出る二択。
+ * 「あそぶ」を押したときに下から出る選択シート。
  *
- * ワイヤーの画面 2a(ルーム作成・参加)を独立した画面として挟むと、
- * 情報量の薄い 1 画面のためにタップが 1 回増える。選択肢は 2 つしかないので、
- * その場で開いて決めさせ、「つくる」なら待機画面へ直行する。
+ * 部屋を作る人だけがモードを選ぶ。招待された人はモードを選ばず、
+ * 同じシートから招待コード入力へ進んで部屋側のモードに従う。
  */
 export function PlaySheet({
   onCreate,
   onJoin,
   onClose,
+  playedBefore = false,
   error,
 }: PlaySheetProps) {
+  const [mode, setMode] = useState<RoomMode | null>(null);
   const [code, setCode] = useState('');
   const [isJoining, setIsJoining] = useState(false);
 
   return (
     <ChoiceSheet
-      label="じぶんの部屋をつくるか、友だちの部屋にはいる"
+      label={
+        isJoining
+          ? '友だちの部屋にはいる'
+          : mode === null
+            ? 'あそぶモードをえらぶ'
+            : 'じぶんの部屋をつくる'
+      }
       onClose={onClose}
     >
       {isJoining ? (
@@ -68,15 +78,27 @@ export function PlaySheet({
             </Button>
           </div>
         </>
-      ) : (
+      ) : mode === null ? (
         <>
-          {/*
-           * 2 つの選択肢は「じぶん / 友だち」「つくる / はいる」で対比させる。
-           * どちらを押すかは「コードをもらっているか」で決まるので、
-           * 人数(4 人固定)はここで意識させる情報ではない。
-           */}
-          <Button variant="primary" block onClick={onCreate}>
-            じぶんの部屋をつくる
+          <Button
+            variant="primary"
+            block
+            onClick={() => {
+              setMode('basic');
+            }}
+          >
+            きほん
+            {!playedBefore && (
+              <Tag variant="active">はじめてのひとはこちら</Tag>
+            )}
+          </Button>
+          <Button
+            block
+            onClick={() => {
+              setMode('community');
+            }}
+          >
+            みんなのルール
           </Button>
           <Button
             block
@@ -86,7 +108,29 @@ export function PlaySheet({
           >
             友だちの部屋にはいる
           </Button>
+        </>
+      ) : (
+        <>
+          <Button
+            variant="primary"
+            block
+            onClick={() => {
+              onCreate(mode);
+            }}
+          >
+            じぶんの部屋をつくる
+          </Button>
           {error && <p role="alert">{error}</p>}
+          <div className={styles.back}>
+            <Button
+              size="small"
+              onClick={() => {
+                setMode(null);
+              }}
+            >
+              もどる
+            </Button>
+          </div>
         </>
       )}
     </ChoiceSheet>

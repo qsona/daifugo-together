@@ -334,7 +334,8 @@ export function attachRoomSocketGateway(
 
     socket.on('room:create', (payload, ack) => {
       try {
-        if (!clientPayloadSchemas['room:create'].safeParse(payload).success) {
+        const parsed = clientPayloadSchemas['room:create'].safeParse(payload);
+        if (!parsed.success) {
           safeAck(ack, failure('BAD_PAYLOAD'));
           return;
         }
@@ -342,7 +343,9 @@ export function attachRoomSocketGateway(
           safeAck(ack, failure('INTERNAL', 'server is draining'));
           return;
         }
-        const created = rooms.create(session);
+        const created = rooms.create(session, {
+          mode: parsed.data.mode ?? 'community',
+        });
         if (!created.ok) {
           safeAck(ack, failure(created.code));
           return;

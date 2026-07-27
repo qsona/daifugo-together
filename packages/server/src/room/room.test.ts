@@ -1,4 +1,4 @@
-import { enumerateLegalPlays } from '@daifugo/core';
+import { enumerateLegalPlays, type RuleChainEntry } from '@daifugo/core';
 import { describe, expect, it } from 'vitest';
 
 import { createRoomState, reduceRoom } from './reducer.js';
@@ -9,6 +9,7 @@ function room(): RoomState {
   return createRoomState({
     roomId: 'room-1',
     inviteCode: 'ABCD-2345',
+    mode: 'community',
     owner: {
       memberId: 'member-1',
       userId: 'private-user-1',
@@ -140,6 +141,38 @@ function finishSet(initial: RoomState): {
 }
 
 describe('pure room reducer', () => {
+  it('モードをstate/viewへ通し、きほんでは入力されたルールを空にする', () => {
+    const availableRule: RuleChainEntry = {
+      ruleId: 'community-rule',
+      name: 'みんなのルール',
+      position: 0,
+      priority: {
+        score: 1,
+        activatedAt: 1,
+        ruleId: 'community-rule',
+      },
+      bundleHash: 'fixture',
+      contractVersion: 1,
+    };
+    const basic = createRoomState({
+      roomId: 'basic-room',
+      inviteCode: 'BASIC-001',
+      mode: 'basic',
+      owner: {
+        memberId: 'basic-owner',
+        userId: 'basic-user',
+        displayName: 'ホスト',
+      },
+      availableRules: [availableRule],
+      now: 100,
+    });
+
+    expect(basic.mode).toBe('basic');
+    expect(basic.availableRules).toEqual([]);
+    expect(viewFor(basic, 'basic-owner').mode).toBe('basic');
+    expect(viewFor(basic, 'basic-owner').activeRules).toEqual([]);
+  });
+
   it('drain要求は進行中ゲームを完走させ、新しいゲームを開始せずsetResultへ移る', () => {
     const state = start(fourHumanRoom());
     const drained = reduceRoom(state, {

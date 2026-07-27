@@ -5,6 +5,7 @@ import type {
   RuleChainPort,
   RoomErrorCode,
   RoomGameEvent,
+  RoomMode,
   RoomPhase,
   SeatId,
   SetState,
@@ -18,6 +19,7 @@ export type {
   PublicPlayView,
   RoomErrorCode,
   RoomGameEvent,
+  RoomMode,
   RoomPhase,
   RuleRef,
   SeatId,
@@ -52,6 +54,7 @@ export type RoomGameEventPayload = RoomGameEvent extends infer Event
 export interface RoomState {
   roomId: string;
   inviteCode: string;
+  mode: RoomMode;
   phase: RoomPhase;
   members: RoomMember[];
   availableRules: RuleChainEntry[];
@@ -149,6 +152,7 @@ export interface RoomTransition {
 export interface CreateRoomInput {
   roomId: string;
   inviteCode: string;
+  mode: RoomMode;
   owner: {
     memberId: string;
     userId: string;
