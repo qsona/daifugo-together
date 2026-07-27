@@ -11,7 +11,7 @@
 - **フェーズ 2 / E7 CX-03 プロセス2完了、外部受入ゲート待ち**: trusted diff-guard、untrusted quality/rule-tests/simulation、ローカルCI監視を実装。独立完了再レビューはコード・自動テスト `PASS` / 品質 `APPROVED` / Critical・Importantなし。実repositoryのbranch protection/ruleset登録はworkflowのmain反映後
 - **フェーズ 2 / E7 CX-04 プロセス2コード完了**: 独立再レビューはコード・自動テスト範囲 `PASS` / 品質 `APPROVED` / Critical・Importantなし。実CD/revertリハーサル、通知経路、CX-05完全registry接続は外部・後続ゲート
 - **フェーズ 2 / E2 AI-02 プロセス2コード完了**: workerへ権威runtime snapshotと実SHA-256検証済みbundleを渡し、E1 simulation generatorをworker AI 4席で駆動。独立完了再レビューは要件 `PASS` / 品質 `APPROVED` / Critical・Important・Minorなし
-- **フェーズ 2 / E7 CX-05 プロセス2完了レビュー修正中**: 完了レビューの第三操作を追加後、独立再レビューが実行中registryのreadiness証明と放置リマインダー導線にImportant 2件を再現。起動中bundle照合のattestationと通常skill起動時の48時間警告まで修正済み。指摘解消再レビュー待ち
+- **フェーズ 2 / E7 CX-05 プロセス2コード完了**: 第三操作、起動中registryのreadiness attestation、48時間リマインダーまで追加。独立完了再レビューはコード要件 `PASS` / 品質 `APPROVED` / Critical・Importantなし。実GitHub/CD/本番の3操作リハーサルとRP-03 UIは外部・後続ゲート
 - E1〜E3 の実装記録は本書末尾の「並行進行」節、E13 は「E13」節。E4 の未解消の開発者判断は「詰まっている点」に残っている(1〜4・7・8・11)
 
 ### E-18 / C-2・C-3・C-6 再設計の反映(2026-07-27)
@@ -841,6 +841,7 @@ TS-02 から継続で未解決のもの:
 - 修正後の全体`CI=true pnpm verify`はformat/lint/design/typecheck、64 files / 442 tests、全package buildまで成功。実GitHub/CD/本番での3操作実績はコード完了判定とは分け、外部受入ゲートに残す
 - 指摘解消レビューは、永続`rule_versions`だけでは起動中registryが同期を拒否したデプロイを見抜けず、`release-status`が一度`ready`を返してからenableでfail-closedになる再現例をImportantとした。管理GETに起動中registration・release source・current versionの完全照合から算出する`releaseReady` attestationを追加し、CLIはこれが偽なら有効化しない
 - 同レビューは48時間判定が対象jobのstatusコマンドを再実行した場合だけのpull通知だった点もImportantとした。`activeJobs`に`merged`を残し、通常の次job取得時にも48時間超の未有効化jobを`REMINDER`警告として必ず再提示するよう変更した。対象jobのstatus結果にも従来どおり`reminder: true`を残す
+- 修正後の独立再レビューはコード要件 **PASS** / 品質 **APPROVED**、両Important **CLOSED**。実serviceでbundle不一致時に`releaseReady: false`、CLIが`pending/provenance_mismatch`となりenableを呼ばないことと、通常next APIでの48時間警告を再現確認した。Critical・Importantの新規指摘なし
 
 #### CX-05の残る外部・後続ゲート
 
