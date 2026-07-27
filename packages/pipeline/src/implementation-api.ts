@@ -266,6 +266,7 @@ export type RuleReleaseLookup =
       status: 'found';
       rule: StoredRule;
       versions: StoredRuleVersion[];
+      releaseReady: boolean;
     }
   | { status: 'not_found' };
 
@@ -329,7 +330,8 @@ export class HttpRuleReleasePort implements RuleReleasePort {
         response?.status !== 'found' ||
         !storedRule(response.rule) ||
         !Array.isArray(response.versions) ||
-        !response.versions.every(storedRuleVersion)
+        !response.versions.every(storedRuleVersion) ||
+        typeof response.releaseReady !== 'boolean'
       ) {
         throw new ImplementationApiError('invalid rule lookup response');
       }

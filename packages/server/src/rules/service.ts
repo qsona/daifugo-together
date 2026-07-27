@@ -46,6 +46,7 @@ export type RuleControlResult =
       rule: StoredRule;
       versions: StoredRuleVersion[];
       incidents: StoredRuleIncident[];
+      releaseReady: boolean;
     }
   | { status: 'updated'; rule: StoredRule }
   | { status: 'unchanged'; rule: StoredRule }
@@ -377,6 +378,9 @@ export class RuleRegistryService {
           rule,
           versions: this.#repository.versions(ruleId),
           incidents: this.#repository.incidents(ruleId),
+          releaseReady:
+            this.#deploymentIssue(rule, this.#codeById.get(rule.id) ?? []) ===
+            null,
         }
       : { status: 'not_found' };
   }
@@ -608,6 +612,23 @@ export class RuleRegistryService {
     ) {
       return `active rule release state does not match: ${source.proposal.status}/${source.job.phase}`;
     }
+    const sourceIssue = this.#releaseSourceIssue(registration, source);
+    if (sourceIssue || !source) return sourceIssue;
+    return versionIssue(
+      this.#repository.currentVersion(rule.id),
+      registration,
+      source,
+    );
+  }
+
+  #deploymentIssue(
+    rule: StoredRule,
+    registrations: readonly CodeRuleRegistration[],
+  ): string | null {
+    const issue = registryIssue(rule, registrations);
+    if (issue || !this.#proposals || !this.#pipeline) return issue;
+    const registration = registrations[0]!;
+    const source = this.#releaseSource(rule.proposalId);
     const sourceIssue = this.#releaseSourceIssue(registration, source);
     if (sourceIssue || !source) return sourceIssue;
     return versionIssue(

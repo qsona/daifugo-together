@@ -310,7 +310,16 @@ describe('production app server', () => {
         },
         jobs: {
           next: nextJob,
-          active: () => [],
+          active: () => [
+            {
+              ...updateJob().job,
+              phase: 'merged',
+              prNumber: 42,
+              headSha: 'b'.repeat(40),
+              mergeSha: 'c'.repeat(40),
+              updatedAt: 1,
+            },
+          ],
           resume: () => null,
           update: updateJob,
           retry: retryJob,
@@ -391,7 +400,12 @@ describe('production app server', () => {
       headers: { authorization: 'Bearer admin-token' },
     });
     expect(next.status).toBe(200);
-    await expect(next.json()).resolves.toEqual({ item: null, warnings: [] });
+    await expect(next.json()).resolves.toEqual({
+      item: null,
+      warnings: [
+        'REMINDER: job 1 (r0001-yagiri) has awaited enablement for over 48 hours',
+      ],
+    });
     expect(nextJob).toHaveBeenCalledOnce();
 
     const updated = await fetch(`${baseUrl}/admin/pipeline/jobs/1/update`, {
@@ -473,7 +487,13 @@ describe('production app server', () => {
     const get = vi.fn((ruleId: string) =>
       ruleId === 'missing'
         ? ({ status: 'not_found' } as const)
-        : { status: 'found' as const, rule, versions: [], incidents: [] },
+        : {
+            status: 'found' as const,
+            rule,
+            versions: [],
+            incidents: [],
+            releaseReady: true,
+          },
     );
     const disable = vi.fn((ruleId: string, body: unknown) =>
       ruleId === 'removed'
@@ -517,6 +537,7 @@ describe('production app server', () => {
       rule,
       versions: [],
       incidents: [],
+      releaseReady: true,
     });
 
     const disabled = await fetch(

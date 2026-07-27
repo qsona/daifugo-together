@@ -359,6 +359,7 @@ describe('implementation CLI workflow', () => {
         status: 'found',
         rule: storedRule(),
         versions: [storedVersion()],
+        releaseReady: true,
       });
     const enable = vi.fn<RuleReleasePort['enable']>().mockResolvedValue({
       status: 'updated',
@@ -403,6 +404,7 @@ describe('implementation CLI workflow', () => {
             status: 'found',
             rule: storedRule(),
             versions: [storedVersion({ mergeSha: 'e'.repeat(40) })],
+            releaseReady: true,
           }),
           enable,
         },
@@ -435,6 +437,7 @@ describe('implementation CLI workflow', () => {
             status: 'found',
             rule: storedRule(),
             versions: [storedVersion()],
+            releaseReady: true,
           }),
           enable,
         },
@@ -446,6 +449,36 @@ describe('implementation CLI workflow', () => {
       status: 'ready',
       jobId: 1,
       ruleId: 'r0001-yagiri',
+    });
+    expect(enable).not.toHaveBeenCalled();
+  });
+
+  it('起動中registryが同期を拒否したruleはreadyにせず有効化しない', async () => {
+    const current = item('merged', {
+      prNumber: 42,
+      mergeSha: 'c'.repeat(40),
+    });
+    const enable = vi.fn<RuleReleasePort['enable']>();
+
+    await expect(
+      releaseDeployedRule({
+        jobs: { resume: () => current },
+        rules: {
+          get: async () => ({
+            status: 'found',
+            rule: storedRule(),
+            versions: [storedVersion()],
+            releaseReady: false,
+          }),
+          enable,
+        },
+        jobId: 1,
+        enable: false,
+        maxWaitMs: 0,
+      }),
+    ).resolves.toMatchObject({
+      status: 'pending',
+      reason: 'provenance_mismatch',
     });
     expect(enable).not.toHaveBeenCalled();
   });
@@ -462,11 +495,13 @@ describe('implementation CLI workflow', () => {
         status: 'found',
         rule: storedRule(),
         versions: [storedVersion()],
+        releaseReady: true,
       })
       .mockResolvedValueOnce({
         status: 'found',
         rule: storedRule('active', null),
         versions: [storedVersion()],
+        releaseReady: true,
       });
     const enable = vi
       .fn<RuleReleasePort['enable']>()
@@ -507,6 +542,7 @@ describe('implementation CLI workflow', () => {
             status: 'found',
             rule: storedRule('disabled', 'manual'),
             versions: [storedVersion()],
+            releaseReady: true,
           }),
           enable,
         },
@@ -545,6 +581,7 @@ describe('implementation CLI workflow', () => {
             status: 'found',
             rule: storedRule('disabled', 'manual'),
             versions: [storedVersion()],
+            releaseReady: true,
           }),
           enable: vi.fn(),
         },

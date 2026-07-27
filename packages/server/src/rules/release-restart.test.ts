@@ -242,6 +242,32 @@ describe('CX-05 release persistence and provenance', () => {
     });
   });
 
+  it('起動中bundleが永続provenanceと違う場合はrelease readinessを拒否する', () => {
+    const persistence = createPersistence(databasePath());
+    const { registration } = seedMerged(persistence);
+    registry(persistence, [registration]).synchronizeCodeRegistry();
+    const mismatched = registry(persistence, [
+      { ...registration, bundleHash: 'd'.repeat(64) },
+    ]);
+
+    expect(mismatched.synchronizeCodeRegistry()).toMatchObject({
+      failures: [
+        {
+          ruleId: 'r0001-release',
+          detail: 'rule version provenance does not match deployed code',
+        },
+      ],
+    });
+    expect(mismatched.get('r0001-release')).toMatchObject({
+      status: 'found',
+      releaseReady: false,
+    });
+    expect(mismatched.enable('r0001-release')).toEqual({
+      status: 'conflict',
+      error: 'rule_unavailable',
+    });
+  });
+
   it('proposal/jobが初回公開前のactive不整合ruleをruntimeへ載せない', () => {
     const persistence = createPersistence(databasePath());
     const { registration } = seedMerged(persistence);

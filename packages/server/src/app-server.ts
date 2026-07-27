@@ -30,6 +30,8 @@ import type { PipelineJudgementService } from './pipeline/service.js';
 import type { PipelineJobService } from './pipeline/jobs.js';
 import type { RuleRegistryService } from './rules/service.js';
 
+const RELEASE_REMINDER_MS = 48 * 60 * 60 * 1_000;
+
 const CONTENT_TYPES: Record<string, string> = {
   '.css': 'text/css; charset=utf-8',
   '.html': 'text/html; charset=utf-8',
@@ -356,9 +358,14 @@ export function createAppServer(options: AppServerOptions): AppServer {
       const item = options.adminPipeline!.jobs.next();
       const warnings = options
         .adminPipeline!.jobs.active()
-        .map(
-          (job) =>
-            `job ${String(job.id)} (${job.ruleId}) is already ${job.phase}`,
+        .flatMap((job) =>
+          job.phase === 'merged'
+            ? Date.now() - job.updatedAt >= RELEASE_REMINDER_MS
+              ? [
+                  `REMINDER: job ${String(job.id)} (${job.ruleId}) has awaited enablement for over 48 hours`,
+                ]
+              : []
+            : [`job ${String(job.id)} (${job.ruleId}) is already ${job.phase}`],
         );
       writeJson(response, 200, { item, warnings });
       return true;

@@ -240,6 +240,7 @@ describe('HttpRuleReleasePort', () => {
           JSON.stringify({
             status: 'found',
             rule,
+            releaseReady: true,
             versions: [
               {
                 id: 1,

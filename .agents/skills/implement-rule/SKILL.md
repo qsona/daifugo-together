@@ -35,8 +35,9 @@ pnpm --filter @daifugo/pipeline implement
 ```
 
 The command obtains one E6-passed, developer-SPEC-approved job; warns about any
-existing `implementing` or `pr_open` jobs; shallow-clones `main`; installs the
-lockfile; creates and pushes the immutable scaffold; invokes `codex exec` with
+existing `implementing` or `pr_open` jobs and any `merged` job that has awaited
+enablement for over 48 hours; shallow-clones `main`; installs the lockfile;
+creates and pushes the immutable scaffold; invokes `codex exec` with
 `workspace-write` and a 20-minute timeout; checks the repository-wide diff and
 scaffold history; commits the two generated files; and opens or recovers one
 PR. Report the returned workspace, job ID, rule ID, PR number, and result.

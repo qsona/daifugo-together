@@ -237,6 +237,7 @@ export async function releaseDeployedRule(options: {
           (version) => version.isCurrent && version.revertedAt === null,
         );
         const provenanceMatches =
+          lookup.releaseReady &&
           current !== undefined &&
           current.prNumber === job.prNumber &&
           current.mergeSha === job.mergeSha &&

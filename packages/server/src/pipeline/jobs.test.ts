@@ -236,6 +236,9 @@ describe('CX-02 pipeline jobs', () => {
     expect(jobs.resume(item.job.id)).toMatchObject({
       job: { phase: 'merged', mergeSha: 'c'.repeat(40) },
     });
+    expect(jobs.active()).toEqual([
+      expect.objectContaining({ id: item.job.id, phase: 'merged' }),
+    ]);
     expect(persistence.pipeline.job(item.job.id)?.phase).toBe('merged');
   });
 

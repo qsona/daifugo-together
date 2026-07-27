@@ -589,7 +589,7 @@ export class PipelineRepository {
       this.#sqlite
         .prepare(
           `SELECT * FROM pipeline_jobs
-           WHERE phase IN ('implementing', 'pr_open')
+           WHERE phase IN ('implementing', 'pr_open', 'merged')
            ORDER BY created_at ASC, id ASC`,
         )
         .all() as PipelineJobRow[]
