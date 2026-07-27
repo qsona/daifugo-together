@@ -58,27 +58,62 @@ function sortWeakFirst(plays, strength) {
   );
 }
 
-function observedCards(view) {
-  const observed = new Map(view.hand.map((card) => [card.id, card]));
+function knownCardZones(view) {
+  const deck = new Map(core.createDeck().map((card) => [card.id, card]));
+  const zones = new Map();
+  const clearKnownField = () => {
+    for (const [cardId, zone] of zones) {
+      if (zone.kind === 'field') zones.set(cardId, { kind: 'discard' });
+    }
+  };
   for (const event of view.history) {
     if (event.type === 'played') {
+      clearKnownField();
       for (const card of event.play.cards) {
-        observed.set(card.id, card);
+        zones.set(card.id, { kind: 'field' });
       }
+    } else if (event.type === 'fieldCleared') {
+      clearKnownField();
+    } else if (event.type === 'cardsMoved') {
+      if (event.cardIds) {
+        for (const cardId of event.cardIds) {
+          if (!deck.has(cardId)) {
+            throw new Error(`AI observed an unknown card: ${cardId}`);
+          }
+          zones.set(cardId, structuredClone(event.to));
+        }
+      } else if (event.from.kind === 'hand' && event.to.kind === 'hand') {
+        // Hand-to-hand moves intentionally omit identities. A card that was
+        // known from an earlier public zone becomes hidden again.
+        for (const [cardId, zone] of zones) {
+          if (zone.kind === 'hand' && zone.player === event.from.player) {
+            zones.delete(cardId);
+          }
+        }
+      }
+    }
+  }
+  const currentIds = new Set(view.field?.play.cards.map((card) => card.id));
+  for (const [cardId, zone] of zones) {
+    if (zone.kind === 'field' && !currentIds.has(cardId)) {
+      zones.set(cardId, { kind: 'discard' });
     }
   }
   if (view.field) {
     for (const card of view.field.play.cards) {
-      observed.set(card.id, card);
+      zones.set(card.id, { kind: 'field' });
     }
   }
-  return observed;
+  for (const card of view.hand) {
+    zones.set(card.id, { kind: 'hand', player: view.forPlayer });
+  }
+  return { deck, zones };
 }
 
 function determinize(view, seed, iteration) {
   const rng = core.seedRng(`${seed}:world:${iteration}`);
-  const observed = observedCards(view);
-  const unknown = core.createDeck().filter((card) => !observed.has(card.id));
+  const { deck, zones } = knownCardZones(view);
+  const unknown = [...deck.values()].filter((card) => !zones.has(card.id));
   const shuffled = shuffle(unknown, rng);
   let offset = 0;
   const players = {};
@@ -87,24 +122,42 @@ function determinize(view, seed, iteration) {
     if (player.id === view.forPlayer) {
       hand = structuredClone(view.hand);
     } else {
-      hand = shuffled.cards.slice(offset, offset + player.handCount);
-      offset += player.handCount;
+      const known = [...zones]
+        .filter(([, zone]) => zone.kind === 'hand' && zone.player === player.id)
+        .map(([cardId]) => deck.get(cardId));
+      const unknownCount = player.handCount - known.length;
+      if (unknownCount < 0) {
+        throw new Error(`AI observed too many cards in ${player.id}'s hand`);
+      }
+      hand = [
+        ...known.map((card) => structuredClone(card)),
+        ...shuffled.cards.slice(offset, offset + unknownCount),
+      ];
+      offset += unknownCount;
     }
     players[player.id] = {
       id: player.id,
-      hand,
+      hand: core.sortCards(hand),
       status: player.status,
       ...(player.standing === null ? {} : { standing: player.standing }),
       skipCount: 0,
     };
   }
-  const currentIds = new Set(
-    view.field?.play.cards.map((card) => card.id) ?? [],
-  );
-  const publicCards = [...observed.values()].filter(
-    (card) =>
-      !view.hand.some((own) => own.id === card.id) && !currentIds.has(card.id),
-  );
+  const publicCards = [...zones]
+    .filter(([, zone]) => zone.kind === 'discard')
+    .map(([cardId]) => deck.get(cardId));
+  if (publicCards.length !== view.discardCount) {
+    throw new Error(
+      `AI discard observation mismatch: ${publicCards.length}/${view.discardCount}`,
+    );
+  }
+  if (shuffled.cards.length - offset !== view.excludedCount) {
+    throw new Error(
+      `AI card conservation mismatch: ${String(
+        shuffled.cards.length - offset,
+      )}/${String(view.excludedCount)}`,
+    );
+  }
   return {
     public: {
       phase: view.gamePhase,

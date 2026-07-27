@@ -42,6 +42,7 @@ ENV NODE_ENV=production
 COPY --from=production-dependencies /app ./
 COPY --from=builder /app/packages/ai/dist packages/ai/dist
 COPY --from=builder /app/packages/core/dist packages/core/dist
+COPY --from=builder /app/packages/rules/dist packages/rules/dist
 COPY --from=builder /app/packages/server/dist packages/server/dist
 COPY --from=builder /app/packages/web/dist packages/web/dist
 EXPOSE 8080

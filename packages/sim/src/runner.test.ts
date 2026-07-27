@@ -42,19 +42,15 @@ describe('CX-03 simulation runner', () => {
       newRuleId: simRule.meta.ruleId,
       games: 1,
       seeds: 1,
-      budget: {
-        softMs: 3,
-        hardMs: 1_000,
-        maxPlayouts: 1,
-        sliceMs: 1,
-      },
-      maxMoveWallMs: 1_500,
     });
 
     expect(runs).toHaveLength(2);
     expect(simulationViolations(runs)).toEqual([]);
     expect(runs.every((run) => (run.aiStats?.moves ?? 0) > 0)).toBe(true);
     expect(runs.every((run) => run.aiStats?.fallbackRate === 0)).toBe(true);
+    expect(
+      runs.every((run) => (run.aiStats?.maxMoveWallMs ?? Infinity) <= 200),
+    ).toBe(true);
   }, 20_000);
 
   it('new-only/allの2構成を固定seedで完走する', () => {

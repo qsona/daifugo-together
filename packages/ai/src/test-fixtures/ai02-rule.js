@@ -15,7 +15,17 @@ export const rule = {
       if (context.memory.game.throw === true) {
         throw new Error('AI-02 fixture hook failure');
       }
-      return context.memory.game.force === true || context.rng.int(2) === 1
+      const watchedPlayer = context.memory.game.watchPlayer;
+      const watchedCard = context.memory.game.watchCard;
+      const watchedCardIsHeld =
+        typeof watchedPlayer === 'string' &&
+        typeof watchedCard === 'string' &&
+        context.game.players
+          .find((player) => player.id === watchedPlayer)
+          ?.hand.some((card) => card.id === watchedCard);
+      return context.memory.game.force === true ||
+        watchedCardIsHeld ||
+        (context.memory.game.disableRandom !== true && context.rng.int(2) === 1)
         ? { ranking: [...base.ranking].reverse() }
         : base;
     },

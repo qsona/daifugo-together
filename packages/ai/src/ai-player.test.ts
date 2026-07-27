@@ -693,6 +693,174 @@ describe('AI-02 rule following', () => {
     expect(actions).toBeLessThan(1_000);
   }, 20_000);
 
+  it('公開cardsMoved履歴から既知カードの現在zoneを権威側と同じに復元する', async () => {
+    const module = ai02RuleFixture as RuleModule;
+    const moduleUrl = new URL('./test-fixtures/ai02-rule.js', import.meta.url);
+    const bundleHash = createHash('sha256')
+      .update(await readFile(moduleUrl))
+      .digest('hex');
+    const ruleEntry: RuleChainEntry = {
+      ruleId: module.meta.ruleId,
+      name: module.meta.name,
+      position: 0,
+      priority: {
+        score: 0,
+        activatedAt: 0,
+        ruleId: module.meta.ruleId,
+      },
+      bundleHash,
+      contractVersion: module.meta.contractVersion,
+    };
+    const config: GameConfig = {
+      gameIndex: 0,
+      seats,
+      gameSeed: 'ai02-card-move-authority',
+      ruleChain: [ruleEntry],
+    };
+    const started = startGame(config).state;
+    const player = started.public.turn;
+    if (!player) throw new Error('Expected an opening player');
+    const [sourcePlayer, targetPlayer] = seats.filter(
+      (candidate) => candidate !== player,
+    );
+    if (!sourcePlayer || !targetPlayer) {
+      throw new Error('Expected two hidden opponents');
+    }
+    const movedCard = started.players[sourcePlayer]!.hand[0]!;
+    const baseView = buildPlayerSnapshot(
+      config,
+      started,
+      {
+        setId: 'ai02-card-move-set',
+        setPhase: { name: 'gameInProgress', gameIndex: 0 },
+        members: seats.map((id) => ({
+          id,
+          displayName: id,
+          isAI: true,
+        })),
+        setResults: [],
+      },
+      player,
+    );
+    const legalPlays = enumerateLegalPlays(config, started, player);
+    expect(legalPlays.length).toBeGreaterThan(1);
+    const played = {
+      type: 'played' as const,
+      player: sourcePlayer,
+      play: {
+        kind: 'single' as const,
+        cards: [movedCard],
+        count: 1,
+        repRank: movedCard.rank,
+      },
+    };
+    const cleared = {
+      type: 'fieldCleared' as const,
+      reason: 'rule' as const,
+      nextLeader: sourcePlayer,
+    };
+    const toHand = {
+      type: 'cardsMoved' as const,
+      by: ruleEntry.ruleId,
+      from: { kind: 'discard' as const },
+      to: { kind: 'hand' as const, player: targetPlayer },
+      count: 1,
+      cardIds: [movedCard.id],
+    };
+    const adjustedPlayers = baseView.players.map((entry) => ({
+      ...entry,
+      handCount:
+        entry.id === sourcePlayer
+          ? entry.handCount - 1
+          : entry.id === targetPlayer
+            ? entry.handCount + 1
+            : entry.handCount,
+    }));
+    const ruleContext = {
+      ruleChain: [ruleEntry],
+      bundles: [
+        {
+          ruleId: ruleEntry.ruleId,
+          moduleUrl: moduleUrl.href,
+          bundleHash,
+          contractVersion: ruleEntry.contractVersion,
+          meta: module.meta,
+        },
+      ],
+      gameSeed: config.gameSeed,
+      gameMemory: {
+        [ruleEntry.ruleId]: {
+          watchPlayer: targetPlayer,
+          watchCard: movedCard.id,
+          disableRandom: true,
+        },
+      },
+      hookCalls: started.private.hookCalls,
+      setMemory: {},
+    };
+    const ai = createAiPlayer({
+      search: { cutoffSteps: 1, rootCandidateCap: 2 },
+    });
+    try {
+      const common = {
+        legalPlays,
+        budget: {
+          softMs: 3,
+          hardMs: 1_000,
+          maxPlayouts: 1,
+          sliceMs: 1,
+        },
+        seed: 'ai02-card-move',
+        difficulty: NORMAL_DIFFICULTY,
+        ruleContext,
+      };
+      const returnedToHand = await ai.decideMove({
+        ...common,
+        view: {
+          ...baseView,
+          field: null,
+          discardCount: 0,
+          players: adjustedPlayers,
+          history: [baseView.history[0]!, played, cleared, toHand],
+        },
+      });
+      const returnedToDiscard = await ai.decideMove({
+        ...common,
+        view: {
+          ...baseView,
+          field: null,
+          discardCount: 1,
+          players: baseView.players.map((entry) => ({
+            ...entry,
+            handCount:
+              entry.id === sourcePlayer ? entry.handCount - 1 : entry.handCount,
+          })),
+          history: [
+            baseView.history[0]!,
+            played,
+            cleared,
+            toHand,
+            {
+              type: 'cardsMoved',
+              by: ruleEntry.ruleId,
+              from: { kind: 'hand', player: targetPlayer },
+              to: { kind: 'discard' },
+              count: 1,
+              cardIds: [movedCard.id],
+            },
+          ],
+        },
+      });
+
+      expect(returnedToHand.usedFallback).toBe('none');
+      expect(returnedToHand.stats?.effectiveStrengthInverted).toBe(true);
+      expect(returnedToDiscard.usedFallback).toBe('none');
+      expect(returnedToDiscard.stats?.effectiveStrengthInverted).toBe(false);
+    } finally {
+      await ai.close();
+    }
+  });
+
   it('bundle実体不一致とworker hook例外を合法heuristic fallbackへ落とす', async () => {
     const module = ai02RuleFixture as RuleModule;
     const moduleUrl = new URL('./test-fixtures/ai02-rule.js', import.meta.url);

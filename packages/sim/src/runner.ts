@@ -87,10 +87,11 @@ export function runRuleSimulations(options: {
 
 const CI_AI_BUDGET: ThinkBudget = {
   softMs: 3,
-  hardMs: 500,
+  hardMs: 150,
   maxPlayouts: 1,
   sliceMs: 1,
 };
+const CI_MAX_MOVE_WALL_MS = 200;
 
 export async function runAiRuleSimulations(options: {
   bundles: readonly LoadedRuleBundle[];
@@ -220,7 +221,7 @@ export async function runAiRuleSimulations(options: {
             detail: `${String(fallbacks)}/${String(moves)} AI moves used fallback`,
           });
         }
-        const wallLimit = options.maxMoveWallMs ?? CI_AI_BUDGET.hardMs + 100;
+        const wallLimit = options.maxMoveWallMs ?? CI_MAX_MOVE_WALL_MS;
         if (maxMoveWallMs > wallLimit) {
           report.invariantViolations.push({
             game: -1,

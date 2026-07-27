@@ -10,7 +10,7 @@
 - **フェーズ 2 / E7 CX-02 プロセス2完了**: subscription Codex CLIを使う共有skill、scaffold先行push/任意段階再開、全差分・履歴検収、1回retry、PR作成、失敗永続化まで実装。独立最終再レビューはコード・テスト範囲 `PASS` / 品質 `APPROVED` / 全指摘なし。実subscriptionでのルール生成・実PR作成は未実行
 - **フェーズ 2 / E7 CX-03 プロセス2完了、外部受入ゲート待ち**: trusted diff-guard、untrusted quality/rule-tests/simulation、ローカルCI監視を実装。独立完了再レビューはコード・自動テスト `PASS` / 品質 `APPROVED` / Critical・Importantなし。実repositoryのbranch protection/ruleset登録はworkflowのmain反映後
 - **フェーズ 2 / E7 CX-04 プロセス2コード完了**: 独立再レビューはコード・自動テスト範囲 `PASS` / 品質 `APPROVED` / Critical・Importantなし。実CD/revertリハーサル、通知経路、CX-05完全registry接続は外部・後続ゲート
-- **フェーズ 2 / E2 AI-02 プロセス2実装完了・独立レビュー待ち**: workerへ権威runtime snapshotと実SHA-256検証済みbundleを渡し、E1 simulation generatorをworker AI 4席で駆動。CX-03 CLIのnew-only/all-rules検査をAI版へ切替済み。全体`pnpm verify`は61 files / 417 testsを含め成功
+- **フェーズ 2 / E2 AI-02 プロセス2レビュー修正・再レビュー中**: workerへ権威runtime snapshotと実SHA-256検証済みbundleを渡し、E1 simulation generatorをworker AI 4席で駆動。初回独立レビューの配布物・CI時間上限・`cardsMoved`決定化の指摘を修正済み
 - **フェーズ 2 / E7 CX-05 プロセス1実装中**: 静的registryの起動時同期、`pending_enable`登録、管理API有効化時のproposal `released`・pipeline job `done`との原子的遷移、次セットでの実発動を縦に接続
 - E1〜E3 の実装記録は本書末尾の「並行進行」節、E13 は「E13」節。E4 の未解消の開発者判断は「詰まっている点」に残っている(1〜4・7・8・11)
 
@@ -781,6 +781,9 @@ TS-02 から継続で未解決のもの:
 - `packages/sim` loaderもcompiled ruleの実bytes SHA-256とmodule URLを同時に返し、CI authority portとworkerが同じbundle集合を使う
 - focused検証: AI/server/sim/core typecheck成功。AI fallback・rule registry・AI turn・simulation/loaderを含む対象テスト成功。最終の全体`pnpm verify`もformat/lint/design/typecheck、61 files / 417 tests、全package buildまで成功
 - TypeScript buildが素のJavaScriptである`worker-entry.js`を`dist`へ出力しない問題を検出し、AI packageのbuildでruntimeファイルを明示コピーするよう修正した。source testだけでなく配布成果物でもworker実体が必ず揃う
+- 独立完了レビューは初回`PARTIAL / CHANGES_REQUESTED`。Docker runtimeに新規依存`packages/rules/dist`が欠ける配布物不備、CIが500/600msを許す時間不変条件の緩和、公開`cardsMoved`後の既知カードzoneをworkerが復元しない権威差の3件を検出した
+- Dockerfileへrules成果物を追加し、runtime workspace成果物の列挙テストを追加。CI workerは`hardMs=150`、1手wall上限200msへ締めた。レビュアーのNode 26実測はnew-only/all-rules × 5 seed × 200 games = 2,000 games、83,698 AI着手、201.01秒、最大59.51ms、fallback/違反0
+- worker決定化は`played`・`fieldCleared`・公開`cardsMoved`を順に反映し、既知カードを現在のhand/field/discardへ固定する。非公開hand-to-hand移動では既知性を解除し、最終hand/discard数と52枚保存が合わなければ合法heuristic fallbackへ落とす。public→hand→publicの両方向を強さ順の観測差で回帰化した
 
 #### 残る外部・後続ゲート
 
