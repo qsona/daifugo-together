@@ -1171,6 +1171,22 @@ TS-02 から継続で未解決のもの:
 - localhost許可付きの全体`CI=true pnpm verify`はformat/lint/design/typecheck、75 files / 525 tests、全package buildまで成功。sandbox内の初回だけHTTP/Socket系が`listen EPERM`になったため、同一コマンドを制限外で再実行して全件通過した
 - 新規コンテキストの独立 GPT-5.6 Sol 完了レビューは **GO**、Critical / Important / Minorすべてなし。方向性レビューのImportant 6件はすべて **CLOSED**。Roomイベントの`trigger`/`gameIndex`はE07の例示的な単体イベントではなく、E03/E12の権威snapshot・単調`seq`・現在game状態で因果と順序を表す既存契約を正として追加しない裁定も承認された
 
+### E10 OP-01・OP-02 プロセス1（運用可視化）
+
+- E-18/C-2/C-6/G-8〜G-12をE10の旧本文と突き合わせ、従量課金API・サーバー常駐worker・レートgovernor・`ops_events`・codex上限`settings`を実装対象から外した。人間承認駆動では`pipeline_jobs`がキュー、試行、実行段階、内部`error_code`をすでに正規化して保持するため、重複台帳を作らない
+- `pnpm ops status`でL3/CX-01/開発者確定の最新判定数、提案状態、実装phase、内部失敗内訳、screeningの現在段階と実装キューを古い順にJSON表示する。読み取り専用で、起動頻度や状態は変更しない
+- `pnpm ops funnel --since <ISO date>`で全投稿の状態、却下理由、`pipeline_jobs.error_code`、最新判定シグナルを提案作成時コホートで集計する。E-18後は全送信が`proposals`行になるため旧二源遮断集計は廃止し、L3 blockシグナルと確定した`inappropriate`却下を分離して読める
+- D-4は未決のため単一の採用率を決めず、`released / (released + rejected + failed)`を`terminalOutcomes`、`released / 全投稿`を`allSubmissions`として分母をAPI名に固定して併記する。0件期間はいずれも`null`
+- プロセス1重点検証はoperations repositoryの3 testsとserver typecheckが成功。全状態の恒等式、3段階のscreeningキュー、FIFO表示、内部失敗、分母別率、0件・不正期間を確認し、空SQLiteへの実CLI `pnpm ops status`も成功した
+
+#### E10で置いた仮定・プロセス2送り
+
+| ID | 仮定・残作業 | 根拠 | プロセス2での扱い |
+|---|---|---|---|
+| E10-P1-1 | OP-01の「上限」は、人間がローカルskillを明示起動する現行モデルでは自動governorを意味しない | workorder #6、C-2、G-8。D-5も実質不要の見込み | 独立方向性レビューで受け入れ条件との整合を確認し、必要なら非強制の滞留/経過時間表示を足す |
+| E10-P1-2 | D-4確定までは`adoptionRate`という単一値を公開しない | decision-log D-4が未決。どちらも正確な生データから導出可能 | 分母別の2値と生件数を維持し、決定後に正準aliasを追加できる形にする |
+| E10-P1-3 | CLI出力は既存opsコマンドに合わせたJSON 1行を正とする | 個人開発者向けで機械処理もしやすく、専用UIを作らないE10方針に合う | `--detail`相当が常時含まれる情報量と秘匿境界をレビューする |
+
 ### E2で見つけた設計書の不整合
 
 - 冒頭改訂ノートは探索を `worker_threads` 1〜2本で実行すると決定済みだが、§3.1(d)・§4.4・§6-5には「初期はホスト直列、兆候が出たらworkerへ移行」という旧記述が残る。実装は改訂ノートを正とした。

@@ -19,6 +19,7 @@ import {
 } from 'drizzle-orm/sqlite-core';
 
 import { InjectionRepository } from './injection/repository.js';
+import { OperationsRepository } from './operations/repository.js';
 import { PipelineRepository } from './pipeline/repository.js';
 import type {
   RoomManagerOptions,
@@ -182,6 +183,7 @@ export class SqlitePersistence implements RoomPersistencePort {
   readonly sessions: SqliteSessionStore;
   readonly proposals: ProposalRepository;
   readonly injection: InjectionRepository;
+  readonly operations: OperationsRepository;
   readonly pipeline: PipelineRepository;
   readonly rules: RuleRepository;
 
@@ -308,6 +310,7 @@ export class SqlitePersistence implements RoomPersistencePort {
       this.proposals,
       this.injection,
     );
+    this.operations = new OperationsRepository(this.#sqlite);
     this.rules = new RuleRepository(this.#sqlite);
   }
 

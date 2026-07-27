@@ -28,7 +28,24 @@ const persistence = new SqlitePersistence(
 );
 
 try {
-  if (command === 'list-appeals') {
+  if (command === 'status') {
+    process.stdout.write(
+      `${JSON.stringify(persistence.operations.status(Date.now()))}\n`,
+    );
+  } else if (command === 'funnel') {
+    const now = Date.now();
+    const sinceOption = option('--since');
+    const since =
+      sinceOption === null
+        ? now - 30 * 24 * 60 * 60 * 1_000
+        : Date.parse(sinceOption);
+    if (!Number.isSafeInteger(since) || since < 0 || since >= now) {
+      throw new Error('--since must be an ISO date before now');
+    }
+    process.stdout.write(
+      `${JSON.stringify(persistence.operations.funnel(since, now))}\n`,
+    );
+  } else if (command === 'list-appeals') {
     for (const appeal of persistence.injection.listOpenAppeals()) {
       process.stdout.write(`${JSON.stringify(appeal)}\n`);
     }
@@ -60,7 +77,7 @@ try {
     );
   } else {
     throw new Error(
-      'command must be list-appeals, revoke-card, or reject-appeal',
+      'command must be status, funnel, list-appeals, revoke-card, or reject-appeal',
     );
   }
 } finally {

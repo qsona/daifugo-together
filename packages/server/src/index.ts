@@ -10,6 +10,7 @@ export * from './injection/repository.js';
 export * from './injection/screening.js';
 export * from './injection/screening-batch.js';
 export * from './injection/yellow-card-service.js';
+export * from './operations/repository.js';
 export * from './pipeline/repository.js';
 export * from './pipeline/service.js';
 export * from './pipeline/jobs.js';
