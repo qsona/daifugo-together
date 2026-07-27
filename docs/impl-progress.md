@@ -13,6 +13,7 @@
 - **フェーズ 2 / E7 CX-04 プロセス2コード完了**: 独立再レビューはコード・自動テスト範囲 `PASS` / 品質 `APPROVED` / Critical・Importantなし。実CD/revertリハーサル、通知経路、CX-05完全registry接続は外部・後続ゲート
 - **フェーズ 2 / E2 AI-02 プロセス2コード完了**: workerへ権威runtime snapshotと実SHA-256検証済みbundleを渡し、E1 simulation generatorをworker AI 4席で駆動。独立完了再レビューは要件 `PASS` / 品質 `APPROVED` / Critical・Important・Minorなし
 - **フェーズ 2 / E7 CX-05 プロセス2コード完了**: 第三操作、起動中registryのreadiness attestation、48時間リマインダーまで追加。独立完了再レビューはコード要件 `PASS` / 品質 `APPROVED` / Critical・Importantなし。実GitHub/CD/本番の3操作リハーサルとRP-03 UIは外部・後続ゲート
+- **フェーズ 2 / E10 OP-01・OP-02 プロセス2コード完了**: 人間承認駆動に合わせたキュー・判定・失敗・ファネルCLIを既存台帳から読み取り専用で構成。独立完了レビューは `PASS / APPROVED / GO`、全指摘なし。D-5/OP-01/E-15の正式な文書裁定だけ外部ゲート
 - E1〜E3 の実装記録は本書末尾の「並行進行」節、E13 は「E13」節。E4 の未解消の開発者判断は「詰まっている点」に残っている(1〜4・7・8・11)
 
 ### E-18 / C-2・C-3・C-6 再設計の反映(2026-07-27)
@@ -1197,6 +1198,7 @@ TS-02 から継続で未解決のもの:
 - Important 3のうちD-5解消、OP-01受け入れ条件改訂、E-15をマージ/デプロイ時刻の人間選択として正式化する裁定は、実装者がdecision-logを変更せず**開発者判断待ち**として残す。コードは非強制の読み取り専用なので、裁定後にgovernor撤回等の破壊的手戻りは生じない
 - process2重点検証はoperations/pipeline/persistenceの5 files / 32 testsとserver typecheckが成功。全体`CI=true pnpm verify`もformat/lint/design/typecheck、77 files / 535 tests、全package buildまで成功した
 - 本番配布物の入口は通常build後に`node packages/server/dist/ops.js status/funnel`をbuildなしで実行して成功した。Docker runtime imageの実buildも試みたが、ローカルDocker daemonが停止中で接続できず未実施。Dockerfileはproduction dependenciesとserver/core/rules等の`dist`をruntimeへコピーする既存構成で、runbookは本番でpnpm/buildを要求しない
+- 新規コンテキストの独立 GPT-5.6 Sol 完了レビューはコード実装スコープ **PASS / APPROVED / GO**、Critical / Important / Minorすべてなし、main統合可。初回の本番CLI・JST境界・20件固定と追加要求はすべて **CLOSED**。D-5解消・OP-01受け入れ条件改訂・E-15運用の正式裁定だけは、コード完了を妨げない**外部決定ゲート**としてOPENのまま残す
 
 ### E2で見つけた設計書の不整合
 
