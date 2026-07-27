@@ -7,7 +7,7 @@
 - **C-5 追従完了**: E7 内包リトライの決定を反映し、`proposals.failed` を終端化。`failed` 遷移時に `attempt_count=1` を記録して同内容の再提案を即時解禁する
 - **フェーズ 2 / E6 YC-01〜03 プロセス2完了**: E-18 の非同期構成、ローカル判定ツール、イエローカード表示・停止・救済まで実装済み。修正後 judge eval は Luna/Sol とも 40/40、平均 6.40秒 / 6.23秒のため既定を **GPT-5.6 Sol medium** とした。独立 GPT-5.6 Sol 完了レビューは要件適合 `PASS` / 品質 `APPROVED`
 - **フェーズ 2 / E7 CX-01 プロセス2ほぼ完了**: 独立方向性レビュー `GO_WITH_FIXES` のImportant 4件と、初回完了レビューのImportant 2件を反映。完了再レビューはコード・自動テスト `PASS` / 品質 `APPROVED` / Critical・Importantなし。実app-server評価だけ明示許可待ち
-- **フェーズ 2 / E7 CX-02 プロセス2レビュー修正完了・独立最終再レビュー中**: subscription Codex CLIを使う共有skill、scaffold先行push/任意段階再開、全差分・履歴検収、1回retry、PR作成、失敗永続化まで実装。実subscriptionでのルール生成・実PR作成は未実行
+- **フェーズ 2 / E7 CX-02 プロセス2完了**: subscription Codex CLIを使う共有skill、scaffold先行push/任意段階再開、全差分・履歴検収、1回retry、PR作成、失敗永続化まで実装。独立最終再レビューはコード・テスト範囲 `PASS` / 品質 `APPROVED` / 全指摘なし。実subscriptionでのルール生成・実PR作成は未実行
 - E1〜E3 の実装記録は本書末尾の「並行進行」節、E13 は「E13」節。E4 の未解消の開発者判断は「詰まっている点」に残っている(1〜4・7・8・11)
 
 ### E-18 / C-2・C-3・C-6 再設計の反映(2026-07-27)
@@ -242,7 +242,7 @@ E3 マージ後の実プレーで開発者から 4 件の指摘を受け、反�
 
 ### CX-02 プロセス1
 
-- 状態: FakeCodexRunner を使う縦切り実装、独立方向性レビュー、プロセス2実装、初回完了レビュー修正まで完了。独立最終再レビュー中
+- 状態: FakeCodexRunner を使う縦切り実装、独立方向性レビュー、プロセス2実装、初回完了レビュー修正、独立最終再レビューまで完了
 - ユーザーストーリーの確認:
   - `packages/server/src/pipeline/jobs.test.ts` で、E6 pass + 開発者SPEC承認済みの `queued` jobだけを払い出し、提案・承認済みSPEC・scaffoldメタを同じjobへ結びつけることを確認
   - `packages/pipeline/src/implement.test.ts` で、払い出し → 不変 `meta.json` / `SPEC.json` scaffold → Fake publisherによるscaffold SHA固定 → compare-and-setで `implementing` claim → FakeCodexRunnerによる `rule.ts` / `rule.test.ts` 生成 → 検収、を縦に確認
@@ -311,6 +311,8 @@ E3 マージ後の実プレーで開発者から 4 件の指摘を受け、反�
 - CLIオーケストレーションを注入可能なportへ抽出し、cleanup途中・CAS直後の応答消失、2回失敗後の3回目成功、二重retry拒否、成功/準備失敗時のworkspace清掃を回帰化した。既に `pr_open` のresumeは再実装しない正常no-op応答にした
 - 正常完了した一時workspaceと準備失敗した一時workspaceを削除し、実装処理中に失敗したworkspaceだけを診断・再開用に残す
 - `CI=true pnpm verify`: **52 files / 346 tests 成功**。format / lint / design lint / 全package typecheck・buildも成功
+- 固定コミット `20ae51c` の独立最終再レビュー: コード・自動テスト要件 `PASS` / 品質 `APPROVED` / Critical・Important・Minorなし。focused **7 files / 30 tests** と差分検査もレビュアー環境で成功
+- 外部受入ゲート: 認証済みsubscription Codexと実GitHubで、承認済み提案1件を生成→branch/PR→`pr_open` 永続化まで流すリハーサルは未実施。外部状態を変えるため自動実行せず、コード完了と分離して残す
 
 ## 完了したストーリー
 
