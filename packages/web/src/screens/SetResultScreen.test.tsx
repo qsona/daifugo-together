@@ -102,7 +102,9 @@ describe('SetResultScreen phase boundary', () => {
     const won = render(
       <SetResultScreen {...props} ranks={[{ ...champion, isYou: true }]} />,
     );
-    expect(won.container.querySelector(`.${confettiStyles.field}`)).toBeTruthy();
+    expect(
+      won.container.querySelector(`.${confettiStyles.field}`),
+    ).toBeTruthy();
     cleanup();
 
     const lost = render(
