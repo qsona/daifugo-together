@@ -6,6 +6,7 @@
 - **フェーズ 2 / E5 RP-01・RP-02 完了**: E-18/C-3 の再設計(非同期受付、名前40/内容1000、投稿レート制限なし)まで反映済み。RP-03 は CX-02 依存のため E7 後に戻る
 - **C-5 追従完了**: E7 内包リトライの決定を反映し、`proposals.failed` を終端化。`failed` 遷移時に `attempt_count=1` を記録して同内容の再提案を即時解禁する
 - **フェーズ 2 / E6 YC-01〜03 プロセス2完了**: E-18 の非同期構成、ローカル判定ツール、イエローカード表示・停止・救済まで実装済み。修正後 judge eval は Luna/Sol とも 40/40、平均 6.40秒 / 6.23秒のため既定を **GPT-5.6 Sol medium** とした。独立 GPT-5.6 Sol 完了レビューは要件適合 `PASS` / 品質 `APPROVED`
+- **フェーズ 2 / E7 CX-01 プロセス1実装済み・方向性レビュー待ち**: E6 pass 後のローカルAI判定、開発者による却下確定／SPEC承認、`pipeline_jobs(phase='queued')` 作成までの縦切りを実装
 - E1〜E3 の実装記録は本書末尾の「並行進行」節、E13 は「E13」節。E4 の未解消の開発者判断は「詰まっている点」に残っている(1〜4・7・8・11)
 
 ### E-18 / C-2・C-3・C-6 再設計の反映(2026-07-27)
@@ -176,6 +177,47 @@ E3 マージ後の実プレーで開発者から 4 件の指摘を受け、反�
 | Minor 4: カタログ側の `rgba()` 直書きが残る(仮定 13) | 実装側は正しいとの裁定。**カタログの修正は開発者に起票済み**(下記「設計への提案」) |
 
 検査のテストは 17 本 → **27 本**に増えた(全体 30 → 40 tests)。
+
+## フェーズ 2: E7 codex パイプライン(CX-01〜04)
+
+### CX-01 プロセス1
+
+- 状態: 縦切り実装完了・独立方向性レビュー待ち
+- ユーザーストーリーの確認:
+  - `packages/server/src/pipeline/service.test.ts` で、提案受付 → E6 pass → CX-01 払い出し → AI approve + 正規化SPEC記録 → 開発者SPEC承認 → `proposals.status='implementing'` + `pipeline_jobs.phase='queued'` を同一SQLite境界で確認
+  - 同テストで、AI reject は開発者が対象 judgement ID を確定するまで `screening` に留まり、確定後だけ C-6 の公開理由へ写像して `rejected` になることを確認
+  - 同テストで、E6 `block_card` は対象 check ID の開発者確定時だけ、カード発行・`inappropriate` 却下・監査 judgement を一体で記録することを確認
+  - `packages/server/src/pipeline/app-server-judge.test.ts` で、ephemeral / read-only / network off / approval never / 全ツール無効の app-server thread と構造化出力スキーマを確認
+  - `packages/server/src/app-server.test.ts` で、管理 Bearer token 付きの screening / check / judge / approve-spec API を実HTTPで確認
+- 実装した方向:
+  - サーバー側に append-only の `judgements` と提案ごとに一意な `pipeline_jobs` を追加。AI判定と開発者確定を別行にし、`source_check_id` / `source_judgement_id` / `actor` / `created_at` で確定対象と操作者を固定した
+  - `GET /admin/pipeline/screening` は E6 未判定を `stage=e6`、E6 pass かつCX未判定を `stage=cx01` として払い出す。ローカルツールは E6 を先に、次回払い出しで CX-01 を処理する
+  - CX-01 は契約v1の全hook/Effect語彙、A1〜C3の線引き、既存ルール一覧、保存済み提案だけを入力にし、approve / reject / needs_review とSPECを同時生成する
+  - 可視文言は名前40文字・summary 1000文字・message 200文字、既知hook/Effect部分集合、slug、NG hard patternをサーバーで再検証する。提案由来の `source` はAI入力を信用せず保存済み行からサーバーが再構成する
+  - E6 check・AI judgement・開発者確定はIDで結び、古い／別提案の判定では状態遷移しない。SPEC承認は developer judgement、queued job、提案の implementing 遷移を同一transactionにした
+- 検証:
+  - `CI=true pnpm exec vitest run packages/server/src/pipeline/service.test.ts packages/server/src/pipeline/app-server-judge.test.ts packages/server/src/app-server.test.ts`: **3 files / 10 tests 成功**
+  - `CI=true pnpm --filter @daifugo/server typecheck`: 成功
+
+#### 置いた仮定(方向性レビューで裁定)
+
+| # | 仮定した内容 | なぜそう決めたか | 出典 | 覆ったときの影響範囲 |
+|---|---|---|---|---|
+| E7-P1-1 | 内部 `queued` は `pipeline_jobs.phase` にだけ持ち、ユーザー向け `proposals.status` はSPEC承認時に `implementing` へ進める | E5 の公開状態に queued はなく、E07 が二層状態を定義しているため | E05 §2.2、E07 §2.3・§3.2(c) | `approveSpec()` とRP-03表示 |
+| E7-P1-2 | `judgements.spec_json` はCX-02の `SPEC.json` 本文に加え、scaffoldの `meta.json` 生成に必要な `slug` / `messages` も含む正規化仕様として保存する | E07の表例は `SPEC.json` と `meta.json` を分ける一方、judgementから後者を復元する専用列を定義していないため | E07 §2.4、§3.1(c) | judgement型、CX-02 scaffold生成、DB互換 |
+| E7-P1-3 | 重複判定用の既存ルール一覧は、当面 `pipeline_jobs.phase IN ('merged','done')` の開発者承認SPECから構成する | 現在の `packages/rules` に登録済み個別ルールがなく、CX-05の有効ルール台帳も未実装のため | E07 §3.1、CX-05依存 | `PipelineRepository.existingRules()`。CX-05で有効ルール台帳へ差し替え |
+| E7-P1-4 | SQLite・API・判定サービスと、既存E6 app-serverクライアントを再利用するローカルCLIを `packages/server` に置き、`packages/pipeline` はCX-02以降の実装ドライバから使用する | 現行E6の `ops:screen` がserver packageにあり、プロセス1では一つのローカルバッチとして縦に通すことを優先したため | E07 §2.3・§3.1(d) | `screening-runner.ts` とapp-server client/promptの移動。DB/API契約は維持 |
+
+#### プロセス2へ回したもの
+
+| 項目 | 内容 |
+|---|---|
+| 判定品質 | A1〜C3各行の評価セット、Luna/Sol一致率測定、実app-serverでのCX-01評価、既存ルール重複検体 |
+| needs_review | 開発者によるapprove/reject両方向、修正SPEC、理由カテゴリ整合の全境界テスト |
+| 冪等性・障害 | AI出力不正1回再試行、app-server障害3回、バッチ後続継続、API再送・並行確定、transaction rollback、再起動後の未処理再払い出し |
+| 運用動線 | 未確定判定一覧、check/judgement IDを表示したカード・却下・SPEC確認手順、runbook |
+| パッケージ境界 | E7-P1-4の裁定に従い、ローカル判定CLIを `packages/pipeline` に寄せるかserver内運用を確定する |
+| CX-02〜04 | scaffold、実装skill、検収・差分ガード、PR/CI、マージ確認、enable/disableとロールバック |
 
 ## 完了したストーリー
 

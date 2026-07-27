@@ -5,6 +5,7 @@ import { InjectionStaticAnalyzer } from './injection/detector.js';
 import { LocalScreeningService } from './injection/local-screening.js';
 import { InjectionSignalRecorder } from './injection/screening.js';
 import { YellowCardService } from './injection/yellow-card-service.js';
+import { PipelineJudgementService } from './pipeline/service.js';
 import { SqlitePersistence } from './persistence.js';
 import { ProposalSubmissionService } from './proposal/submission.js';
 import { RoomManager } from './room/manager.js';
@@ -62,6 +63,14 @@ const app = createAppServer({
           service: new LocalScreeningService(
             persistence.injection,
             persistence.proposals,
+          ),
+        },
+        adminPipeline: {
+          token: adminPipelineToken,
+          service: new PipelineJudgementService(
+            persistence.pipeline,
+            persistence.proposals,
+            persistence.injection,
           ),
         },
       }

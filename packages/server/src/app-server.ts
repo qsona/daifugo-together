@@ -26,6 +26,7 @@ import type {
 import type { ProposalSubmissionPort } from './proposal/submission.js';
 import type { LocalScreeningService } from './injection/local-screening.js';
 import type { YellowCardPort } from './injection/yellow-card-service.js';
+import type { PipelineJudgementService } from './pipeline/service.js';
 
 const CONTENT_TYPES: Record<string, string> = {
   '.css': 'text/css; charset=utf-8',
@@ -46,6 +47,17 @@ export interface AppServerOptions {
   adminScreening?: {
     token: string;
     service: Pick<LocalScreeningService, 'pending' | 'record'>;
+  };
+  adminPipeline?: {
+    token: string;
+    service: Pick<
+      PipelineJudgementService,
+      | 'pending'
+      | 'recordAi'
+      | 'confirmE6Rejection'
+      | 'confirmCxRejection'
+      | 'approveSpec'
+    >;
   };
 }
 
@@ -143,7 +155,7 @@ async function readJsonBody(request: IncomingMessage): Promise<unknown> {
   for await (const chunk of request) {
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
     size += buffer.length;
-    if (size > 8 * 1024) throw new Error('request_too_large');
+    if (size > 64 * 1024) throw new Error('request_too_large');
     chunks.push(buffer);
   }
   return JSON.parse(Buffer.concat(chunks).toString('utf8'));
@@ -169,12 +181,22 @@ export function createAppServer(options: AppServerOptions): AppServer {
     const pathname = new URL(request.url ?? '/', 'http://localhost').pathname;
     const isListing = pathname === '/admin/pipeline/screening';
     const checkMatch = /^\/admin\/proposals\/([^/]+)\/check$/u.exec(pathname);
-    if (!isListing && !checkMatch) return false;
-    if (!options.adminScreening) {
+    const judgeMatch = /^\/admin\/proposals\/([^/]+)\/judge$/u.exec(pathname);
+    const approveSpecMatch =
+      /^\/admin\/proposals\/([^/]+)\/approve-spec$/u.exec(pathname);
+    if (!isListing && !checkMatch && !judgeMatch && !approveSpecMatch) {
+      return false;
+    }
+    const configuration = checkMatch
+      ? options.adminScreening
+      : judgeMatch || approveSpecMatch
+        ? options.adminPipeline
+        : (options.adminScreening ?? options.adminPipeline);
+    if (!configuration) {
       writeJson(response, 503, { error: 'admin_screening_unavailable' });
       return true;
     }
-    if (!sameSecret(bearerToken(request), options.adminScreening.token)) {
+    if (!sameSecret(bearerToken(request), configuration.token)) {
       writeJson(response, 401, { error: 'unauthorized' });
       return true;
     }
@@ -185,7 +207,16 @@ export function createAppServer(options: AppServerOptions): AppServer {
         return true;
       }
       writeJson(response, 200, {
-        items: options.adminScreening.service.pending(),
+        items: [
+          ...(options.adminScreening?.service.pending() ?? []).map((item) => ({
+            stage: 'e6' as const,
+            ...item,
+          })),
+          ...(options.adminPipeline?.service.pending() ?? []).map((item) => ({
+            stage: 'cx01' as const,
+            ...item,
+          })),
+        ],
       });
       return true;
     }
@@ -204,19 +235,51 @@ export function createAppServer(options: AppServerOptions): AppServer {
       });
       return true;
     }
-    const result = options.adminScreening.service.record(
-      decodeURIComponent(checkMatch![1]!),
-      body,
+    const proposalId = decodeURIComponent(
+      (checkMatch ?? judgeMatch ?? approveSpecMatch)![1]!,
     );
+    let result;
+    if (checkMatch) {
+      result = options.adminScreening!.service.record(proposalId, body);
+    } else if (approveSpecMatch) {
+      result = options.adminPipeline!.service.approveSpec(proposalId, body);
+    } else {
+      const value =
+        typeof body === 'object' && body !== null && !Array.isArray(body)
+          ? (body as Record<string, unknown>)
+          : null;
+      const action = value?.action;
+      const payload = value?.payload;
+      result =
+        action === 'record_ai'
+          ? options.adminPipeline!.service.recordAi(proposalId, payload)
+          : action === 'confirm_e6_rejection'
+            ? options.adminPipeline!.service.confirmE6Rejection(
+                proposalId,
+                payload,
+              )
+            : action === 'confirm_rejection'
+              ? options.adminPipeline!.service.confirmCxRejection(
+                  proposalId,
+                  payload,
+                )
+              : { status: 'invalid' as const, error: 'invalid_action' };
+    }
     writeJson(
       response,
       result.status === 'recorded'
         ? 200
         : result.status === 'already_recorded'
           ? 200
-          : result.status === 'not_found'
-            ? 404
-            : 400,
+          : result.status === 'confirmed'
+            ? 200
+            : result.status === 'already_confirmed'
+              ? 200
+              : result.status === 'not_found'
+                ? 404
+                : result.status === 'conflict'
+                  ? 409
+                  : 400,
       result,
     );
     return true;

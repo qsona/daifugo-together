@@ -8,6 +8,13 @@ import type {
   RecordLocalVerdictResult,
 } from './injection/local-screening.js';
 import { runScreeningBatch } from './injection/screening-batch.js';
+import { CodexCxJudge } from './pipeline/app-server-judge.js';
+import type { PendingCxJudgement } from './pipeline/repository.js';
+import type { PipelineMutationResult } from './pipeline/service.js';
+
+type ScreeningItem =
+  | ({ stage: 'e6' } & PendingLocalScreening)
+  | ({ stage: 'cx01' } & PendingCxJudgement);
 
 function option(name: string): string | null {
   const index = process.argv.indexOf(name);
@@ -76,7 +83,7 @@ async function requestJson(
   return body;
 }
 
-function pendingItems(value: unknown): PendingLocalScreening[] {
+function pendingItems(value: unknown): ScreeningItem[] {
   if (
     typeof value !== 'object' ||
     value === null ||
@@ -85,7 +92,7 @@ function pendingItems(value: unknown): PendingLocalScreening[] {
   ) {
     throw new Error('admin API returned an invalid screening list');
   }
-  return value.items as PendingLocalScreening[];
+  return value.items as ScreeningItem[];
 }
 
 function recorded(value: unknown): RecordLocalVerdictResult {
@@ -101,6 +108,24 @@ function recorded(value: unknown): RecordLocalVerdictResult {
     throw new Error('admin API returned an invalid verdict result');
   }
   return value as RecordLocalVerdictResult;
+}
+
+function pipelineResult(value: unknown): PipelineMutationResult {
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    !('status' in value) ||
+    (value.status !== 'recorded' &&
+      value.status !== 'already_recorded' &&
+      value.status !== 'confirmed' &&
+      value.status !== 'already_confirmed' &&
+      value.status !== 'not_found' &&
+      value.status !== 'conflict' &&
+      value.status !== 'invalid')
+  ) {
+    throw new Error('admin API returned an invalid pipeline result');
+  }
+  return value as PipelineMutationResult;
 }
 
 const baseUrl = new URL(
@@ -126,52 +151,154 @@ const items = pendingItems(await requestJson(listUrl, token)).slice(0, limit);
 if (items.length === 0) {
   process.stdout.write(`${JSON.stringify({ status: 'idle', processed: 0 })}\n`);
 } else {
-  const summary = await runScreeningBatch({
-    items,
-    attempts,
-    judge: async (item) => {
+  const e6Items = items.filter(
+    (item): item is Extract<ScreeningItem, { stage: 'e6' }> =>
+      item.stage === 'e6',
+  );
+  const cxItems = items.filter(
+    (item): item is Extract<ScreeningItem, { stage: 'cx01' }> =>
+      item.stage === 'cx01',
+  );
+  const e6Summary =
+    e6Items.length === 0
+      ? { processed: 0, failed: 0 }
+      : await runScreeningBatch({
+          items: e6Items,
+          attempts,
+          judge: async (item) => {
+            const rpc = await StdioAppServerRpc.start({
+              ...(process.env.CODEX_BIN
+                ? { codexBin: process.env.CODEX_BIN }
+                : {}),
+              timeoutMs,
+            });
+            try {
+              return await new CodexAppServerJudge({
+                rpc,
+                model,
+                effort: reasoningEffort,
+              }).judge(item);
+            } finally {
+              rpc.close();
+            }
+          },
+          record: async (item, verdict) =>
+            recorded(
+              await requestJson(
+                new URL(
+                  `/admin/proposals/${encodeURIComponent(item.proposal.id)}/check`,
+                  baseUrl,
+                ),
+                token,
+                { method: 'POST', body: JSON.stringify(verdict) },
+              ),
+            ),
+          onEvent: (event) => {
+            process[event.status === 'failed' ? 'stderr' : 'stdout'].write(
+              `${JSON.stringify({
+                stage: 'e6',
+                proposalId: event.proposalId,
+                status: event.status,
+                attempt: event.attempt,
+                ...(event.result?.status === 'recorded'
+                  ? { finalVerdict: event.result.result.finalVerdict }
+                  : {}),
+                ...(event.error instanceof Error
+                  ? { error: event.error.message }
+                  : {}),
+                model,
+              })}\n`,
+            );
+          },
+        });
+  const cxSummary = {
+    processed: cxItems.length,
+    recorded: 0,
+    alreadyRecorded: 0,
+    failed: 0,
+  };
+  for (const item of cxItems) {
+    let complete = false;
+    for (let attempt = 1; attempt <= attempts && !complete; attempt += 1) {
       const rpc = await StdioAppServerRpc.start({
         ...(process.env.CODEX_BIN ? { codexBin: process.env.CODEX_BIN } : {}),
         timeoutMs,
       });
       try {
-        return await new CodexAppServerJudge({
+        const judgement = await new CodexCxJudge({
           rpc,
           model,
           effort: reasoningEffort,
         }).judge(item);
+        const result = pipelineResult(
+          await requestJson(
+            new URL(
+              `/admin/proposals/${encodeURIComponent(item.proposal.id)}/judge`,
+              baseUrl,
+            ),
+            token,
+            {
+              method: 'POST',
+              body: JSON.stringify({
+                action: 'record_ai',
+                payload: judgement,
+              }),
+            },
+          ),
+        );
+        if (result.status === 'recorded') cxSummary.recorded += 1;
+        else if (result.status === 'already_recorded') {
+          cxSummary.alreadyRecorded += 1;
+        } else {
+          throw new Error(`CX-01 record failed: ${result.status}`);
+        }
+        process.stdout.write(
+          `${JSON.stringify({
+            stage: 'cx01',
+            proposalId: item.proposal.id,
+            status: result.status,
+            attempt,
+            verdict:
+              result.status === 'recorded' ||
+              result.status === 'already_recorded'
+                ? result.judgement.verdict
+                : undefined,
+            model,
+          })}\n`,
+        );
+        complete = true;
+      } catch (error) {
+        const invalidOutput =
+          error instanceof Error &&
+          (error.message.includes('invalid structured output') ||
+            error.message.includes('non-JSON output'));
+        const finalAttempt =
+          attempt >= attempts || (invalidOutput && attempt >= 2);
+        process[finalAttempt ? 'stderr' : 'stdout'].write(
+          `${JSON.stringify({
+            stage: 'cx01',
+            proposalId: item.proposal.id,
+            status: finalAttempt ? 'failed' : 'retrying',
+            attempt,
+            error: error instanceof Error ? error.message : String(error),
+            model,
+          })}\n`,
+        );
+        if (finalAttempt) {
+          cxSummary.failed += 1;
+          complete = true;
+        }
       } finally {
         rpc.close();
       }
-    },
-    record: async (item, verdict) =>
-      recorded(
-        await requestJson(
-          new URL(
-            `/admin/proposals/${encodeURIComponent(item.proposal.id)}/check`,
-            baseUrl,
-          ),
-          token,
-          { method: 'POST', body: JSON.stringify(verdict) },
-        ),
-      ),
-    onEvent: (event) => {
-      process[event.status === 'failed' ? 'stderr' : 'stdout'].write(
-        `${JSON.stringify({
-          proposalId: event.proposalId,
-          status: event.status,
-          attempt: event.attempt,
-          ...(event.result?.status === 'recorded'
-            ? { finalVerdict: event.result.result.finalVerdict }
-            : {}),
-          ...(event.error instanceof Error
-            ? { error: event.error.message }
-            : {}),
-          model,
-        })}\n`,
-      );
-    },
-  });
+    }
+  }
+  const summary = {
+    processed: e6Summary.processed + cxSummary.processed,
+    failed: e6Summary.failed + cxSummary.failed,
+    e6: e6Summary,
+    cx01: cxSummary,
+  };
   process.stdout.write(
     `${JSON.stringify({ status: 'complete', ...summary, model })}\n`,
   );

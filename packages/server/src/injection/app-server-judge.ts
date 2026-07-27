@@ -285,7 +285,7 @@ export class StdioAppServerRpc implements AppServerRpc {
   }
 }
 
-function threadIdFrom(value: unknown): string {
+export function threadIdFrom(value: unknown): string {
   const result = object(value);
   const thread = object(result?.thread);
   if (typeof thread?.id !== 'string') {
@@ -294,7 +294,7 @@ function threadIdFrom(value: unknown): string {
   return thread.id;
 }
 
-function finalAgentText(turn: CompletedTurn): string {
+export function finalAgentText(turn: CompletedTurn): string {
   if (turn.status !== 'completed') {
     throw new Error(
       turn.error?.message ?? `Codex screening turn ended as ${turn.status}`,

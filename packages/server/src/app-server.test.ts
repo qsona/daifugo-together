@@ -244,6 +244,8 @@ describe('production app server', () => {
         reviewFlag: false,
       },
     }));
+    const recordAi = vi.fn(() => ({ status: 'not_found' as const }));
+    const approveSpec = vi.fn(() => ({ status: 'not_found' as const }));
     const app = createAppServer({
       webDistDir: directory,
       adminScreening: {
@@ -251,6 +253,16 @@ describe('production app server', () => {
         service: {
           pending: () => [],
           record,
+        },
+      },
+      adminPipeline: {
+        token: 'admin-token',
+        service: {
+          pending: () => [],
+          recordAi,
+          confirmE6Rejection: () => ({ status: 'not_found' }),
+          confirmCxRejection: () => ({ status: 'not_found' }),
+          approveSpec,
         },
       },
     });
@@ -287,6 +299,40 @@ describe('production app server', () => {
       evidence: null,
       model: 'gpt-5.6-sol',
       latencyMs: 1,
+    });
+
+    const judged = await fetch(`${baseUrl}/admin/proposals/proposal-1/judge`, {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer admin-token',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        action: 'record_ai',
+        payload: { verdict: 'approve' },
+      }),
+    });
+    expect(judged.status).toBe(404);
+    expect(recordAi).toHaveBeenCalledWith('proposal-1', {
+      verdict: 'approve',
+    });
+
+    const approved = await fetch(
+      `${baseUrl}/admin/proposals/proposal-1/approve-spec`,
+      {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer admin-token',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ judgementId: 1, actor: 'developer', spec: {} }),
+      },
+    );
+    expect(approved.status).toBe(404);
+    expect(approveSpec).toHaveBeenCalledWith('proposal-1', {
+      judgementId: 1,
+      actor: 'developer',
+      spec: {},
     });
   });
 });
