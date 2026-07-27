@@ -149,6 +149,7 @@ const app = createAppServer({
     : {}),
   gateway: {
     rooms: roomManager,
+    sessions: persistence.sessions,
     rulePortForSet: (setId) => rules.rulePortForSet(setId),
     effectiveRuleChainForSet: (setId, entries) =>
       rules.effectiveRuleChainForSet(setId, entries),

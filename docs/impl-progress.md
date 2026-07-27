@@ -14,7 +14,7 @@
 - **フェーズ 2 / E2 AI-02 プロセス2コード完了**: workerへ権威runtime snapshotと実SHA-256検証済みbundleを渡し、E1 simulation generatorをworker AI 4席で駆動。独立完了再レビューは要件 `PASS` / 品質 `APPROVED` / Critical・Important・Minorなし
 - **フェーズ 2 / E7 CX-05 プロセス2コード完了**: 第三操作、起動中registryのreadiness attestation、48時間リマインダーまで追加。独立完了再レビューはコード要件 `PASS` / 品質 `APPROVED` / Critical・Importantなし。実GitHub/CD/本番の3操作リハーサルとRP-03 UIは外部・後続ゲート
 - **フェーズ 2 / E10 OP-01・OP-02 プロセス2コード完了**: 人間承認駆動に合わせたキュー・判定・失敗・ファネルCLIを既存台帳から読み取り専用で構成。独立完了レビューは `PASS / APPROVED / GO`、全指摘なし。D-5/OP-01/E-15の正式な文書裁定だけ外部ゲート
-- **フェーズ 2 / E11 RV-01・RV-02 プロセス2コード完了・完了レビュー待ち**: 待機/対局画面の固定ルール一覧と公開ルール図鑑を接続。方向性レビューのImportant 2件を反映し、待機中のregistry変更追従、最終API契約、詳細・再試行・競合fetch・公開API保護、実DB境界、375×812実画面まで仕上げた
+- **フェーズ 2 / E11 RV-01・RV-02 プロセス2コード完了・完了再レビュー待ち**: 待機/対局画面の固定ルール一覧と公開ルール図鑑を接続。方向性レビューのImportant 2件と初回完了レビューのImportant 1件を反映し、待機中のregistry変更追従、最終API契約、詳細・再試行・競合fetch・公開API保護、実DB境界、375×812実画面まで仕上げた
 - E1〜E3 の実装記録は本書末尾の「並行進行」節、E13 は「E13」節。E4 の未解消の開発者判断は「詰まっている点」に残っている(1〜4・7・8・11)
 
 ### E-18 / C-2・C-3・C-6 再設計の反映(2026-07-27)
@@ -1362,6 +1362,12 @@ TS-02 から継続で未解決のもの:
   - design lint: **110 files**、キービジュアル3ファイル、アウトライン23件が成功
   - Vitest: **83 files / 575 tests** 成功
 - 実ブラウザ: 375×812で45件・初期30件の図鑑を表示。長い名称と説明の展開前後とも`clientWidth=scrollWidth=375`で横スクロールなし。`<script>alert(1)</script>`を含む説明は文字列として表示され、ダイアログ・実行なし。詳細の区分・状態・実装日も確認した
+
+#### E11 初回完了レビュー
+
+- 新規コンテキストの独立 GPT-5.6 Sol は **FAIL / CHANGES_REQUESTED / NO_GO**。初回方向性レビューのImportant 2件とMinorはすべてCLOSED、E11機能自体の重点9 files / 99 testsも成功した
+- Important 1件: process2で`RoomManager`を共有化した際、実起動の`gateway.sessions: persistence.sessions`が脱落し、既定のメモリsessionへ戻っていた。発行tokenがSQLite usersへ保存されず、提案・マイ提案・黄カード等の認証と再起動後identityを壊す回帰だった
+- SQLite session注入を復元。実buildしたserverへSocket.IO接続し、発行tokenとuser IDがSQLiteへ保存されること、同じDBで再起動後に同じtoken / userへ復帰し、usersが1行のままであることを確認した
 
 #### E11 詰まっている点
 
