@@ -25,6 +25,10 @@ type SetResultScreenProps = {
   onChangeFunRating: (rating: SetFunRating) => void;
   onVoteRule: (ruleId: string, vote: RuleVote) => void;
   onPlayAgain: () => void;
+  onPlayCommunity?: () => void;
+  emphasizePlayCommunity?: boolean;
+  actionPending?: boolean;
+  actionError?: string | null;
   onHome: () => void;
   showEvaluation?: boolean;
   waitingFor?: readonly string[] | null;
@@ -42,6 +46,10 @@ export function SetResultScreen({
   onChangeFunRating,
   onVoteRule,
   onPlayAgain,
+  onPlayCommunity,
+  emphasizePlayCommunity = false,
+  actionPending = false,
+  actionError = null,
   onHome,
   showEvaluation = true,
   waitingFor = null,
@@ -124,14 +132,30 @@ export function SetResultScreen({
            * だから CTA は次の行動だけを言う。1 ボタン 1 動作。
            */}
           <Button
-            variant="primary"
+            variant={emphasizePlayCommunity ? 'secondary' : 'primary'}
             block
-            disabled={waitingFor !== null}
+            disabled={waitingFor !== null || actionPending}
             onClick={onPlayAgain}
           >
             {waitingFor === null ? 'もう1セットあそぶ' : '待っています…'}
           </Button>
-          <Button block onClick={onHome}>
+          {onPlayCommunity && (
+            <Button
+              variant={emphasizePlayCommunity ? 'primary' : 'secondary'}
+              block
+              disabled={actionPending}
+              aria-busy={actionPending}
+              onClick={onPlayCommunity}
+            >
+              みんなのルールで あそんでみる
+            </Button>
+          )}
+          {actionError && (
+            <p className={styles.actionError} role="alert">
+              {actionError}
+            </p>
+          )}
+          <Button block disabled={actionPending} onClick={onHome}>
             ホームへ
           </Button>
         </div>

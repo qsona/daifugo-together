@@ -73,4 +73,27 @@ describe('TU-01: あそぶモードの選択', () => {
     await user.click(screen.getByRole('button', { name: 'はいる' }));
     expect(onJoin).toHaveBeenCalledWith('ABCD-1234');
   });
+
+  it('community作成の再試行ではモード選択を戻さず、失敗を作成ボタンの下へ出す', () => {
+    render(
+      <PlaySheet
+        onCreate={vi.fn()}
+        onJoin={vi.fn()}
+        onClose={vi.fn()}
+        playedBefore
+        initialMode="community"
+        error="みんなのルールへ進めませんでした。もう一度ためしてください"
+      />,
+    );
+
+    expect(
+      screen.getByRole('dialog', { name: 'じぶんの部屋をつくる' }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: 'じぶんの部屋をつくる' }),
+    ).toBeTruthy();
+    expect(screen.getByRole('alert').textContent).toContain(
+      'もう一度ためしてください',
+    );
+  });
 });

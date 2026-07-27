@@ -1,4 +1,4 @@
-import type { PlayerRoomView } from '@daifugo/core';
+import type { PlayerRoomView, RoomMode } from '@daifugo/core';
 import type { ReactNode } from 'react';
 import {
   useCallback,
@@ -53,6 +53,15 @@ import {
   markPlayedBefore,
   type PlayedBeforeStorage,
 } from './tutorial/played-before';
+import {
+  isGraduationEmphasized,
+  readGraduationState,
+  reduceGraduationState,
+  writeGraduationState,
+} from './tutorial/graduation';
+
+const GRADUATION_ERROR =
+  'みんなのルールへ進めませんでした。もう一度ためしてください';
 
 const DEMO_PROPOSAL_API: ProposalApi = {
   submit: async (request) => ({
@@ -494,6 +503,17 @@ function ConnectedApp({
   const [playedBefore, setPlayedBefore] = useState(() =>
     hasPlayedBefore(storage),
   );
+  const [graduationState, setGraduationState] = useState(() =>
+    readGraduationState(storage),
+  );
+  const [graduationFrom, setGraduationFrom] = useState<PlayerRoomView | null>(
+    null,
+  );
+  const [isGraduating, setIsGraduating] = useState(false);
+  const [graduationError, setGraduationError] = useState<string | null>(null);
+  const [playSheetInitialMode, setPlaySheetInitialMode] =
+    useState<RoomMode | null>(null);
+  const [playSheetError, setPlaySheetError] = useState<string | null>(null);
   const room = state.room;
   const tutorialEligible =
     !playedBefore &&
@@ -558,6 +578,25 @@ function ConnectedApp({
       active = false;
     };
   }, [current, proposalApi]);
+
+  useEffect(() => {
+    setGraduationState((current) => {
+      const next = reduceGraduationState(current, { playedBefore, room });
+      const unchanged =
+        next === current ||
+        (next?.kind === 'candidate' &&
+          current?.kind === 'candidate' &&
+          next.roomId === current.roomId) ||
+        (next?.kind === 'emphasized' &&
+          current?.kind === 'emphasized' &&
+          next.snapshotKey === current.snapshotKey);
+      if (unchanged) {
+        return current;
+      }
+      if (next) writeGraduationState(storage, next);
+      return next;
+    });
+  }, [playedBefore, room, storage]);
 
   useEffect(() => {
     const completedOneGame =
@@ -629,6 +668,12 @@ function ConnectedApp({
       <RuleCutIn activations={activations} onDone={finishRuleCutIn} />
     </>
   );
+  const visibleSetResultRoom =
+    room?.phase === 'setResult'
+      ? room
+      : !room && isGraduating && graduationFrom?.phase === 'setResult'
+        ? graduationFrom
+        : null;
 
   if (room?.phase === 'waiting') {
     const you = room.members.find(
@@ -743,26 +788,27 @@ function ConnectedApp({
     );
   }
 
-  if (room?.phase === 'setResult') {
-    const you = room.members.find(
-      (member) => member.memberId === room.you.memberId,
+  if (visibleSetResultRoom) {
+    const resultRoom = visibleSetResultRoom;
+    const you = resultRoom.members.find(
+      (member) => member.memberId === resultRoom.you.memberId,
     );
     const waitingFor = you?.wantsNextSet
-      ? room.members
+      ? resultRoom.members
           .filter(
             (member) =>
               !member.isAI &&
               !member.departed &&
-              member.memberId !== room.you.memberId &&
+              member.memberId !== resultRoom.you.memberId &&
               member.wantsNextSet !== true,
           )
           .map((member) => member.displayName)
       : null;
     return show(
       <SetResultScreen
-        ranks={setRanks(room)}
+        ranks={setRanks(resultRoom)}
         funRating={funRating}
-        firedRules={(room.setResult?.firedRules ?? []).map((rule) => ({
+        firedRules={(resultRoom.setResult?.firedRules ?? []).map((rule) => ({
           ruleId: rule.ruleId,
           name: rule.ruleName,
           vote: null,
@@ -772,6 +818,42 @@ function ConnectedApp({
         onPlayAgain={() => {
           invoke(client.continueRoom());
         }}
+        {...(resultRoom.mode === 'basic'
+          ? {
+              onPlayCommunity: () => {
+                if (isGraduating) return;
+                setIsGraduating(true);
+                setGraduationError(null);
+                setGraduationFrom(resultRoom);
+                void client.leaveRoom().then(
+                  () => {
+                    void client.createRoom('community').then(
+                      () => {
+                        setIsGraduating(false);
+                        setGraduationFrom(null);
+                      },
+                      () => {
+                        setIsGraduating(false);
+                        setGraduationFrom(null);
+                        setPlaySheetInitialMode('community');
+                        setPlaySheetError(GRADUATION_ERROR);
+                        go('menu');
+                        setIsChoosingRoom(true);
+                      },
+                    );
+                  },
+                  () => {
+                    setIsGraduating(false);
+                    setGraduationError(GRADUATION_ERROR);
+                  },
+                );
+              },
+              emphasizePlayCommunity: isGraduationEmphasized(
+                graduationState,
+                resultRoom,
+              ),
+            }
+          : {})}
         onHome={() => {
           if (!window.confirm('部屋から出ますか?')) return;
           invoke(
@@ -782,6 +864,8 @@ function ConnectedApp({
         }}
         showEvaluation={false}
         waitingFor={waitingFor}
+        actionPending={isGraduating}
+        actionError={graduationError}
       />,
     );
   }
@@ -809,7 +893,11 @@ function ConnectedApp({
   return show(
     <>
       <MenuScreen
-        onPlay={() => setIsChoosingRoom(true)}
+        onPlay={() => {
+          setPlaySheetInitialMode(null);
+          setPlaySheetError(null);
+          setIsChoosingRoom(true);
+        }}
         onPropose={() => go('proposal')}
         onEncyclopedia={() => undefined}
         onMyProposals={() => go('myProposals')}
@@ -819,10 +907,13 @@ function ConnectedApp({
       {isChoosingRoom && (
         <PlaySheet
           playedBefore={playedBefore}
+          initialMode={playSheetInitialMode}
           onCreate={(mode) => {
+            setPlaySheetError(null);
             invoke(
               client.createRoom(mode).then(() => {
                 setIsChoosingRoom(false);
+                setPlaySheetInitialMode(null);
               }),
             );
           }}
@@ -833,8 +924,12 @@ function ConnectedApp({
               }),
             );
           }}
-          onClose={() => setIsChoosingRoom(false)}
-          error={friendlyError(state.error)}
+          onClose={() => {
+            setIsChoosingRoom(false);
+            setPlaySheetInitialMode(null);
+            setPlaySheetError(null);
+          }}
+          error={playSheetError ?? friendlyError(state.error)}
         />
       )}
     </>,

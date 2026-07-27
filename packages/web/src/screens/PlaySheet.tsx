@@ -13,6 +13,7 @@ type PlaySheetProps = {
   onJoin: (code: string) => void;
   onClose: () => void;
   playedBefore?: boolean;
+  initialMode?: RoomMode | null;
   error?: string | null;
 };
 
@@ -27,9 +28,10 @@ export function PlaySheet({
   onJoin,
   onClose,
   playedBefore = false,
+  initialMode = null,
   error,
 }: PlaySheetProps) {
-  const [mode, setMode] = useState<RoomMode | null>(null);
+  const [mode, setMode] = useState<RoomMode | null>(initialMode);
   const [code, setCode] = useState('');
   const [isJoining, setIsJoining] = useState(false);
 
