@@ -1,7 +1,7 @@
 import { AppBar } from '../components/AppBar';
 import { CountdownButton } from '../components/CountdownButton';
-import { RankRows } from '../components/RankRow';
-import type { RankView } from '../components/RankRow';
+import { GameRankRows } from '../components/GameRankRows';
+import type { GameRankView } from '../components/GameRankRows';
 
 import screen from './screen.module.css';
 
@@ -10,7 +10,7 @@ type GameResultScreenProps = {
   title: string;
   /** 「セット 1 / 3 戦」。 */
   progressLabel: string;
-  ranks: readonly RankView[];
+  ranks: readonly GameRankView[];
   nextLabel: string;
   /** サーバーが決めた、自動で次戦へ進むまでの総時間。 */
   autoAdvanceMs: number;
@@ -41,7 +41,7 @@ export function GameResultScreen({
          * 「同じメンバーで続く」「評価はあとでまとめて」はどちらも予告で、
          * 次戦が始まれば分かる・評価画面に着けば分かる(UI文言ガイド 原則 4)。
          */}
-        <RankRows ranks={ranks} />
+        <GameRankRows ranks={ranks} />
         <div className={screen.footer}>
           {/* 「5 秒後に自動で進む」という文の代わりに、縁のリングが残り時間を見せる。 */}
           <CountdownButton

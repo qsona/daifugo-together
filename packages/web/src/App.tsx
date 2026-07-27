@@ -11,7 +11,8 @@ import {
 
 import type { CardView } from './components/Card';
 import type { MemberView as MemberListView } from './components/MemberList';
-import type { RankView } from './components/RankRow';
+import type { GameRankView } from './components/GameRankRows';
+import type { SetRankView } from './components/SetRankRows';
 import type { TableSeat } from './components/Table';
 import { RuleCutIn, type RuleActivation } from './components/RuleCutIn';
 import type { SeatFinish } from './screens/GameScreen';
@@ -69,6 +70,12 @@ import {
 
 const GRADUATION_ERROR =
   'みんなのルールへ進めませんでした。もう一度ためしてください';
+
+/**
+ * 最終戦リザルトを見せる時間。
+ * サーバーはこの間もセットリザルトのフェーズなので、これはこの端末だけの間。
+ */
+const FINAL_RESULT_MS = 10_000;
 
 const DEMO_PROPOSAL_API: ProposalApi = {
   submit: async (request) => ({
@@ -311,12 +318,12 @@ function DemoApp({ storage }: { storage: PlayedBeforeStorage | undefined }) {
     case 'gameResult':
       return (
         <GameResultScreen
-          title="第1戦 おわり"
-          progressLabel="セット 1 / 3 戦"
+          title="第3戦 おわり"
+          progressLabel="セット 3 / 3 戦"
           ranks={DEMO_GAME_RANKS}
-          nextLabel="第2戦へ"
-          autoAdvanceMs={15_000}
-          autoAdvanceAt={Date.now() + 15_000}
+          nextLabel="セット結果へ"
+          autoAdvanceMs={FINAL_RESULT_MS}
+          autoAdvanceAt={Date.now() + FINAL_RESULT_MS}
           onNext={() => {
             go('setResult');
           }}
@@ -459,7 +466,7 @@ function tableSeats(room: PlayerRoomView): TableSeat[] {
   });
 }
 
-function gameRanks(room: PlayerRoomView): RankView[] {
+function gameRanks(room: PlayerRoomView): GameRankView[] {
   const results = room.game?.previousResults ?? [];
   const result = results.at(-1);
   if (!result) return [];
@@ -496,7 +503,45 @@ function gameRanks(room: PlayerRoomView): RankView[] {
     });
 }
 
-function setRanks(room: PlayerRoomView): RankView[] {
+/**
+ * セットリザルト直前に見せる最終戦の順位。
+ * 加点は最終戦の順位点、合計点はセットの合計(最終戦なので両者は一致する)。
+ */
+function finalGameRanks(room: PlayerRoomView): GameRankView[] {
+  const finalGame = room.setResult?.finalGame;
+  if (!finalGame) return [];
+  const totals = new Map(
+    (room.setResult?.standings ?? []).map((standing) => [
+      standing.memberId,
+      standing.points,
+    ]),
+  );
+  const bySeat = new Map(
+    room.members.flatMap((member) =>
+      member.seatId === null ? [] : ([[member.seatId, member]] as const),
+    ),
+  );
+  return [...finalGame.standings]
+    .sort((left, right) => left.rank - right.rank)
+    .map((standing) => {
+      const member = bySeat.get(standing.seat);
+      return {
+        place: standing.rank,
+        name:
+          member?.memberId === room.you.memberId
+            ? 'あなた'
+            : (member?.displayName ?? `席${String(standing.seat + 1)}`),
+        kind: member?.isAI ? ('ai' as const) : ('human' as const),
+        title: standing.title,
+        gainedPoints: standing.points,
+        totalPoints: member
+          ? (totals.get(member.memberId) ?? standing.points)
+          : standing.points,
+      };
+    });
+}
+
+function setRanks(room: PlayerRoomView): SetRankView[] {
   const standings = room.setResult?.standings ?? [];
   return [...standings]
     .sort((left, right) => left.totalRank - right.totalRank)
@@ -512,8 +557,8 @@ function setRanks(room: PlayerRoomView): RankView[] {
             : (member?.displayName ?? 'プレイヤー'),
         kind: member?.isAI ? ('ai' as const) : ('human' as const),
         title: standing.title,
-        history: standing.ranks,
         totalPoints: standing.points,
+        isYou: standing.memberId === room.you.memberId,
       };
     });
 }
@@ -549,6 +594,9 @@ function ConnectedApp({
   const [isChoosingRoom, setIsChoosingRoom] = useState(false);
   const [selectedCardIds, setSelectedCardIds] = useState<readonly string[]>([]);
   const [funRating, setFunRating] = useState<SetFunRating | null>(null);
+  /** 最終戦リザルトを見終えたセット。sync や再接続で画面が巻き戻らないようにする。 */
+  const [finalResultSeen, setFinalResultSeen] = useState<string | null>(null);
+  const finalResultDeadline = useRef<{ key: string; at: number } | null>(null);
   const [unreadProposalCount, setUnreadProposalCount] = useState(0);
   const proposalApi = getBrowserProposalClient();
   const ruleEventRoomId = useRef<string | null>(null);
@@ -874,6 +922,41 @@ function ConnectedApp({
         }}
       />,
     );
+  }
+
+  /*
+   * セット最終戦だけサーバーは interimResult を挟まない(そのまま setResult へ進む)。
+   * その戦の結果をセット総合と一緒に出すと 2 つの結果が混ざるので、
+   * この端末の中でだけ最終戦リザルトを先に見せてからセットリザルトへ渡す。
+   */
+  const finalResultKey =
+    room?.phase === 'setResult' && room.setResult?.finalGame
+      ? `${room.roomId}:${String(room.setResult.respondBy)}`
+      : null;
+  if (room?.setResult?.finalGame && finalResultKey !== null) {
+    if (finalResultSeen !== finalResultKey) {
+      const gameNo = room.setResult.finalGame.gameNo;
+      if (finalResultDeadline.current?.key !== finalResultKey) {
+        finalResultDeadline.current = {
+          key: finalResultKey,
+          at: Date.now() + FINAL_RESULT_MS,
+        };
+      }
+      const key = finalResultKey;
+      return show(
+        <GameResultScreen
+          title={`第${String(gameNo)}戦 おわり`}
+          progressLabel={`セット ${String(gameNo)} / ${String(gameNo)} 戦`}
+          ranks={finalGameRanks(room)}
+          nextLabel="セット結果へ"
+          autoAdvanceMs={FINAL_RESULT_MS}
+          autoAdvanceAt={finalResultDeadline.current.at}
+          onNext={() => {
+            setFinalResultSeen(key);
+          }}
+        />,
+      );
+    }
   }
 
   if (visibleSetResultRoom) {

@@ -129,9 +129,9 @@ describe('DS-02: フェーズ 1 の主要画面が 1 本の導線でつながる
     await user.click(screen.getByRole('button', { name: 'パス' }));
 
     // 画面 5a: 順位のみの簡易リザルト。評価入力は置かない。
-    expect(screen.getByRole('button', { name: '第2戦へ' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'セット結果へ' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /高評価/ })).toBeNull();
-    await user.click(screen.getByRole('button', { name: '第2戦へ' }));
+    await user.click(screen.getByRole('button', { name: 'セット結果へ' }));
 
     // 画面 5b: セット単位の評価。
     expect(
@@ -181,16 +181,17 @@ describe('DS-02: フェーズ 1 の主要画面が 1 本の導線でつながる
     expect(fun.getAttribute('aria-checked')).toBe('true');
   });
 
-  it('セットの総合であることを見出しではなく順位推移が語る', () => {
+  it('セットの総合であることを見出しではなく 1 位の扱いが語る', () => {
     useScreenStore.setState({ current: 'setResult' });
     render(<App />);
 
     expect(screen.queryByRole('heading', { name: /総合結果/ })).toBeNull();
-    expect(screen.getByText('1→1→2')).toBeTruthy();
-    expect(screen.getByText('4→4→4')).toBeTruthy();
+    // 各戦の内訳は最終戦リザルトが見せたので、ここには持ち込まない。
+    expect(screen.queryByText(/→/)).toBeNull();
+    expect(screen.getByText('大富豪')).toBeTruthy();
   });
 
-  it('セットリザルトは合計点を、ゲーム間リザルトは今回の点と累計を出す', () => {
+  it('セットリザルトは合計点を、ゲーム間リザルトは今回の点と累計を出す', async () => {
     useScreenStore.setState({ current: 'setResult' });
     const { unmount } = render(<App />);
 
@@ -202,30 +203,32 @@ describe('DS-02: フェーズ 1 の主要画面が 1 本の導線でつながる
     useScreenStore.setState({ current: 'gameResult' });
     render(<App />);
 
-    // 5a: 第1戦では今回点と累計が同値なので、累計だけを出す。
-    expect(screen.queryByText('+5')).toBeNull();
-    expect(screen.getByText('5点')).toBeTruthy();
+    // 5a: この戦の加点と、そこへ数え上がるセット累計。
+    expect(screen.getByText('+5')).toBeTruthy();
+    await waitFor(() => {
+      expect(screen.getByText('13点')).toBeTruthy();
+    });
   });
 
-  it('ゲーム間リザルトは待っていても次戦へ進む(文で予告しない)', () => {
+  it('ゲーム間リザルトは待っていても次へ進む(文で予告しない)', () => {
     vi.useFakeTimers();
     try {
       useScreenStore.setState({ current: 'gameResult' });
       render(<App />);
 
-      expect(screen.getByRole('button', { name: '第2戦へ' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'セット結果へ' })).toBeTruthy();
       expect(screen.queryByText(/自動で進む/)).toBeNull();
 
       act(() => {
-        vi.advanceTimersByTime(14_999);
+        vi.advanceTimersByTime(9_999);
       });
-      expect(screen.getByRole('button', { name: '第2戦へ' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'セット結果へ' })).toBeTruthy();
 
       act(() => {
         vi.advanceTimersByTime(1);
       });
 
-      expect(screen.queryByRole('button', { name: '第2戦へ' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'セット結果へ' })).toBeNull();
       expect(
         screen.getByRole('radiogroup', { name: 'このセットはおもしろかった?' }),
       ).toBeTruthy();

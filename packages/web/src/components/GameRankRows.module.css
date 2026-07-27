@@ -1,4 +1,4 @@
-/* インゲーム部品: 順位行(ゲーム間リザルト / セットリザルト) */
+/* インゲーム部品: 1 戦のリザルトの順位行 */
 
 .rows {
   list-style: none;
@@ -49,13 +49,11 @@
   white-space: nowrap;
 }
 
-/* 各戦の順位推移。ラベルを付けず、書式(1→1→2)そのものに語らせる。 */
-.history {
-  display: block;
+.title {
   font-size: var(--font-size-micro);
   font-weight: var(--font-weight-bold);
   color: var(--color-text-secondary);
-  letter-spacing: var(--letter-spacing-wide);
+  white-space: nowrap;
 }
 
 /* 順位点。数字そのものが単位を語るので、ラベルは「点」だけに留める。 */
@@ -73,12 +71,23 @@
   display: block;
   font-size: var(--font-size-micro);
   font-weight: var(--font-weight-bold);
-  color: var(--color-text-secondary);
+  color: var(--color-text-caution);
+  animation: gain-pop 240ms ease-out;
 }
 
-.title {
-  font-size: var(--font-size-micro);
-  font-weight: var(--font-weight-bold);
-  color: var(--color-text-secondary);
-  white-space: nowrap;
+@keyframes gain-pop {
+  from {
+    transform: translateY(6px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gain {
+    animation: none;
+  }
 }

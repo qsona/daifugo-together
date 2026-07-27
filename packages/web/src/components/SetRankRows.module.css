@@ -1,0 +1,144 @@
+/* インゲーム部品: セット総合の順位(1 位の花形カード + 2 位以下の行) */
+
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* 1 位。セットの主役なので、行ではなく面で見せる。 */
+.champion {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  background: var(--color-gold-200);
+  border: var(--border-heavy) solid var(--color-border-strong);
+  border-radius: var(--radius-l);
+  padding: var(--space-4) var(--space-3);
+  box-shadow: var(--shadow-hard-m);
+  animation: champion-pop 320ms ease-out;
+}
+
+.crown {
+  font-size: var(--font-size-title-s);
+  font-weight: var(--font-weight-heavy);
+  color: var(--color-text-caution);
+}
+
+.championTitle {
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-secondary);
+}
+
+.championName {
+  max-width: 100%;
+  font-size: var(--font-size-title-l);
+  font-weight: var(--font-weight-heavy);
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.championScore {
+  font-size: var(--font-size-title-m);
+  font-weight: var(--font-weight-heavy);
+}
+
+.rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  background: var(--color-bg-surface);
+  border: var(--border-bold) solid var(--color-border-strong);
+  border-radius: var(--radius-m);
+  padding: var(--space-2) var(--space-3);
+  box-shadow: var(--shadow-hard-s);
+  min-height: var(--size-tap-min);
+}
+
+.place {
+  width: 40px;
+  flex-shrink: 0;
+  text-align: center;
+  background: var(--color-cream-100);
+  border: var(--border-control) solid var(--color-border-strong);
+  border-radius: var(--radius-s);
+  padding: 3px 0 4px;
+  font-size: var(--font-size-title-m);
+  font-weight: var(--font-weight-heavy);
+  line-height: 1.1;
+}
+
+.name {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--font-size-title-s);
+  font-weight: var(--font-weight-bold);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.title {
+  font-size: var(--font-size-micro);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.score {
+  flex-shrink: 0;
+  text-align: right;
+  font-size: var(--font-size-title-s);
+  font-weight: var(--font-weight-heavy);
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+/* 自分の結果。1 位でなくても目が行くように、ひと弾みだけさせる。 */
+.you {
+  animation: you-bounce 420ms ease-out;
+}
+
+@keyframes champion-pop {
+  from {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes you-bounce {
+  0% {
+    transform: translateY(6px);
+  }
+  60% {
+    transform: translateY(-3px);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .champion,
+  .you {
+    animation: none;
+  }
+}

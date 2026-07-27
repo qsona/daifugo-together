@@ -6,7 +6,8 @@
 
 import type { CardView } from '../components/Card';
 import type { MemberView } from '../components/MemberList';
-import type { RankView } from '../components/RankRow';
+import type { GameRankView } from '../components/GameRankRows';
+import type { SetRankView } from '../components/SetRankRows';
 import type { RuleActivation } from '../components/RuleCutIn';
 import type { TableSeat } from '../components/Table';
 import type { SeatFinish } from '../screens/GameScreen';
@@ -101,50 +102,14 @@ export const DEMO_HAND: readonly CardView[] = [
   { id: 'h-h2', suit: 'heart', rank: '2' },
 ];
 
-/** 第 1 戦の直後なので、この戦の得点と累計は同じ。 */
-export const DEMO_GAME_RANKS: readonly RankView[] = [
+/** 見本は最終戦(第 3 戦)の直後。この戦の得点とセット累計が別々に出る。 */
+export const DEMO_GAME_RANKS: readonly GameRankView[] = [
   {
     place: 1,
     name: 'あなた',
     kind: 'human',
     title: '大富豪',
     gainedPoints: 5,
-    totalPoints: 5,
-  },
-  {
-    place: 2,
-    name: 'プレイヤーB',
-    kind: 'ai',
-    title: '富豪',
-    gainedPoints: 3,
-    totalPoints: 3,
-  },
-  {
-    place: 3,
-    name: 'プレイヤーC',
-    kind: 'human',
-    title: '貧民',
-    gainedPoints: 2,
-    totalPoints: 2,
-  },
-  {
-    place: 4,
-    name: 'プレイヤーD',
-    kind: 'ai',
-    title: '大貧民',
-    gainedPoints: 1,
-    totalPoints: 1,
-  },
-];
-
-/** セットリザルトは 3 戦の推移込み。「総合結果である」ことをデータ自身が語る。 */
-export const DEMO_SET_RANKS: readonly RankView[] = [
-  {
-    place: 1,
-    name: 'あなた',
-    kind: 'human',
-    title: '大富豪',
-    history: [1, 1, 2],
     totalPoints: 13,
   },
   {
@@ -152,7 +117,7 @@ export const DEMO_SET_RANKS: readonly RankView[] = [
     name: 'プレイヤーB',
     kind: 'ai',
     title: '富豪',
-    history: [2, 3, 1],
+    gainedPoints: 3,
     totalPoints: 10,
   },
   {
@@ -160,7 +125,7 @@ export const DEMO_SET_RANKS: readonly RankView[] = [
     name: 'プレイヤーC',
     kind: 'human',
     title: '貧民',
-    history: [3, 2, 3],
+    gainedPoints: 2,
     totalPoints: 7,
   },
   {
@@ -168,7 +133,40 @@ export const DEMO_SET_RANKS: readonly RankView[] = [
     name: 'プレイヤーD',
     kind: 'ai',
     title: '大貧民',
-    history: [4, 4, 4],
+    gainedPoints: 1,
+    totalPoints: 3,
+  },
+];
+
+/** セットリザルトは 3 戦の合計点だけ。各戦の内訳は最終戦リザルトが見せている。 */
+export const DEMO_SET_RANKS: readonly SetRankView[] = [
+  {
+    place: 1,
+    name: 'あなた',
+    kind: 'human',
+    title: '大富豪',
+    totalPoints: 13,
+    isYou: true,
+  },
+  {
+    place: 2,
+    name: 'プレイヤーB',
+    kind: 'ai',
+    title: '富豪',
+    totalPoints: 10,
+  },
+  {
+    place: 3,
+    name: 'プレイヤーC',
+    kind: 'human',
+    title: '貧民',
+    totalPoints: 7,
+  },
+  {
+    place: 4,
+    name: 'プレイヤーD',
+    kind: 'ai',
+    title: '大貧民',
     totalPoints: 3,
   },
 ];

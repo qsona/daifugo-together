@@ -1,5 +1,10 @@
 /* 画面 5b: セットリザルト+評価 */
 
+/* 紙吹雪を 1 位カードの上に重ねるための土台。 */
+.podium {
+  position: relative;
+}
+
 .ruleVotes {
   list-style: none;
   margin: 0;

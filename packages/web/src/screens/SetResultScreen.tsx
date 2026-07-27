@@ -1,8 +1,9 @@
 import { AppBar } from '../components/AppBar';
 import { Button } from '../components/Button';
+import { Confetti } from '../components/Confetti';
 import { MoodPicker } from '../components/MoodPicker';
-import { RankRows } from '../components/RankRow';
-import type { RankView } from '../components/RankRow';
+import { SetRankRows } from '../components/SetRankRows';
+import type { SetRankView } from '../components/SetRankRows';
 import { VoteButton } from '../components/VoteButton';
 
 import styles from './SetResultScreen.module.css';
@@ -19,7 +20,7 @@ export type FiredRuleVote = {
 };
 
 type SetResultScreenProps = {
-  ranks: readonly RankView[];
+  ranks: readonly SetRankView[];
   funRating: SetFunRating | null;
   firedRules: readonly FiredRuleVote[];
   onChangeFunRating: (rating: SetFunRating) => void;
@@ -58,8 +59,12 @@ export function SetResultScreen({
     <div className={screen.screen}>
       <AppBar title="セットリザルト" />
       <main className={screen.body}>
-        {/* 見出しは AppBar と順位行が語っているので置かない。 */}
-        <RankRows ranks={ranks} />
+        {/* 見出しは AppBar と順位が語っているので置かない。 */}
+        <div className={styles.podium}>
+          {/* 紙吹雪は自分が 1 位のときだけ。勝ちのごほうびを薄めない。 */}
+          {ranks.some((rank) => rank.place === 1 && rank.isYou) && <Confetti />}
+          <SetRankRows ranks={ranks} />
+        </div>
 
         {showEvaluation && (
           <>

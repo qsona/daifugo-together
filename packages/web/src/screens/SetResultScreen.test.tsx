@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import buttonStyles from '../components/Button.module.css';
+import confettiStyles from '../components/Confetti.module.css';
 import { SetResultScreen } from './SetResultScreen';
 
 afterEach(cleanup);
@@ -53,7 +54,7 @@ describe('SetResultScreen phase boundary', () => {
     expect(screen.queryByRole('button', { name: /高評価/ })).toBeNull();
   });
 
-  it('順位行にセット合計点を出す', () => {
+  it('1位を花形カードにして合計点を出し、各戦の順位推移は出さない', () => {
     render(
       <SetResultScreen
         ranks={[
@@ -62,8 +63,8 @@ describe('SetResultScreen phase boundary', () => {
             name: 'あなた',
             kind: 'human',
             title: '大富豪',
-            history: [1, 1, 2],
             totalPoints: 13,
+            isYou: true,
           },
         ]}
         funRating={null}
@@ -77,6 +78,50 @@ describe('SetResultScreen phase boundary', () => {
     );
 
     expect(screen.getByText('13点')).toBeTruthy();
+    expect(screen.queryByText(/→/)).toBeNull();
+  });
+
+  it('紙吹雪は自分が1位のときだけ出す', () => {
+    const props = {
+      funRating: null,
+      firedRules: [],
+      onChangeFunRating: () => undefined,
+      onVoteRule: () => undefined,
+      onPlayAgain: () => undefined,
+      onHome: () => undefined,
+      showEvaluation: false,
+    } as const;
+    const champion = {
+      place: 1,
+      name: 'あなた',
+      kind: 'human' as const,
+      title: '大富豪',
+      totalPoints: 13,
+    };
+
+    const won = render(
+      <SetResultScreen {...props} ranks={[{ ...champion, isYou: true }]} />,
+    );
+    expect(won.container.querySelector(`.${confettiStyles.field}`)).toBeTruthy();
+    cleanup();
+
+    const lost = render(
+      <SetResultScreen
+        {...props}
+        ranks={[
+          { ...champion, name: 'プレイヤーB', kind: 'ai', isYou: false },
+          {
+            place: 2,
+            name: 'あなた',
+            kind: 'human',
+            title: '富豪',
+            totalPoints: 10,
+            isYou: true,
+          },
+        ]}
+      />,
+    );
+    expect(lost.container.querySelector(`.${confettiStyles.field}`)).toBeNull();
   });
 
   it('継続回答後は未回答の人を表示し、二重回答を無効化する', () => {
