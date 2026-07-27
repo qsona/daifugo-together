@@ -18,7 +18,7 @@ const DAY_MS = 24 * HOUR_MS;
 export type ProposalInspection =
   | {
       verdict: 'pass';
-      commit?: (proposalId: string) => void;
+      commit: (proposalId: string) => void;
     }
   | {
       verdict: 'blocked';
@@ -112,10 +112,6 @@ export class ProposalRateLimiter {
   }
 }
 
-const PASS_THROUGH_GATE: ProposalScreeningGate = {
-  inspect: () => ({ verdict: 'pass' }),
-};
-
 export class ProposalSubmissionService implements ProposalSubmissionPort {
   readonly #repository: ProposalRepository;
   readonly #screening: ProposalScreeningGate;
@@ -126,14 +122,14 @@ export class ProposalSubmissionService implements ProposalSubmissionPort {
   constructor(
     repository: ProposalRepository,
     options: {
-      screening?: ProposalScreeningGate;
+      screening: ProposalScreeningGate;
       rateLimiter?: ProposalRateLimitPort;
       now?: () => number;
       createId?: (now: number) => string;
-    } = {},
+    },
   ) {
     this.#repository = repository;
-    this.#screening = options.screening ?? PASS_THROUGH_GATE;
+    this.#screening = options.screening;
     this.#rateLimiter = options.rateLimiter ?? new ProposalRateLimiter();
     this.#now = options.now ?? Date.now;
     this.#createId = options.createId ?? createUlid;
@@ -195,7 +191,7 @@ export class ProposalSubmissionService implements ProposalSubmissionPort {
         contentHash,
         now,
         id: this.#createId(now),
-        ...(inspection.commit ? { commitInspection: inspection.commit } : {}),
+        commitInspection: inspection.commit,
       });
       return {
         status: 200,

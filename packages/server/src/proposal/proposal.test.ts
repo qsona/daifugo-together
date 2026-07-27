@@ -8,11 +8,17 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { createAppServer, type AppServer } from '../app-server.js';
 import { SqlitePersistence } from '../persistence.js';
-import { ProposalSubmissionService } from './submission.js';
+import {
+  type ProposalScreeningGate,
+  ProposalSubmissionService,
+} from './submission.js';
 
 const apps: AppServer[] = [];
 const persistenceInstances: SqlitePersistence[] = [];
 const directories: string[] = [];
+const PASS_SCREENING: ProposalScreeningGate = {
+  inspect: () => ({ verdict: 'pass', commit: () => undefined }),
+};
 
 afterEach(async () => {
   await Promise.all(apps.splice(0).map((app) => app.close()));
@@ -74,6 +80,7 @@ describe('proposal vertical slice', () => {
     const app = createAppServer({
       webDistDir: directory,
       proposals: new ProposalSubmissionService(persistence.proposals, {
+        screening: PASS_SCREENING,
         now: () => 1_000,
         createId: () => '00000000Z8AAAAAAAAAAAAAAAA',
       }),
@@ -137,7 +144,9 @@ describe('proposal vertical slice', () => {
     const session = persistence.sessions.resolve(undefined);
     const app = createAppServer({
       webDistDir: directory,
-      proposals: new ProposalSubmissionService(persistence.proposals),
+      proposals: new ProposalSubmissionService(persistence.proposals, {
+        screening: PASS_SCREENING,
+      }),
     });
     apps.push(app);
     const port = await app.listen(0, '127.0.0.1');
@@ -199,6 +208,7 @@ describe('proposal vertical slice', () => {
     persistenceInstances.push(persistence);
     const session = persistence.sessions.resolve(undefined);
     const service = new ProposalSubmissionService(persistence.proposals, {
+      screening: PASS_SCREENING,
       now: () => 2_000,
       createId: () => '00000001YGAAAAAAAAAAAAAAAA',
     });
@@ -243,6 +253,7 @@ describe('proposal vertical slice', () => {
     persistenceInstances.push(persistence);
     const session = persistence.sessions.resolve(undefined);
     const service = new ProposalSubmissionService(persistence.proposals, {
+      screening: PASS_SCREENING,
       now: () => 3_000,
       createId: () => '00000002XRAAAAAAAAAAAAAAAA',
     });
@@ -337,6 +348,7 @@ describe('proposal vertical slice', () => {
     const session = persistence.sessions.resolve(undefined);
     const ids = ['00000003X0AAAAAAAAAAAAAAAA', '00000003X1AAAAAAAAAAAAAAAA'];
     const service = new ProposalSubmissionService(persistence.proposals, {
+      screening: PASS_SCREENING,
       now: () => 4_000,
       createId: () => ids.shift()!,
     });
@@ -415,6 +427,7 @@ describe('proposal vertical slice', () => {
       '00000004W3AAAAAAAAAAAAAAAA',
     ];
     const service = new ProposalSubmissionService(persistence.proposals, {
+      screening: PASS_SCREENING,
       now: () => 5_000,
       createId: () => ids.shift()!,
     });

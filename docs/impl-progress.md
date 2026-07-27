@@ -105,6 +105,16 @@
 | YC-03救済 | appeal API、revoke/list CLI、取り消し時の停止解除とカード復元、本人への結果表示 |
 | YC-03境界 | 3日失効、同時2件、停止期限経過、停止中も対局可能のE2E、履歴監査 |
 
+#### プロセス1方向性レビューの結果と反映
+
+- 独立 GPT-5.6 Sol の判定: **GO_WITH_FIXES**
+- 仮定 E6-P1-1 は「プロセス1限定で採用」、E6-P1-2・3 は採用。C-2 は引き続き人間判断
+- Important 1: L1 hard 判定が L3 障害時に 503 へ落ち、静的層の独立性を失っていた
+  - 対応: hard ヒット時の L3 は参考試行にし、障害でも `block_card` を維持。`llm_verdict='error'` と review flag を監査記録へ残す回帰テストを追加
+- Important 2: screening gate と pass 確定 callback が任意で、未検査 `screening` 行を作れる組み立てが残っていた
+  - 対応: `ProposalSubmissionService` の screening と、`ProposalRepository.create()` の検査確定 callback を必須化。E5 単体テストだけ明示 Fake を注入する
+- 修正後 `pnpm verify`: **35 files / 251 tests 成功**。format / lint / design lint / typecheck / 全 package build も成功
+
 ### 開発者レビューの反映(2026-07-26・プロセス2 のあと)
 
 動くものを触ってもらった結果の指摘を反映した。**画面の作り直しを伴う指摘が中心**で、いずれもトーンではなく情報量と操作数の問題だった。

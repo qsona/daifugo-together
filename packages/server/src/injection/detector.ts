@@ -14,7 +14,7 @@ export interface Layer2Flags {
   trailingDirective: boolean;
 }
 
-export interface LlmResult {
+export interface LlmSuccessResult {
   verdict: LlmVerdict;
   reason: string;
   evidence: string | null;
@@ -22,6 +22,17 @@ export interface LlmResult {
   model: string;
   latencyMs: number;
 }
+
+export interface LlmErrorResult {
+  verdict: 'error';
+  reason: 'judge_unavailable';
+  evidence: null;
+  evidenceVerified: false;
+  model: null;
+  latencyMs: null;
+}
+
+export type LlmResult = LlmSuccessResult | LlmErrorResult;
 
 export interface InjectionJudge {
   judge(input: {
@@ -31,7 +42,7 @@ export interface InjectionJudge {
     normalizedText: string;
     layer1: Layer1Hits;
     layer2: Layer2Flags;
-  }): Promise<Omit<LlmResult, 'evidenceVerified'>>;
+  }): Promise<Omit<LlmSuccessResult, 'evidenceVerified'>>;
 }
 
 export class UnavailableInjectionJudge implements InjectionJudge {
@@ -129,9 +140,9 @@ export class InjectionDetector {
       };
     }
 
-    let judged: Omit<LlmResult, 'evidenceVerified'>;
+    let llm: LlmResult;
     try {
-      judged = await this.#judge.judge({
+      const judged = await this.#judge.judge({
         name: proposal.name,
         body: proposal.body,
         inputText: normalized.inputText,
@@ -139,28 +150,38 @@ export class InjectionDetector {
         layer1,
         layer2,
       });
+      const evidenceVerified =
+        judged.evidence !== null &&
+        judged.evidence.length > 0 &&
+        normalized.inputText.includes(judged.evidence);
+      llm = { ...judged, evidenceVerified };
     } catch (cause) {
-      throw new InjectionUnavailableError({ cause });
+      if (layer1.hard.length === 0) {
+        throw new InjectionUnavailableError({ cause });
+      }
+      llm = {
+        verdict: 'error',
+        reason: 'judge_unavailable',
+        evidence: null,
+        evidenceVerified: false,
+        model: null,
+        latencyMs: null,
+      };
     }
-    const evidenceVerified =
-      judged.evidence !== null &&
-      judged.evidence.length > 0 &&
-      normalized.inputText.includes(judged.evidence);
-    const llm: LlmResult = { ...judged, evidenceVerified };
 
     let finalVerdict: DetectionResult['finalVerdict'] = 'pass';
     let softReasonKey: DetectionResult['softReasonKey'];
     let reviewFlag = false;
     if (layer1.hard.length > 0) {
       finalVerdict = 'block_card';
-      reviewFlag = judged.verdict === 'clean';
-    } else if (judged.verdict === 'injection' && evidenceVerified) {
+      reviewFlag = llm.verdict === 'clean' || llm.verdict === 'error';
+    } else if (llm.verdict === 'injection' && llm.evidenceVerified) {
       finalVerdict = 'block_card';
-    } else if (judged.verdict === 'injection') {
+    } else if (llm.verdict === 'injection') {
       finalVerdict = 'block_soft';
       softReasonKey = 'generic';
       reviewFlag = true;
-    } else if (judged.verdict === 'suspicious') {
+    } else if (llm.verdict === 'suspicious') {
       finalVerdict = 'block_soft';
       softReasonKey = 'generic';
     } else if (layer2.hasCodeFence || layer2.hasUrl || layer2.hasBase64Like) {

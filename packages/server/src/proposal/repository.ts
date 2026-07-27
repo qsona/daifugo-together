@@ -74,7 +74,7 @@ export interface CreateStoredProposalOptions {
   contentHash: string;
   now: number;
   id: string;
-  commitInspection?: (proposalId: string) => void;
+  commitInspection: (proposalId: string) => void;
 }
 
 const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
@@ -246,7 +246,7 @@ export class ProposalRepository {
           options.now,
           options.now,
         );
-      options.commitInspection?.(options.id);
+      options.commitInspection(options.id);
       return this.#sqlite
         .prepare('SELECT * FROM proposals WHERE id = ?')
         .get(options.id) as ProposalRow;

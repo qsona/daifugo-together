@@ -15,6 +15,9 @@ import {
 
 const instances: SqlitePersistence[] = [];
 const directories: string[] = [];
+const PASS_SCREENING: ProposalScreeningGate = {
+  inspect: () => ({ verdict: 'pass', commit: () => undefined }),
+};
 
 afterEach(() => {
   for (const instance of instances.splice(0)) instance.close();
@@ -37,7 +40,12 @@ function setup(
   });
   instances.push(persistence);
   const session = persistence.sessions.resolve(undefined);
-  const service = new ProposalSubmissionService(persistence.proposals, options);
+  const service = new ProposalSubmissionService(persistence.proposals, {
+    screening: options.screening ?? PASS_SCREENING,
+    ...(options.rateLimiter ? { rateLimiter: options.rateLimiter } : {}),
+    ...(options.now ? { now: options.now } : {}),
+    ...(options.createId ? { createId: options.createId } : {}),
+  });
   return { persistence, session, service };
 }
 
@@ -51,7 +59,10 @@ const validBody = {
 describe('ProposalSubmissionService', () => {
   it('認証→レート制限→検証→重複→検査の順で止める', async () => {
     const consume = vi.fn(() => true);
-    const inspect = vi.fn(() => ({ verdict: 'pass' as const }));
+    const inspect = vi.fn(() => ({
+      verdict: 'pass' as const,
+      commit: () => undefined,
+    }));
     const { session, service } = setup({
       rateLimiter: { consume },
       screening: { inspect },
@@ -217,7 +228,7 @@ describe('ProposalSubmissionService', () => {
         inspect: async () => {
           entered += 1;
           await barrier;
-          return { verdict: 'pass' };
+          return { verdict: 'pass', commit: () => undefined };
         },
       },
       createId: (() => {
@@ -268,6 +279,7 @@ describe('ProposalSubmissionService', () => {
     const firstAuthor = persistence.sessions.resolve(undefined);
     const secondAuthor = persistence.sessions.resolve(undefined);
     const service = new ProposalSubmissionService(persistence.proposals, {
+      screening: PASS_SCREENING,
       createId: () => `AUTHOR-${String(++proposalSequence)}`,
     });
 
@@ -391,7 +403,10 @@ describe('proposal persistence constraints', () => {
       .run(20_000, session.userId);
     sqlite.close();
     const consume = vi.fn(() => true);
-    const inspect = vi.fn(() => ({ verdict: 'pass' as const }));
+    const inspect = vi.fn(() => ({
+      verdict: 'pass' as const,
+      commit: () => undefined,
+    }));
     const service = new ProposalSubmissionService(persistence.proposals, {
       now: () => 10_000,
       rateLimiter: { consume },

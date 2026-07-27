@@ -25,6 +25,7 @@ export interface StoredProposalCheck {
   userId: string;
   inputText: string;
   finalVerdict: DetectionResult['finalVerdict'];
+  llmVerdict: string;
   reviewFlag: boolean;
   createdAt: number;
 }
@@ -235,7 +236,7 @@ export class InjectionRepository implements ProposalQueueQualification {
   latestCheckForUser(userId: string): StoredProposalCheck | null {
     const row = this.#sqlite
       .prepare(
-        `SELECT id, proposal_id, user_id, input_text, final_verdict,
+        `SELECT id, proposal_id, user_id, input_text, final_verdict, llm_verdict,
                 review_flag, created_at
          FROM proposal_checks
          WHERE user_id = ?
@@ -249,6 +250,7 @@ export class InjectionRepository implements ProposalQueueQualification {
           user_id: string;
           input_text: string;
           final_verdict: DetectionResult['finalVerdict'];
+          llm_verdict: string;
           review_flag: number;
           created_at: number;
         }
@@ -260,6 +262,7 @@ export class InjectionRepository implements ProposalQueueQualification {
           userId: row.user_id,
           inputText: row.input_text,
           finalVerdict: row.final_verdict,
+          llmVerdict: row.llm_verdict,
           reviewFlag: row.review_flag === 1,
           createdAt: row.created_at,
         }
