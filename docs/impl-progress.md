@@ -871,6 +871,8 @@ TS-02 から継続で未解決のもの:
 - seen更新だけ失敗した場合は取得済み一覧と未読件数を維持し、一覧取得失敗とは別の再試行案内を表示する。状態5値のステッパー、メニューの未読件数と`99+`境界も回帰化した
 - 旧`users`表からの加算migrationを実SQLiteで開き、既存token・表示名を維持したまま`proposals_seen_at`を利用できることを確認した。HTTP結合では本人分離、新しい順、GET非既読、同時刻競合、等値境界、単調更新、未来値拒否を確認する
 - P1-2のE11図鑑遷移は予定どおり後続へ残し、`releasedRuleId`の表示と型接続は維持する
+- 新規コンテキストの独立 GPT-5.6 Sol 完了レビューは **GO**、Critical / Important / Minorすべてなし。方向性レビューのImportant（GET→状態変更→seen競合）とMinor（NULL理由文が生のreason codeになる問題）はともに **CLOSED**。本人分離、5状態ステッパー、C-6制約と全表示、旧SQLite migration、seen失敗時の一覧・未読維持、メニューバッジまで受け入れ確認済み
+- 修正後の全体`CI=true pnpm verify`はformat/lint/design/typecheck、66 files / 452 tests、全package buildまで成功。AI simulationのfallback率テストが初回だけ揺れたが、単独4/4と全体再実行452/452の双方で通過した
 
 ### E2で見つけた設計書の不整合
 
