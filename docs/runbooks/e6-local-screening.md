@@ -9,9 +9,11 @@ E6 の L3 判定は従量課金 API を使わず、開発者 PC の Codex app-se
 ```dotenv
 ADMIN_PIPELINE_TOKEN=<サーバーと共有する32文字以上のランダム値>
 DAIFUGO_ADMIN_URL=https://daifugo-together.fly.dev
+ADMIN_PIPELINE_URL=https://daifugo-together.fly.dev
+RULE_REPOSITORY_URL=git@github.com:qsona/daifugo-together.git
 ```
 
-`packages/pipeline` の各運用コマンドは、このファイルがあれば自動で読み込む。シェルで同名の環境変数を明示した場合は、その値を優先する。`.env.local` は必ず Git 管理外のまま、ファイルモード `0600` で保持する。
+`DAIFUGO_ADMIN_URL` は `judge` / `confirm`、`ADMIN_PIPELINE_URL` と `RULE_REPOSITORY_URL` は `implement*` が使う。`packages/pipeline` の各運用コマンドは、このファイルがあれば自動で読み込む。シェルで同名の環境変数を明示した場合は、その値を優先する。`.env.local` は必ず Git 管理外のまま、ファイルモード `0600` で保持する。
 
 macOS では ChatGPT アプリ同梱の Codex を優先して使う。それ以外の場所にあるバイナリを使う場合だけ `CODEX_BIN` を設定する。
 

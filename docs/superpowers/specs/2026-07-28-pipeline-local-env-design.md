@@ -17,6 +17,8 @@ secret out of Git and synchronizing it with the production Fly.io app.
   - `ADMIN_PIPELINE_TOKEN`: a newly generated 32-byte random value encoded as
     64 hexadecimal characters.
   - `DAIFUGO_ADMIN_URL=https://daifugo-together.fly.dev`
+  - `ADMIN_PIPELINE_URL=https://daifugo-together.fly.dev`
+  - `RULE_REPOSITORY_URL=git@github.com:qsona/daifugo-together.git`
 - Restrict `.env.local` to the current user with filesystem mode `0600`.
 - Set the same `ADMIN_PIPELINE_TOKEN` as a Fly.io secret on the
   `daifugo-together` application. The value must never be printed, committed,
@@ -33,7 +35,7 @@ administration credential.
 1. A test verifies that every pipeline runtime script uses the optional root
    environment file.
 2. Repository checks confirm `.env.local` is ignored and untracked.
-3. Local checks confirm the file exists, has mode `0600`, and contains both
+3. Local checks confirm the file exists, has mode `0600`, and contains all
    required variable names without printing their values.
 4. Fly.io reports the `ADMIN_PIPELINE_TOKEN` secret name as configured.
 5. A read-only request to the production screening endpoint returns an

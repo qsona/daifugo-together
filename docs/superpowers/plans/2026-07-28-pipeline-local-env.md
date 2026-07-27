@@ -105,6 +105,8 @@ Replace the repeated-export setup in `docs/runbooks/e6-local-screening.md` with 
 ```dotenv
 ADMIN_PIPELINE_TOKEN=<サーバーと共有する32文字以上のランダム値>
 DAIFUGO_ADMIN_URL=https://daifugo-together.fly.dev
+ADMIN_PIPELINE_URL=https://daifugo-together.fly.dev
+RULE_REPOSITORY_URL=git@github.com:qsona/daifugo-together.git
 ```
 
 State that pipeline commands load it automatically, explicit process environment values take precedence, and the file must remain untracked with mode `0600`.
@@ -150,7 +152,7 @@ Use a temporary mode-`0600` file, write a 32-byte random hexadecimal token and t
 ```sh
 umask 077
 pipeline_env_tmp="$(mktemp ./.env.local.tmp.XXXXXX)"
-printf 'ADMIN_PIPELINE_TOKEN=%s\nDAIFUGO_ADMIN_URL=https://daifugo-together.fly.dev\n' "$(openssl rand -hex 32)" > "$pipeline_env_tmp"
+printf 'ADMIN_PIPELINE_TOKEN=%s\nDAIFUGO_ADMIN_URL=https://daifugo-together.fly.dev\nADMIN_PIPELINE_URL=https://daifugo-together.fly.dev\nRULE_REPOSITORY_URL=git@github.com:qsona/daifugo-together.git\n' "$(openssl rand -hex 32)" > "$pipeline_env_tmp"
 mv "$pipeline_env_tmp" .env.local
 chmod 600 .env.local
 ```
@@ -164,6 +166,8 @@ git check-ignore -q .env.local
 test "$(stat -f '%Lp' .env.local)" = 600
 test "$(sed -n 's/^ADMIN_PIPELINE_TOKEN=//p' .env.local | awk 'length == 64 && /^[0-9a-f]+$/ { print "valid" }')" = valid
 test "$(sed -n 's/^DAIFUGO_ADMIN_URL=//p' .env.local)" = https://daifugo-together.fly.dev
+test "$(sed -n 's/^ADMIN_PIPELINE_URL=//p' .env.local)" = https://daifugo-together.fly.dev
+test "$(sed -n 's/^RULE_REPOSITORY_URL=//p' .env.local)" = git@github.com:qsona/daifugo-together.git
 ```
 
 Expected: every command exits 0 and prints no secret.
