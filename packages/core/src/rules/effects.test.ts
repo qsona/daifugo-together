@@ -119,8 +119,135 @@ describe('GE-04 effect pipeline and lifecycle hooks', () => {
     expect(transition.events).toContainEqual({
       type: 'ruleFired',
       ruleId: ruleEntry.ruleId,
-      messageKey: '',
+      messageKey: null,
     });
+  });
+
+  it('変換とafterPlay Effectを同じ発火ボレーで重複排除し優先度順に並べる', () => {
+    const effectEntry = entry('r0095-effect-first');
+    const transformEntry = {
+      ...entry('r0096-transform-second'),
+      position: 1,
+    };
+    const effectRule: RuleModule = {
+      meta: {
+        ruleId: effectEntry.ruleId,
+        name: 'Effect優先',
+        description: '優先度の高いEffect',
+        kind: 'original',
+        proposalId: 'fixture',
+        contractVersion: 1,
+        messages: { fired: 'Effect優先が発動' },
+      },
+      hooks: {
+        afterPlay: () => [
+          { type: 'reverseTurnOrder' },
+          { type: 'announce', messageKey: 'fired' },
+        ],
+      },
+    };
+    const transformRule: RuleModule = {
+      meta: {
+        ruleId: transformEntry.ruleId,
+        name: '変換は後',
+        description: '優先度の低い変換',
+        kind: 'original',
+        proposalId: 'fixture',
+        contractVersion: 1,
+        messages: {},
+      },
+      hooks: {
+        modifyLegality: () => ({ legal: true }),
+      },
+    };
+    const fixture = oneCardState([effectEntry, transformEntry]);
+    const fieldCard = createDeck().find((card) => card.rank === '10')!;
+    const state: GameState = {
+      ...fixture.state,
+      public: {
+        ...fixture.state.public,
+        field: {
+          current: {
+            play: {
+              kind: 'single',
+              cards: [fieldCard],
+              count: 1,
+              repRank: fieldCard.rank,
+            },
+            by: 'p2',
+          },
+          passedSinceLastPlay: [],
+        },
+      },
+    };
+    const transition = reduceGame(
+      fixture.config,
+      state,
+      {
+        type: 'play',
+        player: 'p1',
+        cards: [state.players.p1!.hand[0]!.id],
+      },
+      {
+        port: createInProcessRuleChainPort([effectRule, transformRule]),
+        setHistory: [],
+        setMemory: {},
+      },
+    );
+
+    expect(
+      transition.events
+        .filter((event) => event.type === 'ruleFired')
+        .map((event) => [event.ruleId, event.messageKey]),
+    ).toEqual([
+      [effectEntry.ruleId, 'fired'],
+      [transformEntry.ruleId, null],
+    ]);
+  });
+
+  it('leadNoLegalMove failsafeで破棄した変換は発火にも集計にも含めない', () => {
+    const ruleEntry = entry('r0094-failsafe-transform');
+    const module: RuleModule = {
+      meta: {
+        ruleId: ruleEntry.ruleId,
+        name: '全部禁止',
+        description: 'leadをすべて禁止してfailsafeになる',
+        kind: 'original',
+        proposalId: 'fixture',
+        contractVersion: 1,
+        messages: {},
+      },
+      hooks: {
+        modifyLegality: () => ({
+          legal: false,
+          reasonKey: 'fixture.forbidden',
+        }),
+      },
+    };
+    const fixture = oneCardState([ruleEntry]);
+    const transition = reduceGame(
+      fixture.config,
+      fixture.state,
+      {
+        type: 'play',
+        player: 'p1',
+        cards: [fixture.state.players.p1!.hand[0]!.id],
+      },
+      runtime(module),
+    );
+
+    expect(transition.events).toContainEqual({
+      type: 'failsafe',
+      reason: 'leadNoLegalMove',
+      relatedRuleIds: [ruleEntry.ruleId],
+    });
+    expect(
+      transition.events.some(
+        (event) =>
+          event.type === 'ruleFired' && event.ruleId === ruleEntry.ruleId,
+      ),
+    ).toBe(false);
+    expect(transition.state.public.firedRules).not.toContain(ruleEntry.ruleId);
   });
 
   it('不正Effectを返したルールは同じ遷移内の後続hookからも除外する', () => {
@@ -1056,7 +1183,7 @@ describe('GE-04 effect pipeline and lifecycle hooks', () => {
     expect(transition.events).toContainEqual({
       type: 'ruleFired',
       ruleId: ruleEntry.ruleId,
-      messageKey: '',
+      messageKey: null,
     });
     expect(transition.events).toContainEqual(
       expect.objectContaining({

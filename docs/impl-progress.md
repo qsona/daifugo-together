@@ -1159,6 +1159,17 @@ TS-02 から継続で未解決のもの:
 | E7-CX06-P1-3 | 既存RuleCutInの同時最大3枚・約0.75〜1.11秒・3件超combo表示を縦導線に再利用する | DS-02実装済み部品は段重ねをトーンとして確定している一方、E07本文は1件ずつ約1.5秒・3件超ログ縮退と記述 | 独立方向性レビューでDS設計との優先関係を裁定し、後続キュー・4件以上・reduced-motion・取り落としを仕上げる |
 | E7-CX06-P1-4 | `NEW RULE`既見集合はAppプロセス内だけ保持する | 永続既見データ契約は設計にない。演出の成立に不要なDB/Storageを増やさない | 再接続・別room・同一rule再発火の境界を確認。永続化は要求がない限り追加しない |
 
+### E7 CX-06 プロセス2（発動演出・集計の仕上げ）
+
+- 新規コンテキストの独立 GPT-5.6 Sol 方向性レビューは **GO**。Criticalなし、Important 6件（最終手の演出持越し、戦数になっていたcount、変換/Effect混在時の全体優先順、failsafeで破棄した変換の誤発火、空`messageKey` sentinel、4件超の名前欠落）をプロセス2で解消した
+- エンジンの発火は「1ルール×1権威バッチ」で正規化する。同じルールの変換と`afterPlay` Effectは1回にまとめ、採用announceの文言を優先し、全ルールをchain position順に並べる。後続の別hookは別の因果バッチとして再度countできる。`leadNoLegalMove` failsafeで基準値へ戻した変換は発火・集計の双方から除外する
+- 名前だけの発火は`messageKey: null`とし、Room配信にはserverが信頼済みregistry `meta.messages`から解決した`message: string | null`を載せる。旧診断用`messageKey`はannounce時だけ残す。解決器が例外を投げても名前fallbackへ閉じ込め、権威ゲーム進行は成功する
+- Roomはセット単位の`firedRuleCounts`を保持し、client再生回数と独立に権威`ruleFired`を計数する。`set_results.fired_rules`を加算migrationし、セット結果と同じSQLite transactionで`[{ruleId, ruleName, count}]`を保存する。旧行は正確な回数を復元できないため空配列とし、推測値を作らない
+- Connected Appの演出はゲーム画面内から全phase共通overlayへ移した。Roomイベント列全体の`seq` watermarkで古いsnapshotを排除し、最終手直後にintermission/setResultへ進んでもその場で表示する。`NEW RULE`は実際に表示された時点でApp session既見にし、roomをまたいで維持、App再起動でリセットする
+- DS-02の段重ね・短時間・chip方針を方向性レビューどおり採用し、4件超は3枚のリボンに加えて残りの全ルール名をコンパクト表示する。逐次1.5秒や実況ログへの巻き戻しは行わない
+- process2重点検証はcore/server/webの6 files / 97 tests、およびcore/server/web typecheckが成功。旧DB migration、同一SQLite再起動、正確なcount、信頼済み名称、表示経路例外、混在優先順、failsafe、最終手、stale seq、後続queue、別room既見、5件同時を含む
+- localhost許可付きの全体`CI=true pnpm verify`はformat/lint/design/typecheck、75 files / 525 tests、全package buildまで成功。sandbox内の初回だけHTTP/Socket系が`listen EPERM`になったため、同一コマンドを制限外で再実行して全件通過した
+
 ### E2で見つけた設計書の不整合
 
 - 冒頭改訂ノートは探索を `worker_threads` 1〜2本で実行すると決定済みだが、§3.1(d)・§4.4・§6-5には「初期はホスト直列、兆候が出たらworkerへ移行」という旧記述が残る。実装は改訂ノートを正とした。

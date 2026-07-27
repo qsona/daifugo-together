@@ -76,7 +76,7 @@ export type PublicGameEvent =
   | {
       type: 'ruleFired';
       ruleId: RuleId;
-      messageKey: string;
+      messageKey: string | null;
       params?: Record<string, string>;
     }
   | {

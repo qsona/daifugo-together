@@ -2,7 +2,12 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 
-import type { ReplayAction, ReplayInit, ReplayRecord } from '@daifugo/core';
+import type {
+  ReplayAction,
+  ReplayInit,
+  ReplayRecord,
+  SetResultView,
+} from '@daifugo/core';
 import Database from 'better-sqlite3';
 import { eq, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
@@ -51,6 +56,7 @@ const setResults = sqliteTable('set_results', {
   setId: text('set_id').primaryKey(),
   roomId: text('room_id').notNull(),
   resultJson: text('result_json').notNull(),
+  firedRules: text('fired_rules'),
   createdAt: integer('created_at').notNull(),
 });
 
@@ -203,6 +209,7 @@ export class SqlitePersistence implements RoomPersistencePort {
         set_id TEXT PRIMARY KEY,
         room_id TEXT NOT NULL,
         result_json TEXT NOT NULL,
+        fired_rules TEXT,
         created_at INTEGER NOT NULL
       );
       CREATE TABLE IF NOT EXISTS proposals (
@@ -249,6 +256,12 @@ export class SqlitePersistence implements RoomPersistencePort {
       this.#sqlite.exec(
         'ALTER TABLE users ADD COLUMN proposals_seen_at INTEGER',
       );
+    }
+    const setResultColumns = this.#sqlite
+      .prepare("PRAGMA table_info('set_results')")
+      .all() as Array<{ name: string }>;
+    if (!setResultColumns.some(({ name }) => name === 'fired_rules')) {
+      this.#sqlite.exec('ALTER TABLE set_results ADD COLUMN fired_rules TEXT');
     }
     const proposalColumns = this.#sqlite
       .prepare("PRAGMA table_info('proposals')")
@@ -341,12 +354,35 @@ export class SqlitePersistence implements RoomPersistencePort {
         next.phase === 'setResult' &&
         next.engine?.outcome
       ) {
+        const ruleNames = new Map(
+          (next.fixedRules ?? next.availableRules).map((rule) => [
+            rule.ruleId,
+            rule.name,
+          ]),
+        );
+        const firedRules: SetResultView['firedRules'] = Object.entries(
+          next.firedRuleCounts,
+        )
+          .filter(([, count]) => count > 0)
+          .sort(
+            ([left], [right]) =>
+              ((next.fixedRules ?? []).find((rule) => rule.ruleId === left)
+                ?.position ?? Number.MAX_SAFE_INTEGER) -
+              ((next.fixedRules ?? []).find((rule) => rule.ruleId === right)
+                ?.position ?? Number.MAX_SAFE_INTEGER),
+          )
+          .map(([ruleId, count]) => ({
+            ruleId,
+            ruleName: ruleNames.get(ruleId) ?? ruleId,
+            count,
+          }));
         this.#db
           .insert(setResults)
           .values({
             setId: next.engine.setId,
             roomId: next.roomId,
             resultJson: JSON.stringify(next.engine.outcome),
+            firedRules: JSON.stringify(firedRules),
             createdAt: now,
           })
           .onConflictDoNothing()
@@ -372,7 +408,15 @@ export class SqlitePersistence implements RoomPersistencePort {
       .from(setResults)
       .where(eq(setResults.setId, setId))
       .get();
-    return row ? JSON.parse(row.resultJson) : undefined;
+    return row
+      ? {
+          ...(JSON.parse(row.resultJson) as object),
+          firedRules:
+            row.firedRules === null
+              ? []
+              : (JSON.parse(row.firedRules) as SetResultView['firedRules']),
+        }
+      : undefined;
   }
 
   checkHealth(): boolean {

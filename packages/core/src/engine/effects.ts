@@ -911,37 +911,33 @@ export function executeEffectHook(
       }
     }
   }
-  const announcedRules = new Set<string>();
-  for (const entry of batch.entries) {
-    if (
-      entry.effect.type === 'announce' &&
-      entry.resolution.status === 'adopted'
-    ) {
-      announcedRules.add(entry.ruleId);
-      events.push({
-        type: 'ruleFired',
-        ruleId: entry.ruleId,
-        messageKey: entry.effect.messageKey,
-        ...(entry.effect.params === undefined
-          ? {}
-          : { params: entry.effect.params }),
-      });
-    }
-  }
   for (const [ruleId, ruleEntries] of Map.groupBy(
     batch.entries,
     (entry) => entry.ruleId,
   )) {
-    if (
-      !announcedRules.has(ruleId) &&
-      ruleEntries.some(
-        (entry) =>
-          entry.effect.type !== 'announce' &&
-          ['adopted', 'deduped'].includes(entry.resolution.status),
-      )
-    ) {
-      events.push({ type: 'ruleFired', ruleId, messageKey: '' });
-    }
+    const announcement = ruleEntries.find(
+      (entry) =>
+        entry.effect.type === 'announce' &&
+        entry.resolution.status === 'adopted',
+    );
+    const realized = ruleEntries.some(
+      (entry) =>
+        entry.effect.type !== 'announce' &&
+        ['adopted', 'deduped'].includes(entry.resolution.status),
+    );
+    if (!announcement && !realized) continue;
+    events.push({
+      type: 'ruleFired',
+      ruleId,
+      messageKey:
+        announcement?.effect.type === 'announce'
+          ? announcement.effect.messageKey
+          : null,
+      ...(announcement?.effect.type === 'announce' &&
+      announcement.effect.params !== undefined
+        ? { params: announcement.effect.params }
+        : {}),
+    });
   }
 
   const firedRules = new Set(nextState.public.firedRules);

@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -12,7 +13,7 @@ import type { CardView } from './components/Card';
 import type { MemberView as MemberListView } from './components/MemberList';
 import type { RankView } from './components/RankRow';
 import type { TableSeat } from './components/Table';
-import type { RuleActivation } from './components/RuleCutIn';
+import { RuleCutIn, type RuleActivation } from './components/RuleCutIn';
 import type { SeatFinish } from './screens/GameScreen';
 import type { RuleVote, SetFunRating } from './screens/SetResultScreen';
 import {
@@ -518,25 +519,24 @@ function ConnectedApp({
       setActivationVolleys([]);
       setLastActivation(null);
     }
-    const fired = room.events.filter(
-      (event) =>
-        event.t === 'ruleFired' && event.seq > lastRuleEventSeq.current,
-    );
-    if (fired.length === 0) return;
+    const freshEvents = room.events
+      .filter((event) => event.seq > lastRuleEventSeq.current)
+      .toSorted((left, right) => left.seq - right.seq);
+    if (freshEvents.length === 0) return;
     lastRuleEventSeq.current = Math.max(
       lastRuleEventSeq.current,
-      ...fired.map((event) => event.seq),
+      ...freshEvents.map((event) => event.seq),
     );
+    const fired = freshEvents.filter((event) => event.t === 'ruleFired');
     const unique = new Map<string, RuleActivation>();
     for (const event of fired) {
       if (event.t !== 'ruleFired') continue;
-      const isFirstSeen = !seenRuleIds.current.has(event.ruleId);
-      seenRuleIds.current.add(event.ruleId);
       if (!unique.has(event.ruleId)) {
         unique.set(event.ruleId, {
           ruleId: event.ruleId,
           name: event.name,
-          isFirstSeen,
+          ...(event.message === null ? {} : { effectLabel: event.message }),
+          isFirstSeen: false,
         });
       }
     }
@@ -600,7 +600,20 @@ function ConnectedApp({
   const invoke = (operation: Promise<unknown>) => {
     void operation.catch(() => undefined);
   };
-  const activations = activationVolleys[0] ?? [];
+  const currentActivationVolley = activationVolleys[0];
+  const activations = useMemo(
+    () =>
+      (currentActivationVolley ?? []).map((activation) => ({
+        ...activation,
+        isFirstSeen: !seenRuleIds.current.has(activation.ruleId),
+      })),
+    [currentActivationVolley],
+  );
+  useEffect(() => {
+    for (const activation of activations) {
+      seenRuleIds.current.add(activation.ruleId);
+    }
+  }, [activations]);
   const finishRuleCutIn = useCallback(() => {
     if (activations.length > 0) {
       setLastActivation({
@@ -611,7 +624,10 @@ function ConnectedApp({
     setActivationVolleys((volleys) => volleys.slice(1));
   }, [activations]);
   const show = (content: ReactNode) => (
-    <ConnectionStatus state={state}>{content}</ConnectionStatus>
+    <>
+      <ConnectionStatus state={state}>{content}</ConnectionStatus>
+      <RuleCutIn activations={activations} onDone={finishRuleCutIn} />
+    </>
   );
 
   if (room?.phase === 'waiting') {
@@ -675,9 +691,9 @@ function ConnectedApp({
               : leadMember.displayName
             : null
         }
-        activations={activations}
+        activations={[]}
         onCutInDone={finishRuleCutIn}
-        lastActivation={lastActivation}
+        lastActivation={activations.length > 0 ? null : lastActivation}
         hand={cards(game.yourHand)}
         selectedCardIds={selectedCardIds}
         {...(cardHints ? { cardHints } : {})}

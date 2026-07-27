@@ -2,7 +2,14 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { enumerateLegalPlays } from '@daifugo/core';
+import {
+  enumerateLegalPlays,
+  TITLE_BY_STANDING,
+  type GameResult,
+  type SetOutcome,
+  type Standing,
+} from '@daifugo/core';
+import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { SqlitePersistence } from './persistence.js';
@@ -44,6 +51,127 @@ describe('SQLite persistence', () => {
     expect(reopened.sessions.resolve(issued.userToken)).toEqual({
       ...issued,
       displayName: '永続ユーザー',
+    });
+    reopened.close();
+  });
+
+  it('旧set_resultsへ加算migrationし、不明な発火回数を捏造しない', () => {
+    const path = databasePath();
+    const legacy = new Database(path);
+    legacy.exec(`
+      CREATE TABLE set_results (
+        set_id TEXT PRIMARY KEY,
+        room_id TEXT NOT NULL,
+        result_json TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      );
+      INSERT INTO set_results
+        (set_id, room_id, result_json, created_at)
+      VALUES
+        ('legacy-set', 'legacy-room', '{"completion":"completed"}', 1);
+    `);
+    legacy.close();
+
+    const migrated = new SqlitePersistence(path);
+    expect(migrated.result('legacy-set')).toEqual({
+      completion: 'completed',
+      firedRules: [],
+    });
+    migrated.close();
+  });
+
+  it('正確な発火回数と信頼済みルール名をset resultと同時保存し再起動後も復元する', () => {
+    const path = databasePath();
+    const persistence = new SqlitePersistence(path);
+    const rule = {
+      ruleId: 'r0001-persistent-fired',
+      name: '永続発火',
+      position: 0,
+      priority: {
+        score: 0,
+        activatedAt: 1,
+        ruleId: 'r0001-persistent-fired',
+      },
+      bundleHash: 'fixture',
+      contractVersion: 1,
+    };
+    const rooms = new RoomManager({
+      ...persistence.roomManagerOptions(),
+      availableRules: () => [rule],
+      createRoomId: () => 'fired-result-room',
+      createMemberId: () => 'fired-result-host',
+      randomIndex: () => 0,
+      reducer: { random: () => 0.999_999 },
+    });
+    const created = rooms.create({
+      userId: 'fired-result-user',
+      displayName: '発火ユーザー',
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const started = rooms.apply(created.value.room.roomId, {
+      type: 'start',
+      memberId: created.value.member.memberId,
+      now: 100,
+      setSeed: 'fired-result-seed',
+    })!;
+    const engine = started.state.engine!;
+    const standings = engine.members.map((member, index) => {
+      const standing = (index + 1) as Standing;
+      return {
+        player: member.id,
+        standing,
+        title: TITLE_BY_STANDING[standing],
+      };
+    });
+    const gameResult = {
+      gameIndex: 0,
+      standings,
+      firedRuleIds: [rule.ruleId],
+    } satisfies GameResult;
+    const outcome = {
+      setId: engine.setId,
+      standings: standings.map((entry) => ({
+        player: entry.player,
+        totalStanding: entry.standing,
+        title: entry.title,
+        points: 1,
+      })),
+      members: engine.members,
+      wasActiveRuleIds: [rule.ruleId],
+      firedRuleIds: [rule.ruleId],
+      results: [gameResult],
+      completion: 'drained',
+      gamesPlayed: 1,
+    } satisfies SetOutcome;
+    const resultState = {
+      ...started.state,
+      phase: 'setResult' as const,
+      firedRuleCounts: { [rule.ruleId]: 3 },
+      engine: {
+        ...engine,
+        phase: { name: 'setResult' as const },
+        results: [gameResult],
+        outcome,
+      },
+    };
+    persistence.commit(
+      started.state,
+      { type: 'requestDrain', now: 101 },
+      { state: resultState, events: [], accepted: true },
+    );
+    persistence.close();
+
+    const reopened = new SqlitePersistence(path);
+    expect(reopened.result(engine.setId)).toMatchObject({
+      completion: 'drained',
+      firedRules: [
+        {
+          ruleId: rule.ruleId,
+          ruleName: '永続発火',
+          count: 3,
+        },
+      ],
     });
     reopened.close();
   });

@@ -679,6 +679,7 @@ describe('CX-06: 実ルール発動イベントの演出', () => {
             t: 'ruleFired',
             ruleId: 'r0001-revolution',
             name: '革命返し',
+            message: '革命返しが発動!',
             messageKey: 'fired',
           },
         ],
@@ -686,6 +687,7 @@ describe('CX-06: 実ルール発動イベントの演出', () => {
     });
 
     expect(await screen.findByText('革命返し')).toBeTruthy();
+    expect(screen.getByText('革命返しが発動!')).toBeTruthy();
     expect(screen.getByText('NEW RULE')).toBeTruthy();
 
     await user.click(screen.getByRole('button', { name: '演出をとばす' }));
@@ -701,12 +703,157 @@ describe('CX-06: 実ルール発動イベントの演出', () => {
             t: 'ruleFired',
             ruleId: 'r0001-revolution',
             name: '革命返し',
+            message: '革命返しが発動!',
             messageKey: 'fired',
           },
         ],
       });
     });
     expect(screen.queryByRole('button', { name: '演出をとばす' })).toBeNull();
+  });
+
+  it('最終手でsetResultへ進んでも発火を次セットへ持ち越さず表示する', async () => {
+    const initial = tutorialHintRoom('community', []);
+    const observable = observableTutorialClient(initial);
+    render(<App client={observable.client} />);
+
+    act(() => {
+      observable.setRoom({
+        ...initial,
+        v: 8,
+        phase: 'setResult',
+        game: null,
+        setResult: {
+          standings: [],
+          firedRules: [{ ruleId: 'r-final', ruleName: 'あがり花火', count: 1 }],
+          respondBy: Date.now() + 10_000,
+        },
+        events: [
+          {
+            seq: 30,
+            t: 'ruleFired',
+            ruleId: 'r-final',
+            name: 'あがり花火',
+            message: '最後の一手で発動!',
+          },
+          { seq: 31, t: 'gameEnded' },
+          { seq: 32, t: 'setEnded' },
+        ],
+      });
+    });
+
+    expect(await screen.findByText('最後の一手で発動!')).toBeTruthy();
+    expect(
+      await screen.findByRole('button', { name: '演出をとばす' }),
+    ).toBeTruthy();
+  });
+
+  it('非rule eventを含むseq watermarkより古い発火snapshotを再生しない', () => {
+    const initial = tutorialHintRoom('community', []);
+    const observable = observableTutorialClient(initial);
+    render(<App client={observable.client} />);
+
+    act(() => {
+      observable.setRoom({
+        ...initial,
+        v: 9,
+        events: [{ seq: 50, t: 'passed', seat: 1 }],
+      });
+    });
+    act(() => {
+      observable.setRoom({
+        ...initial,
+        v: 10,
+        events: [
+          {
+            seq: 49,
+            t: 'ruleFired',
+            ruleId: 'r-stale',
+            name: '古い発火',
+            message: null,
+          },
+        ],
+      });
+    });
+
+    expect(screen.queryByText('古い発火')).toBeNull();
+    expect(screen.queryByRole('button', { name: '演出をとばす' })).toBeNull();
+  });
+
+  it('後続ボレーを順に再生し、別roomでも同一App sessionの既見を維持する', async () => {
+    const user = userEvent.setup();
+    const initial = tutorialHintRoom('community', []);
+    const observable = observableTutorialClient(initial);
+    render(<App client={observable.client} />);
+    const fired = (seq: number, room = initial) => ({
+      ...room,
+      v: seq,
+      events: [
+        {
+          seq,
+          t: 'ruleFired' as const,
+          ruleId: 'r-repeat',
+          name: '繰り返し',
+          message: null,
+        },
+      ],
+    });
+
+    act(() => {
+      observable.setRoom(fired(60));
+    });
+    expect(await screen.findByText('NEW RULE')).toBeTruthy();
+    act(() => {
+      observable.setRoom({
+        ...initial,
+        v: 61,
+        events: [
+          {
+            seq: 61,
+            t: 'ruleFired',
+            ruleId: 'r-later',
+            name: 'あとから',
+            message: null,
+          },
+        ],
+      });
+    });
+    await user.click(screen.getByRole('button', { name: '演出をとばす' }));
+    expect(await screen.findByText('あとから')).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: '演出をとばす' }));
+
+    const anotherRoom = { ...initial, roomId: 'another-room' };
+    act(() => {
+      observable.setRoom(fired(1, anotherRoom));
+    });
+    expect(await screen.findByText('繰り返し')).toBeTruthy();
+    expect(screen.queryByText('NEW RULE')).toBeNull();
+  });
+
+  it('5件同時発火でも全ルール名を表示できる', async () => {
+    const initial = tutorialHintRoom('community', []);
+    const observable = observableTutorialClient(initial);
+    render(<App client={observable.client} />);
+
+    act(() => {
+      observable.setRoom({
+        ...initial,
+        v: 70,
+        events: Array.from({ length: 5 }, (_, index) => ({
+          seq: 70 + index,
+          t: 'ruleFired' as const,
+          ruleId: `r-overflow-${String(index + 1)}`,
+          name: `発火${String(index + 1)}`,
+          message: null,
+        })),
+      });
+    });
+
+    for (let index = 1; index <= 3; index += 1) {
+      expect(await screen.findByText(`発火${String(index)}`)).toBeTruthy();
+    }
+    expect(screen.getByText(/ほか: 発火4・発火5/)).toBeTruthy();
+    expect(screen.getByLabelText('5件同時発動')).toBeTruthy();
   });
 
   it('セット結果snapshotの発動ルールを評価機能なしでも一覧表示する', () => {

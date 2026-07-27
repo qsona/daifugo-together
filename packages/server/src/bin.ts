@@ -133,6 +133,8 @@ const app = createAppServer({
       availableRules: (setId) => rules.availableRules(setId),
       reducer: {
         rulePortForSet: (setId) => rules.rulePortForSet(setId),
+        resolveRuleMessage: (ruleId, messageKey, params) =>
+          rules.resolveMessage(ruleId, messageKey, params),
         releaseRulePort: (setId) => rules.releaseRulePort(setId),
         onRuleIncident: (incident) => {
           rules.disableRuleInSet(incident.setId, incident.ruleId);

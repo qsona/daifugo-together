@@ -338,6 +338,20 @@ export class RuleRegistryService {
     return sortRuleChain(entries);
   }
 
+  resolveMessage(
+    ruleId: string,
+    messageKey: string,
+    params: Readonly<Record<string, string>> = {},
+  ): string | null {
+    const registrations = this.#codeById.get(ruleId);
+    if (registrations?.length !== 1) return null;
+    const template = registrations[0]!.module.meta.messages[messageKey];
+    if (template === undefined) return null;
+    return template.replaceAll(/\{([A-Za-z0-9_-]+)\}/g, (match, key: string) =>
+      Object.hasOwn(params, key) ? params[key]! : match,
+    );
+  }
+
   aiRuleBundles(entries: readonly RuleChainEntry[]): AiRuleBundleRef[] {
     return entries.map((entry) => {
       const registration = this.#codeById.get(entry.ruleId);

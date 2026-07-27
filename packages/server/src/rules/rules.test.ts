@@ -614,6 +614,8 @@ describe('CX-04 rule registry', () => {
       reducer: {
         random: () => 0.999_999,
         rulePortForSet: (setId) => service.rulePortForSet(setId),
+        resolveRuleMessage: (ruleId, messageKey, params) =>
+          service.resolveMessage(ruleId, messageKey, params),
         releaseRulePort: (setId) => service.releaseRulePort(setId),
         onRuleIncident: (incident) => {
           service.disableRuleInSet(incident.setId, incident.ruleId);
@@ -665,6 +667,78 @@ describe('CX-04 rule registry', () => {
 });
 
 describe('CX-05 rule release', () => {
+  it('発動文言の解決失敗を名前fallbackへ閉じ込めてゲーム進行を止めない', () => {
+    const { persistence, register } = setup();
+    register({ id: 'r0001-fire-forget', slug: 'fire-forget', name: '耐性' });
+    const registration = codeRule('r0001-fire-forget', '耐性', {
+      messages: { fired: '耐性が発動' },
+    });
+    registration.module.hooks.afterPlay = () => [
+      { type: 'announce', messageKey: 'fired' },
+    ];
+    const service = new RuleRegistryService(persistence.rules, [registration], {
+      now: () => 2_000,
+    });
+    let memberSequence = 0;
+    const rooms = new RoomManager({
+      availableRules: (setId) => service.availableRules(setId),
+      createRoomId: () => 'fire-forget-room',
+      createMemberId: () => `fire-forget-${String(++memberSequence)}`,
+      randomIndex: () => 0,
+      reducer: {
+        random: () => 0.999_999,
+        rulePortForSet: (setId) => service.rulePortForSet(setId),
+        resolveRuleMessage: () => {
+          throw new Error('display path failed');
+        },
+      },
+    });
+    const created = rooms.create({
+      userId: 'fire-forget-user',
+      displayName: '耐性確認',
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const started = rooms.apply(created.value.room.roomId, {
+      type: 'start',
+      memberId: created.value.member.memberId,
+      now: 2_100,
+      setSeed: 'fire-forget-set',
+    })!;
+    const engine = started.state.engine!;
+    if (engine.phase.name !== 'gameInProgress') return;
+    const player = engine.currentGame!.public.turn!;
+    const legal = enumerateLegalPlays(
+      {
+        gameIndex: engine.phase.gameIndex,
+        seats: engine.members.map((member) => member.id),
+        gameSeed: `${engine.setSeed}:${String(engine.phase.gameIndex)}`,
+        ruleChain: engine.ruleChain,
+      },
+      engine.currentGame!,
+      player,
+    );
+    const played = rooms.apply(started.state.roomId, {
+      type: 'play',
+      memberId: player,
+      turnSeq: started.state.turnSeq,
+      cards: legal[0]!.cards.map((card) => card.id),
+      now: 2_101,
+    });
+
+    expect(played?.accepted).toBe(true);
+    expect(played?.state.lastEvents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          t: 'ruleFired',
+          ruleId: 'r0001-fire-forget',
+          message: null,
+          messageKey: 'fired',
+        }),
+      ]),
+    );
+  });
+
   it('デプロイ済みコードをpending_enable登録し、有効化とreleasedを原子的に確定する', () => {
     const { persistence } = setup();
     const proposal = persistence.proposals.findById('proposal-r0001-a');
@@ -772,6 +846,8 @@ describe('CX-05 rule release', () => {
       reducer: {
         random: () => 0.999_999,
         rulePortForSet: (setId) => service.rulePortForSet(setId),
+        resolveRuleMessage: (ruleId, messageKey, params) =>
+          service.resolveMessage(ruleId, messageKey, params),
         releaseRulePort: (setId) => service.releaseRulePort(setId),
       },
     });
@@ -823,6 +899,7 @@ describe('CX-05 rule release', () => {
           t: 'ruleFired',
           ruleId: 'r0001-a',
           name: 'ルールA',
+          message: 'ルールA!',
           messageKey: 'fired',
         }),
       ]),
@@ -858,6 +935,7 @@ describe('CX-05 rule release', () => {
       ...played!.state,
       phase: 'setResult',
       setRespondBy: 3_000,
+      firedRuleCounts: { 'r0001-a': 3 },
       engine: {
         ...played!.state.engine!,
         phase: { name: 'setResult' },
@@ -866,7 +944,7 @@ describe('CX-05 rule release', () => {
       },
     } satisfies RoomState;
     expect(viewFor(setResultState, player).setResult?.firedRules).toEqual([
-      { ruleId: 'r0001-a', ruleName: 'ルールA', count: 1 },
+      { ruleId: 'r0001-a', ruleName: 'ルールA', count: 3 },
     ]);
 
     expect(service.synchronizeCodeRegistry()).toMatchObject({

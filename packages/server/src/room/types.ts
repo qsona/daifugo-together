@@ -70,6 +70,8 @@ export interface RoomState {
   lobbyExpiresAt: number;
   abandonAt: number | null;
   lastEvents: RoomGameEvent[];
+  /** セット内の権威発火回数。client event の再生回数とは独立。 */
+  firedRuleCounts: Record<string, number>;
 }
 
 export type RoomAction =
@@ -183,6 +185,11 @@ export interface RoomReducerOptions {
   rulePort?: RuleChainPort;
   availableRulesForSet?: (setId: string) => RuleChainEntry[];
   rulePortForSet?: (setId: string) => RuleChainPort;
+  resolveRuleMessage?: (
+    ruleId: string,
+    messageKey: string,
+    params?: Readonly<Record<string, string>>,
+  ) => string | null;
   releaseRulePort?: (setId: string) => void;
   onRuleIncident?: (incident: {
     setId: string;

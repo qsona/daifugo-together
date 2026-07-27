@@ -471,6 +471,9 @@ function reducePlay(
     player: action.player,
     play: interpreted.play,
   };
+  const authoritativeInfluenced = evaluated.failsafeActivated
+    ? []
+    : evaluated.influenced;
   let nextState: GameState = {
     ...evaluated.state,
     public: {
@@ -483,7 +486,7 @@ function reducePlay(
       firedRules: [
         ...new Set([
           ...evaluated.state.public.firedRules,
-          ...evaluated.influenced,
+          ...authoritativeInfluenced,
         ]),
       ],
       turnCount: evaluated.state.public.turnCount + 1,
@@ -522,28 +525,30 @@ function reducePlay(
     interpreted.play,
   );
   nextState = effects.state;
-  const announcedAfterPlay = new Set(
+  const afterPlayFired = new Map(
     effects.events.flatMap((event) =>
-      event.type === 'ruleFired' ? [event.ruleId] : [],
+      event.type === 'ruleFired' ? [[event.ruleId, event] as const] : [],
     ),
   );
-  events.push(
-    ...evaluated.influenced
-      .filter((ruleId) => !announcedAfterPlay.has(ruleId))
-      .sort(
-        (left, right) =>
-          (config.ruleChain.find((entry) => entry.ruleId === left)?.position ??
-            Number.MAX_SAFE_INTEGER) -
-          (config.ruleChain.find((entry) => entry.ruleId === right)?.position ??
-            Number.MAX_SAFE_INTEGER),
-      )
-      .map((ruleId) => ({
-        type: 'ruleFired' as const,
+  for (const ruleId of authoritativeInfluenced) {
+    if (!afterPlayFired.has(ruleId)) {
+      afterPlayFired.set(ruleId, {
+        type: 'ruleFired',
         ruleId,
-        messageKey: '',
-      })),
+        messageKey: null,
+      });
+    }
+  }
+  events.push(
+    ...[...afterPlayFired.values()].sort(
+      (left, right) =>
+        (config.ruleChain.find((entry) => entry.ruleId === left.ruleId)
+          ?.position ?? Number.MAX_SAFE_INTEGER) -
+        (config.ruleChain.find((entry) => entry.ruleId === right.ruleId)
+          ?.position ?? Number.MAX_SAFE_INTEGER),
+    ),
+    ...effects.events.filter((event) => event.type !== 'ruleFired'),
   );
-  events.push(...effects.events);
 
   if (nextState.public.turnCount > TURN_LIMIT) {
     const finished = finishForTurnLimit(

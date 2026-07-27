@@ -84,7 +84,10 @@ export type RoomGameEvent = { seq: number } & (
       t: 'ruleFired';
       ruleId: string;
       name: string;
-      messageKey: string;
+      /** Trusted rule metadata から server が解決した表示文言。 */
+      message: string | null;
+      /** 旧クライアントの診断用。名前だけの発火では省略する。 */
+      messageKey?: string;
     }
 );
 
@@ -103,7 +106,7 @@ export type PublicPlayView =
       t: 'gameEnded';
       standings: { seat: SeatId; rank: Standing; title: Title }[];
     }
-  | { t: 'ruleFired'; ruleId: string; messageKey: string }
+  | { t: 'ruleFired'; ruleId: string; messageKey: string | null }
   | { t: 'failsafe'; reason: 'leadNoLegalMove' | 'turnLimit' }
   | { t: 'playerRetired'; seat: SeatId; cardCount: number; rank: Standing }
   | { t: 'cardsMoved'; count: number };

@@ -107,6 +107,19 @@
   white-space: nowrap;
 }
 
+.overflow {
+  max-width: 92%;
+  margin: 0;
+  padding: var(--space-1) var(--space-3);
+  border: var(--border-thin) solid var(--color-border-strong);
+  border-radius: var(--radius-s);
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-bold);
+  text-align: center;
+}
+
 /* 初登場のルールだけ、金の NEW RULE 面を審判が掲げる変種にする。 */
 .newRule {
   background: var(--color-gold-400);

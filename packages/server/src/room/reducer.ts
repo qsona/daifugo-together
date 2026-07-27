@@ -96,6 +96,7 @@ export function createRoomState(input: CreateRoomInput): RoomState {
     lobbyExpiresAt: input.now + (input.lobbyTtlMs ?? DEFAULT_LOBBY_TTL_MS),
     abandonAt: null,
     lastEvents: [],
+    firedRuleCounts: {},
   };
 }
 
@@ -129,9 +130,18 @@ function committed(
   events: RoomGameEventPayload[],
 ): RoomTransition {
   const numbered = numberedEvents(state, events);
+  const firedRuleCounts = {
+    ...(patch.firedRuleCounts ?? state.firedRuleCounts),
+  };
+  for (const event of events) {
+    if (event.t === 'ruleFired') {
+      firedRuleCounts[event.ruleId] = (firedRuleCounts[event.ruleId] ?? 0) + 1;
+    }
+  }
   const nextState: RoomState = {
     ...state,
     ...patch,
+    firedRuleCounts,
     v: state.v + 1,
     nextEventSeq: numbered.nextEventSeq,
     lastEvents: structuredClone(numbered.events),
@@ -233,6 +243,7 @@ function publicEngineEvents(
   members: readonly RoomMember[],
   rules: readonly RuleChainEntry[],
   events: readonly (EngineEvent | SetEndedEvent)[],
+  resolveRuleMessage?: RoomReducerOptions['resolveRuleMessage'],
 ): RoomGameEventPayload[] {
   const output: RoomGameEventPayload[] = [];
   for (const event of events) {
@@ -271,14 +282,31 @@ function publicEngineEvents(
       case 'setEnded':
         output.push({ t: 'setEnded' });
         break;
-      case 'ruleFired':
+      case 'ruleFired': {
+        let message: string | null = null;
+        if (event.messageKey !== null) {
+          try {
+            message =
+              resolveRuleMessage?.(
+                event.ruleId,
+                event.messageKey,
+                event.params,
+              ) ?? null;
+          } catch {
+            // 演出文言の解決失敗は権威ゲーム進行へ伝播させない。
+          }
+        }
         output.push({
           t: 'ruleFired',
           ruleId: event.ruleId,
           name: eventRuleName(rules, event.ruleId),
-          messageKey: event.messageKey,
+          message,
+          ...(event.messageKey === null
+            ? {}
+            : { messageKey: event.messageKey }),
         });
         break;
+      }
       case 'gameStarted':
       case 'turnChanged':
       case 'failsafe':
@@ -405,6 +433,7 @@ function startSet(
       members: settlement.members,
       availableRules,
       fixedRules,
+      firedRuleCounts: {},
       engine: started.state,
       setNo,
       turnDeadlineAt: deadlineAtForTurn(
@@ -433,7 +462,12 @@ function startSet(
       })),
       { t: 'setStarted', setNo },
       { t: 'gameStarted', gameNo: 1 },
-      ...publicEngineEvents(members, fixedRules, started.events),
+      ...publicEngineEvents(
+        members,
+        fixedRules,
+        started.events,
+        options.resolveRuleMessage,
+      ),
       ...memberLeftEvents(settlement.removedMemberIds),
     ],
   );
@@ -968,6 +1002,7 @@ function gameAction(
     state.members,
     state.fixedRules ?? [],
     transition.events,
+    options.resolveRuleMessage,
   );
   if (action.type === 'autoAct' && action.reason === 'turnTimeout') {
     engineEvents.unshift({ t: 'turnTimeout', seat: actor.seatId });
@@ -1035,6 +1070,7 @@ function advanceIntermission(
       state.members,
       state.fixedRules ?? [],
       transition.events,
+      options.resolveRuleMessage,
     ),
     ...memberLeftEvents(settlement.removedMemberIds),
   ];
@@ -1108,6 +1144,7 @@ function requestDrain(
         state.members,
         state.fixedRules ?? [],
         transition.events,
+        options.resolveRuleMessage,
       ),
       ...memberLeftEvents(settlement.removedMemberIds),
     ],

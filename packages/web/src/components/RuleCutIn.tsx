@@ -39,6 +39,7 @@ type RuleCutInProps = {
  */
 export function RuleCutIn({ activations, onDone }: RuleCutInProps) {
   const shown = activations.slice(0, MAX_VISIBLE);
+  const overflow = activations.slice(MAX_VISIBLE);
   const total = HOLD_MS + STAGGER_MS * Math.max(0, shown.length - 1);
 
   useEffect(() => {
@@ -91,6 +92,11 @@ export function RuleCutIn({ activations, onDone }: RuleCutInProps) {
           >
             ×{activations.length}
           </span>
+        )}
+        {overflow.length > 0 && (
+          <p className={styles.overflow}>
+            ほか: {overflow.map((activation) => activation.name).join('・')}
+          </p>
         )}
       </div>
     </>

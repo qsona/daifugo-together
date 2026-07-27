@@ -256,13 +256,20 @@ function setResultView(state: RoomState): SetResultView | null {
       ),
       points: standing.points,
     })),
-    firedRules: engine.outcome.firedRuleIds.map((ruleId) => ({
-      ruleId,
-      ruleName: ruleNames.get(ruleId) ?? ruleId,
-      count: engine.results.filter((result) =>
-        result.firedRuleIds.includes(ruleId),
-      ).length,
-    })),
+    firedRules: Object.entries(state.firedRuleCounts)
+      .filter(([, count]) => count > 0)
+      .sort(
+        ([left], [right]) =>
+          (rules.find((rule) => rule.ruleId === left)?.position ??
+            Number.MAX_SAFE_INTEGER) -
+          (rules.find((rule) => rule.ruleId === right)?.position ??
+            Number.MAX_SAFE_INTEGER),
+      )
+      .map(([ruleId, count]) => ({
+        ruleId,
+        ruleName: ruleNames.get(ruleId) ?? ruleId,
+        count,
+      })),
     respondBy: state.setRespondBy,
   };
 }
