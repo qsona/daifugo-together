@@ -33,6 +33,8 @@ import { GameResultScreen } from './screens/GameResultScreen';
 import { GameScreen } from './screens/GameScreen';
 import { MenuScreen } from './screens/MenuScreen';
 import { MyProposalsScreen } from './screens/MyProposalsScreen';
+import { ActiveRulesScreen } from './screens/ActiveRulesScreen';
+import { RuleDexScreen } from './screens/RuleDexScreen';
 import {
   getBrowserMultiplayerClient,
   type MultiplayerClient,
@@ -41,6 +43,10 @@ import { ConnectionStatus } from './multiplayer/ConnectionStatus';
 import { PlaySheet } from './screens/PlaySheet';
 import { getBrowserProposalClient, type ProposalApi } from './proposal/client';
 import { ProposalFormScreen } from './screens/ProposalFormScreen';
+import {
+  getBrowserRuleCatalogClient,
+  type RuleCatalogApi,
+} from './rules/client';
 import { SetResultScreen } from './screens/SetResultScreen';
 import { TitleScreen } from './screens/TitleScreen';
 import { WaitingRoomScreen } from './screens/WaitingRoomScreen';
@@ -95,6 +101,39 @@ const DEMO_PROPOSAL_API: ProposalApi = {
   markProposalsSeen: async () => undefined,
 };
 
+const DEMO_RULES = DEMO_FIRED_RULES.map((rule) => ({
+  ruleId: rule.ruleId,
+  name: rule.name,
+}));
+
+const DEMO_RULE_CATALOG_API: RuleCatalogApi = {
+  list: async ({ limit = 30, offset = 0 } = {}) => ({
+    summary: {
+      implemented: DEMO_RULES.length,
+      active: DEMO_RULES.length,
+      removed: 0,
+      prefectureCoverage: 1,
+    },
+    page: {
+      total: DEMO_RULES.length,
+      limit,
+      offset,
+    },
+    items: DEMO_RULES.slice(offset, offset + limit).map((rule, index) => ({
+      id: rule.ruleId,
+      name: rule.name,
+      description: '対局にひとひねり加えるルールです。',
+      kind: index === 0 ? 'local' : 'original',
+      prefecture: index === 0 ? '埼玉県' : null,
+      status: 'active',
+      priority: null,
+      popularity: null,
+      implementedAt: Date.now(),
+      removedAt: null,
+    })),
+  }),
+};
+
 /**
  * フェーズ 1 の画面の組み立て。
  * 各画面は表示専用で、ここが渡しているのは固定データ(`fixtures/demo`)。
@@ -112,6 +151,9 @@ function DemoApp({ storage }: { storage: PlayedBeforeStorage | undefined }) {
   const [playedBefore] = useState(() => hasPlayedBefore(storage));
   const [volleyIndex, setVolleyIndex] = useState<number | null>(null);
   const [lastVolleyIndex, setLastVolleyIndex] = useState<number | null>(null);
+  const [activeRulesReturn, setActiveRulesReturn] = useState<
+    'waitingRoom' | 'game'
+  >('waitingRoom');
 
   const activations =
     volleyIndex === null ? [] : (DEMO_ACTIVATION_VOLLEYS[volleyIndex] ?? []);
@@ -163,7 +205,7 @@ function DemoApp({ storage }: { storage: PlayedBeforeStorage | undefined }) {
               setIsChoosingRoom(true);
             }}
             onPropose={() => go('proposal')}
-            onEncyclopedia={() => undefined}
+            onEncyclopedia={() => go('ruleDex')}
             onMyProposals={() => go('myProposals')}
             onHowToPlay={() => undefined}
           />
@@ -196,6 +238,20 @@ function DemoApp({ storage }: { storage: PlayedBeforeStorage | undefined }) {
         <MyProposalsScreen api={DEMO_PROPOSAL_API} onBack={() => go('menu')} />
       );
 
+    case 'activeRules':
+      return (
+        <ActiveRulesScreen
+          rules={DEMO_RULES}
+          onBack={() => go(activeRulesReturn)}
+          onOpenDex={() => go('ruleDex')}
+        />
+      );
+
+    case 'ruleDex':
+      return (
+        <RuleDexScreen api={DEMO_RULE_CATALOG_API} onBack={() => go('menu')} />
+      );
+
     case 'waitingRoom':
       return (
         <WaitingRoomScreen
@@ -206,7 +262,10 @@ function DemoApp({ storage }: { storage: PlayedBeforeStorage | undefined }) {
             go('menu');
           }}
           onCopyInvite={() => undefined}
-          onViewRules={() => undefined}
+          onViewRules={() => {
+            setActiveRulesReturn('waitingRoom');
+            go('activeRules');
+          }}
           onStart={() => {
             go('game');
           }}
@@ -231,7 +290,10 @@ function DemoApp({ storage }: { storage: PlayedBeforeStorage | undefined }) {
           hand={DEMO_HAND}
           selectedCardIds={selectedCardIds}
           isMyTurn
-          onViewRules={() => undefined}
+          onViewRules={() => {
+            setActiveRulesReturn('game');
+            go('activeRules');
+          }}
           onToggleCard={toggleCard}
           onPlay={() => {
             setSelectedCardIds([]);
@@ -514,6 +576,10 @@ function ConnectedApp({
   const [playSheetInitialMode, setPlaySheetInitialMode] =
     useState<RoomMode | null>(null);
   const [playSheetError, setPlaySheetError] = useState<string | null>(null);
+  const [roomOverlay, setRoomOverlay] = useState<
+    'activeRules' | 'ruleDex' | null
+  >(null);
+  const ruleCatalogApi = getBrowserRuleCatalogClient();
   const room = state.room;
   const tutorialEligible =
     !playedBefore &&
@@ -675,6 +741,24 @@ function ConnectedApp({
         ? graduationFrom
         : null;
 
+  if (room && roomOverlay === 'activeRules') {
+    return show(
+      <ActiveRulesScreen
+        rules={room.activeRules}
+        onBack={() => setRoomOverlay(null)}
+        onOpenDex={() => setRoomOverlay('ruleDex')}
+      />,
+    );
+  }
+  if (room && roomOverlay === 'ruleDex') {
+    return show(
+      <RuleDexScreen
+        api={ruleCatalogApi}
+        onBack={() => setRoomOverlay('activeRules')}
+      />,
+    );
+  }
+
   if (room?.phase === 'waiting') {
     const you = room.members.find(
       (member) => member.memberId === room.you.memberId,
@@ -695,7 +779,7 @@ function ConnectedApp({
         onCopyInvite={() => {
           void navigator.clipboard?.writeText(room.inviteCode);
         }}
-        onViewRules={() => undefined}
+        onViewRules={() => setRoomOverlay('activeRules')}
         onStart={() => {
           invoke(client.startRoom());
         }}
@@ -748,7 +832,7 @@ function ConnectedApp({
         canPlay={legalSelection}
         canPass={game.field.cards.length > 0}
         turnDeadlineAt={game.turn?.deadlineAt ?? null}
-        onViewRules={() => undefined}
+        onViewRules={() => setRoomOverlay('activeRules')}
         onToggleCard={(id) => {
           setSelectedCardIds((ids) =>
             ids.includes(id) ? ids.filter((item) => item !== id) : [...ids, id],
@@ -890,6 +974,11 @@ function ConnectedApp({
       />,
     );
   }
+  if (current === 'ruleDex') {
+    return show(
+      <RuleDexScreen api={ruleCatalogApi} onBack={() => go('menu')} />,
+    );
+  }
   return show(
     <>
       <MenuScreen
@@ -899,7 +988,7 @@ function ConnectedApp({
           setIsChoosingRoom(true);
         }}
         onPropose={() => go('proposal')}
-        onEncyclopedia={() => undefined}
+        onEncyclopedia={() => go('ruleDex')}
         onMyProposals={() => go('myProposals')}
         onHowToPlay={() => undefined}
         unreadProposalCount={unreadProposalCount}

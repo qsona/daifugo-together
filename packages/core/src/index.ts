@@ -12,6 +12,7 @@ export * from './protocol.js';
 export * from './replay/replay.js';
 export * from './rng/rng.js';
 export * from './rules/chain.js';
+export * from './rules/catalog.js';
 export * from './rules/contract.js';
 export * from './rules/in-process.js';
 export * from './set/scoring.js';

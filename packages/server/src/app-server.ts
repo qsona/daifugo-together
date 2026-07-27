@@ -29,6 +29,7 @@ import type { YellowCardPort } from './injection/yellow-card-service.js';
 import type { PipelineJudgementService } from './pipeline/service.js';
 import type { PipelineJobService } from './pipeline/jobs.js';
 import type { RuleRegistryService } from './rules/service.js';
+import type { RuleCatalogService } from './rules/catalog.js';
 
 const RELEASE_REMINDER_MS = 48 * 60 * 60 * 1_000;
 
@@ -47,6 +48,7 @@ export interface AppServerOptions {
   gateway?: RoomSocketGatewayOptions;
   checkDatabase?: () => boolean;
   proposals?: ProposalSubmissionPort;
+  ruleCatalog?: Pick<RuleCatalogService, 'list'>;
   yellowCards?: YellowCardPort;
   adminScreening?: {
     token: string;
@@ -190,6 +192,25 @@ function writeJson(
 
 export function createAppServer(options: AppServerOptions): AppServer {
   let draining = false;
+  const handleRuleCatalog = (
+    request: IncomingMessage,
+    response: ServerResponse,
+  ): boolean => {
+    const url = new URL(request.url ?? '/', 'http://localhost');
+    if (url.pathname !== '/api/rules') return false;
+    if (request.method !== 'GET') {
+      response.setHeader('allow', 'GET');
+      writeJson(response, 405, { error: 'method_not_allowed' });
+      return true;
+    }
+    if (!options.ruleCatalog) {
+      writeJson(response, 503, { error: 'rule_catalog_unavailable' });
+      return true;
+    }
+    const result = options.ruleCatalog.list(url.searchParams);
+    writeJson(response, result.status, result.body);
+    return true;
+  };
   const handleAdminRules = async (
     request: IncomingMessage,
     response: ServerResponse,
@@ -629,6 +650,7 @@ export function createAppServer(options: AppServerOptions): AppServer {
   const http = createServer((request, response) => {
     try {
       if (handleHealth(request, response)) return;
+      if (handleRuleCatalog(request, response)) return;
     } catch {
       response.statusCode = 400;
       response.end();

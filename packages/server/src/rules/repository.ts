@@ -75,6 +75,26 @@ export interface RuleLifecycleTransition {
   now: number;
 }
 
+export interface RuleCatalogQuery {
+  prefecture?: string | 'none';
+  status?: 'active' | 'removed';
+  kind?: 'local' | 'original';
+  order: 'asc' | 'desc';
+  limit: number;
+  offset: number;
+}
+
+export interface RuleCatalogResult {
+  summary: {
+    implemented: number;
+    active: number;
+    removed: number;
+    prefectureCoverage: number;
+  };
+  total: number;
+  items: StoredRule[];
+}
+
 type RuleRow = {
   id: string;
   slug: string;
@@ -274,6 +294,69 @@ export class RuleRepository {
       )
       .all() as RuleRow[];
     return rows.map(storedRule);
+  }
+
+  catalog(query: RuleCatalogQuery): RuleCatalogResult {
+    const conditions = ["status IN ('active', 'removed')"];
+    const parameters: Array<string | number> = [];
+    if (query.status) {
+      conditions.push('status = ?');
+      parameters.push(query.status);
+    }
+    if (query.kind) {
+      conditions.push('kind = ?');
+      parameters.push(query.kind);
+    }
+    if (query.prefecture === 'none') {
+      conditions.push("kind = 'local'");
+      conditions.push('prefecture IS NULL');
+    } else if (query.prefecture) {
+      conditions.push('prefecture = ?');
+      parameters.push(query.prefecture);
+    }
+    const where = conditions.join(' AND ');
+    const summary = this.#sqlite
+      .prepare(
+        `SELECT
+           COUNT(*) AS implemented,
+           SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) AS active,
+           SUM(CASE WHEN status = 'removed' THEN 1 ELSE 0 END) AS removed,
+           COUNT(DISTINCT CASE
+             WHEN kind = 'local' AND prefecture IS NOT NULL THEN prefecture
+           END) AS prefecture_coverage
+         FROM rules
+         WHERE status IN ('active', 'removed')`,
+      )
+      .get() as {
+      implemented: number;
+      active: number | null;
+      removed: number | null;
+      prefecture_coverage: number;
+    };
+    const total = (
+      this.#sqlite
+        .prepare(`SELECT COUNT(*) AS total FROM rules WHERE ${where}`)
+        .get(...parameters) as { total: number }
+    ).total;
+    const direction = query.order === 'asc' ? 'ASC' : 'DESC';
+    const rows = this.#sqlite
+      .prepare(
+        `SELECT * FROM rules
+         WHERE ${where}
+         ORDER BY created_at ${direction}, id ${direction}
+         LIMIT ? OFFSET ?`,
+      )
+      .all(...parameters, query.limit, query.offset) as RuleRow[];
+    return {
+      summary: {
+        implemented: summary.implemented,
+        active: summary.active ?? 0,
+        removed: summary.removed ?? 0,
+        prefectureCoverage: summary.prefecture_coverage,
+      },
+      total,
+      items: rows.map(storedRule),
+    };
   }
 
   transition(input: RuleLifecycleTransition): {

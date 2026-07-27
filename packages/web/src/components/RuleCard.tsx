@@ -1,7 +1,7 @@
 import { cx } from '../lib/cx';
 
 import { PopularityBar } from './PopularityBar';
-import { PrefectureTag, Tag } from './Tag';
+import { Tag } from './Tag';
 import styles from './RuleCard.module.css';
 
 /** 図鑑行が表示する内容だけを持つ view-model(エンジンの型は写さない)。 */
@@ -12,8 +12,9 @@ export type RuleCardView = {
   category: 'local' | 'original';
   /** ローカル区分でも未入力があるので任意。 */
   prefecture?: string;
+  originLabel?: string;
   description?: string;
-  popularity: number;
+  popularity: number | null;
   status: 'active' | 'removed';
 };
 
@@ -22,12 +23,12 @@ export function RuleCard({ rule }: { rule: RuleCardView }) {
 
   return (
     <article className={cx(styles.rule, isRemoved && styles.removed)}>
-      <div className={styles.rank}>
-        <b className={styles.rankValue}>{rule.priority ?? '—'}</b>
-        {rule.priority !== null && (
+      {rule.priority !== null && (
+        <div className={styles.rank}>
+          <b className={styles.rankValue}>{rule.priority}</b>
           <small className={styles.rankLabel}>優先</small>
-        )}
-      </div>
+        </div>
+      )}
       <div className={styles.main}>
         <h3 className={styles.name}>
           {rule.name}
@@ -39,16 +40,16 @@ export function RuleCard({ rule }: { rule: RuleCardView }) {
           <p className={styles.description}>{rule.description}</p>
         )}
         <div className={styles.meta}>
-          {rule.prefecture && <PrefectureTag prefecture={rule.prefecture} />}
-          <Tag variant={rule.category}>
-            {rule.category === 'local'
-              ? rule.prefecture
-                ? 'ローカル'
-                : 'ローカル(県の記載なし)'
-              : 'オリジナル'}
+          <Tag variant={rule.prefecture ? 'pref' : rule.category}>
+            {rule.originLabel ??
+              (rule.category === 'local'
+                ? 'ローカル(県の記載なし)'
+                : 'オリジナル')}
           </Tag>
         </div>
-        <PopularityBar value={rule.popularity} labelPosition="trailing" />
+        {rule.popularity !== null && (
+          <PopularityBar value={rule.popularity} labelPosition="trailing" />
+        )}
       </div>
     </article>
   );

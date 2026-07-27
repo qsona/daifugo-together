@@ -10,6 +10,8 @@ export type ScreenId =
   | 'menu'
   | 'proposal'
   | 'myProposals'
+  | 'activeRules'
+  | 'ruleDex'
   | 'waitingRoom'
   | 'game'
   | 'gameResult'

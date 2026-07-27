@@ -14,6 +14,7 @@
 - **フェーズ 2 / E2 AI-02 プロセス2コード完了**: workerへ権威runtime snapshotと実SHA-256検証済みbundleを渡し、E1 simulation generatorをworker AI 4席で駆動。独立完了再レビューは要件 `PASS` / 品質 `APPROVED` / Critical・Important・Minorなし
 - **フェーズ 2 / E7 CX-05 プロセス2コード完了**: 第三操作、起動中registryのreadiness attestation、48時間リマインダーまで追加。独立完了再レビューはコード要件 `PASS` / 品質 `APPROVED` / Critical・Importantなし。実GitHub/CD/本番の3操作リハーサルとRP-03 UIは外部・後続ゲート
 - **フェーズ 2 / E10 OP-01・OP-02 プロセス2コード完了**: 人間承認駆動に合わせたキュー・判定・失敗・ファネルCLIを既存台帳から読み取り専用で構成。独立完了レビューは `PASS / APPROVED / GO`、全指摘なし。D-5/OP-01/E-15の正式な文書裁定だけ外部ゲート
+- **フェーズ 2 / E11 RV-01・RV-02 プロセス1実装完了・方向性レビュー待ち**: 待機/対局画面から固定ルール名一覧を開く導線と、メニュー/一覧から公開ルール図鑑を開く導線を接続。`GET /api/rules`、フィルタ、30件ページング、出自の非断定表現、active/removed表示まで縦に通した
 - E1〜E3 の実装記録は本書末尾の「並行進行」節、E13 は「E13」節。E4 の未解消の開発者判断は「詰まっている点」に残っている(1〜4・7・8・11)
 
 ### E-18 / C-2・C-3・C-6 再設計の反映(2026-07-27)
@@ -1318,6 +1319,24 @@ TS-02 から継続で未解決のもの:
 - process2重点検証はoperations/pipeline/persistenceの5 files / 32 testsとserver typecheckが成功。全体`CI=true pnpm verify`もformat/lint/design/typecheck、77 files / 535 tests、全package buildまで成功した
 - 本番配布物の入口は通常build後に`node packages/server/dist/ops.js status/funnel`をbuildなしで実行して成功した。Docker runtime imageの実buildも試みたが、ローカルDocker daemonが停止中で接続できず未実施。Dockerfileはproduction dependenciesとserver/core/rules等の`dist`をruntimeへコピーする既存構成で、runbookは本番でpnpm/buildを要求しない
 - 新規コンテキストの独立 GPT-5.6 Sol 完了レビューはコード実装スコープ **PASS / APPROVED / GO**、Critical / Important / Minorすべてなし、main統合可。初回の本番CLI・JST境界・20件固定と追加要求はすべて **CLOSED**。D-5解消・OP-01受け入れ条件改訂・E-15運用の正式裁定だけは、コード完了を妨げない**外部決定ゲート**としてOPENのまま残す
+
+### E11 RV-01・RV-02 プロセス1（ルール閲覧）
+
+- `PlayerRoomView.activeRules` を権威的な現在セットの並びとしてそのまま使い、待機画面と対局画面の既存「ルール N件」ボタンを同じ名称一覧へ接続した。一覧行は名称だけで、人気度・優先度・順位・都道府県を描画しない。0件の基本ルール対局も空状態で成立する
+- メニューと対局ルール一覧から図鑑を開ける。図鑑は名称、区分、都道府県の出自記録、状態、短い説明を表示し、都道府県・状態・区分をANDフィルタとして再取得する。人気度・優先度は共有レスポンス上も`null`、DOMにも出さない
+- 公開`GET /api/rules`を追加し、`active`/`removed`だけを新着順で取得する。`disabled`は未決のため公開対象・集計の双方から除外する。既定30件、最大100件、offset追加取得、全体summaryとフィルタ後totalを分離した
+- `ruleOriginLabel`で県ありを「報告: 埼玉県」「埼玉県で遊ばれていた報告」、県なしローカルとオリジナルを断定しない表示に統一した。排除済みは物理削除せず打ち消し表示と理由を添える
+- プロセス1重点検証はcore/server/web typecheck成功、catalog service・出自・名称限定一覧・図鑑の4 files / 8 tests成功。フィルタquery、未実装指標null、0件、非断定文言、AND再取得を確認した
+
+#### E11で置いた仮定・プロセス2送り
+
+| ID | 仮定・残作業 | 根拠 | プロセス2での扱い |
+|---|---|---|---|
+| E11-P1-1 | 対局中一覧は既存の全量snapshot内`activeRules`を使い、E11旧提案の別イベント化は行わない | E3/E12実装済み共有契約が各snapshotの権威表示を確定済み。固定後は内容不変で、契約変更を避ける | 独立レビューで契約優先関係と固定セット維持を確認する |
+| E11-P1-2 | `disabled`は図鑑・summary・都道府県カバーから除外し、`active`と`removed`を実装済み資産とする | E11 §3.2(g)でdisabled表示は未決。受け入れ条件は有効/排除済みを要求 | リポジトリ実DBテストで集計を固定し、決定後に状態追加できる境界を維持する |
+| E11-P1-3 | 既存schemaに`removed_at`がないため、removed行の`updated_at`を`removedAt`として返す | lifecycle transition時刻を表す既存の唯一の列で、契約追加なしに意味が一致する | transition回帰テストを追加。別更新がremoved後に入り得るかレビューする |
+| E11-P1-4 | フェーズ2のsortは`recent`だけを受理し、priority/popularityはnull固定にする | workorder #7が人気度・優先度表示をフェーズ3へ明示延期 | API/UI双方で未知sortを400にし、将来の列追加位置だけ残す |
+| E11-P1-5 | 詳細は初期一覧の短文までとし、行展開はプロセス2へ送る | E11は初期実装として展開を推奨するが、ユーザーストーリーの縦導線とフィルタを先に確認できる | 説明全文・実装日/排除日の展開、失敗再試行、競合fetch、API/DB統合、ページ境界、実画面確認を仕上げる |
 
 ### E2で見つけた設計書の不整合
 

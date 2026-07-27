@@ -13,6 +13,7 @@ import { SqlitePersistence } from './persistence.js';
 import { ProposalSubmissionService } from './proposal/submission.js';
 import { RoomManager } from './room/manager.js';
 import { RuleRegistryService } from './rules/service.js';
+import { RuleCatalogService } from './rules/catalog.js';
 
 function errorFields(error: unknown): Record<string, unknown> {
   return error instanceof Error
@@ -96,6 +97,7 @@ const app = createAppServer({
   proposals: new ProposalSubmissionService(persistence.proposals, {
     signals,
   }),
+  ruleCatalog: new RuleCatalogService(persistence.rules),
   yellowCards: new YellowCardService(
     persistence.injection,
     persistence.proposals,
