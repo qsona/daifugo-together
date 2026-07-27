@@ -1545,3 +1545,4 @@ TS-02 から継続で未解決のもの:
 - `CI=true pnpm verify`: 成功（Prettier / ESLint / AI boundary / design lint / TypeScript / build / Vitest）
 - 375×812でメニュー、未登録提案、basic対局中の導線と横スクロールなしを確認した
 - 実Google通し、実セット完走後の登録導線、最終文言は本番デプロイ後の受け入れ確認で完了させる
+- E15 §2.3はPOST `form_post`へ改訂し、`PUBLIC_ORIGIN`の本番設定と[E15 Google OAuth 受入 runbook](runbooks/E15-google-oauth.md)を追加した
