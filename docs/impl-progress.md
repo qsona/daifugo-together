@@ -6,7 +6,7 @@
 - **フェーズ 2 / E5 RP-01・RP-02 完了**: E-18/C-3 の再設計(非同期受付、名前40/内容1000、投稿レート制限なし)まで反映済み。RP-03 は CX-02 依存のため E7 後に戻る
 - **C-5 追従完了**: E7 内包リトライの決定を反映し、`proposals.failed` を終端化。`failed` 遷移時に `attempt_count=1` を記録して同内容の再提案を即時解禁する
 - **フェーズ 2 / E6 YC-01〜03 プロセス2完了**: E-18 の非同期構成、ローカル判定ツール、イエローカード表示・停止・救済まで実装済み。修正後 judge eval は Luna/Sol とも 40/40、平均 6.40秒 / 6.23秒のため既定を **GPT-5.6 Sol medium** とした。独立 GPT-5.6 Sol 完了レビューは要件適合 `PASS` / 品質 `APPROVED`
-- **フェーズ 2 / E7 CX-01 プロセス2ほぼ完了**: 独立方向性レビュー `GO_WITH_FIXES` のImportant 4件を反映。実app-server評価だけ明示許可待ちで、CX-02へ進行可能
+- **フェーズ 2 / E7 CX-01 プロセス2ほぼ完了**: 独立方向性レビュー `GO_WITH_FIXES` のImportant 4件と、初回完了レビューのImportant 2件を反映。実app-server評価だけ明示許可待ちで、完了再レビュー中
 - E1〜E3 の実装記録は本書末尾の「並行進行」節、E13 は「E13」節。E4 の未解消の開発者判断は「詰まっている点」に残っている(1〜4・7・8・11)
 
 ### E-18 / C-2・C-3・C-6 再設計の反映(2026-07-27)
@@ -229,6 +229,55 @@ E3 マージ後の実プレーで開発者から 4 件の指摘を受け、反�
 - 追加申し送りも反映: 作成順でE6/CXを統合して飢餓を防止、同一起動中にE6→CXを連続処理、hook別Effect許可表をpromptとサーバーバリデータへ追加、`needs_review` のapprove/reject両方向、判定run IDによる再送冪等性と再判定追記、未確定一覧と確定CLI/runbookを追加
 - 評価セットはA1〜C3全行 + approve 8件 + needs_review 2件の計22件。実app-server評価は `~/.codex` と外部モデル送信を伴う操作として権限審査で拒否されたため、迂回せず明示許可待ち。評価CLIと構造化出力のFakeテストは完成済み
 - `CI=true pnpm verify`: **44 files / 315 tests 成功**。format / lint / design lint / 全package typecheck・buildも成功
+
+#### プロセス2初回完了レビューと修正
+
+- 独立 GPT-5.6 Sol の初回判定: 要件適合 `PARTIAL` / 品質 `NEEDS_FIXES`。Criticalなし、Important 2件
+- Important 1（確認待ちによる飢餓）: E6/CX-01/確認待ちを作成順に統合した一覧へ先に `limit` をかけていたため、古い確認待ちが自動判定枠を消費していた。E6/CX-01だけを抽出してからlimitを適用し、確認待ちは枠外で全件表示するよう修正。確認待ち101件の後ろにあるE6/CX-01が選ばれる回帰を追加
+- Important 2（障害・復旧回帰）: CX判定バッチをテスト可能な関数へ分離し、不正出力2回打ち切り、App Server障害3回再試行、1件失敗後の後続継続、同一run ID維持を回帰化。加えて、SQLite triggerでjob作成を強制失敗させた承認transaction rollback、確認の並行再送冪等、SQLite再起動後の未処理再取得を追加
+- 修正コミット: `73b31ea`。独立完了再レビュー中
+- 実app-server評価は明示許可待ちのため未実行のまま。実モデル精度を除くコード・永続化・運用境界を再レビュー対象とした
+
+### CX-02 プロセス1
+
+- 状態: FakeCodexRunner を使う縦切り実装まで完了。独立方向性レビュー待ち
+- ユーザーストーリーの確認:
+  - `packages/server/src/pipeline/jobs.test.ts` で、E6 pass + 開発者SPEC承認済みの `queued` jobだけを払い出し、提案・承認済みSPEC・scaffoldメタを同じjobへ結びつけることを確認
+  - `packages/pipeline/src/implement.test.ts` で、払い出し → 不変 `meta.json` / `SPEC.json` scaffold → Fake publisherによるscaffold SHA固定 → compare-and-setで `implementing` claim → FakeCodexRunnerによる `rule.ts` / `rule.test.ts` 生成 → 検収、を縦に確認
+  - 同テストで、scaffold改変、範囲外ファイル、禁止tokenを生成後検収で拒否することを確認
+  - `packages/server/src/app-server.test.ts` で、Bearer保護された `GET /admin/pipeline/next` と `POST /admin/pipeline/jobs/{id}/update` を実HTTPで確認
+- 実装した方向:
+  - serverはSQLiteとjob払い出し・compare-and-set状態遷移だけを所有し、scaffold・publisher・CodexRunner・検収・実装driverを `packages/pipeline` に置いた
+  - job払い出し時にE6 `pass` と最新judgementが開発者 `approve` であることを再確認する。AI approveだけ、古いdeveloper approveの後に新しいAI judgementがある場合、非queued jobは払い出さない
+  - `meta.json` / `SPEC.json` は排他的作成と内容一致による冪等性を持たせ、CodexRunnerの前後でsha256を照合する
+  - scaffoldを先にpublishしてcommit SHAを得た後、`queued → implementing` をcompare-and-setする。claim競合時はCodexRunnerを起動しない
+
+#### 置いた仮定（方向性レビュー対象）
+
+| # | 仮定した内容 | なぜそう決めたか | 出典 | 覆ったときの影響範囲 |
+|---|---|---|---|---|
+| E7-CX02-P1-1 | `meta.json` は現時点ではE07 §2.4の例どおり `id` + `slug` を持つ。E1 `RuleMeta.ruleId` との命名・ID形式の食い違いは方向性レビューで裁定し、CX-05のレジストリ実装前に一本化する | E07はE1スキーマ一致と書きつつ、同じ節の具体例が `id` + `slug`、E1は `ruleId=r{連番}-{slug}`、CX-01/jobは `rule_id=r{連番}` で相互に一致していないため | E07 §2.4、E01 §3.2、E07 §3.2(c) | scaffold、diff guard、ルールレジストリ、公開 `rule_id` |
+| E7-CX02-P1-2 | scaffoldのpublish後に `queued → implementing` をclaimする | `scaffold_sha` はpush済みcommit SHAであり、状態遷移前には値を得られないため。競合時の同一branch再利用・履歴検証はプロセス2で完成させる | E07 §2.4、§3.2(b)(c) | source-control adapter、再起動冪等性 |
+| E7-CX02-P1-3 | 生成・ローカル検収成功時点ではjobを `implementing` に保つ | `pr_open` は生成成功でなくPR作成成功を表すため。プロセス1はFakeCodexによるコード生成までを縦切りの終点とした | E07 §3.2(b)(c) | GitHub adapter、完了/失敗記録 |
+
+#### プロセス2へ回したもの
+
+| 項目 | 内容 |
+|---|---|
+| 実Codex・skill | subscriptionのCodex CLI runner、20分timeout、薄い実装CLI/skill定義、従量課金APIキー非使用の機械検査 |
+| workspace/git | shallow clone、決定的branch、scaffold commit/push、履歴・祖先・blob一致検査、再起動冪等性 |
+| GitHub | 生成commit/push、PR作成、機械可読scaffold SHA、`rule-change` label、障害時3回再試行 |
+| job失敗 | `/fail` API、内部error_code、attempt/`-a2`、打ち切り時の `proposals.failed` + `implementation_failed`。生成成功はPR作成後に `pr_open` へ進める |
+| 検収強化 | 差分ゼロ、symlink、import元、Date/Math.random、git差分・履歴、SHA/branch形式、サイズ境界、全違反fixture |
+| CX-03境界 | diff-guardの入口条件G-4、quality/rule-tests/simulation CIはCX-03で実装 |
+
+#### プロセス1の検証
+
+- `CI=true pnpm --filter @daifugo/server typecheck`: 成功
+- `CI=true pnpm --filter @daifugo/pipeline typecheck`: 成功
+- `CI=true pnpm exec vitest run packages/pipeline/src/implement.test.ts packages/server/src/pipeline/jobs.test.ts packages/server/src/pipeline/service.test.ts`: **3 files / 16 tests 成功**
+- `CI=true pnpm exec vitest run packages/server/src/app-server.test.ts`: localhost bind可能な環境で **1 file / 5 tests 成功**
+- `CI=true pnpm verify`: **48 files / 326 tests 成功**。format / lint / design lint / 全package typecheck・buildも成功
 
 ## 完了したストーリー
 

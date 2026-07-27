@@ -4,4 +4,8 @@ export * from './confirmation.js';
 export * from './cx-batch.js';
 export * from './judge-corpus.js';
 export * from './judge-prompt.js';
+export * from './implement.js';
+export * from './implementation-driver.js';
+export * from './inspector.js';
+export * from './scaffold.js';
 export * from './queue-selection.js';

@@ -12,6 +12,7 @@ export * from './injection/screening-batch.js';
 export * from './injection/yellow-card-service.js';
 export * from './pipeline/repository.js';
 export * from './pipeline/service.js';
+export * from './pipeline/jobs.js';
 export * from './persistence.js';
 export * from './proposal/repository.js';
 export * from './proposal/submission.js';

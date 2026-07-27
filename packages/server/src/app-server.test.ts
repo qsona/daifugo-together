@@ -246,6 +246,28 @@ describe('production app server', () => {
     }));
     const recordAi = vi.fn(() => ({ status: 'not_found' as const }));
     const approveSpec = vi.fn(() => ({ status: 'not_found' as const }));
+    const nextJob = vi.fn(() => null);
+    const updateJob = vi.fn(() => ({
+      status: 'updated' as const,
+      job: {
+        id: 1,
+        proposalId: 'proposal-1',
+        phase: 'implementing' as const,
+        attempt: 1,
+        ciRerun: 0,
+        ruleId: 'r0001',
+        slug: 'yagiri',
+        branch: 'rule/r0001-yagiri',
+        prNumber: null,
+        headSha: null,
+        scaffoldSha: null,
+        promptVersion: 'cx01-v1',
+        errorCode: null,
+        errorNote: null,
+        createdAt: 1,
+        updatedAt: 2,
+      },
+    }));
     const app = createAppServer({
       webDistDir: directory,
       adminScreening: {
@@ -264,6 +286,10 @@ describe('production app server', () => {
           confirmE6Rejection: () => ({ status: 'not_found' }),
           confirmCxRejection: () => ({ status: 'not_found' }),
           approveSpec,
+        },
+        jobs: {
+          next: nextJob,
+          update: updateJob,
         },
       },
     });
@@ -334,6 +360,32 @@ describe('production app server', () => {
       judgementId: 1,
       actor: 'developer',
       spec: {},
+    });
+
+    const next = await fetch(`${baseUrl}/admin/pipeline/next`, {
+      headers: { authorization: 'Bearer admin-token' },
+    });
+    expect(next.status).toBe(200);
+    await expect(next.json()).resolves.toEqual({ item: null });
+    expect(nextJob).toHaveBeenCalledOnce();
+
+    const updated = await fetch(`${baseUrl}/admin/pipeline/jobs/1/update`, {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer admin-token',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: 'queued',
+        to: 'implementing',
+        branch: 'rule/r0001-yagiri',
+      }),
+    });
+    expect(updated.status).toBe(200);
+    expect(updateJob).toHaveBeenCalledWith(1, {
+      from: 'queued',
+      to: 'implementing',
+      branch: 'rule/r0001-yagiri',
     });
   });
 });

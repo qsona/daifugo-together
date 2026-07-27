@@ -1,3 +1,4 @@
+import { prefectureName } from '@daifugo/core';
 import type Database from 'better-sqlite3';
 
 import type {
@@ -89,6 +90,22 @@ export interface PipelineJob {
   errorNote: string | null;
   createdAt: number;
   updatedAt: number;
+}
+
+export interface QueuedImplementation {
+  job: PipelineJob;
+  proposal: {
+    id: string;
+    kind: 'local' | 'original';
+    prefectureCode: string | null;
+    prefecture: string | null;
+    name: string;
+    body: string;
+  };
+  passedCheckId: number;
+  approvedJudgementId: number;
+  spec: RuleSpecification;
+  scaffoldMeta: RuleScaffoldMeta;
 }
 
 export interface PendingCxJudgement {
@@ -555,6 +572,90 @@ export class PipelineRepository {
       .prepare('SELECT * FROM pipeline_jobs WHERE proposal_id = ?')
       .get(proposalId) as PipelineJobRow | undefined;
     return row ? storedJob(row) : null;
+  }
+
+  nextQueued(): QueuedImplementation | null {
+    const row = this.#sqlite
+      .prepare(
+        `SELECT pj.id AS job_id, pc.id AS check_id, j.id AS judgement_id
+         FROM pipeline_jobs pj
+         JOIN proposal_checks pc ON pc.proposal_id = pj.proposal_id
+         JOIN judgements j ON j.proposal_id = pj.proposal_id
+         WHERE pj.phase = 'queued'
+           AND pc.final_verdict = 'pass'
+           AND j.id = (
+             SELECT MAX(j2.id) FROM judgements j2
+             WHERE j2.proposal_id = pj.proposal_id
+           )
+           AND j.verdict = 'approve'
+           AND j.decided_by = 'developer'
+           AND j.spec_json IS NOT NULL
+           AND j.scaffold_meta_json IS NOT NULL
+         ORDER BY pj.created_at ASC, pj.id ASC
+         LIMIT 1`,
+      )
+      .get() as
+      { job_id: number; check_id: number; judgement_id: number } | undefined;
+    if (!row) return null;
+    const job = this.job(row.job_id);
+    if (!job) return null;
+    const proposal = this.#proposals.findById(job.proposalId);
+    const judgement = this.judgement(row.judgement_id);
+    if (!proposal || !judgement?.spec || !judgement.scaffoldMeta) return null;
+    return {
+      job,
+      proposal: {
+        id: proposal.id,
+        kind: proposal.kind,
+        prefectureCode: proposal.prefectureCode,
+        prefecture: prefectureName(proposal.prefectureCode),
+        name: proposal.name,
+        body: proposal.body,
+      },
+      passedCheckId: row.check_id,
+      approvedJudgementId: row.judgement_id,
+      spec: judgement.spec,
+      scaffoldMeta: judgement.scaffoldMeta,
+    };
+  }
+
+  transitionJob(
+    id: number,
+    from: PipelineJob['phase'],
+    to: PipelineJob['phase'],
+    patch: {
+      branch?: string;
+      prNumber?: number;
+      headSha?: string;
+      scaffoldSha?: string;
+      errorCode?: string;
+      errorNote?: string;
+    },
+    now: number,
+  ): PipelineJob | null {
+    const result = this.#sqlite
+      .prepare(
+        `UPDATE pipeline_jobs
+         SET phase = ?, branch = COALESCE(?, branch),
+             pr_number = COALESCE(?, pr_number),
+             head_sha = COALESCE(?, head_sha),
+             scaffold_sha = COALESCE(?, scaffold_sha),
+             error_code = ?, error_note = ?, updated_at = ?
+         WHERE id = ? AND phase = ?`,
+      )
+      .run(
+        to,
+        patch.branch ?? null,
+        patch.prNumber ?? null,
+        patch.headSha ?? null,
+        patch.scaffoldSha ?? null,
+        patch.errorCode ?? null,
+        patch.errorNote ?? null,
+        now,
+        id,
+        from,
+      );
+    return result.changes === 1 ? this.job(id) : null;
   }
 
   screeningProposal(proposalId: string): ProposalQueueItem | null {

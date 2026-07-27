@@ -6,6 +6,7 @@ import { LocalScreeningService } from './injection/local-screening.js';
 import { InjectionSignalRecorder } from './injection/screening.js';
 import { YellowCardService } from './injection/yellow-card-service.js';
 import { PipelineJudgementService } from './pipeline/service.js';
+import { PipelineJobService } from './pipeline/jobs.js';
 import { SqlitePersistence } from './persistence.js';
 import { ProposalSubmissionService } from './proposal/submission.js';
 import { RoomManager } from './room/manager.js';
@@ -72,6 +73,7 @@ const app = createAppServer({
             persistence.proposals,
             persistence.injection,
           ),
+          jobs: new PipelineJobService(persistence.pipeline),
         },
       }
     : {}),
