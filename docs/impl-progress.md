@@ -1449,3 +1449,14 @@ TS-02 から継続で未解決のもの:
 - 本番セット: 1人役+AI 3席の3戦セットを実Socket.IO経路で完走。初回は`replay_records=243` / `set_results=1`。2回目の対局中にrolling deployを実行し、15:42:33 SIGTERM → `server_drain_started`、15:43:25 `server_drain_completed`、exit code 0を確認。進行中ゲームは完走し、セットは仕様どおり1戦で途中終了した。
 - 永続性: 再デプロイ後も`users=2` / `replay_records=333` / `set_results=2`をreadonly接続で確認。ヘルスチェックpassing、OGP絶対URL、新バージョンでの部屋作成・退出も確認した。
 - ロールバック: Fly CLI v0.4.69で`fly releases --image`から直前の`e13-initial`を特定し、`fly deploy --image`で実際に切り替えた。`/health` passingと`replay_records=333` / `set_results=2`の保持を確認後、同じ手順で`e13-final`へ復帰。Machine version 4、ヘルスチェックpassingを確認済み。
+
+---
+
+## 追加改善: 最終戦リザルトとセットリザルトの分離（2026-07-28）
+
+- 最終戦（第3戦）の結果とセット総合が1画面に混ざっていたのを2画面に分けた。`setResult` フェーズに入ると、まず最終戦リザルト（10秒のカウントダウンで自動進行、または「セット結果へ」）を出し、そのあとセットリザルトへ渡す。サーバーのフェーズ・タイマー仕様は変えていない
+- `SetResultView.finalGame`（既存の `GameResultView` 形）を追加。完走セット（`results.length === gamesPerSet`）でだけ入り、中断セット（drained）では `null` で、その場合クライアントは最終戦リザルトを飛ばす
+- 最終戦リザルトを見たかどうかは `roomId:respondBy` をキーに端末内で保持し、`sync` や再接続で画面が巻き戻らないようにした。ページ再読み込み時はもう一度最終戦リザルトから始まる
+- 順位行を用途で分割。`GameRankRows` は「順位 → 名前 → 称号 → この戦の加点 → セット累計点」を出し、加点が乗ってから合計点が数え上がる。`SetRankRows` は1位を花形カードにし、2〜4位は合計点だけの行にした（各戦の順位推移 `1→2→1` は最終戦リザルトが語るので削除）
+- 自分が1位のときだけ紙吹雪（`Confetti`、トークン色のみのCSSアニメーション）、それ以外は自分の行がひと弾みする控えめな演出。`prefers-reduced-motion` では紙吹雪のDOMを作らず、カウントアップも最終値を即表示する（判定は `prefersReducedMotion()`）
+- 設計と計画: `docs/superpowers/specs/2026-07-28-set-result-split-design.md` / `docs/superpowers/plans/2026-07-28-set-result-split.md`
