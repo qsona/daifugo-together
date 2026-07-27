@@ -65,7 +65,7 @@ describe('pipeline local environment', () => {
 Run:
 
 ```sh
-pnpm --filter @daifugo/pipeline test -- src/package-scripts.test.ts
+pnpm exec vitest run packages/pipeline/src/package-scripts.test.ts
 ```
 
 Expected: FAIL because the runtime scripts lack `--env-file-if-exists` and `.gitignore` lacks `.env.local`.
@@ -114,7 +114,7 @@ State that pipeline commands load it automatically, explicit process environment
 Run:
 
 ```sh
-pnpm --filter @daifugo/pipeline test -- src/package-scripts.test.ts
+pnpm exec vitest run packages/pipeline/src/package-scripts.test.ts
 ```
 
 Expected: PASS.
@@ -124,7 +124,7 @@ Expected: PASS.
 Run:
 
 ```sh
-pnpm --filter @daifugo/pipeline test
+pnpm exec vitest run packages/pipeline/src
 pnpm --filter @daifugo/pipeline typecheck
 git diff --check
 ```
