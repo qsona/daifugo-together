@@ -1,4 +1,5 @@
 import { act, cleanup, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { DEMO_HAND, DEMO_SEATS } from '../fixtures/demo';
@@ -116,5 +117,32 @@ describe('DS-04: 手番残り時間バー', () => {
       vi.advanceTimersByTime(51_000);
     });
     expect(screen.getByRole('timer', { name: '手番 残り9秒' })).toBeTruthy();
+  });
+});
+
+describe('TU-02: 出せるカード案内', () => {
+  afterEach(cleanup);
+
+  it('dimmedのカードをタップしても選択せず、拒否フィードバックだけを返す', async () => {
+    const user = userEvent.setup();
+    const onToggleCard = vi.fn();
+    const onDimmedCardTap = vi.fn();
+    render(
+      <GameScreen
+        {...game([]).props}
+        isMyTurn
+        cardHints={new Map([['h-c3', 'dimmed']])}
+        onToggleCard={onToggleCard}
+        onDimmedCardTap={onDimmedCardTap}
+      />,
+    );
+
+    const card = screen.getByRole('button', { name: 'クラブの3' });
+    expect(card.getAttribute('aria-disabled')).toBe('true');
+
+    await user.click(card);
+
+    expect(onToggleCard).not.toHaveBeenCalled();
+    expect(onDimmedCardTap).toHaveBeenCalledWith('h-c3');
   });
 });

@@ -3,6 +3,7 @@ import type {
   ClientToServerEvents,
   PlayerRoomView,
   RoomCloseReason,
+  RoomMode,
   ServerToClientEvents,
 } from '@daifugo/core';
 import { io, type Socket } from 'socket.io-client';
@@ -102,8 +103,10 @@ export class MultiplayerClient {
     return () => this.#listeners.delete(listener);
   };
 
-  async createRoom(): Promise<void> {
-    await this.#request((ack) => this.#socket.emit('room:create', {}, ack));
+  async createRoom(mode: RoomMode): Promise<void> {
+    await this.#request((ack) =>
+      this.#socket.emit('room:create', { mode }, ack),
+    );
   }
 
   async joinRoom(inviteCode: string): Promise<void> {
@@ -191,6 +194,9 @@ export class MultiplayerClient {
 let browserClient: MultiplayerClient | undefined;
 
 export function getBrowserMultiplayerClient(): MultiplayerClient {
-  browserClient ??= new MultiplayerClient(window.location.origin, localStorage);
+  browserClient ??= new MultiplayerClient(
+    window.location.origin,
+    window.localStorage,
+  );
   return browserClient;
 }

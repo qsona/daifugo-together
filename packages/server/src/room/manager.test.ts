@@ -1,5 +1,9 @@
-import { enumerateLegalPlays } from '@daifugo/core';
-import { describe, expect, it } from 'vitest';
+import {
+  enumerateLegalPlays,
+  type RoomMode,
+  type RuleChainEntry,
+} from '@daifugo/core';
+import { describe, expect, it, vi } from 'vitest';
 
 import { RoomManager, normalizeInviteCode } from './manager.js';
 
@@ -14,7 +18,173 @@ function manager() {
   });
 }
 
+const AVAILABLE_RULE: RuleChainEntry = {
+  ruleId: 'rule-community-only',
+  name: 'みんなのルール',
+  position: 0,
+  priority: {
+    score: 1,
+    activatedAt: 1,
+    ruleId: 'rule-community-only',
+  },
+  bundleHash: 'fixture',
+  contractVersion: 1,
+};
+
+function modeManager(availableRules: () => RuleChainEntry[]) {
+  let id = 0;
+  return new RoomManager({
+    now: () => 1_000 + id,
+    createRoomId: () => `mode-room-${++id}`,
+    createMemberId: () => `mode-member-${++id}`,
+    randomIndex: (max) => id++ % max,
+    availableRules,
+    reducer: {
+      gamesPerSet: 1,
+      random: () => 0.999_999,
+    },
+  });
+}
+
+function finishManagedSet(rooms: RoomManager, roomId: string): void {
+  for (let guard = 0; guard < 5_000; guard += 1) {
+    const state = rooms.get(roomId);
+    if (!state || state.phase === 'setResult') return;
+    expect(state.phase).toBe('playing');
+    const engine = state.engine!;
+    if (engine.phase.name === 'interimResult') {
+      rooms.apply(roomId, {
+        type: 'advanceIntermission',
+        now: 20_000 + guard,
+      });
+      continue;
+    }
+    expect(engine.phase.name).toBe('gameInProgress');
+    if (engine.phase.name !== 'gameInProgress') return;
+    const player = engine.currentGame!.public.turn!;
+    const legal = enumerateLegalPlays(
+      {
+        gameIndex: engine.phase.gameIndex,
+        seats: engine.members.map((member) => member.id),
+        gameSeed: `${engine.setSeed}:${engine.phase.gameIndex}`,
+        ruleChain: engine.ruleChain,
+      },
+      engine.currentGame!,
+      player,
+    );
+    rooms.apply(
+      roomId,
+      legal.length === 0
+        ? {
+            type: 'pass',
+            memberId: player,
+            turnSeq: state.turnSeq,
+            now: 20_000 + guard,
+          }
+        : {
+            type: 'play',
+            memberId: player,
+            turnSeq: state.turnSeq,
+            cards: legal[0]!.cards.map((card) => card.id),
+            now: 20_000 + guard,
+          },
+    );
+  }
+  throw new Error('Set did not reach setResult');
+}
+
+function createModeRoom(mode: RoomMode) {
+  const availableRules = vi.fn(() => [AVAILABLE_RULE]);
+  const rooms = modeManager(availableRules);
+  const created = rooms.create(
+    { userId: 'mode-user-1', displayName: 'ホスト' },
+    { mode },
+  );
+  expect(created.ok).toBe(true);
+  if (!created.ok) throw new Error('Failed to create room');
+  return { rooms, created, availableRules };
+}
+
 describe('RoomManager indexes', () => {
+  it('availableRulesが非空でも、きほんの部屋は有効ルールを空に固定する', () => {
+    const basic = createModeRoom('basic');
+    expect(basic.created.value.room.availableRules).toEqual([]);
+    expect(basic.created.value.room.mode).toBe('basic');
+    expect(basic.availableRules).not.toHaveBeenCalled();
+
+    const community = createModeRoom('community');
+    expect(community.created.value.room.availableRules).toEqual([
+      AVAILABLE_RULE,
+    ]);
+    expect(community.created.value.room.mode).toBe('community');
+    expect(community.availableRules).toHaveBeenCalledOnce();
+  });
+
+  it.each(['continue', 'leave', 'expireSetResult'] as const)(
+    '%sで2セット目へ進んでも、きほんの部屋はみんなのルールに化けない',
+    (path) => {
+      const { rooms, created, availableRules } = createModeRoom('basic');
+      const joined = rooms.join(created.value.room.inviteCode, {
+        userId: 'mode-user-2',
+        displayName: '参加者',
+      });
+      expect(joined.ok).toBe(true);
+      if (!joined.ok) return;
+      const roomId = created.value.room.roomId;
+      const started = rooms.apply(roomId, {
+        type: 'start',
+        memberId: created.value.member.memberId,
+        now: 2_000,
+        setSeed: `basic-${path}-first`,
+      });
+      expect(started?.accepted).toBe(true);
+      expect(started?.state.fixedRules).toEqual([]);
+      finishManagedSet(rooms, roomId);
+
+      const hostContinued = rooms.apply(roomId, {
+        type: 'continue',
+        memberId: created.value.member.memberId,
+        now: 50_000,
+        setSeed: `basic-${path}-waiting`,
+      });
+      expect(hostContinued?.accepted).toBe(true);
+      expect(hostContinued?.state.phase).toBe('setResult');
+
+      if (path === 'continue') {
+        rooms.apply(roomId, {
+          type: 'continue',
+          memberId: joined.value.member.memberId,
+          now: 50_001,
+          setSeed: 'basic-continue-second',
+        });
+      } else if (path === 'leave') {
+        rooms.apply(roomId, {
+          type: 'leave',
+          memberId: joined.value.member.memberId,
+          now: 50_001,
+          setSeed: 'basic-leave-second',
+        });
+      } else {
+        const deadline = rooms.get(roomId)?.setRespondBy;
+        expect(deadline).not.toBeNull();
+        rooms.apply(roomId, {
+          type: 'expireSetResult',
+          now: deadline!,
+          setSeed: 'basic-expire-second',
+        });
+      }
+
+      const secondSet = rooms.get(roomId);
+      expect(secondSet?.phase).toBe('playing');
+      expect(secondSet?.setNo).toBe(2);
+      expect(secondSet?.mode).toBe('basic');
+      expect(secondSet?.availableRules).toEqual([]);
+      expect(secondSet?.fixedRules).toEqual([]);
+      expect(secondSet?.engine?.ruleChain).toEqual([]);
+      expect(availableRules).not.toHaveBeenCalled();
+    },
+  );
+
   it('定期sweepで期限切れロビーを閉じ、全indexを解放する', () => {
     const rooms = manager();
     const created = rooms.create({

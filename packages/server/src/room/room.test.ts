@@ -1,4 +1,4 @@
-import { enumerateLegalPlays } from '@daifugo/core';
+import { enumerateLegalPlays, type RuleChainEntry } from '@daifugo/core';
 import { describe, expect, it } from 'vitest';
 
 import { createRoomState, reduceRoom } from './reducer.js';
@@ -9,6 +9,7 @@ function room(): RoomState {
   return createRoomState({
     roomId: 'room-1',
     inviteCode: 'ABCD-2345',
+    mode: 'community',
     owner: {
       memberId: 'member-1',
       userId: 'private-user-1',
@@ -140,6 +141,148 @@ function finishSet(initial: RoomState): {
 }
 
 describe('pure room reducer', () => {
+  it('きほんの1人AI戦は人間のタイマーを外し、初戦だけ人間をseat 0に置く', () => {
+    const basic = createRoomState({
+      roomId: 'basic-tutorial',
+      inviteCode: 'BASIC-T03',
+      mode: 'basic',
+      owner: {
+        memberId: 'member-1',
+        userId: 'private-user-1',
+        displayName: 'ホスト',
+      },
+      now: 100,
+    });
+    const started = reduceRoom(
+      basic,
+      {
+        type: 'start',
+        memberId: 'member-1',
+        now: 1_000,
+        setSeed: 'v3a-1',
+      },
+      { random: () => 0 },
+    ).state;
+
+    expect(
+      started.members.find((member) => member.memberId === 'member-1')?.seatId,
+    ).toBe(0);
+    expect(started.engine?.currentGame?.public.turn).toBe('member-1');
+    expect(started.turnDeadlineAt).toBeNull();
+
+    const disconnected = reduceRoom(
+      started,
+      { type: 'disconnect', memberId: 'member-1', now: 2_000 },
+      { random: () => 0 },
+    ).state;
+    expect(disconnected.turnDeadlineAt).toBe(17_000);
+  });
+
+  it('きほんでも人間2人なら通常タイマーを残し、communityの席順は従来どおりシャッフルする', () => {
+    const basicTwoHumans = createRoomState({
+      roomId: 'basic-multi',
+      inviteCode: 'BASIC-M03',
+      mode: 'basic',
+      owner: {
+        memberId: 'member-1',
+        userId: 'private-user-1',
+        displayName: 'ホスト',
+      },
+      now: 100,
+    });
+    const joined = join(basicTwoHumans, 2);
+    const basicStarted = reduceRoom(
+      joined,
+      {
+        type: 'start',
+        memberId: 'member-1',
+        now: 1_000,
+        setSeed: 'v3a-1',
+      },
+      { random: () => 0.999_999 },
+    ).state;
+    expect(basicStarted.engine?.currentGame?.public.turn).toBe('member-1');
+    expect(basicStarted.turnDeadlineAt).toBe(61_000);
+
+    const communityStarted = reduceRoom(
+      room(),
+      {
+        type: 'start',
+        memberId: 'member-1',
+        now: 1_000,
+        setSeed: 'v3a-1',
+      },
+      { random: () => 0 },
+    ).state;
+    expect(
+      communityStarted.members.find((member) => member.memberId === 'member-1')
+        ?.seatId,
+    ).not.toBe(0);
+  });
+
+  it('basic soloでも2セット目は人間をseat 0へ固定しない', () => {
+    const secondSet = {
+      ...createRoomState({
+        roomId: 'basic-second-set',
+        inviteCode: 'BASIC-S03',
+        mode: 'basic' as const,
+        owner: {
+          memberId: 'member-1',
+          userId: 'private-user-1',
+          displayName: 'ホスト',
+        },
+        now: 100,
+      }),
+      setNo: 1,
+    };
+    const started = reduceRoom(
+      secondSet,
+      {
+        type: 'start',
+        memberId: 'member-1',
+        now: 1_000,
+        setSeed: 'v3a-second',
+      },
+      { random: () => 0 },
+    ).state;
+
+    expect(
+      started.members.find((member) => member.memberId === 'member-1')?.seatId,
+    ).not.toBe(0);
+  });
+
+  it('モードをstate/viewへ通し、きほんでは入力されたルールを空にする', () => {
+    const availableRule: RuleChainEntry = {
+      ruleId: 'community-rule',
+      name: 'みんなのルール',
+      position: 0,
+      priority: {
+        score: 1,
+        activatedAt: 1,
+        ruleId: 'community-rule',
+      },
+      bundleHash: 'fixture',
+      contractVersion: 1,
+    };
+    const basic = createRoomState({
+      roomId: 'basic-room',
+      inviteCode: 'BASIC-001',
+      mode: 'basic',
+      owner: {
+        memberId: 'basic-owner',
+        userId: 'basic-user',
+        displayName: 'ホスト',
+      },
+      availableRules: [availableRule],
+      now: 100,
+    });
+
+    expect(basic.mode).toBe('basic');
+    expect(basic.availableRules).toEqual([]);
+    expect(viewFor(basic, 'basic-owner').mode).toBe('basic');
+    expect(viewFor(basic, 'basic-owner').activeRules).toEqual([]);
+  });
+
   it('drain要求は進行中ゲームを完走させ、新しいゲームを開始せずsetResultへ移る', () => {
     const state = start(fourHumanRoom());
     const drained = reduceRoom(state, {

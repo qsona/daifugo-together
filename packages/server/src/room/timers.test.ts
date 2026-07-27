@@ -19,6 +19,7 @@ function state(): RoomState {
   return createRoomState({
     roomId: 'room-1',
     inviteCode: 'ABCD-2345',
+    mode: 'community',
     owner: {
       memberId: 'member-1',
       userId: 'user-1',
@@ -246,6 +247,68 @@ describe('RoomTimerCoordinator', () => {
         now: 2_000,
       },
     ]);
+  });
+
+  it('きほんの1人AI戦だけAIの間合いを3〜4.5秒にし、他の部屋の既定値は変えない', () => {
+    const started = reduceRoom(
+      state(),
+      {
+        type: 'start',
+        memberId: 'member-1',
+        now: 1_000,
+        setSeed: 'timer-mode-set',
+      },
+      { random: () => 0.999_999 },
+    ).state;
+    const memberId = started.members.find((member) => member.isAI)!.memberId;
+    const automated: RoomState = {
+      ...started,
+      engine: {
+        ...started.engine!,
+        currentGame: {
+          ...started.engine!.currentGame!,
+          public: {
+            ...started.engine!.currentGame!.public,
+            turn: memberId,
+          },
+        },
+      },
+      turnDeadlineAt: null,
+    };
+    const delays = (roomState: RoomState, random = 0) => {
+      const room = authority(roomState);
+      const timers: FakeTimer[] = [];
+      const coordinator = new RoomTimerCoordinator(room.api, {
+        random: () => random,
+        decideTurn: async () => ['D03'],
+        setTimer: (callback, delayMs) => {
+          const timer = { callback, delayMs, cleared: false };
+          timers.push(timer);
+          return timer;
+        },
+      });
+      coordinator.sync(roomState);
+      return timers[0]?.delayMs;
+    };
+
+    expect(delays(automated)).toBe(800);
+    expect(delays({ ...automated, mode: 'basic' })).toBe(3_000);
+    expect(delays({ ...automated, mode: 'basic' }, 1)).toBe(4_500);
+
+    const secondHuman = {
+      ...automated.members.find((member) => !member.isAI)!,
+      memberId: 'member-2',
+      userId: 'user-2',
+      seatId: 2 as const,
+      isHost: false,
+    };
+    expect(
+      delays({
+        ...automated,
+        mode: 'basic',
+        members: [...automated.members, secondHuman],
+      }),
+    ).toBe(800);
   });
 
   it('AI決定中に本人操作でturnSeqが進んだら、古い決定を破棄する', async () => {

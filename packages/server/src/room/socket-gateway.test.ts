@@ -190,6 +190,47 @@ afterEach(async () => {
 });
 
 describe('Socket.IO room gateway', () => {
+  it('きほんの1人部屋の初戦は探索済みseedでseat 0に教材配牌を届ける', async () => {
+    const harness = await createHarness();
+    const owner = await connect(harness);
+    const created = await emitAck<
+      'room:create',
+      { roomId: string; inviteCode: string }
+    >(owner.client, 'room:create', { mode: 'basic' });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+
+    const startedState = once<PlayerRoomView>((resolve) =>
+      owner.client.once('room:state', (view) => {
+        if (view.phase === 'playing') resolve(view);
+      }),
+    );
+    await emitAck<'room:start', Record<string, never>>(
+      owner.client,
+      'room:start',
+      {},
+    );
+    const view = await startedState;
+
+    expect(view.you.seatId).toBe(0);
+    expect(view.game?.turn).toMatchObject({ seat: 0, deadlineAt: null });
+    expect(view.game?.yourHand.map((card) => card.id)).toEqual([
+      'D03',
+      'C03',
+      'H05',
+      'S07',
+      'D07',
+      'C08',
+      'HJ',
+      'SK',
+      'DK',
+      'SA',
+      'S02',
+      'H02',
+      'D02',
+    ]);
+  });
+
   it('create→join→startを実ソケットで直列化し、受信者以外の手札を漏らさない', async () => {
     const harness = await createHarness();
     const owner = await connect(harness);
@@ -200,7 +241,7 @@ describe('Socket.IO room gateway', () => {
     const created = await emitAck<
       'room:create',
       { roomId: string; inviteCode: string }
-    >(owner.client, 'room:create', {});
+    >(owner.client, 'room:create', { mode: 'basic' });
     expect(created.ok).toBe(true);
     if (!created.ok) return;
 
@@ -239,6 +280,8 @@ describe('Socket.IO room gateway', () => {
     ]);
     expect(ownerView.phase).toBe('playing');
     expect(guestView.phase).toBe('playing');
+    expect(ownerView.mode).toBe('basic');
+    expect(guestView.mode).toBe('basic');
 
     const authority = harness.gateway.rooms.get(created.value.roomId)!;
     for (const view of [ownerView, guestView]) {
@@ -254,13 +297,29 @@ describe('Socket.IO room gateway', () => {
     }
   });
 
+  it('旧クライアントのモード未指定はcommunityとして扱う', async () => {
+    const harness = await createHarness();
+    const owner = await connect(harness);
+    const roomState = once<PlayerRoomView>((resolve) =>
+      owner.client.once('room:state', resolve),
+    );
+
+    const created = await emitAck<
+      'room:create',
+      { roomId: string; inviteCode: string }
+    >(owner.client, 'room:create', {});
+
+    expect(created.ok).toBe(true);
+    expect((await roomState).mode).toBe('community');
+  });
+
   it('同一tokenの後勝ち接続で旧socketをsupersedeし、最新snapshotへ再アタッチする', async () => {
     const harness = await createHarness();
     const first = await connect(harness);
     const created = await emitAck<
       'room:create',
       { roomId: string; inviteCode: string }
-    >(first.client, 'room:create', {});
+    >(first.client, 'room:create', { mode: 'basic' });
     expect(created.ok).toBe(true);
 
     const superseded = once<void>((resolve) =>
@@ -274,6 +333,7 @@ describe('Socket.IO room gateway', () => {
     expect(replacement.ready.room?.roomId).toBe(
       created.ok ? created.value.roomId : '',
     );
+    expect(replacement.ready.room?.mode).toBe('basic');
     expect(replacement.ready.room?.events).toEqual([]);
     expect(replacement.statesBeforeReady).toEqual([]);
   });

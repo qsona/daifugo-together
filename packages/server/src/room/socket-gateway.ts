@@ -42,6 +42,7 @@ import {
   RoomTimerCoordinator,
 } from './timers.js';
 import type { RoomTimerOptions } from './timers.js';
+import { setSeedForRoomStart } from './tutorial.js';
 import type { RoomState, RoomTransition } from './types.js';
 import { viewFor } from './view.js';
 
@@ -75,7 +76,13 @@ export interface RoomSocketGatewayOptions {
   decideTurn?: (state: RoomState, memberId: string) => Promise<CardId[] | null>;
   timers?: Pick<
     RoomTimerOptions,
-    'setTimer' | 'clearTimer' | 'random' | 'aiDelayMinMs' | 'aiDelayMaxMs'
+    | 'setTimer'
+    | 'clearTimer'
+    | 'random'
+    | 'aiDelayMinMs'
+    | 'aiDelayMaxMs'
+    | 'basicAiDelayMinMs'
+    | 'basicAiDelayMaxMs'
   >;
   joinRateLimit?: {
     maxAttempts: number;
@@ -382,7 +389,8 @@ export function attachRoomSocketGateway(
 
     socket.on('room:create', (payload, ack) => {
       try {
-        if (!clientPayloadSchemas['room:create'].safeParse(payload).success) {
+        const parsed = clientPayloadSchemas['room:create'].safeParse(payload);
+        if (!parsed.success) {
           safeAck(ack, failure('BAD_PAYLOAD'));
           return;
         }
@@ -390,7 +398,9 @@ export function attachRoomSocketGateway(
           safeAck(ack, failure('INTERNAL', 'server is draining'));
           return;
         }
-        const created = rooms.create(session);
+        const created = rooms.create(session, {
+          mode: parsed.data.mode ?? 'community',
+        });
         if (!created.ok) {
           safeAck(ack, failure(created.code));
           return;
@@ -496,7 +506,7 @@ export function attachRoomSocketGateway(
           type: 'start',
           memberId: current.member.memberId,
           now: now(),
-          setSeed: createSetSeed(),
+          setSeed: setSeedForRoomStart(current.room, createSetSeed),
         });
         const error = roomFailure(transition);
         if (error) {

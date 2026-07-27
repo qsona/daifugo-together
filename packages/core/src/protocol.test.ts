@@ -5,7 +5,6 @@ import { clientPayloadSchemas } from './protocol.js';
 describe('shared client payload schemas', () => {
   it('rejects extra keys for empty payload events', () => {
     for (const event of [
-      'room:create',
       'room:leave',
       'room:start',
       'room:continue',
@@ -16,6 +15,29 @@ describe('shared client payload schemas', () => {
       ).toBe(false);
       expect(clientPayloadSchemas[event].safeParse({}).success).toBe(true);
     }
+  });
+
+  it('room:createはモード指定を受け、未指定も旧クライアント互換で受ける', () => {
+    expect(clientPayloadSchemas['room:create'].safeParse({}).success).toBe(
+      true,
+    );
+    expect(
+      clientPayloadSchemas['room:create'].safeParse({ mode: 'basic' }).success,
+    ).toBe(true);
+    expect(
+      clientPayloadSchemas['room:create'].safeParse({ mode: 'community' })
+        .success,
+    ).toBe(true);
+    expect(
+      clientPayloadSchemas['room:create'].safeParse({ mode: 'unknown' })
+        .success,
+    ).toBe(false);
+    expect(
+      clientPayloadSchemas['room:create'].safeParse({
+        mode: 'basic',
+        extra: true,
+      }).success,
+    ).toBe(false);
   });
 
   it('validates join, play, pass, and rename payloads', () => {

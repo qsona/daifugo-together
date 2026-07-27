@@ -1,6 +1,12 @@
 import type { PlayerRoomView } from '@daifugo/core';
 import type { ReactNode } from 'react';
-import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 
 import type { CardView } from './components/Card';
 import type { MemberView as MemberListView } from './components/MemberList';
@@ -37,6 +43,14 @@ import { SetResultScreen } from './screens/SetResultScreen';
 import { TitleScreen } from './screens/TitleScreen';
 import { WaitingRoomScreen } from './screens/WaitingRoomScreen';
 import { useScreenStore } from './store/screen';
+import { deriveCardHints } from './game/hints';
+import { createGuideState, reduceGuide, type GuideCue } from './game/guide';
+import {
+  getPlayedBeforeStorage,
+  hasPlayedBefore,
+  markPlayedBefore,
+  type PlayedBeforeStorage,
+} from './tutorial/played-before';
 
 const DEMO_PROPOSAL_API: ProposalApi = {
   submit: async (request) => ({
@@ -75,7 +89,7 @@ const DEMO_PROPOSAL_API: ProposalApi = {
  * 各画面は表示専用で、ここが渡しているのは固定データ(`fixtures/demo`)。
  * サーバースナップショットの接続と合法手の判定は E1/E3 の責務。
  */
-function DemoApp() {
+function DemoApp({ storage }: { storage: PlayedBeforeStorage | undefined }) {
   const current = useScreenStore((state) => state.current);
   const go = useScreenStore((state) => state.go);
 
@@ -84,6 +98,7 @@ function DemoApp() {
   const [ruleVotes, setRuleVotes] = useState(DEMO_FIRED_RULES);
   /** 見本のカットインを順に再生するための位置。null は再生していない状態。 */
   const [isChoosingRoom, setIsChoosingRoom] = useState(false);
+  const [playedBefore] = useState(() => hasPlayedBefore(storage));
   const [volleyIndex, setVolleyIndex] = useState<number | null>(null);
   const [lastVolleyIndex, setLastVolleyIndex] = useState<number | null>(null);
 
@@ -143,6 +158,7 @@ function DemoApp() {
           />
           {isChoosingRoom && (
             <PlaySheet
+              playedBefore={playedBefore}
               onCreate={() => {
                 setIsChoosingRoom(false);
                 go('waitingRoom');
@@ -441,7 +457,13 @@ export function reconcileSelectedCardIds(
   return existing.length === selected.length ? selected : existing;
 }
 
-function ConnectedApp({ client }: { client: MultiplayerClient }) {
+function ConnectedApp({
+  client,
+  storage,
+}: {
+  client: MultiplayerClient;
+  storage: PlayedBeforeStorage | undefined;
+}) {
   const current = useScreenStore((state) => state.current);
   const go = useScreenStore((state) => state.go);
   const state = useSyncExternalStore(
@@ -455,7 +477,24 @@ function ConnectedApp({ client }: { client: MultiplayerClient }) {
   const [ruleVotes, setRuleVotes] = useState(DEMO_FIRED_RULES);
   const [unreadProposalCount, setUnreadProposalCount] = useState(0);
   const proposalApi = getBrowserProposalClient();
+  const guideState = useRef(createGuideState());
+  const guideSessionKey = useRef<string | null>(null);
+  const [guideCue, setGuideCue] = useState<GuideCue | null>(null);
+  const [playedBefore, setPlayedBefore] = useState(() =>
+    hasPlayedBefore(storage),
+  );
   const room = state.room;
+  const tutorialEligible =
+    !playedBefore &&
+    room?.mode === 'basic' &&
+    room.phase === 'playing' &&
+    room.game?.gameNo === 1 &&
+    room.members.filter((member) => !member.isAI && !member.departed).length ===
+      1;
+  const tutorialSessionKey =
+    tutorialEligible && room?.game
+      ? `${room.roomId}:${String(room.game.gameNo)}`
+      : null;
 
   useEffect(() => {
     setSelectedCardIds((selected) => reconcileSelectedCardIds(selected, room));
@@ -474,6 +513,44 @@ function ConnectedApp({ client }: { client: MultiplayerClient }) {
       active = false;
     };
   }, [current, proposalApi]);
+
+  useEffect(() => {
+    const completedOneGame =
+      room?.phase === 'setResult' ||
+      (room?.game?.previousResults.length ?? 0) > 0;
+    if (!playedBefore && completedOneGame) {
+      markPlayedBefore(storage);
+      setPlayedBefore(true);
+    }
+  }, [playedBefore, room, storage]);
+
+  useEffect(() => {
+    if (guideSessionKey.current === tutorialSessionKey) return;
+    guideSessionKey.current = tutorialSessionKey;
+    guideState.current = createGuideState();
+    setGuideCue(null);
+  }, [tutorialSessionKey]);
+
+  useEffect(() => {
+    if (!tutorialEligible || !room?.game || guideCue) return;
+    const result = reduceGuide(guideState.current, {
+      type: 'snapshot',
+      key: `${room.roomId}:${String(room.v)}`,
+      gameNo: room.game.gameNo,
+      isMyTurn: room.game.turn?.seat === room.you.seatId,
+      fieldCardCount: room.game.field.cards.length,
+      legalMoves: room.game.legalMoves,
+      events: room.events,
+    });
+    guideState.current = result.state;
+    if (result.cue) setGuideCue(result.cue);
+  }, [guideCue, room, tutorialEligible]);
+
+  useEffect(() => {
+    if (!guideCue) return;
+    const timer = window.setTimeout(() => setGuideCue(null), 3_000);
+    return () => window.clearTimeout(timer);
+  }, [guideCue]);
 
   const invoke = (operation: Promise<unknown>) => {
     void operation.catch(() => undefined);
@@ -523,6 +600,10 @@ function ConnectedApp({ client }: { client: MultiplayerClient }) {
             .sort()
             .every((id, index) => id === selected[index]),
       ) ?? false;
+    const cardHints =
+      room.mode === 'basic'
+        ? deriveCardHints(game.yourHand, game.legalMoves, selectedCardIds)
+        : undefined;
     const leadMember = room.members.find(
       (member) => member.seatId === game.field.playedBySeat,
     );
@@ -544,6 +625,9 @@ function ConnectedApp({ client }: { client: MultiplayerClient }) {
         lastActivation={null}
         hand={cards(game.yourHand)}
         selectedCardIds={selectedCardIds}
+        {...(cardHints ? { cardHints } : {})}
+        guideCue={tutorialEligible ? guideCue : null}
+        showStrengthScale={tutorialEligible}
         isMyTurn={game.turn?.seat === room.you.seatId}
         canPlay={legalSelection}
         canPass={game.field.cards.length > 0}
@@ -665,9 +749,10 @@ function ConnectedApp({ client }: { client: MultiplayerClient }) {
       />
       {isChoosingRoom && (
         <PlaySheet
-          onCreate={() => {
+          playedBefore={playedBefore}
+          onCreate={(mode) => {
             invoke(
-              client.createRoom().then(() => {
+              client.createRoom(mode).then(() => {
                 setIsChoosingRoom(false);
               }),
             );
@@ -701,8 +786,10 @@ function friendlyError(error: string | null): string | null {
 
 export function App({
   client,
+  storage,
 }: {
   client?: MultiplayerClient | null;
+  storage?: PlayedBeforeStorage;
 } = {}) {
   const effectiveClient =
     client === undefined
@@ -710,9 +797,16 @@ export function App({
         ? null
         : getBrowserMultiplayerClient()
       : client;
+  const effectiveStorage =
+    storage ??
+    (import.meta.env.MODE === 'test'
+      ? undefined
+      : getPlayedBeforeStorage(
+          typeof window === 'undefined' ? undefined : window,
+        ));
   return effectiveClient ? (
-    <ConnectedApp client={effectiveClient} />
+    <ConnectedApp client={effectiveClient} storage={effectiveStorage} />
   ) : (
-    <DemoApp />
+    <DemoApp storage={effectiveStorage} />
   );
 }
