@@ -10,6 +10,38 @@ const request = {
 };
 
 describe('ProposalClient', () => {
+  it('fetcherをクライアントのメソッドreceiverなしで呼ぶ', async () => {
+    const fetcher = async function (this: unknown) {
+      expect(this).toBeUndefined();
+      return new Response(
+        JSON.stringify({
+          outcome: 'accepted',
+          proposal: {
+            id: 'proposal-browser-fetch',
+            ...request,
+            prefectureName: null,
+            status: 'screening',
+            reason: null,
+            releasedRuleId: null,
+            popularity: null,
+            priorityRank: null,
+            unread: true,
+            createdAt: 1,
+            statusChangedAt: 1,
+          },
+        }),
+        { status: 200 },
+      );
+    };
+    const client = new ProposalClient(
+      'https://example.test',
+      { getItem: () => 'shared-session-token' },
+      fetcher as typeof fetch,
+    );
+
+    await client.submit(request);
+  });
+
   it('Socket.IOと同じ匿名tokenをBearerで送る', async () => {
     const fetcher = vi.fn(
       async () =>

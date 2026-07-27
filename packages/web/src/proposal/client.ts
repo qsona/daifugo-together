@@ -48,7 +48,9 @@ export class ProposalClient implements ProposalApi {
   ) {
     this.#baseUrl = baseUrl;
     this.#storage = storage;
-    this.#fetch = fetcher;
+    // Window.fetch をインスタンスのメソッドとして呼ぶと、ブラウザでは
+    // ProposalClient が receiver になり "Illegal invocation" で失敗する。
+    this.#fetch = (...args) => fetcher(...args);
   }
 
   async submit(

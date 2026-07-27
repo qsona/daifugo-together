@@ -20,7 +20,8 @@ export class RuleCatalogClient implements RuleCatalogApi {
 
   constructor(baseUrl: string, fetcher: typeof fetch = fetch) {
     this.#baseUrl = baseUrl;
-    this.#fetch = fetcher;
+    // Window.fetch を RuleCatalogClient のメソッドとして呼ばないようにする。
+    this.#fetch = (...args) => fetcher(...args);
   }
 
   async list(filters: RuleCatalogFilters = {}): Promise<RuleCatalogResponse> {
