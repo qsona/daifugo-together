@@ -17,6 +17,10 @@ const FORBIDDEN = [
   'eval(',
   'child_process',
   'node:',
+  'Math.random',
+  'new Date',
+  'Date.now',
+  'import(',
 ];
 
 function sha256(value: Buffer): string {
@@ -57,6 +61,22 @@ export async function inspectGeneratedRule(
         violations.push(`${name}: exceeds ${String(maxBytes)} bytes`);
       }
       const content = await readFile(path, 'utf8');
+      for (const match of content.matchAll(
+        /\b(?:import|export)\s+[\s\S]*?\sfrom\s+['"]([^'"]+)['"]/gu,
+      )) {
+        if (match[1] !== '@daifugo/core') {
+          violations.push(
+            `${name}: imports forbidden module ${match[1] ?? 'unknown'}`,
+          );
+        }
+      }
+      for (const match of content.matchAll(/\bimport\s*['"]([^'"]+)['"]/gu)) {
+        if (match[1] !== '@daifugo/core') {
+          violations.push(
+            `${name}: imports forbidden module ${match[1] ?? 'unknown'}`,
+          );
+        }
+      }
       for (const token of FORBIDDEN) {
         if (content.includes(token)) {
           violations.push(`${name}: contains forbidden token ${token}`);

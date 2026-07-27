@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import type { QueuedImplementation } from '@daifugo/server';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { implementQueuedRule, type CodexRunner } from './implement.js';
 import {
@@ -103,6 +103,7 @@ describe('CX-02 implementation vertical slice', () => {
         };
         return { status: 'updated', job: current };
       },
+      retry: () => ({ status: 'invalid', error: 'unexpected_retry' }),
       fail: () => ({ status: 'invalid', error: 'unexpected_failure' }),
     };
     const result = await runNextImplementation({
@@ -121,6 +122,7 @@ describe('CX-02 implementation vertical slice', () => {
           };
         },
         inspect: async () => [],
+        recoverImplementation: async () => null,
         publishImplementation: async () => ({
           prNumber: 42,
           headSha: 'b'.repeat(40),
@@ -191,6 +193,68 @@ describe('CX-02 implementation vertical slice', () => {
     ).toEqual(queued().spec);
   });
 
+  it('生成commit/PR後の応答消失はCodexを再実行せずpr_openを回復する', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'pipeline-rules-'));
+    directories.push(root);
+    const item = queued();
+    item.job = {
+      ...item.job,
+      phase: 'implementing',
+      branch: 'rule/r0001-yagiri',
+      scaffoldSha: 'a'.repeat(40),
+      promptVersion: 'cx02-v2',
+    };
+    const run = vi.fn<CodexRunner['run']>();
+    const result = await runNextImplementation({
+      item,
+      jobs: {
+        next: () => null,
+        resume: () => item,
+        retry: () => ({ status: 'invalid', error: 'unexpected_retry' }),
+        fail: () => ({ status: 'invalid', error: 'unexpected_failure' }),
+        update: (_jobId, input) => {
+          const value = input as { from: string; to: string };
+          return value.from === 'implementing' && value.to === 'pr_open'
+            ? {
+                status: 'updated',
+                job: {
+                  ...item.job,
+                  phase: 'pr_open',
+                  prNumber: 42,
+                  headSha: 'b'.repeat(40),
+                },
+              }
+            : { status: 'invalid', error: 'unexpected_update' };
+        },
+      },
+      publisher: {
+        publish: async () => ({
+          branch: 'rule/r0001-yagiri',
+          scaffoldSha: 'a'.repeat(40),
+        }),
+        recoverImplementation: async () => ({
+          prNumber: 42,
+          headSha: 'b'.repeat(40),
+        }),
+        inspect: async () => {
+          throw new Error('inspection should have been recovered');
+        },
+        publishImplementation: async () => {
+          throw new Error('implementation should not be republished');
+        },
+      },
+      runner: { run },
+      rulesRoot: root,
+      promptPath: 'packages/pipeline/prompts/implement.md',
+    });
+
+    expect(result).toMatchObject({
+      status: 'ready',
+      job: { phase: 'pr_open', prNumber: 42 },
+    });
+    expect(run).not.toHaveBeenCalled();
+  });
+
   it('scaffold改変・範囲外ファイル・禁止tokenを検収で止める', async () => {
     const root = await mkdtemp(join(tmpdir(), 'pipeline-rules-'));
     directories.push(root);
@@ -201,7 +265,16 @@ describe('CX-02 implementation vertical slice', () => {
       runner: {
         run: async ({ directory }) => {
           await writeFile(join(directory, 'SPEC.json'), '{}\n');
-          await writeFile(join(directory, 'rule.ts'), 'process.exit(0);\n');
+          await writeFile(
+            join(directory, 'rule.ts'),
+            [
+              "import fs from 'fs';",
+              "export { PipelineJobService } from '@daifugo/server';",
+              'const stamp = Date.now();',
+              'const roll = Math.random();',
+              'process.exit(stamp + roll);',
+            ].join('\n'),
+          );
           await writeFile(join(directory, 'rule.test.ts'), 'export {};\n');
           await writeFile(join(directory, 'extra.ts'), 'export {};\n');
           return { status: 'completed' };
@@ -213,6 +286,10 @@ describe('CX-02 implementation vertical slice', () => {
       violations: expect.arrayContaining([
         'SPEC.json: scaffold content was modified',
         'extra.ts: unexpected generated path',
+        'rule.ts: imports forbidden module fs',
+        'rule.ts: imports forbidden module @daifugo/server',
+        'rule.ts: contains forbidden token Date.now',
+        'rule.ts: contains forbidden token Math.random',
         'rule.ts: contains forbidden token process.',
       ]),
     });

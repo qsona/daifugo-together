@@ -62,7 +62,7 @@ export interface AppServerOptions {
     >;
     jobs: Pick<
       PipelineJobService,
-      'next' | 'active' | 'resume' | 'update' | 'fail'
+      'next' | 'active' | 'resume' | 'update' | 'retry' | 'fail'
     >;
   };
 }
@@ -199,6 +199,9 @@ export function createAppServer(options: AppServerOptions): AppServer {
     const jobFailMatch = /^\/admin\/pipeline\/jobs\/([1-9]\d*)\/fail$/u.exec(
       pathname,
     );
+    const jobRetryMatch = /^\/admin\/pipeline\/jobs\/([1-9]\d*)\/retry$/u.exec(
+      pathname,
+    );
     const jobGetMatch = /^\/admin\/pipeline\/jobs\/([1-9]\d*)$/u.exec(pathname);
     if (
       !isListing &&
@@ -208,6 +211,7 @@ export function createAppServer(options: AppServerOptions): AppServer {
       !approveSpecMatch &&
       !jobUpdateMatch &&
       !jobFailMatch &&
+      !jobRetryMatch &&
       !jobGetMatch
     ) {
       return false;
@@ -219,6 +223,7 @@ export function createAppServer(options: AppServerOptions): AppServer {
           isNextJob ||
           jobUpdateMatch ||
           jobFailMatch ||
+          jobRetryMatch ||
           jobGetMatch
         ? options.adminPipeline
         : (options.adminScreening ?? options.adminPipeline);
@@ -324,6 +329,11 @@ export function createAppServer(options: AppServerOptions): AppServer {
       );
     } else if (jobFailMatch) {
       result = options.adminPipeline!.jobs.fail(Number(jobFailMatch[1]), body);
+    } else if (jobRetryMatch) {
+      result = options.adminPipeline!.jobs.retry(
+        Number(jobRetryMatch[1]),
+        body,
+      );
     } else if (checkMatch) {
       result = options.adminScreening!.service.record(proposalId, body);
     } else if (approveSpecMatch) {
@@ -366,11 +376,13 @@ export function createAppServer(options: AppServerOptions): AppServer {
                   ? 200
                   : result.status === 'already_failed'
                     ? 200
-                    : result.status === 'not_found'
-                      ? 404
-                      : result.status === 'conflict'
-                        ? 409
-                        : 400,
+                    : result.status === 'retried'
+                      ? 200
+                      : result.status === 'not_found'
+                        ? 404
+                        : result.status === 'conflict'
+                          ? 409
+                          : 400,
       result,
     );
     return true;

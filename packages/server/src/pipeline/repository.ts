@@ -704,6 +704,25 @@ export class PipelineRepository {
     return result.changes === 1 ? this.job(id) : null;
   }
 
+  retryJob(
+    id: number,
+    from: PipelineJob['phase'],
+    expectedAttempt: number,
+    now: number,
+  ): PipelineJob | null {
+    const result = this.#sqlite
+      .prepare(
+        `UPDATE pipeline_jobs
+         SET phase = 'implementing', attempt = attempt + 1,
+             branch = NULL, pr_number = NULL, head_sha = NULL,
+             scaffold_sha = NULL, prompt_version = NULL,
+             error_code = NULL, error_note = NULL, updated_at = ?
+         WHERE id = ? AND phase = ? AND attempt = ? AND attempt < 2`,
+      )
+      .run(now, id, from, expectedAttempt);
+    return result.changes === 1 ? this.job(id) : null;
+  }
+
   screeningProposal(proposalId: string): ProposalQueueItem | null {
     return (
       this.#proposals

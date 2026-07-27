@@ -261,7 +261,7 @@ describe('production app server', () => {
         prNumber: null,
         headSha: null,
         scaffoldSha: null,
-        promptVersion: 'cx02-v1',
+        promptVersion: 'cx02-v2',
         errorCode: null,
         errorNote: null,
         createdAt: 1,
@@ -275,6 +275,17 @@ describe('production app server', () => {
         phase: 'failed' as const,
         errorCode: 'inspect_violation',
         errorNote: 'unexpected file',
+      },
+    }));
+    const retryJob = vi.fn(() => ({
+      status: 'retried' as const,
+      job: {
+        ...updateJob().job,
+        phase: 'implementing' as const,
+        attempt: 2,
+        branch: null,
+        scaffoldSha: null,
+        promptVersion: null,
       },
     }));
     const app = createAppServer({
@@ -301,6 +312,7 @@ describe('production app server', () => {
           active: () => [],
           resume: () => null,
           update: updateJob,
+          retry: retryJob,
           fail: failJob,
         },
       },
@@ -392,7 +404,7 @@ describe('production app server', () => {
         to: 'implementing',
         branch: 'rule/r0001-yagiri',
         scaffoldSha: 'a'.repeat(40),
-        promptVersion: 'cx02-v1',
+        promptVersion: 'cx02-v2',
       }),
     });
     expect(updated.status).toBe(200);
@@ -401,7 +413,24 @@ describe('production app server', () => {
       to: 'implementing',
       branch: 'rule/r0001-yagiri',
       scaffoldSha: 'a'.repeat(40),
-      promptVersion: 'cx02-v1',
+      promptVersion: 'cx02-v2',
+    });
+
+    const retried = await fetch(`${baseUrl}/admin/pipeline/jobs/1/retry`, {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer admin-token',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: 'implementing',
+        expectedAttempt: 1,
+      }),
+    });
+    expect(retried.status).toBe(200);
+    expect(retryJob).toHaveBeenCalledWith(1, {
+      from: 'implementing',
+      expectedAttempt: 1,
     });
 
     const failed = await fetch(`${baseUrl}/admin/pipeline/jobs/1/fail`, {

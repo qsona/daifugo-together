@@ -188,6 +188,19 @@ export class HttpPipelineJobPort implements PipelineJobPort {
     return response as Awaited<ReturnType<PipelineJobPort['update']>>;
   }
 
+  async retry(jobId: number, input: unknown) {
+    const response = object(
+      await this.#request(`/admin/pipeline/jobs/${String(jobId)}/retry`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    );
+    if (!response || typeof response.status !== 'string') {
+      throw new ImplementationApiError('invalid job-retry response');
+    }
+    return response as Awaited<ReturnType<PipelineJobPort['retry']>>;
+  }
+
   async fail(jobId: number, input: unknown) {
     const response = object(
       await this.#request(`/admin/pipeline/jobs/${String(jobId)}/fail`, {

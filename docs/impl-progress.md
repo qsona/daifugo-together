@@ -7,7 +7,7 @@
 - **C-5 追従完了**: E7 内包リトライの決定を反映し、`proposals.failed` を終端化。`failed` 遷移時に `attempt_count=1` を記録して同内容の再提案を即時解禁する
 - **フェーズ 2 / E6 YC-01〜03 プロセス2完了**: E-18 の非同期構成、ローカル判定ツール、イエローカード表示・停止・救済まで実装済み。修正後 judge eval は Luna/Sol とも 40/40、平均 6.40秒 / 6.23秒のため既定を **GPT-5.6 Sol medium** とした。独立 GPT-5.6 Sol 完了レビューは要件適合 `PASS` / 品質 `APPROVED`
 - **フェーズ 2 / E7 CX-01 プロセス2ほぼ完了**: 独立方向性レビュー `GO_WITH_FIXES` のImportant 4件と、初回完了レビューのImportant 2件を反映。完了再レビューはコード・自動テスト `PASS` / 品質 `APPROVED` / Critical・Importantなし。実app-server評価だけ明示許可待ち
-- **フェーズ 2 / E7 CX-02 プロセス2実装完了・独立完了レビュー待ち**: subscription Codex CLIを使う共有skill、scaffold先行push/再開、全差分・履歴検収、PR作成、失敗永続化まで実装。実subscriptionでのルール生成・実PR作成は未実行
+- **フェーズ 2 / E7 CX-02 プロセス2レビュー修正完了・独立再レビュー待ち**: subscription Codex CLIを使う共有skill、scaffold先行push/任意段階再開、全差分・履歴検収、1回retry、PR作成、失敗永続化まで実装。実subscriptionでのルール生成・実PR作成は未実行
 - E1〜E3 の実装記録は本書末尾の「並行進行」節、E13 は「E13」節。E4 の未解消の開発者判断は「詰まっている点」に残っている(1〜4・7・8・11)
 
 ### E-18 / C-2・C-3・C-6 再設計の反映(2026-07-27)
@@ -286,7 +286,7 @@ E3 マージ後の実プレーで開発者から 4 件の指摘を受け、反�
 - Important 1（非同期Port）: `PipelineJobPort` を Promise 対応にし、Bearer保護された実HTTP adapterを追加。next/update/fail/resumeの契約をローカルHTTPで検証した
 - Important 2（RuleMeta）: E12/E1の上位契約を正として、`meta.json` を `RuleMeta` と同じ `ruleId` に統一。公開rule IDとディレクトリ名を `r0001-yagiri` 形式にし、都道府県なしではpropertyを省略する
 - Important 3（状態不変条件）: `queued → implementing` は決定的branch、40/64桁scaffold SHA、CX-02 prompt versionを必須化。`implementing → pr_open` はPR番号/head SHAと既存固定点を必須化し、欠落・古いphaseを拒否する
-- Important 4（prompt version）: CX-01の判定prompt versionをqueued jobへ引き継がず、scaffold claim時に `cx02-v1` を記録する
+- Important 4（prompt version）: CX-01の判定prompt versionをqueued jobへ引き継がず、scaffold claim時に実装prompt版を記録する。authoring契約を強化した現在値は `cx02-v2`
 - subscription実行: `SubscriptionCodexRunner` は認証済みローカル `codex exec` のみを `workspace-write` / ephemeral / 20分timeoutで起動する。LLM SDK・API key・専用隔離は使用しない。timeout/異常終了/生成物なしを内部区分へ写像する
 - workspace/GitHub: shallow clone、決定的branch、`meta.json`/`SPEC.json` のscaffold commit先行push、remote branchからの中断再開、scaffold祖先・blob・全worktree差分検収、生成commit/push、既存PR回復または `rule-change` PR作成を実装した
 - 失敗境界: `/admin/pipeline/jobs/{id}/fail` を追加。内部区分は `pipeline_jobs.error_code` に保存し、同じSQLite transactionで提案を公開理由 `implementation_failed`、`attempt_count=1` にする。最終失敗は開発者がskillから明示確定し、自動では打ち切らない
@@ -295,10 +295,19 @@ E3 マージ後の実プレーで開発者から 4 件の指摘を受け、反�
 
 #### プロセス2の検証
 
-- 対象実テスト: `CI=true pnpm exec vitest run ...`: **6 files / 19 tests 成功**。実ローカルHTTP、bare Git remoteへのscaffold push・別cloneからの回復、全差分検収、生成commit/push、Fake `gh` PR契約を含む
-- 全体 `CI=true pnpm verify`: **51 files / 335 tests 成功**。format / lint / design lint / 全package typecheck・buildも成功。AI boundary検査は `no LLM SDK or network I/O`
+- 対象実テスト: `CI=true pnpm exec vitest run ...`: **6 files / 21 tests 成功**。実ローカルHTTP、bare Git remoteへのscaffold push・別cloneからの回復、全差分検収、生成commit/push、Fake `gh` PR契約を含む
+- 全体 `CI=true pnpm verify`: **51 files / 337 tests 成功**。format / lint / design lint / 全package typecheck・buildも成功。AI boundary検査は `no LLM SDK or network I/O`
 - skill validatorはfrontmatter/YAMLを手動確認済み。公式 `quick_validate.py` は実行したが、利用可能なPython環境にPyYAMLがなくスクリプト自体が起動不能だった
 - 未実行: 実Codex subscriptionでの提案1件の生成、実GitHubへのbranch push/PR作成。外部状態を変える実ジョブは存在せず、自動テストではFake/ローカルremoteに限定した
+
+#### 初回完了レビューと修正
+
+- 独立 GPT-5.6 Sol の初回判定: 要件適合 `PARTIAL` / 品質 `NEEDS_FIXES`。Criticalなし、Important 4件。方向性レビューのImportant 4件はすべて解消済みと確認された
+- Important 1（遅い段階の再開）: remoteに生成commit/PRがある `implementing` jobは、scaffold祖先・生成2ファイル・検収・head/PR一致を照合してCodexを再実行せず `pr_open` を回復する。scaffold push、生成push、PR作成後・API応答消失を同じbranch/head/PRへ収束させる
+- Important 2（retry/attempt）: 開発者が明示した1回だけ `attempt=2` へCAS更新し、旧PRをコメント付きclose、旧branchを非forceで削除、`-a2` branchへ進む `implement:retry` を追加。clone/install/git remote/GitHub操作は最大3回の指数backoffにした
+- Important 3（authoring契約）: 実装promptから正本 `packages/core/src/rules/README.md` を読むようにし、完了時typecheck/test commandを明記。外部import/re-export、`Date`、`Math.random`、dynamic importをpush前に拒否し、prompt版を `cx02-v2` に更新した
+- Important 4（PR本文）: 開発者レビュー用に承認済み `SPEC.summary` をPR本文へ追加し、Fake `gh` 契約テストで固定した
+- 正常完了した一時workspaceは削除し、失敗時だけ診断・再開用に残す
 - `CI=true pnpm verify`: **48 files / 326 tests 成功**。format / lint / design lint / 全package typecheck・buildも成功
 
 ## 完了したストーリー

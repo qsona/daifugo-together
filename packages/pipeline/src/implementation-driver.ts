@@ -19,6 +19,11 @@ type JobFailResult =
   | { status: 'not_found' }
   | { status: 'invalid'; error: string }
   | { status: 'conflict'; error: string };
+type JobRetryResult =
+  | { status: 'retried'; job: PipelineJob }
+  | { status: 'not_found' }
+  | { status: 'invalid'; error: string }
+  | { status: 'conflict'; error: string };
 
 type Awaitable<T> = T | Promise<T>;
 
@@ -26,6 +31,7 @@ export interface PipelineJobPort {
   next(): Awaitable<QueuedImplementation | null>;
   resume(jobId: number): Awaitable<QueuedImplementation | null>;
   update(jobId: number, input: unknown): Awaitable<JobUpdateResult>;
+  retry(jobId: number, input: unknown): Awaitable<JobRetryResult>;
   fail(jobId: number, input: unknown): Awaitable<JobFailResult>;
 }
 
@@ -40,6 +46,12 @@ export interface ScaffoldPublisher {
     branch: string;
     scaffoldSha: string;
   }): Promise<string[]>;
+  recoverImplementation(input: {
+    item: QueuedImplementation;
+    scaffold: ScaffoldResult;
+    branch: string;
+    scaffoldSha: string;
+  }): Promise<{ prNumber: number; headSha: string } | null>;
   publishImplementation(input: {
     item: QueuedImplementation;
     scaffold: ScaffoldResult;
@@ -86,11 +98,22 @@ export async function runNextImplementation(options: {
           promptVersion: IMPLEMENTATION_PROMPT_VERSION,
         })
       : item.job.phase === 'implementing' &&
-          item.job.branch === published.branch &&
-          item.job.scaffoldSha === published.scaffoldSha &&
-          item.job.promptVersion === IMPLEMENTATION_PROMPT_VERSION
-        ? ({ status: 'updated', job: item.job } as const)
-        : ({ status: 'conflict', error: 'resume_state_mismatch' } as const);
+          item.job.attempt > 1 &&
+          item.job.branch === null &&
+          item.job.scaffoldSha === null
+        ? await options.jobs.update(item.job.id, {
+            from: 'implementing',
+            to: 'implementing',
+            branch: published.branch,
+            scaffoldSha: published.scaffoldSha,
+            promptVersion: IMPLEMENTATION_PROMPT_VERSION,
+          })
+        : item.job.phase === 'implementing' &&
+            item.job.branch === published.branch &&
+            item.job.scaffoldSha === published.scaffoldSha &&
+            item.job.promptVersion === IMPLEMENTATION_PROMPT_VERSION
+          ? ({ status: 'updated', job: item.job } as const)
+          : ({ status: 'conflict', error: 'resume_state_mismatch' } as const);
   if (claimed.status !== 'updated') {
     return {
       status: 'claim_failed',
@@ -100,6 +123,33 @@ export async function runNextImplementation(options: {
     };
   }
   let finalJob = claimed.job;
+  const recovered = await options.publisher.recoverImplementation({
+    item,
+    scaffold,
+    ...published,
+  });
+  if (recovered) {
+    const opened = await options.jobs.update(item.job.id, {
+      from: 'implementing',
+      to: 'pr_open',
+      prNumber: recovered.prNumber,
+      headSha: recovered.headSha,
+    });
+    if (opened.status !== 'updated') {
+      return {
+        status: 'claim_failed',
+        jobId: item.job.id,
+        proposalId: item.proposal.id,
+        result: opened,
+      };
+    }
+    return {
+      status: 'ready',
+      job: opened.job,
+      proposalId: item.proposal.id,
+      result: { status: 'ready', scaffold },
+    };
+  }
 
   let result = await implementScaffold({
     scaffold,

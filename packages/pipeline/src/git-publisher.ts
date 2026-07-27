@@ -5,6 +5,7 @@ import { relative, sep } from 'node:path';
 import type { QueuedImplementation } from '@daifugo/server';
 
 import type { ScaffoldPublisher } from './implementation-driver.js';
+import { inspectGeneratedRule } from './inspector.js';
 import { SpawnProcessPort, type ProcessPort } from './process.js';
 import type { ScaffoldResult } from './scaffold.js';
 
@@ -46,55 +47,77 @@ export class GitImplementationPublisher implements ScaffoldPublisher {
     this.#timeoutMs = options.timeoutMs ?? 60_000;
   }
 
-  async #git(args: string[], allowExitCodes: number[] = [0]) {
-    const result = await this.#process.run({
-      command: 'git',
-      args,
-      cwd: this.#repoRoot,
-      timeoutMs: this.#timeoutMs,
-    });
-    if (
-      result.timedOut ||
-      result.exitCode === null ||
-      !allowExitCodes.includes(result.exitCode)
-    ) {
-      throw new Error(
-        result.stderr.trim() || `git ${args[0] ?? ''} failed or timed out`,
-      );
+  async #git(args: string[], allowExitCodes: number[] = [0], attempts = 1) {
+    let lastError = '';
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      const result = await this.#process.run({
+        command: 'git',
+        args,
+        cwd: this.#repoRoot,
+        timeoutMs: this.#timeoutMs,
+      });
+      if (
+        !result.timedOut &&
+        result.exitCode !== null &&
+        allowExitCodes.includes(result.exitCode)
+      ) {
+        return result;
+      }
+      lastError =
+        result.stderr.trim() || `git ${args[0] ?? ''} failed or timed out`;
+      if (attempt < attempts) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, 50 * 2 ** (attempt - 1)),
+        );
+      }
     }
-    return result;
+    throw new Error(lastError);
   }
 
   async #gh(args: string[]) {
-    const result = await this.#process.run({
-      command: 'gh',
-      args,
-      cwd: this.#repoRoot,
-      timeoutMs: this.#timeoutMs,
-    });
-    if (result.timedOut || result.exitCode !== 0) {
-      throw new Error(result.stderr.trim() || 'gh command failed or timed out');
+    let lastError = '';
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      const result = await this.#process.run({
+        command: 'gh',
+        args,
+        cwd: this.#repoRoot,
+        timeoutMs: this.#timeoutMs,
+      });
+      if (!result.timedOut && result.exitCode === 0) return result;
+      lastError = result.stderr.trim() || 'gh command failed or timed out';
+      if (attempt < 3) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, 50 * 2 ** (attempt - 1)),
+        );
+      }
     }
-    return result;
+    throw new Error(lastError);
   }
 
   async publish(input: {
     item: QueuedImplementation;
     scaffold: ScaffoldResult;
   }): Promise<{ branch: string; scaffoldSha: string }> {
-    const branch = `rule/${input.item.job.ruleId}`;
+    const branch = `rule/${input.item.job.ruleId}${
+      input.item.job.attempt > 1 ? `-a${String(input.item.job.attempt)}` : ''
+    }`;
     const directory = safeRelative(this.#repoRoot, input.scaffold.directory);
     const metaPath = `${directory}/meta.json`;
     const specPath = `${directory}/SPEC.json`;
     const remote = await this.#git(
       ['ls-remote', '--exit-code', '--heads', 'origin', `refs/heads/${branch}`],
       [0, 2],
+      3,
     );
     if (remote.exitCode === 0) {
       const expectedMeta = await readFile(input.scaffold.metaPath, 'utf8');
       const expectedSpec = await readFile(input.scaffold.specPath, 'utf8');
       await rm(input.scaffold.directory, { recursive: true, force: true });
-      await this.#git(['fetch', '--depth=2', 'origin', `refs/heads/${branch}`]);
+      await this.#git(
+        ['fetch', '--depth=2', 'origin', `refs/heads/${branch}`],
+        [0],
+        3,
+      );
       await this.#git(['checkout', '-B', branch, 'FETCH_HEAD']);
       const headSha = (await this.#git(['rev-parse', 'HEAD'])).stdout.trim();
       const scaffoldSha = input.item.job.scaffoldSha ?? headSha;
@@ -139,8 +162,42 @@ export class GitImplementationPublisher implements ScaffoldPublisher {
       `chore(rules): scaffold ${input.item.job.ruleId}`,
     ]);
     const sha = (await this.#git(['rev-parse', 'HEAD'])).stdout.trim();
-    await this.#git(['push', '--set-upstream', 'origin', branch]);
+    await this.#git(['push', '--set-upstream', 'origin', branch], [0], 3);
     return { branch, scaffoldSha: sha };
+  }
+
+  async recoverImplementation(input: {
+    item: QueuedImplementation;
+    scaffold: ScaffoldResult;
+    branch: string;
+    scaffoldSha: string;
+  }): Promise<{ prNumber: number; headSha: string } | null> {
+    const headSha = (await this.#git(['rev-parse', 'HEAD'])).stdout.trim();
+    if (headSha === input.scaffoldSha) return null;
+    const directory = safeRelative(this.#repoRoot, input.scaffold.directory);
+    const [local, history, changed] = await Promise.all([
+      inspectGeneratedRule(input.scaffold),
+      this.inspect(input),
+      this.#git(['diff', '--name-only', input.scaffoldSha, 'HEAD', '--']),
+    ]);
+    const expected = [
+      `${directory}/rule.ts`,
+      `${directory}/rule.test.ts`,
+    ].sort();
+    const violations = [
+      ...(local.ok ? [] : local.violations),
+      ...history,
+      ...(JSON.stringify(lines(changed.stdout).sort()) ===
+      JSON.stringify(expected)
+        ? []
+        : ['git: generated commit contains unexpected paths']),
+    ];
+    if (violations.length > 0) {
+      throw new Error(
+        `cannot recover generated commit: ${violations.join('; ')}`,
+      );
+    }
+    return this.publishImplementation(input);
   }
 
   async inspect(input: {
@@ -210,19 +267,31 @@ export class GitImplementationPublisher implements ScaffoldPublisher {
     scaffoldSha: string;
   }): Promise<{ prNumber: number; headSha: string }> {
     const directory = safeRelative(this.#repoRoot, input.scaffold.directory);
-    await this.#git([
-      'add',
-      '--',
-      `${directory}/rule.ts`,
-      `${directory}/rule.test.ts`,
-    ]);
-    await this.#git([
-      'commit',
-      '-m',
-      `feat(rules): implement ${input.item.job.ruleId}`,
-    ]);
+    const before = (await this.#git(['rev-parse', 'HEAD'])).stdout.trim();
+    if (before === input.scaffoldSha) {
+      await this.#git([
+        'add',
+        '--',
+        `${directory}/rule.ts`,
+        `${directory}/rule.test.ts`,
+      ]);
+      await this.#git([
+        'commit',
+        '-m',
+        `feat(rules): implement ${input.item.job.ruleId}`,
+      ]);
+    } else {
+      const status = await this.#git([
+        'status',
+        '--porcelain=v1',
+        '--untracked-files=all',
+      ]);
+      if (statusLines(status.stdout).length > 0) {
+        throw new Error('recovered generated commit has uncommitted changes');
+      }
+    }
     const headSha = (await this.#git(['rev-parse', 'HEAD'])).stdout.trim();
-    await this.#git(['push', 'origin', input.branch]);
+    await this.#git(['push', 'origin', input.branch], [0], 3);
     const existing = JSON.parse(
       (
         await this.#gh([
@@ -249,6 +318,8 @@ export class GitImplementationPublisher implements ScaffoldPublisher {
       `Proposal: ${input.item.proposal.id}`,
       '',
       `Rule: ${input.item.job.ruleId}`,
+      '',
+      `SPEC summary: ${input.item.spec.summary}`,
       '',
       '<!-- daifugo-pipeline',
       `scaffold-sha: ${input.scaffoldSha}`,

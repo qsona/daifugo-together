@@ -145,9 +145,11 @@ describe('GitImplementationPublisher', () => {
 
     const spawned = new SpawnProcessPort();
     let listCount = 0;
+    const ghCalls: string[][] = [];
     const processPort: ProcessPort = {
       run: async (command): Promise<ProcessResult> => {
         if (command.command !== 'gh') return spawned.run(command);
+        ghCalls.push(command.args);
         if (command.args[0] === 'pr' && command.args[1] === 'create') {
           return {
             exitCode: 0,
@@ -191,6 +193,30 @@ describe('GitImplementationPublisher', () => {
       prNumber: 42,
       headSha: expect.stringMatching(/^[0-9a-f]{40}$/u),
     });
+    expect(
+      ghCalls
+        .find((args) => args[0] === 'pr' && args[1] === 'create')
+        ?.join('\n'),
+    ).toContain(`SPEC summary: ${item.spec.summary}`);
+    await expect(
+      new GitImplementationPublisher({
+        repoRoot: recovered,
+        process: processPort,
+      }).recoverImplementation({
+        item: {
+          ...item,
+          job: {
+            ...item.job,
+            phase: 'implementing',
+            branch: published.branch,
+            scaffoldSha: published.scaffoldSha,
+            promptVersion: 'cx02-v2',
+          },
+        },
+        scaffold: recoveredScaffold,
+        ...published,
+      }),
+    ).resolves.toEqual(pullRequest);
     await expect(
       git(
         recovered,

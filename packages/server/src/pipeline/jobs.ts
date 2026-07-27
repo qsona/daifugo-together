@@ -5,6 +5,7 @@ type JsonObject = Record<string, unknown>;
 
 const TRANSITIONS = new Set([
   'queued:implementing',
+  'implementing:implementing',
   'implementing:pr_open',
   'pr_open:merged',
   'merged:done',
@@ -113,12 +114,20 @@ export class PipelineJobService {
           scaffoldSha === undefined ||
           promptVersion === undefined)) ||
       (from === 'implementing' &&
-        (to !== 'pr_open' ||
-          prNumber === undefined ||
+        to === 'implementing' &&
+        (current.attempt < 2 ||
+          current.branch !== null ||
+          branch !== `rule/${current.ruleId}-a${String(current.attempt)}` ||
+          scaffoldSha === undefined ||
+          promptVersion === undefined)) ||
+      (from === 'implementing' &&
+        to === 'pr_open' &&
+        (prNumber === undefined ||
           headSha === undefined ||
           current.branch === null ||
           current.scaffoldSha === null ||
           current.promptVersion === null)) ||
+      (from === 'implementing' && to !== 'implementing' && to !== 'pr_open') ||
       (from === 'pr_open' && (to !== 'merged' || headSha === undefined)) ||
       (from === 'merged' && to !== 'done')
     ) {
@@ -140,6 +149,40 @@ export class PipelineJobService {
     return job
       ? { status: 'updated', job }
       : { status: 'conflict', error: 'stale_job_phase' };
+  }
+
+  retry(
+    jobId: number,
+    input: unknown,
+  ):
+    | { status: 'retried'; job: PipelineJob }
+    | { status: 'not_found' }
+    | { status: 'invalid'; error: string }
+    | { status: 'conflict'; error: string } {
+    const value = object(input);
+    const from = value?.from;
+    const expectedAttempt = value?.expectedAttempt;
+    if (
+      (from !== 'implementing' && from !== 'pr_open') ||
+      !Number.isSafeInteger(expectedAttempt) ||
+      expectedAttempt !== 1
+    ) {
+      return { status: 'invalid', error: 'invalid_job_retry' };
+    }
+    const current = this.#pipeline.job(jobId);
+    if (!current) return { status: 'not_found' };
+    if (current.phase !== from || current.attempt !== expectedAttempt) {
+      return { status: 'conflict', error: 'stale_job_attempt' };
+    }
+    const job = this.#pipeline.retryJob(
+      jobId,
+      from,
+      expectedAttempt as number,
+      this.#now(),
+    );
+    return job
+      ? { status: 'retried', job }
+      : { status: 'conflict', error: 'stale_job_attempt' };
   }
 
   fail(

@@ -13,10 +13,12 @@ SDK, API key, hosted worker, browser login, or force-push.
 
 1. Read `docs/epics/E07-codex-pipeline.md` §2.2–2.5 and the approved
    `packages/pipeline/prompts/implement.md`.
-2. Verify `codex` is authenticated for the developer subscription and `gh` is
+2. Read `packages/core/src/rules/README.md`, the authoritative rule-authoring
+   guide used by the implementation prompt.
+3. Verify `codex` is authenticated for the developer subscription and `gh` is
    authenticated for this repository. If either integration is unavailable,
    stop and ask the developer to authenticate it; do not use a GUI workaround.
-3. Require these environment variables:
+4. Require these environment variables:
    `ADMIN_PIPELINE_URL`, `ADMIN_PIPELINE_TOKEN`, and `RULE_REPOSITORY_URL`.
    `IMPLEMENT_WORK_ROOT` is optional.
 
@@ -44,8 +46,11 @@ scaffold SHA. Never force-push. Do not continue past an inspection violation.
   `pnpm --filter @daifugo/pipeline implement:resume -- JOB_ID`. It must recover
   the matching remote branch and must reject a mismatched scaffold.
 - For `codex_timeout`, `codex_empty`, or an inspection violation, show the exact
-  internal error to the developer and offer one re-run (`-a2` support is not
-  yet automated) or final failure. Do not decide final failure silently.
+  internal error to the developer and offer one re-run or final failure. Do not
+  decide final failure silently. After the developer authorizes the one retry,
+  run `pnpm --filter @daifugo/pipeline implement:retry -- JOB_ID`. This closes
+  the old PR when present, deletes the old remote branch without force-pushing,
+  increments the persisted attempt, and uses the `-a2` branch.
 - Only after the developer chooses final failure, run:
 
 ```sh

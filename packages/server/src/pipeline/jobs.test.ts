@@ -160,7 +160,7 @@ describe('CX-02 pipeline jobs', () => {
         to: 'implementing',
         branch: 'rule/r0001-yagiri',
         scaffoldSha: 'a'.repeat(40),
-        promptVersion: 'cx02-v1',
+        promptVersion: 'cx02-v2',
       }),
     ).toMatchObject({
       status: 'updated',
@@ -168,7 +168,7 @@ describe('CX-02 pipeline jobs', () => {
         phase: 'implementing',
         branch: 'rule/r0001-yagiri',
         scaffoldSha: 'a'.repeat(40),
-        promptVersion: 'cx02-v1',
+        promptVersion: 'cx02-v2',
       },
     });
     expect(jobs.next()).toBeNull();
@@ -224,7 +224,7 @@ describe('CX-02 pipeline jobs', () => {
         to: 'implementing',
         branch: 'rule/wrong',
         scaffoldSha: 'a'.repeat(40),
-        promptVersion: 'cx02-v1',
+        promptVersion: 'cx02-v2',
       }),
     ).toEqual({
       status: 'invalid',
@@ -242,7 +242,7 @@ describe('CX-02 pipeline jobs', () => {
       to: 'implementing',
       branch: 'rule/r0001-yagiri',
       scaffoldSha: 'a'.repeat(40),
-      promptVersion: 'cx02-v1',
+      promptVersion: 'cx02-v2',
     });
 
     expect(
@@ -270,5 +270,63 @@ describe('CX-02 pipeline jobs', () => {
         errorCode: 'inspect_violation',
       }),
     ).toMatchObject({ status: 'already_failed' });
+  });
+
+  it('開発者が明示した1回だけattempt 2へ進め、-a2固定点を要求する', async () => {
+    const { jobs } = await approvedProposal();
+    const item = jobs.next();
+    if (!item) throw new Error('queued job missing');
+    jobs.update(item.job.id, {
+      from: 'queued',
+      to: 'implementing',
+      branch: 'rule/r0001-yagiri',
+      scaffoldSha: 'a'.repeat(40),
+      promptVersion: 'cx02-v2',
+    });
+
+    expect(
+      jobs.retry(item.job.id, {
+        from: 'implementing',
+        expectedAttempt: 1,
+      }),
+    ).toMatchObject({
+      status: 'retried',
+      job: {
+        phase: 'implementing',
+        attempt: 2,
+        branch: null,
+        scaffoldSha: null,
+      },
+    });
+    expect(
+      jobs.update(item.job.id, {
+        from: 'implementing',
+        to: 'implementing',
+        branch: 'rule/r0001-yagiri',
+        scaffoldSha: 'b'.repeat(40),
+        promptVersion: 'cx02-v2',
+      }),
+    ).toEqual({
+      status: 'invalid',
+      error: 'missing_job_transition_fields',
+    });
+    expect(
+      jobs.update(item.job.id, {
+        from: 'implementing',
+        to: 'implementing',
+        branch: 'rule/r0001-yagiri-a2',
+        scaffoldSha: 'b'.repeat(40),
+        promptVersion: 'cx02-v2',
+      }),
+    ).toMatchObject({
+      status: 'updated',
+      job: { attempt: 2, branch: 'rule/r0001-yagiri-a2' },
+    });
+    expect(
+      jobs.retry(item.job.id, {
+        from: 'implementing',
+        expectedAttempt: 2,
+      }),
+    ).toEqual({ status: 'invalid', error: 'invalid_job_retry' });
   });
 });

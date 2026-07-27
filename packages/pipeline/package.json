@@ -18,6 +18,7 @@
     "judge:eval": "pnpm build && node dist/judge-eval.js",
     "implement": "pnpm build && node dist/implement-cli.js",
     "implement:resume": "pnpm build && node dist/implement-cli.js resume",
+    "implement:retry": "pnpm build && node dist/implement-cli.js retry",
     "implement:fail": "pnpm build && node dist/implement-cli.js fail",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },

@@ -121,13 +121,15 @@ describe('HttpPipelineJobPort', () => {
                 phase: 'implementing',
                 branch: 'rule/r0001-yagiri',
                 scaffoldSha: 'a'.repeat(40),
-                promptVersion: 'cx02-v1',
+                promptVersion: 'cx02-v2',
               },
             },
           }),
         );
       } else if (request.url?.endsWith('/update')) {
         response.end(JSON.stringify({ status: 'updated', job: item.job }));
+      } else if (request.url?.endsWith('/retry')) {
+        response.end(JSON.stringify({ status: 'retried', job: item.job }));
       } else {
         response.end(JSON.stringify({ status: 'failed', job: item.job }));
       }
@@ -148,6 +150,9 @@ describe('HttpPipelineJobPort', () => {
       jobs.update(1, { from: 'queued', to: 'implementing' }),
     ).resolves.toMatchObject({ status: 'updated' });
     await expect(
+      jobs.retry(1, { from: 'implementing', expectedAttempt: 1 }),
+    ).resolves.toMatchObject({ status: 'retried' });
+    await expect(
       jobs.fail(1, { from: 'implementing', errorCode: 'infra' }),
     ).resolves.toMatchObject({ status: 'failed' });
     expect(requests).toEqual([
@@ -165,6 +170,11 @@ describe('HttpPipelineJobPort', () => {
         path: '/admin/pipeline/jobs/1/update',
         authorization: 'Bearer local-admin-token',
         body: '{"from":"queued","to":"implementing"}',
+      },
+      {
+        path: '/admin/pipeline/jobs/1/retry',
+        authorization: 'Bearer local-admin-token',
+        body: '{"from":"implementing","expectedAttempt":1}',
       },
       {
         path: '/admin/pipeline/jobs/1/fail',
