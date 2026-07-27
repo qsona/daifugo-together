@@ -6,6 +6,7 @@ coverage/
 *.tsbuildinfo
 .DS_Store
 packages/rules/generated/
+.worktrees/
 
 # Claude Code のローカル作業データ(launch.json だけ共有する)
 .claude/*
