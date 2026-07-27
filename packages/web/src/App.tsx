@@ -37,6 +37,7 @@ import { TitleScreen } from './screens/TitleScreen';
 import { WaitingRoomScreen } from './screens/WaitingRoomScreen';
 import { useScreenStore } from './store/screen';
 import {
+  getPlayedBeforeStorage,
   hasPlayedBefore,
   markPlayedBefore,
   type PlayedBeforeStorage,
@@ -707,7 +708,11 @@ export function App({
       : client;
   const effectiveStorage =
     storage ??
-    (import.meta.env.MODE === 'test' ? undefined : window.localStorage);
+    (import.meta.env.MODE === 'test'
+      ? undefined
+      : getPlayedBeforeStorage(
+          typeof window === 'undefined' ? undefined : window,
+        ));
   return effectiveClient ? (
     <ConnectedApp client={effectiveClient} storage={effectiveStorage} />
   ) : (

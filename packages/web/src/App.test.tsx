@@ -96,7 +96,7 @@ describe('DS-02: フェーズ 1 の主要画面が 1 本の導線でつながる
     // 「あそぶ」はモードを選び、そのまま作る/入るの選択へ進む。
     expect(
       screen.getByRole('dialog', {
-        name: 'あそぶモードをえらぶ',
+        name: 'あそびかたをえらぶ',
       }),
     ).toBeTruthy();
     await user.click(screen.getByRole('button', { name: /きほん/ }));

@@ -39,7 +39,7 @@ export function PlaySheet({
         isJoining
           ? '友だちの部屋にはいる'
           : mode === null
-            ? 'あそぶモードをえらぶ'
+            ? 'あそびかたをえらぶ'
             : 'じぶんの部屋をつくる'
       }
       onClose={onClose}

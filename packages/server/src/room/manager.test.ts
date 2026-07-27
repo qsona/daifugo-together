@@ -3,7 +3,7 @@ import {
   type RoomMode,
   type RuleChainEntry,
 } from '@daifugo/core';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { RoomManager, normalizeInviteCode } from './manager.js';
 
@@ -31,14 +31,14 @@ const AVAILABLE_RULE: RuleChainEntry = {
   contractVersion: 1,
 };
 
-function modeManager() {
+function modeManager(availableRules: () => RuleChainEntry[]) {
   let id = 0;
   return new RoomManager({
     now: () => 1_000 + id,
     createRoomId: () => `mode-room-${++id}`,
     createMemberId: () => `mode-member-${++id}`,
     randomIndex: (max) => id++ % max,
-    availableRules: () => [AVAILABLE_RULE],
+    availableRules,
     reducer: {
       gamesPerSet: 1,
       random: () => 0.999_999,
@@ -94,14 +94,15 @@ function finishManagedSet(rooms: RoomManager, roomId: string): void {
 }
 
 function createModeRoom(mode: RoomMode) {
-  const rooms = modeManager();
+  const availableRules = vi.fn(() => [AVAILABLE_RULE]);
+  const rooms = modeManager(availableRules);
   const created = rooms.create(
     { userId: 'mode-user-1', displayName: 'ホスト' },
     { mode },
   );
   expect(created.ok).toBe(true);
   if (!created.ok) throw new Error('Failed to create room');
-  return { rooms, created };
+  return { rooms, created, availableRules };
 }
 
 describe('RoomManager indexes', () => {
@@ -109,18 +110,20 @@ describe('RoomManager indexes', () => {
     const basic = createModeRoom('basic');
     expect(basic.created.value.room.availableRules).toEqual([]);
     expect(basic.created.value.room.mode).toBe('basic');
+    expect(basic.availableRules).not.toHaveBeenCalled();
 
     const community = createModeRoom('community');
     expect(community.created.value.room.availableRules).toEqual([
       AVAILABLE_RULE,
     ]);
     expect(community.created.value.room.mode).toBe('community');
+    expect(community.availableRules).toHaveBeenCalledOnce();
   });
 
   it.each(['continue', 'leave', 'expireSetResult'] as const)(
     '%sで2セット目へ進んでも、きほんの部屋はみんなのルールに化けない',
     (path) => {
-      const { rooms, created } = createModeRoom('basic');
+      const { rooms, created, availableRules } = createModeRoom('basic');
       const joined = rooms.join(created.value.room.inviteCode, {
         userId: 'mode-user-2',
         displayName: '参加者',
@@ -178,6 +181,7 @@ describe('RoomManager indexes', () => {
       expect(secondSet?.availableRules).toEqual([]);
       expect(secondSet?.fixedRules).toEqual([]);
       expect(secondSet?.engine?.ruleChain).toEqual([]);
+      expect(availableRules).not.toHaveBeenCalled();
     },
   );
 

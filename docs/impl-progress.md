@@ -2,7 +2,7 @@
 
 ## 現在
 
-- **フェーズ 2 / E14 TU-01 プロセス1完了・方向性レビュー待ち**: `RoomMode` を共有契約から実 Socket・Room state/view・Web のモード選択導線まで通した。非空の `availableRules` スタブを使い、きほんの部屋が `continue` / `leave` / `expireSetResult` の各経路で 2 セット目へ進んでも有効ルール 0 件のままである回帰テストを追加済み
+- **フェーズ 2 / E14 TU-01 プロセス2完了**: 独立 GPT-5.6 Sol の方向性レビュー `GO_WITH_FIXES` を反映。`RoomMode` の最小契約、作成・参加・再接続、きほんのルール空固定、既プレイタグと保存失敗時の続行まで受け入れ条件を満たした。次は TU-02 プロセス1
 - **フェーズ 1 完了(2026-07-27)**: TS-02・E1・E2・E3・E4 は main に統合済み、E13 は本番デプロイと動作検証(DP-01・DP-03)まで完了(`https://daifugo-together.fly.dev/`)。残りは DP-02 の仕上げ(GitHub Environment `production` + `FLY_API_TOKEN` 登録と初回 CD 実行確認)のみ
 - **フェーズ 2 / E5 RP-01・RP-02 完了**: プロセス1の独立 GPT-5.6 Sol レビュー(`GO_WITH_FIXES`)を反映し、プロセス2の独立完了レビューは要件適合 `PASS` / 品質 `APPROVED`。RP-03 は CX-02 依存のため E7 後に戻る
 - E1〜E3 の実装記録は本書末尾の「並行進行」節、E13 は「E13」節。E4 の未解消の開発者判断は「詰まっている点」に残っている(1〜4・7・8・11)
@@ -11,9 +11,10 @@
 
 ### TU-01 プロセス1
 
-- 状態: 縦切り実装完了・方向性レビュー待ち
+- 状態: プロセス2完了
 - ブランチ: `codex/e14-tutorial`
-- コミット: この記録を含むプロセス1コミット
+- プロセス1コミット: `4db904e`
+- プロセス2コミット: この記録を含むコミット
 - ユーザーストーリーの確認:
   - `packages/server/src/room/manager.test.ts` の「availableRulesが非空でも、きほんの部屋は有効ルールを空に固定する」と 3 経路の「2セット目へ進んでも、きほんの部屋はみんなのルールに化けない」で、非空ルール供給下でも初回・2 セット目とも `availableRules` / `fixedRules` / `engine.ruleChain` が空であることを確認
   - `packages/server/src/room/socket-gateway.test.ts` で、`room:create({ mode: 'basic' })` が実 Socket.IO 経路を通り、作成者・参加者双方の `PlayerRoomView.mode` に `basic` が見えることを確認。モード未指定は `community` になることも確認
@@ -35,20 +36,41 @@
 | E14-P1-1 | 入室導線はモード選択の同じ ChoiceSheet に置き、入室者はモード選択を経由しない | 「入る側はモードを選ばず部屋に従う」を、意味のない選択をさせずに守るため。作成者のモード選択は先頭に維持 | E14 §2.1、C-10 | `PlaySheet.tsx` と同テストのみ。ルーム契約・サーバーには影響なし |
 | E14-P1-2 | `playedBefore` はゲーム間リザルトまたはセットリザルトの snapshot を初めて受けた時点で書く | クライアントが権威的に「1 戦完了」を観測でき、再接続で既に完了済みでも取りこぼさない最小条件 | E14 §2.1 | `App.tsx` の保存条件とテスト。サーバー契約には影響なし |
 
-#### プロセス2に回したもの
+#### プロセス1方向性レビュー
+
+- 独立 GPT-5.6 Sol の判定: **GO_WITH_FIXES**。Critical なし、契約逸脱・basic へのルール混入なし
+- Important: `localStorage` の `getItem` / `setItem` と `window.localStorage` 取得時の例外防御をプロセス2で必須とする
+- Minor:
+  - 再接続 snapshot の `mode` を明示 assertion で固定する
+  - 入室導線も含む初期 ChoiceSheet のアクセシブル名を「あそぶモードをえらぶ」から「あそびかたをえらぶ」へ正す
+- 仮定 E14-P1-1 / E14-P1-2 はともに**承認**
+
+#### プロセス1からプロセス2へ回したもの
 
 | ストーリー | 内容 | 理由 |
 |---|---|---|
-| TU-01 | `localStorage` の読み書きが例外になる環境でも対局画面を止めない防御 | プロセス1では通常ブラウザの縦導線と契約回帰を優先。保存失敗はタグが再表示されるだけでゲーム進行は壊れない |
-| TU-01 | C-10 の将来案「招待コード入力後、入室前に部屋モードを見せる」 | C-10 が未決で、現契約は入室前 preview を持たない。今回は承認済みの最小方式どおり部屋参加後の view で見せる |
+| TU-01 | `localStorage` の読み書きが例外になる環境でも対局画面を止めない防御 | **完了**。保存領域の取得・読み取り・書き込みの各例外を隔離した |
+| TU-01 | C-10 の将来案「招待コード入力後、入室前に部屋モードを見せる」 | **設計保留**。レビューでも TU-01 完了を妨げないと裁定。現契約に preview がないため、契約を広げず部屋参加後の view で見せる |
+
+#### プロセス2で仕上げたもの
+
+- `window.localStorage` 自体の取得、`getItem`、`setItem` のいずれが例外になっても、未プレイ扱いまたは保存なしで対局を続ける。専用ヘルパーの正常系・`SecurityError`・`QuotaExceededError` をテスト
+- basic の作成時・`continue` / `leave` / `expireSetResult` 時には、非空の値を返す `availableRules` 供給関数自体が一度も呼ばれないことを明示
+- 同一 token の再接続 snapshot に `mode: basic` が残ることを実 Socket.IO テストで明示
+- 初期 ChoiceSheet のアクセシブル名を、作成モード2択と入室導線の全体を表す「あそびかたをえらぶ」へ変更。画面上の説明文は追加していない
 
 #### 検証
 
 - `CI=true pnpm verify`: 成功
-  - format / lint / design lint / typecheck / **35 files・256 tests** / 全 package build が成功
-- 対象テスト: **6 files・72 tests** 成功
+  - Prettier: 全対象一致
+  - ESLint / AI boundary: 成功
+  - design lint: 84 ファイル、キービジュアル 3 ファイル、アウトライン 23 件が成功
+  - TypeScript: 全 package 成功
+  - Vitest: **36 files・260 tests** 成功
+  - Build: 全 package 成功
+- プロセス2対象テスト: **4 files・44 tests** 成功
 - 実 Socket.IO: `socket-gateway.test.ts` **10 tests** 成功
-- 実ブラウザ: 375×812、モード選択タグと作成導線を確認。横スクロールなし
+- 実ブラウザ: プロセス1で 375×812 のモード選択タグと作成導線を確認。プロセス2の表示変更はアクセシブル名のみで、画面上の文言・レイアウトは不変
 
 #### 設計への提案・気づいたこと
 
@@ -56,7 +78,7 @@
 
 #### 詰まっている点
 
-- なし。C-10 は上記 E14-P1-1 の仮定で先行できている
+- なし。C-10 の入室前 preview は現契約を広げず、設計判断まで保留
 
 ## フェーズ 2: E5 ルール提案受付(RP-01・RP-02)
 

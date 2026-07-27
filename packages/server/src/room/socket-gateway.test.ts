@@ -278,7 +278,7 @@ describe('Socket.IO room gateway', () => {
     const created = await emitAck<
       'room:create',
       { roomId: string; inviteCode: string }
-    >(first.client, 'room:create', {});
+    >(first.client, 'room:create', { mode: 'basic' });
     expect(created.ok).toBe(true);
 
     const superseded = once<void>((resolve) =>
@@ -292,6 +292,7 @@ describe('Socket.IO room gateway', () => {
     expect(replacement.ready.room?.roomId).toBe(
       created.ok ? created.value.roomId : '',
     );
+    expect(replacement.ready.room?.mode).toBe('basic');
     expect(replacement.ready.room?.events).toEqual([]);
     expect(replacement.statesBeforeReady).toEqual([]);
   });
