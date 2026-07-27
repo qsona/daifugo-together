@@ -61,6 +61,10 @@ export function createInProcessRuleChainPort(
   };
 
   return {
+    disableRule(ruleId) {
+      disabled.add(ruleId);
+    },
+
     modifyLegality(
       entries: RuleChainEntry[],
       context: RuleContext,

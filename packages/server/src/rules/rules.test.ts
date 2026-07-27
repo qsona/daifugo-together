@@ -5,7 +5,11 @@ import { SqlitePersistence } from '../persistence.js';
 import { proposalContentHash } from '../proposal/repository.js';
 import { RoomManager } from '../room/manager.js';
 import type { RegisterRuleInput } from './repository.js';
-import { type CodeRuleRegistration, RuleRegistryService } from './service.js';
+import {
+  AUTO_DISABLE_WINDOW_MS,
+  type CodeRuleRegistration,
+  RuleRegistryService,
+} from './service.js';
 
 const instances: SqlitePersistence[] = [];
 
@@ -347,6 +351,92 @@ describe('CX-04 rule registry', () => {
     expect(onAutoDisable).toHaveBeenCalledOnce();
   });
 
+  it('24時間より古いincident setは自動disableの閾値から除外する', () => {
+    const { persistence, register } = setup();
+    register({ id: 'r0001-a', slug: 'a', name: 'ルールA' });
+    let now = 10_000;
+    const service = new RuleRegistryService(
+      persistence.rules,
+      [codeRule('r0001-a', 'ルールA')],
+      { now: () => now },
+    );
+    service.recordIncident({
+      ruleId: 'r0001-a',
+      setId: 'expired-set',
+      type: 'exception',
+      detail: null,
+    });
+    now += AUTO_DISABLE_WINDOW_MS + 1;
+    for (const setId of ['recent-1', 'recent-2']) {
+      service.recordIncident({
+        ruleId: 'r0001-a',
+        setId,
+        type: 'exception',
+        detail: null,
+      });
+    }
+
+    expect(persistence.rules.get('r0001-a')?.status).toBe('active');
+  });
+
+  it('正常なEffect優先度競合はincidentにも自動disableにも数えない', () => {
+    const { persistence, register } = setup();
+    register({ id: 'r0001-high', slug: 'high', name: '優先ルール' });
+    register({ id: 'r0002-low', slug: 'low', name: '競合ルール' });
+    const high = codeRule('r0001-high', '優先ルール');
+    const low = codeRule('r0002-low', '競合ルール');
+    high.module.hooks.onGameStart = (context) => [
+      {
+        type: 'skipTurns',
+        player: context.game.seats[0]!,
+        count: 1,
+      },
+    ];
+    low.module.hooks.onGameStart = (context) => [
+      {
+        type: 'skipTurns',
+        player: context.game.seats[0]!,
+        count: 2,
+      },
+    ];
+    const service = new RuleRegistryService(persistence.rules, [high, low], {
+      now: () => 15_000,
+    });
+    for (let set = 0; set < 3; set += 1) {
+      const rooms = new RoomManager({
+        availableRules: (setId) => service.availableRules(setId),
+        createRoomId: () => `conflict-room-${String(set)}`,
+        createMemberId: () => `conflict-member-${String(set)}`,
+        randomIndex: () => set,
+        reducer: {
+          random: () => 0.999_999,
+          rulePortForSet: (setId) => service.rulePortForSet(setId),
+          onRuleIncident: (incident) => {
+            service.recordIncident(incident);
+          },
+        },
+      });
+      const created = rooms.create({
+        userId: `host-${String(set)}`,
+        displayName: 'ホスト',
+      });
+      expect(created.ok).toBe(true);
+      if (!created.ok) continue;
+      const started = rooms.apply(created.value.room.roomId, {
+        type: 'start',
+        memberId: created.value.member.memberId,
+        now: 15_000 + set,
+        setSeed: `normal-conflict-${String(set)}`,
+      });
+      expect(started?.accepted).toBe(true);
+    }
+
+    expect(persistence.rules.incidents('r0001-high')).toEqual([]);
+    expect(persistence.rules.incidents('r0002-low')).toEqual([]);
+    expect(persistence.rules.get('r0001-high')?.status).toBe('active');
+    expect(persistence.rules.get('r0002-low')?.status).toBe('active');
+  });
+
   it('hook失敗後は同じsetの当該ルールだけを落とし、他ルールと基本進行を継続する', () => {
     const { persistence, register } = setup();
     register({ id: 'r0001-a', slug: 'a', name: 'ルールA' });
@@ -387,6 +477,36 @@ describe('CX-04 rule registry', () => {
       },
     ]);
     expect(persistence.rules.incidents('r0002-b')).toEqual([]);
+  });
+
+  it('set終了時にruntime portを解放し、同じIDの次setへ隔離状態を持ち越さない', () => {
+    const { persistence, register } = setup();
+    register({ id: 'r0001-a', slug: 'a', name: 'ルールA' });
+    let calls = 0;
+    const broken = codeRule('r0001-a', 'ルールA');
+    broken.module.hooks.onGameStart = () => {
+      calls += 1;
+      throw new Error('broken fixture');
+    };
+    const service = new RuleRegistryService(persistence.rules, [broken], {
+      now: () => 25_000,
+    });
+    const ruleChain = service.availableRules('reused-set-id');
+    simulate({
+      games: 1,
+      seed: 'first-runtime',
+      ruleChain,
+      port: service.rulePortForSet('reused-set-id'),
+    });
+    service.releaseRulePort('reused-set-id');
+    simulate({
+      games: 1,
+      seed: 'second-runtime',
+      ruleChain,
+      port: service.rulePortForSet('reused-set-id'),
+    });
+
+    expect(calls).toBe(2);
   });
 
   it('全ルールdisable後も基本ルールだけでsimulationを完走する', () => {

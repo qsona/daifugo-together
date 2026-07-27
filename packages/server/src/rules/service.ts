@@ -300,6 +300,10 @@ export class RuleRegistryService {
       const active = (entries: RuleChainEntry[]) =>
         entries.filter((entry) => !disabled.has(entry.ruleId));
       const port: RuleChainPort = {
+        disableRule: (ruleId) => {
+          disabled.add(ruleId);
+          inner.disableRule?.(ruleId);
+        },
         modifyLegality: (entries, context, plays, base) =>
           inner.modifyLegality(active(entries), context, plays, base),
         modifyStrength: (entries, context, base) =>

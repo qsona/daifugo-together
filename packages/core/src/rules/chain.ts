@@ -13,6 +13,13 @@ export type EffectHook =
   'afterPlay' | 'afterFieldClear' | 'onGameStart' | 'onGameEnd';
 
 export interface RuleChainPort {
+  /**
+   * Excludes a rule from the current runtime immediately.
+   *
+   * The engine calls this after detecting an invalid or unapplicable Effect so
+   * a later hook in the same transition cannot execute the failed rule.
+   */
+  disableRule?(ruleId: RuleId): void;
   modifyLegality(
     entries: RuleChainEntry[],
     context: RuleContext,
@@ -39,6 +46,7 @@ export interface RuleRuntime {
 }
 
 export const NO_RULE_CHAIN_PORT: RuleChainPort = {
+  disableRule: () => undefined,
   modifyLegality: (_entries, _context, _plays, base) => ({
     results: base,
     influenced: [],

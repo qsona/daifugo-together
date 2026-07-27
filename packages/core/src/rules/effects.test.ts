@@ -87,6 +87,86 @@ function oneCardState(ruleChain: RuleChainEntry[]): {
 }
 
 describe('GE-04 effect pipeline and lifecycle hooks', () => {
+  it('不正Effectを返したルールは同じ遷移内の後続hookからも除外する', () => {
+    const invalidEntry = entry('r0098-invalid-same-transition');
+    const finisherEntry = {
+      ...entry('r0099-finisher'),
+      position: 1,
+    };
+    let invalidEndCalls = 0;
+    let finisherEndCalls = 0;
+    const invalid: RuleModule = {
+      meta: {
+        ruleId: invalidEntry.ruleId,
+        name: invalidEntry.name,
+        description: 'invalid same-transition fixture',
+        kind: 'original',
+        proposalId: 'fixture',
+        contractVersion: 1,
+        messages: {},
+      },
+      hooks: {
+        onGameStart: () => [
+          {
+            type: 'setMemory',
+            scope: 'set',
+            key: 'too-large',
+            value: 'x'.repeat(2_000),
+          },
+        ],
+        onGameEnd: () => {
+          invalidEndCalls += 1;
+          return [];
+        },
+      },
+    };
+    const finisher: RuleModule = {
+      meta: {
+        ruleId: finisherEntry.ruleId,
+        name: finisherEntry.name,
+        description: 'finisher fixture',
+        kind: 'original',
+        proposalId: 'fixture',
+        contractVersion: 1,
+        messages: {},
+      },
+      hooks: {
+        onGameStart: (context) =>
+          context.game.seats.slice(0, 3).map((player, index) => ({
+            type: 'forceRank' as const,
+            player,
+            rank: (index + 1) as 1 | 2 | 3,
+          })),
+        onGameEnd: () => {
+          finisherEndCalls += 1;
+          return [];
+        },
+      },
+    };
+    const config: GameConfig = {
+      gameIndex: 0,
+      seats,
+      gameSeed: 'invalid-same-transition',
+      ruleChain: [invalidEntry, finisherEntry],
+    };
+    const transition = startGame(config, {
+      port: createInProcessRuleChainPort([invalid, finisher]),
+      setHistory: [],
+      setMemory: {},
+    });
+
+    expect(transition.state.public.phase).toBe('finished');
+    expect(transition.events).toContainEqual(
+      expect.objectContaining({
+        type: 'effectRejected',
+        ruleId: invalidEntry.ruleId,
+        resolution: 'rejected',
+      }),
+    );
+    expect(invalidEndCalls).toBe(0);
+    expect(finisherEndCalls).toBe(1);
+  });
+
   it('onGameStart・afterPlay・afterFieldClear・onGameEndを正規位置で呼ぶ', () => {
     const ruleEntry = entry('r0100-lifecycle');
     const calls: string[] = [];

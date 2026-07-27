@@ -63,9 +63,9 @@ const rules = new RuleRegistryService(persistence.rules, [], {
     });
   },
 });
-for (const rule of rules.reconcileRevertedCode()) {
-  writeLog('info', 'rule_revert_reconciled', { ruleId: rule.id });
-}
+// CX-05 will run reconcileRevertedCode only after it has loaded the complete
+// static code registry. An empty registry is not proof that every current rule
+// was reverted, so startup must remain fail-safe until that wiring exists.
 const app = createAppServer({
   webDistDir: resolve(process.env.WEB_DIST_DIR ?? 'packages/web/dist'),
   checkDatabase: () => persistence.checkHealth(),

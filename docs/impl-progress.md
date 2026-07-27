@@ -9,7 +9,7 @@
 - **フェーズ 2 / E7 CX-01 プロセス2ほぼ完了**: 独立方向性レビュー `GO_WITH_FIXES` のImportant 4件と、初回完了レビューのImportant 2件を反映。完了再レビューはコード・自動テスト `PASS` / 品質 `APPROVED` / Critical・Importantなし。実app-server評価だけ明示許可待ち
 - **フェーズ 2 / E7 CX-02 プロセス2完了**: subscription Codex CLIを使う共有skill、scaffold先行push/任意段階再開、全差分・履歴検収、1回retry、PR作成、失敗永続化まで実装。独立最終再レビューはコード・テスト範囲 `PASS` / 品質 `APPROVED` / 全指摘なし。実subscriptionでのルール生成・実PR作成は未実行
 - **フェーズ 2 / E7 CX-03 プロセス2完了、外部受入ゲート待ち**: trusted diff-guard、untrusted quality/rule-tests/simulation、ローカルCI監視を実装。独立完了再レビューはコード・自動テスト `PASS` / 品質 `APPROVED` / Critical・Importantなし。実repositoryのbranch protection/ruleset登録はworkflowのmain反映後
-- **フェーズ 2 / E7 CX-04 プロセス2実装・検証中**: 即時disable/enable、セット内障害隔離、24時間内3セットでの自動disable、版履歴と恒久revert同期、管理API、revert差分ガード、runbookまで実装。独立完了レビュー前
+- **フェーズ 2 / E7 CX-04 プロセス2レビュー修正中**: 即時disable/enable、セット内障害隔離、24時間内3セットでの自動disable、版履歴と恒久revert同期、管理API、revert差分ガード、runbookまで実装。独立完了レビューのCritical 1件・Important 2件を修正し、再レビュー待ち
 - **フェーズ 2 / E2 AI-02 プロセス1実装中**: 固定rule chain・ローカルbundle参照・game/set memory・set historyをworkerへ直列化し、worker側で同じRuleModule runtimeを再構成。新ルール有効の1ゲームをworker AI 4席で合法手だけで完走する縦切りまで接続
 - E1〜E3 の実装記録は本書末尾の「並行進行」節、E13 は「E13」節。E4 の未解消の開発者判断は「詰まっている点」に残っている(1〜4・7・8・11)
 
@@ -445,13 +445,21 @@ E3 マージ後の実プレーで開発者から 4 件の指摘を受け、反�
 | # | 仮定した内容 | なぜそう決めたか | 出典 | 覆ったときの影響範囲 |
 |---|---|---|---|---|
 | E7-CX04-P2-1 | 自動無効化の閾値を24時間内3 distinct setで確定する | E07の暫定値を採用し、同一セット内の連鎖障害で即座に全卓から外れない一方、再現性のある事故は短時間で止めるため | E07 §3.4(b)(f)、E12 §7-8 | `AUTO_DISABLE_*`、incident集計テスト、運用アラート |
-| E7-CX04-P2-2 | 開発者通知の当面の出口は構造化サーバーログとする | 通知チャネルとキュー可視化はE10 OP-01の責務で、CX-04では障害を欠落なく記録し運用へ渡せれば境界を保てるため | E07 §3.4、E10 OP-01 | `bin.ts` callback。OP-01で永続通知または外部通知へ差し替え |
+| E7-CX04-P2-2 | ~~開発者通知の当面の出口は構造化サーバーログとする~~ **変更: ログだけでは通知完了と扱わない** | 完了レビューで、監視されていないログは通知要件を満たさないと裁定された | E07 §3.4、E10 OP-01 | `bin.ts` callbackは診断ログとして維持。OP-01で永続outboxまたは監視済み通知へ接続 |
 | E7-CX04-P2-3 | 起動時revert同期はコードregistryに一度でも登録されたcurrent versionだけを対象にする | rule rowだけでは未有効化と恒久削除を区別できないため。`rule_versions.is_current`をデプロイ済み版の根拠にする | E07 §3.4(b)・§3.5(c) | `markMissingCodeReverted()`、CX-05のmerge/version登録 |
 
 #### 残る外部受入ゲート
 
 - runbookの「即時disable → 復帰 → 恒久revert PR → CD → 起動時同期」を実repository・実環境で1回リハーサルする。実PR・mainデプロイを伴うため、自動テストとは分離して開発者の実施許可後に行う
 - `packages/rules`の静的import registryと、merge時の`rules / rule_versions`登録はCX-05の実装で接続する。CX-04側のロード・revert同期境界はFake registryで回帰済み
+
+#### プロセス2完了レビューと修正
+
+- 独立 GPT-5.6 Sol の初回完了レビューは **NO_GO**。正常な優先度競合も`invalid_effect` incidentにして3セットで自動disableするCritical、同一core遷移内の後続hookまで不正Effectルールが残るImportant、空code registryで起動時revert同期するImportantを検出した
+- incident対象を`effectRejected`のうち`resolution='rejected'`かつ失敗詳細を持つものに限定し、通常の競合・superseded・announce抑止を除外した。正常な競合を3セット発生させてもincident 0・両ルールactiveを維持する回帰を追加した
+- `RuleChainPort.disableRule`を内部runtime制御として追加し、不正・適用不能Effectの解決時点で当該ルールを無効化する。同じ`startGame`遷移内の`onGameStart`失敗後に`onGameEnd`が呼ばれない回帰を追加した
+- 本番`bin.ts`では完全な静的registryが未接続のため起動時revert同期を行わない。CX-05で全registryをロードできたことを条件に接続する
+- 仮定 P2-2 はレビュー裁定で変更: 構造化ログだけでは「開発者通知完了」と扱わず、監視済みアラートまたは永続outboxへの接続を外部受入ゲートとする
 
 ## 完了したストーリー
 

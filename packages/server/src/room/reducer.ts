@@ -39,7 +39,13 @@ function reportRuleIncidents(
   events: readonly (EngineEvent | SetEndedEvent)[],
 ): void {
   for (const event of events) {
-    if (event.type !== 'effectRejected') continue;
+    if (
+      event.type !== 'effectRejected' ||
+      event.resolution !== 'rejected' ||
+      event.detail === undefined
+    ) {
+      continue;
+    }
     options.onRuleIncident?.({
       setId,
       ruleId: event.ruleId,

@@ -963,6 +963,15 @@ export function executeEffectHook(
       resolutionEvent(hook, entry, details.get(index)),
     ),
   );
+  for (const event of events) {
+    if (
+      event.type === 'effectRejected' &&
+      event.resolution === 'rejected' &&
+      event.detail !== undefined
+    ) {
+      runtime.port.disableRule?.(event.ruleId);
+    }
+  }
   return {
     state: nextState,
     setMemory,
