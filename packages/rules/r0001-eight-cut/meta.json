@@ -1,0 +1,9 @@
+{
+  "ruleId": "r0001-eight-cut",
+  "name": "8切り",
+  "description": "8を含む手を出すと場を流し、そのプレイヤーが次の場を開始する。ただし、その手で上がったプレイヤーは最低順位になる。",
+  "kind": "local",
+  "proposalId": "01KYJGEX6BQAJ6V2M8P7Q3GEW5",
+  "contractVersion": 1,
+  "messages": {}
+}
