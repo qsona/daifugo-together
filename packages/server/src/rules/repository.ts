@@ -1,5 +1,7 @@
 import type Database from 'better-sqlite3';
 
+import { rulePrefectureCoverage } from './coverage.js';
+
 export const RULE_STATUSES = ['active', 'disabled', 'removed'] as const;
 export type RuleStatus = (typeof RULE_STATUSES)[number];
 
@@ -21,6 +23,11 @@ export interface StoredRule {
   proposalId: string;
   status: RuleStatus;
   disabledReason: RuleDisabledReason | null;
+  activatedAt: number | null;
+  ratingUp: number;
+  ratingDown: number;
+  popularityScore: number;
+  popularityUpdatedAt: number | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -80,6 +87,7 @@ export interface RuleCatalogQuery {
   prefecture?: string | 'none';
   status?: 'active' | 'removed';
   kind?: 'local' | 'original';
+  sort: 'recent' | 'priority' | 'popularity';
   order: 'asc' | 'desc';
   limit: number;
   offset: number;
@@ -93,7 +101,19 @@ export interface RuleCatalogResult {
     prefectureCoverage: number;
   };
   total: number;
-  items: StoredRule[];
+  items: Array<StoredRule & { priorityRank: number | null }>;
+}
+
+export interface StoredConflictEvent {
+  id: number;
+  setId: string;
+  gameIndex: number;
+  playSeq: number;
+  hook: string;
+  conflictKey: string;
+  adoptedRuleId: string;
+  entries: unknown[];
+  createdAt: number;
 }
 
 type RuleRow = {
@@ -106,6 +126,11 @@ type RuleRow = {
   proposal_id: string;
   status: RuleStatus;
   disabled_reason: RuleDisabledReason | null;
+  activated_at: number | null;
+  rating_up: number;
+  rating_down: number;
+  popularity_score: number;
+  popularity_updated_at: number | null;
   created_at: number;
   updated_at: number;
 };
@@ -143,6 +168,11 @@ function storedRule(row: RuleRow): StoredRule {
     proposalId: row.proposal_id,
     status: row.status,
     disabledReason: row.disabled_reason,
+    activatedAt: row.activated_at,
+    ratingUp: row.rating_up,
+    ratingDown: row.rating_down,
+    popularityScore: row.popularity_score,
+    popularityUpdatedAt: row.popularity_updated_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -236,7 +266,24 @@ export class RuleRepository {
       );
       CREATE INDEX IF NOT EXISTS idx_rule_incidents_window
         ON rule_incidents(rule_id, created_at, set_id);
+      CREATE TABLE IF NOT EXISTS conflict_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        set_id TEXT NOT NULL,
+        game_index INTEGER NOT NULL,
+        play_seq INTEGER NOT NULL,
+        hook TEXT NOT NULL,
+        conflict_key TEXT NOT NULL,
+        adopted_rule_id TEXT NOT NULL,
+        entries_json TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        UNIQUE (set_id, game_index, play_seq, hook, conflict_key)
+      );
+      CREATE INDEX IF NOT EXISTS idx_conflict_events_set
+        ON conflict_events(set_id, id);
+      CREATE INDEX IF NOT EXISTS idx_conflict_events_rule
+        ON conflict_events(adopted_rule_id, id);
     `);
+    this.#ensureRuleColumns();
     const versionColumns = this.#sqlite
       .prepare("PRAGMA table_info('rule_versions')")
       .all() as Array<{ name: string }>;
@@ -256,8 +303,8 @@ export class RuleRepository {
       .prepare(
         `INSERT INTO rules (
            id, slug, name, description, kind, prefecture, proposal_id,
-           status, disabled_reason, created_at, updated_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           status, disabled_reason, activated_at, created_at, updated_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         input.id,
@@ -269,6 +316,7 @@ export class RuleRepository {
         input.proposalId,
         input.status,
         input.disabledReason,
+        input.status === 'active' ? input.now : null,
         input.now,
         input.now,
       );
@@ -291,7 +339,7 @@ export class RuleRepository {
       .prepare(
         `SELECT * FROM rules
          WHERE status = 'active'
-         ORDER BY created_at ASC, id ASC`,
+         ORDER BY popularity_score DESC, activated_at ASC, id ASC`,
       )
       .all() as RuleRow[];
     return rows.map(storedRule);
@@ -324,10 +372,7 @@ export class RuleRepository {
         `SELECT
            COUNT(*) AS implemented,
            SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) AS active,
-           SUM(CASE WHEN status = 'removed' THEN 1 ELSE 0 END) AS removed,
-           COUNT(DISTINCT CASE
-             WHEN kind = 'local' AND prefecture IS NOT NULL THEN prefecture
-           END) AS prefecture_coverage
+           SUM(CASE WHEN status = 'removed' THEN 1 ELSE 0 END) AS removed
          FROM rules
          WHERE ${visibleStatuses}`,
       )
@@ -335,7 +380,6 @@ export class RuleRepository {
       implemented: number;
       active: number | null;
       removed: number | null;
-      prefecture_coverage: number;
     };
     const total = (
       this.#sqlite
@@ -343,11 +387,18 @@ export class RuleRepository {
         .get(...parameters) as { total: number }
     ).total;
     const direction = query.order === 'asc' ? 'ASC' : 'DESC';
+    const orderBy =
+      query.sort === 'priority'
+        ? `CASE WHEN status = 'active' THEN 0 ELSE 1 END ASC,
+           popularity_score ${direction}, activated_at ASC, id ASC`
+        : query.sort === 'popularity'
+          ? `popularity_score ${direction}, activated_at ASC, id ASC`
+          : `created_at ${direction}, id ${direction}`;
     const rows = this.#sqlite
       .prepare(
         `SELECT * FROM rules
          WHERE ${where}
-         ORDER BY created_at ${direction}, id ${direction}
+         ORDER BY ${orderBy}
          LIMIT ? OFFSET ?`,
       )
       .all(...parameters, query.limit, query.offset) as RuleRow[];
@@ -356,10 +407,18 @@ export class RuleRepository {
         implemented: summary.implemented,
         active: summary.active ?? 0,
         removed: summary.removed ?? 0,
-        prefectureCoverage: summary.prefecture_coverage,
+        prefectureCoverage: rulePrefectureCoverage(
+          this.#sqlite,
+          query.includeRemoved,
+        ),
       },
       total,
-      items: rows.map(storedRule),
+      items: rows.map((row) => {
+        const rule = storedRule(row);
+        const priorityRank =
+          rule.status === 'active' ? this.#priorityRank(rule.id) : null;
+        return { ...rule, priorityRank };
+      }),
     };
   }
 
@@ -374,14 +433,21 @@ export class RuleRepository {
     const result = this.#sqlite
       .prepare(
         `UPDATE rules
-         SET status = ?, disabled_reason = ?, updated_at = ?
+         SET status = ?, disabled_reason = ?,
+             activated_at = CASE
+               WHEN ? = 'active' THEN COALESCE(activated_at, ?)
+               ELSE activated_at
+             END,
+             updated_at = ?
          WHERE id = ?
-           AND status <> 'removed'
-           AND status IN (${placeholders})`,
+           AND status IN (${placeholders})
+           AND status <> 'removed'`,
       )
       .run(
         input.nextStatus,
         input.disabledReason,
+        input.nextStatus,
+        input.now,
         input.now,
         input.ruleId,
         ...input.expectedStatuses,
@@ -390,6 +456,159 @@ export class RuleRepository {
       changed: result.changes === 1,
       rule: this.get(input.ruleId),
     };
+  }
+
+  priority(): Array<StoredRule & { priorityRank: number | null }> {
+    const rows = this.#sqlite
+      .prepare(
+        `SELECT * FROM rules
+         ORDER BY CASE WHEN status = 'active' THEN 0 ELSE 1 END,
+           popularity_score DESC, activated_at ASC, id ASC`,
+      )
+      .all() as RuleRow[];
+    let rank = 0;
+    return rows.map((row) => {
+      const rule = storedRule(row);
+      if (rule.status === 'active') rank += 1;
+      return {
+        ...rule,
+        priorityRank: rule.status === 'active' ? rank : null,
+      };
+    });
+  }
+
+  #priorityRank(ruleId: string): number | null {
+    return (
+      this.priority().find((rule) => rule.id === ruleId)?.priorityRank ?? null
+    );
+  }
+
+  #ensureRuleColumns(): void {
+    const columns = new Set(
+      (
+        this.#sqlite.prepare("PRAGMA table_info('rules')").all() as Array<{
+          name: string;
+        }>
+      ).map(({ name }) => name),
+    );
+    const additions = [
+      ['activated_at', 'INTEGER'],
+      ['rating_up', 'INTEGER NOT NULL DEFAULT 0'],
+      ['rating_down', 'INTEGER NOT NULL DEFAULT 0'],
+      ['popularity_score', 'REAL NOT NULL DEFAULT 0.5'],
+      ['popularity_updated_at', 'INTEGER'],
+    ] as const;
+    for (const [name, type] of additions) {
+      if (!columns.has(name)) {
+        this.#sqlite.exec(`ALTER TABLE rules ADD COLUMN ${name} ${type}`);
+      }
+    }
+    this.#sqlite.exec(`
+      UPDATE rules SET activated_at = created_at
+      WHERE status = 'active' AND activated_at IS NULL
+    `);
+  }
+
+  recordConflict(
+    input: Omit<StoredConflictEvent, 'id' | 'createdAt'> & {
+      now: number;
+    },
+  ): void {
+    this.#sqlite
+      .prepare(
+        `INSERT OR IGNORE INTO conflict_events (
+           set_id, game_index, play_seq, hook, conflict_key,
+           adopted_rule_id, entries_json, created_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        input.setId,
+        input.gameIndex,
+        input.playSeq,
+        input.hook,
+        input.conflictKey,
+        input.adoptedRuleId,
+        JSON.stringify(input.entries),
+        input.now,
+      );
+  }
+
+  conflicts(
+    query: {
+      setId?: string;
+      ruleId?: string;
+      limit?: number;
+    } = {},
+  ): StoredConflictEvent[] {
+    const conditions: string[] = [];
+    const parameters: Array<string | number> = [];
+    if (query.setId) {
+      conditions.push('set_id = ?');
+      parameters.push(query.setId);
+    }
+    if (query.ruleId) {
+      conditions.push(`(adopted_rule_id = ? OR entries_json LIKE ?)`);
+      parameters.push(query.ruleId, `%"ruleId":"${query.ruleId}"%`);
+    }
+    const limit = Math.min(Math.max(query.limit ?? 100, 1), 1_000);
+    const rows = this.#sqlite
+      .prepare(
+        `SELECT * FROM conflict_events
+         ${conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''}
+         ORDER BY id DESC LIMIT ?`,
+      )
+      .all(...parameters, limit) as Array<{
+      id: number;
+      set_id: string;
+      game_index: number;
+      play_seq: number;
+      hook: string;
+      conflict_key: string;
+      adopted_rule_id: string;
+      entries_json: string;
+      created_at: number;
+    }>;
+    return rows.map((row) => ({
+      id: row.id,
+      setId: row.set_id,
+      gameIndex: row.game_index,
+      playSeq: row.play_seq,
+      hook: row.hook,
+      conflictKey: row.conflict_key,
+      adoptedRuleId: row.adopted_rule_id,
+      entries: JSON.parse(row.entries_json) as unknown[],
+      createdAt: row.created_at,
+    }));
+  }
+
+  snapshot(setId: string): Array<{
+    ruleId: string;
+    position: number;
+    bundleHash: string;
+    popularityScore: number;
+  }> {
+    try {
+      return (
+        this.#sqlite
+          .prepare(
+            `SELECT rule_id, position, bundle_hash, popularity_score
+             FROM set_rules WHERE set_id = ? ORDER BY position`,
+          )
+          .all(setId) as Array<{
+          rule_id: string;
+          position: number;
+          bundle_hash: string;
+          popularity_score: number;
+        }>
+      ).map((row) => ({
+        ruleId: row.rule_id,
+        position: row.position,
+        bundleHash: row.bundle_hash,
+        popularityScore: row.popularity_score,
+      }));
+    } catch {
+      return [];
+    }
   }
 
   recordIncident(input: {

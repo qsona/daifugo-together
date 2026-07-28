@@ -1460,3 +1460,56 @@ TS-02 から継続で未解決のもの:
 - 順位行を用途で分割。`GameRankRows` は「順位 → 名前 → 称号 → この戦の加点 → セット累計点」を出し、加点が乗ってから合計点が数え上がる。`SetRankRows` は1位を花形カードにし、2〜4位は合計点だけの行にした（各戦の順位推移 `1→2→1` は最終戦リザルトが語るので削除）
 - 自分が1位のときだけ紙吹雪（`Confetti`、トークン色のみのCSSアニメーション）、それ以外は自分の行がひと弾みする控えめな演出。`prefers-reduced-motion` では紙吹雪のDOMを作らず、カウントアップも最終値を即表示する（判定は `prefersReducedMotion()`）
 - 設計と計画: `docs/superpowers/specs/2026-07-28-set-result-split-design.md` / `docs/superpowers/plans/2026-07-28-set-result-split.md`
+
+---
+
+## Phase 3 プロセス1（E8 / E9 / E10）
+
+- EV-01 / EV-02: セット終了時に `game_sets`、人間だけの `set_participants`、開始時固定ルールと発火有無を持つ `set_rules` を同じ永続化境界で保存する。画面5bのセット評価・発火ルール評価は省略可能で、選択時に `POST /api/sets/:setId/evaluation` へ即時保存する。参加者外、期限切れ、未発火ルールは拒否し、未発火ルールを含む更新はセット評価も残さない
+- PR-01: 既存 core の `PriorityKey = { score, activatedAt, ruleId }`、変換系の高優先度後勝ち、Effect競合の最高優先採用、コード単位の `ruleId` 比較を維持した。セット固定時の position / bundle hash / popularity snapshot と、採用・棄却を含む競合イベントをSQLiteへ保存し、管理APIで優先順位・セットsnapshot・競合を確認できる
+- EV-03 / PR-02: ルール評価の保存トランザクション内で、ルールごとに各ユーザーの最新票だけを Beta(5,5) で平滑化して人気度へ反映する。保存commit後に生票の有効化ウィンドウを Wilson 下限で判定し、既定 `theta=0.70 / nMin=10 / z=1.96` を超えた active ルールを removed にして履歴を残す。設定変更後の全件再判定、人気度再計算、理由必須のCLI復活を追加した
+- E11後続ゲート: priority / popularity / elimination のfeature flagを既定ONにし、図鑑の人気度・優先度・排除済み表示と優先順位sortを本有効化した。active rule chainも人気度、初回有効化時刻、ruleIdの順になる
+- OP-03: `ops metrics` でルール数帯・JST日次の `fun/(fun+neutral+boring)` と boring率、平均有効ルール数、実装到達・現存active・排除・復活の件数と日次推移、releasedローカル提案の都道府県カバー、完走セットと3戦未満の打ち切りセットを分けて返す
+- プロセス1重点検証: core人気度/優先順位、evaluation repository/service、operations metrics、catalog、persistence、App即時送信の **9 files / 103 tests** が成功。core / server / web typecheckも成功。HTTP listenを使うapp-serverテストはsandbox外で **8 tests** 成功
+
+### Phase 3 で置いた仮定・プロセス2送り
+
+| ID | 仮定・残作業 | 根拠 | プロセス2での扱い |
+|---|---|---|---|
+| P3-P1-1 | `games_played < 3` の打ち切りセットも通常の評価対象に含め、OP-03では評価率へ含めつつ `partialSets` として別掲する | workorder B-3は着手時決定が必要。打ち切りでも評価成立が明示され、除外すると悪い体験を観測から落とす | 独立レビューで採否を裁定し、runbookへ集計定義を明記する |
+| P3-P1-2 | E8の `set_rules` とE9の `set_rule_snapshots` は別表にせず、position / bundle hash / popularity scoreを `set_rules` へ追加して統合する | E-7は統合可否が未決。同じ `(set_id, rule_id)` の開始時スナップショットであり二重管理を避ける | snapshotの完全性・過去再現性と管理読み取り口を重点確認する |
+| P3-P1-3 | workorderの「押した時点で送信済み」をE08旧本文の一括送信/409より優先し、同じ評価をupsertし、ルール票は再選択・取り消し可能にする | phase3 workorderが旧確認ボタンを明示的に上書きしている。通信失敗時は楽観更新を巻き戻す | API冪等性、連打・順序逆転、再読込復元をプロセス2で仕上げる |
+| P3-P1-4 | 人気度は全期間のユーザー別latest-wins、排除はセット別の生票と復活時刻後の有効化ウィンドウを別集計にする | E09 §3.2(c) と E08 §2.4 / §3.3 が用途を分離している | 集計SQLの同時更新、復活直後、票付け替えの境界を追加検証する |
+| P3-P1-5 | D-1/D-2/D-3は設計初期値のまま実装し、D-6はCLI+SSHを採用する | workorderで仮値着手可、D-6は決定済み | `settings`変更の再起動不要反映、全件再判定、実CLI出力と運用runbookを完成させる |
+| P3-P1-6 | 競合ログは権威イベントから競合グループだけを抽出し、セット・戦・play seq・hook・conflict key・採用rule・全entryを保存する | PR-01はEffect語彙/フックを変えず追跡可能にする必要がある | 実競合からDB/APIまでの縦断テストと重複保存防止を追加する |
+
+### Phase 3 独立方向性レビューとプロセス2
+
+- 新規コンテキストの独立 GPT-5.6 Sol 方向性レビューは **GO_WITH_FIXES**、Criticalなし。P3-P1-1〜6はすべて採用された。D-1 / D-2 / D-3は設計初期値のまま実装するが、正式値は開発者承認待ち
+- Important 1「`game_sets`とルールsnapshotがセット終了時まで存在しない」は、セット開始時の`beginSet`と終了時の`completeSet`へ分離して解消した。開始時に人間参加者とposition / bundle hash / popularityを固定し、終了時に結果・戦数・`did_fire`を確定する。未完了セットは評価不可
+- Important 2「E11図鑑とOP-03の都道府県カバーが別集計」は、`rules/coverage.ts`の正準関数をcatalogとmetricsから共有して解消した。active + removedを数えdisabledを除外し、同一fixtureで両出力が一致する回帰を追加した
+- 同じ独立 GPT-5.6 Sol にImportant 2点の修正を再レビューしてもらい、両方 **CLOSED**、残存Critical / Importantなし。関連4 files / 24 tests、server TypeScript、`git diff --check`の成功も独立確認された
+- 競合は実`onGameStart`のEffect衝突からreducer callback、SQLite、管理HTTP APIまで接続し、同一set / game / play / hook / conflict keyの重複保存を防ぐ。優先順位とセットsnapshotも専用Bearerの管理APIで確認できる
+- 評価UIは楽観更新を直列送信し、初期GETと連打POSTの応答順が逆転しても新しい選択を上書きしない。失敗時は最後にサーバー確認済みの状態へ戻す。Bearer取得時にlocalStorageが利用不能でも同期例外を漏らさない
+- OP-04 runbookを追加し、週次の`funRate` / `boringRate` / ルール数帯 / 排除・復活 / 都道府県カバーの読み方、一度に一つだけ設定を変える較正、即時disable、復活、再計算、戻し方を実CLI出力へ対応させた。常駐機構と自動削除は追加していない
+
+### Phase 3 検証
+
+- build済みCLIを空の一時SQLite `/private/tmp/daifugo-phase3.K1A46x/dryrun.sqlite` に対して実行し、`metrics`は空の日次・帯別配列と件数0、`settings set elimination_theta 0.70`と`popularity recompute`は成功JSONを返した。再起動は不要
+- 実ブラウザを375×812に固定し、セット結果の3段階評価、発火ルールごとの高評価・低評価、次セット・ホーム導線を確認した。`clientWidth=scrollWidth=375`で横スクロールなし。評価説明文と確認/送信ボタンはDOMにも表示されない
+- `CI=true pnpm verify`: 成功
+  - Prettier / ESLint / AI boundary / design lint / TypeScript / 全package build: 成功
+  - design lint: **121 files**、キービジュアル3ファイル、アウトライン20件が成功
+  - Vitest: **93 files / 619 tests** 成功
+
+### Phase 3 初回完了レビュー
+
+- 新規コンテキストの独立 GPT-5.6 Sol は **PARTIAL / NEEDS_FIXES / NO_GO**。EV-01 / EV-02 / EV-03 / PR-01 / PR-02 / OP-03 / E11後続ゲートはPASS、Critical / Minorなし
+- Important 1件: OP-04 runbookに、E09が要求する「α / β変更 → 全人気度再計算 → 文書更新」の具体的な操作経路がなく、優先度換算レバーだけ実運用できなかった
+- α / β は設計どおりcoreのコード定数に保ち、変更判断、`POPULARITY_PRIOR`の変更、数値トレース更新、全verify、通常PR/デプロイ、build済みCLIでの全件再計算、管理API確認、効果比較、revertと再計算、runbook / decision-log / 運用記録更新までを手順化した。runtime settingsは増やさない
+- 修正後リハーサルとして人気度純粋関数と評価・再計算の **2 files / 12 tests** を実行し、build済みCLIを一時SQLite `/private/tmp/daifugo-phase3.K1A46x/prior-rehearsal.sqlite` へ適用して `{"status":"recomputed"}` を確認した
+
+### Phase 3 完了再レビュー
+
+- 同じ独立 GPT-5.6 Sol がOP-04 Importantを **CLOSED** と確認し、最終判定は **PASS / APPROVED / GO**。Critical / Important / Minorはすべてなし
+- D-1 / D-2 / D-3の正式値承認とB-4の保持期間決定は運用上の人間判断として残るが、設計初期値、変更経路、記録・復旧手順があるためPhase 3実装の完了を妨げない

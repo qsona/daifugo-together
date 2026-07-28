@@ -62,6 +62,7 @@ describe('RuleRepository catalog', () => {
 
     const first = persistence.rules.catalog({
       includeRemoved: true,
+      sort: 'recent',
       order: 'desc',
       limit: 30,
       offset: 0,
@@ -78,6 +79,7 @@ describe('RuleRepository catalog', () => {
     expect(
       persistence.rules.catalog({
         includeRemoved: true,
+        sort: 'recent',
         order: 'desc',
         limit: 30,
         offset: 30,
@@ -91,6 +93,7 @@ describe('RuleRepository catalog', () => {
           prefecture: 'none',
           kind: 'local',
           status: 'active',
+          sort: 'recent',
           order: 'desc',
           limit: 100,
           offset: 0,
@@ -104,6 +107,7 @@ describe('RuleRepository catalog', () => {
         includeRemoved: true,
         prefecture: '埼玉県',
         kind: 'original',
+        sort: 'recent',
         order: 'desc',
         limit: 100,
         offset: 0,
@@ -113,6 +117,7 @@ describe('RuleRepository catalog', () => {
     const activeOnly = persistence.rules.catalog({
       includeRemoved: false,
       status: 'removed',
+      sort: 'recent',
       order: 'desc',
       limit: 30,
       offset: 0,

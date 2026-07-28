@@ -551,6 +551,11 @@ describe('production app server', () => {
       proposalId: 'proposal-1',
       status: 'active' as const,
       disabledReason: null,
+      activatedAt: 1,
+      ratingUp: 0,
+      ratingDown: 0,
+      popularityScore: 0.5,
+      popularityUpdatedAt: null,
       createdAt: 1,
       updatedAt: 1,
     };
@@ -584,11 +589,50 @@ describe('production app server', () => {
         ? ({ status: 'conflict', error: 'rule_removed' } as const)
         : ({ status: 'updated', rule } as const),
     );
+    const priority = vi.fn(() => [
+      {
+        ruleId: rule.id,
+        up: 0,
+        down: 0,
+        popularityScore: 0.5,
+        priorityRank: 1,
+        activatedAt: 1,
+        popularityUpdatedAt: null,
+      },
+    ]);
+    const conflicts = vi.fn(() => [
+      {
+        id: 1,
+        setId: 'set 1',
+        gameIndex: 0,
+        playSeq: 0,
+        hook: 'onGameStart',
+        conflictKey: 'rank',
+        adoptedRuleId: rule.id,
+        entries: [{ ruleId: rule.id }],
+        createdAt: 1,
+      },
+    ]);
+    const snapshot = vi.fn(() => [
+      {
+        ruleId: rule.id,
+        position: 1,
+        bundleHash: 'bundle',
+        popularityScore: 0.75,
+      },
+    ]);
     const app = createAppServer({
       webDistDir: directory,
       adminRules: {
         token: 'admin-token',
-        service: { get, disable, enable },
+        service: {
+          get,
+          disable,
+          enable,
+          priority,
+          conflicts,
+          snapshot,
+        },
       },
     });
     apps.push(app);
@@ -674,6 +718,85 @@ describe('production app server', () => {
     expect(malformed.status).toBe(400);
     await expect(malformed.json()).resolves.toEqual({
       error: 'invalid_path_encoding',
+    });
+
+    const priorities = await fetch(`${baseUrl}/api/admin/rules/priority`, {
+      headers: { authorization: 'Bearer admin-token' },
+    });
+    expect(priorities.status).toBe(200);
+    await expect(priorities.json()).resolves.toEqual({
+      items: [
+        {
+          ruleId: rule.id,
+          up: 0,
+          down: 0,
+          popularityScore: 0.5,
+          priorityRank: 1,
+          activatedAt: 1,
+          popularityUpdatedAt: null,
+        },
+      ],
+    });
+
+    const conflictEvents = await fetch(
+      `${baseUrl}/api/admin/conflict-events?setId=set%201&ruleId=${rule.id}&limit=5`,
+      { headers: { authorization: 'Bearer admin-token' } },
+    );
+    expect(conflictEvents.status).toBe(200);
+    expect(conflicts).toHaveBeenCalledWith({
+      setId: 'set 1',
+      ruleId: rule.id,
+      limit: 5,
+    });
+
+    const setSnapshot = await fetch(
+      `${baseUrl}/api/admin/sets/set%201/snapshot`,
+      { headers: { authorization: 'Bearer admin-token' } },
+    );
+    expect(setSnapshot.status).toBe(200);
+    expect(snapshot).toHaveBeenCalledWith('set 1');
+  });
+
+  it('セット評価APIへBearerと増分更新を渡す', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'daifugo-web-dist-'));
+    directories.push(directory);
+    const get = vi.fn(() => ({
+      status: 200 as const,
+      body: { setRating: null, ruleVotes: [] },
+    }));
+    const update = vi.fn(() => ({
+      status: 200 as const,
+      body: {
+        status: 'updated',
+        state: { setRating: 'fun', ruleVotes: [] },
+        eliminatedRuleIds: [],
+      },
+    }));
+    const app = createAppServer({
+      webDistDir: directory,
+      evaluations: { get, update },
+    });
+    apps.push(app);
+    const port = await app.listen(0, '127.0.0.1');
+    const baseUrl = `http://127.0.0.1:${String(port)}`;
+
+    const loaded = await fetch(`${baseUrl}/api/sets/set%201/evaluation`, {
+      headers: { authorization: 'Bearer user-token' },
+    });
+    expect(loaded.status).toBe(200);
+    expect(get).toHaveBeenCalledWith('user-token', 'set 1');
+
+    const saved = await fetch(`${baseUrl}/api/sets/set%201/evaluation`, {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer user-token',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ setRating: 'fun' }),
+    });
+    expect(saved.status).toBe(200);
+    expect(update).toHaveBeenCalledWith('user-token', 'set 1', {
+      setRating: 'fun',
     });
   });
 });

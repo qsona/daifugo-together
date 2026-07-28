@@ -614,6 +614,7 @@ function tutorialSetResultRoom(
     activeRules: [],
     game: null,
     setResult: {
+      setId: `${mode}-result-set`,
       standings: [
         {
           memberId: 'member-1',
@@ -850,6 +851,7 @@ describe('CX-06: 実ルール発動イベントの演出', () => {
         phase: 'setResult',
         game: null,
         setResult: {
+          setId: 'community-result-set',
           standings: [],
           finalGame: null,
           firedRules: [{ ruleId: 'r-final', ruleName: 'あがり花火', count: 1 }],
@@ -983,8 +985,13 @@ describe('CX-06: 実ルール発動イベントの演出', () => {
     expect(screen.getByLabelText('5件同時発動')).toBeTruthy();
   });
 
-  it('セット結果snapshotの発動ルールを評価機能なしでも一覧表示する', () => {
+  it('セット結果snapshotの発動ルールを一覧表示し、押した時点で評価を送る', async () => {
+    const user = userEvent.setup();
     const initial = tutorialHintRoom('community', []);
+    const update = vi.fn(async () => ({
+      setRating: null,
+      ruleVotes: [{ ruleId: 'r0001-revolution', vote: 'up' as const }],
+    }));
     render(
       <App
         client={tutorialHintClient({
@@ -992,6 +999,7 @@ describe('CX-06: 実ルール発動イベントの演出', () => {
           phase: 'setResult',
           game: null,
           setResult: {
+            setId: 'community-result-set',
             standings: [],
             firedRules: [
               {
@@ -1005,12 +1013,153 @@ describe('CX-06: 実ルール発動イベントの演出', () => {
           },
           events: [],
         })}
+        evaluationApi={{
+          get: async () => ({ setRating: null, ruleVotes: [] }),
+          update,
+        }}
       />,
     );
 
     expect(screen.getByText('発動したルール')).toBeTruthy();
     expect(screen.getByText('革命返し')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: /高評価/ })).toBeNull();
+    await user.click(screen.getByRole('button', { name: /高評価/ }));
+    expect(update).toHaveBeenCalledWith('community-result-set', {
+      ruleVote: { ruleId: 'r0001-revolution', vote: 'up' },
+    });
+  });
+
+  it('評価の連打はクリック順に保存し、古い応答で最新表示を戻さない', async () => {
+    const user = userEvent.setup();
+    const initial = tutorialHintRoom('community', []);
+    type EvaluationState = {
+      setRating: null;
+      ruleVotes: { ruleId: string; vote: 'up' | 'down' }[];
+    };
+    let resolveFirst!: (value: EvaluationState) => void;
+    let resolveSecond!: (value: EvaluationState) => void;
+    let call = 0;
+    const update = vi.fn(
+      () =>
+        new Promise<EvaluationState>((resolve) => {
+          if (call++ === 0) resolveFirst = resolve;
+          else resolveSecond = resolve;
+        }),
+    );
+    render(
+      <App
+        client={tutorialHintClient({
+          ...initial,
+          phase: 'setResult',
+          game: null,
+          setResult: {
+            setId: 'ordered-evaluation-set',
+            standings: [],
+            firedRules: [
+              {
+                ruleId: 'r0001-revolution',
+                ruleName: '革命返し',
+                count: 1,
+              },
+            ],
+            finalGame: null,
+            respondBy: 10_000,
+          },
+          events: [],
+        })}
+        evaluationApi={{
+          get: async () => ({ setRating: null, ruleVotes: [] }),
+          update,
+        }}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /高評価/ }));
+    await user.click(screen.getByRole('button', { name: /低評価/ }));
+    expect(update).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveFirst({
+        setRating: null,
+        ruleVotes: [{ ruleId: 'r0001-revolution', vote: 'up' }],
+      });
+    });
+    await waitFor(() => expect(update).toHaveBeenCalledTimes(2));
+    await act(async () => {
+      resolveSecond({
+        setRating: null,
+        ruleVotes: [{ ruleId: 'r0001-revolution', vote: 'down' }],
+      });
+    });
+    expect(
+      screen
+        .getByRole('button', { name: /低評価/ })
+        .getAttribute('aria-pressed'),
+    ).toBe('true');
+  });
+
+  it('遅れて届いた初期取得を失敗時の巻き戻し先に使わない', async () => {
+    const user = userEvent.setup();
+    const initial = tutorialHintRoom('community', []);
+    let resolveGet!: (value: {
+      setRating: null;
+      ruleVotes: { ruleId: string; vote: 'up' | 'down' }[];
+    }) => void;
+    let updateCall = 0;
+    const update = vi.fn(async () => {
+      updateCall += 1;
+      if (updateCall === 2) throw new Error('offline');
+      return {
+        setRating: null,
+        ruleVotes: [{ ruleId: 'r0001-revolution', vote: 'up' as const }],
+      };
+    });
+    render(
+      <App
+        client={tutorialHintClient({
+          ...initial,
+          phase: 'setResult',
+          game: null,
+          setResult: {
+            setId: 'stale-load-evaluation-set',
+            standings: [],
+            firedRules: [
+              {
+                ruleId: 'r0001-revolution',
+                ruleName: '革命返し',
+                count: 1,
+              },
+            ],
+            finalGame: null,
+            respondBy: 10_000,
+          },
+          events: [],
+        })}
+        evaluationApi={{
+          get: () =>
+            new Promise((resolve) => {
+              resolveGet = resolve;
+            }),
+          update,
+        }}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /高評価/ }));
+    await waitFor(() => expect(update).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      resolveGet({ setRating: null, ruleVotes: [] });
+    });
+    await user.click(screen.getByRole('button', { name: /低評価/ }));
+    await waitFor(() =>
+      expect(
+        screen.getByText('評価を送れませんでした。もう一度ためしてください'),
+      ).toBeTruthy(),
+    );
+    expect(
+      screen
+        .getByRole('button', { name: /高評価/ })
+        .getAttribute('aria-pressed'),
+    ).toBe('true');
   });
 });
 
@@ -1604,6 +1753,7 @@ function finalGameRoom(
     activeRules: [],
     game: null,
     setResult: {
+      setId: 'final-result-set',
       standings: [
         {
           memberId: 'member-1',

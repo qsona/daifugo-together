@@ -19,6 +19,7 @@
     "ops:dev": "pnpm build && node dist/ops.js",
     "ops:status": "pnpm ops:dev status",
     "ops:funnel": "pnpm ops:dev funnel",
+    "ops:metrics": "pnpm ops:dev metrics",
     "ops:list-appeals": "pnpm build && node dist/ops.js list-appeals",
     "ops:revoke-card": "pnpm build && node dist/ops.js revoke-card",
     "ops:reject-appeal": "pnpm build && node dist/ops.js reject-appeal",

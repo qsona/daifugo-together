@@ -19,6 +19,7 @@ import {
 } from 'drizzle-orm/sqlite-core';
 
 import { InjectionRepository } from './injection/repository.js';
+import { EvaluationRepository } from './evaluation/repository.js';
 import { OperationsRepository } from './operations/repository.js';
 import { PipelineRepository } from './pipeline/repository.js';
 import type {
@@ -184,6 +185,7 @@ export class SqlitePersistence implements RoomPersistencePort {
   readonly proposals: ProposalRepository;
   readonly injection: InjectionRepository;
   readonly operations: OperationsRepository;
+  readonly evaluations: EvaluationRepository;
   readonly pipeline: PipelineRepository;
   readonly rules: RuleRepository;
 
@@ -310,8 +312,9 @@ export class SqlitePersistence implements RoomPersistencePort {
       this.proposals,
       this.injection,
     );
-    this.operations = new OperationsRepository(this.#sqlite);
     this.rules = new RuleRepository(this.#sqlite);
+    this.evaluations = new EvaluationRepository(this.#sqlite);
+    this.operations = new OperationsRepository(this.#sqlite);
   }
 
   roomManagerOptions(): Pick<RoomManagerOptions, 'persistence'> {
@@ -352,6 +355,23 @@ export class SqlitePersistence implements RoomPersistencePort {
           })
           .run();
       }
+      if (isInit && next.engine) {
+        this.evaluations.beginSet({
+          setId: next.engine.setId,
+          roomId: next.roomId,
+          startedAt: now,
+          participantUserIds: next.members.flatMap((member) =>
+            member.isAI || member.userId === null ? [] : [member.userId],
+          ),
+          rules: (next.fixedRules ?? []).map((rule) => ({
+            ruleId: rule.ruleId,
+            position: rule.position,
+            bundleHash: rule.bundleHash,
+            popularityScore: rule.priority.score,
+            didFire: false,
+          })),
+        });
+      }
       if (
         previous.phase !== 'setResult' &&
         next.phase === 'setResult' &&
@@ -390,6 +410,14 @@ export class SqlitePersistence implements RoomPersistencePort {
           })
           .onConflictDoNothing()
           .run();
+        this.evaluations.completeSet({
+          setId: next.engine.setId,
+          endedAt: now,
+          gamesPlayed: next.engine.outcome.gamesPlayed,
+          completion: next.engine.outcome.completion,
+          standings: next.engine.outcome.standings,
+          firedRuleIds: next.engine.outcome.firedRuleIds,
+        });
       }
     });
     transaction();

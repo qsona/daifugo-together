@@ -13,6 +13,7 @@ import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { SqlitePersistence } from './persistence.js';
+import { proposalContentHash } from './proposal/repository.js';
 import { RoomManager } from './room/manager.js';
 
 const temporaryDirectories: string[] = [];
@@ -78,6 +79,85 @@ describe('SQLite persistence', () => {
       firedRules: [],
     });
     migrated.close();
+  });
+
+  it('セット開始時に固定ルールchainを保存し、終了前の評価は開かない', () => {
+    const persistence = new SqlitePersistence(':memory:');
+    const session = persistence.sessions.resolve(undefined);
+    const proposal = {
+      kind: 'original' as const,
+      prefectureCode: null,
+      name: '開始時固定',
+      body: 'セット開始時に固定する',
+    };
+    persistence.proposals.create({
+      id: 'proposal-start-snapshot',
+      authorId: session.userId,
+      proposal,
+      contentHash: proposalContentHash(proposal),
+      now: 1,
+      commitSignals: () => undefined,
+    });
+    persistence.rules.register({
+      id: 'r0001-start-snapshot',
+      slug: 'start-snapshot',
+      name: proposal.name,
+      description: proposal.body,
+      kind: 'original',
+      prefecture: null,
+      proposalId: 'proposal-start-snapshot',
+      status: 'active',
+      disabledReason: null,
+      now: 1,
+    });
+    const chain = {
+      ruleId: 'r0001-start-snapshot',
+      name: proposal.name,
+      position: 0,
+      priority: {
+        score: 0.5,
+        activatedAt: 1,
+        ruleId: 'r0001-start-snapshot',
+      },
+      bundleHash: 'bundle-start-snapshot',
+      contractVersion: 1,
+    };
+    const rooms = new RoomManager({
+      ...persistence.roomManagerOptions(),
+      availableRules: () => [chain],
+      createRoomId: () => 'start-snapshot-room',
+      createMemberId: () => 'start-snapshot-member',
+      randomIndex: () => 0,
+    });
+    const created = rooms.create({
+      userId: session.userId,
+      displayName: session.displayName,
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+
+    const started = rooms.apply(created.value.room.roomId, {
+      type: 'start',
+      memberId: created.value.member.memberId,
+      now: 100,
+      setSeed: 'start-snapshot-seed',
+    })!;
+
+    expect(persistence.rules.snapshot(started.state.engine!.setId)).toEqual([
+      {
+        ruleId: chain.ruleId,
+        position: 0,
+        bundleHash: chain.bundleHash,
+        popularityScore: 0.5,
+      },
+    ]);
+    expect(
+      persistence.evaluations.state(
+        session.userToken,
+        started.state.engine!.setId,
+      ),
+    ).toBe('not_found');
+    persistence.close();
   });
 
   it('正確な発火回数と信頼済みルール名をset resultと同時保存し再起動後も復元する', () => {

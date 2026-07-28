@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { loadRuleCodeBundles } from '@daifugo/rules';
 
 import { createAppServer } from './app-server.js';
+import { EvaluationService } from './evaluation/service.js';
 import { InjectionStaticAnalyzer } from './injection/detector.js';
 import { LocalScreeningService } from './injection/local-screening.js';
 import { InjectionSignalRecorder } from './injection/screening.js';
@@ -105,6 +106,10 @@ const roomManager = new RoomManager({
       rules.disableRuleInSet(incident.setId, incident.ruleId);
       rules.recordIncident(incident);
     },
+    onRuleConflict: (conflict) => {
+      rules.recordConflict(conflict);
+      writeLog('info', 'rule_conflict_resolved', conflict);
+    },
   },
 });
 const app = createAppServer({
@@ -113,8 +118,11 @@ const app = createAppServer({
   proposals: new ProposalSubmissionService(persistence.proposals, {
     signals,
   }),
+  evaluations: new EvaluationService(persistence.evaluations),
   ruleCatalog: new RuleCatalogService(persistence.rules, {
-    eliminationEnabled: process.env.FEATURE_ELIMINATION === 'true',
+    eliminationEnabled: process.env.FEATURE_ELIMINATION !== 'false',
+    priorityEnabled: process.env.FEATURE_PRIORITY !== 'false',
+    popularityEnabled: process.env.FEATURE_POPULARITY !== 'false',
   }),
   yellowCards: new YellowCardService(
     persistence.injection,

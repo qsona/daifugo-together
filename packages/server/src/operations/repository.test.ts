@@ -500,4 +500,161 @@ describe('OperationsRepository', () => {
       ),
     ).toBe(funnel.byStatus.failed);
   });
+
+  test('ルール数帯ごとの評価率と途中打ち切りを分け、実装到達した都道府県を数える', () => {
+    const { persistence, raw } = fixture();
+    raw
+      .prepare(
+        `INSERT INTO users(user_id, user_token, display_name, created_at)
+         VALUES (?, ?, ?, 1)`,
+      )
+      .run('user-2', 'token-0000000000000002', '評価者2');
+    raw
+      .prepare(
+        `INSERT INTO users(user_id, user_token, display_name, created_at)
+         VALUES (?, ?, ?, 1)`,
+      )
+      .run('user-3', 'token-0000000000000003', '評価者3');
+    const insertProposal = raw.prepare(
+      `INSERT INTO proposals (
+         id, proposal_number, author_id, kind, prefecture_code, name, body,
+         status, reason_code, reason_text, rule_id, attempt_count, content_hash,
+         created_at, status_changed_at, updated_at
+       ) VALUES (?, ?, 'user-1', ?, ?, ?, '説明', 'released', NULL, NULL, ?,
+                 0, ?, ?, ?, ?)`,
+    );
+    const insertRule = raw.prepare(
+      `INSERT INTO rules (
+         id, slug, name, description, kind, prefecture, proposal_id, status,
+         disabled_reason, activated_at, created_at, updated_at
+       ) VALUES (?, ?, ?, '説明', ?, ?, ?, 'active', NULL, ?, ?, ?)`,
+    );
+    for (let index = 0; index < 11; index += 1) {
+      const number = index + 1;
+      const proposalId = `metrics-p${String(number)}`;
+      const ruleId = `metrics-r${String(number)}`;
+      const local = index <= 1;
+      const prefectureCode = index === 0 ? '11' : index === 1 ? '13' : null;
+      const prefecture = index === 0 ? '埼玉県' : index === 1 ? '東京都' : null;
+      insertProposal.run(
+        proposalId,
+        number,
+        local ? 'local' : 'original',
+        prefectureCode,
+        `指標ルール${String(number)}`,
+        ruleId,
+        `metrics-hash-${String(number)}`,
+        1_000 + index,
+        1_000 + index,
+        1_000 + index,
+      );
+      insertRule.run(
+        ruleId,
+        ruleId,
+        ruleId,
+        local ? 'local' : 'original',
+        prefecture,
+        proposalId,
+        1_000 + index,
+        1_000 + index,
+        1_000 + index,
+      );
+    }
+    persistence.rules.transition({
+      ruleId: 'metrics-r2',
+      expectedStatuses: ['active'],
+      nextStatus: 'disabled',
+      disabledReason: 'manual',
+      now: 2_000,
+    });
+    const endedAt = Date.UTC(2026, 0, 1, 3);
+    const insertSet = raw.prepare(
+      `INSERT INTO game_sets (
+         id, room_id, started_at, ended_at, games_played, completion, standings
+       ) VALUES (?, 'room-1', ?, ?, ?, ?, '[]')`,
+    );
+    insertSet.run('metrics-set-10', endedAt - 1_000, endedAt, 3, 'completed');
+    insertSet.run('metrics-set-11', endedAt, endedAt + 1_000, 2, 'drained');
+    const insertSetRule = raw.prepare(
+      `INSERT INTO set_rules (
+         set_id, rule_id, was_active, did_fire, position, bundle_hash,
+         popularity_score
+       ) VALUES (?, ?, 1, 0, ?, ?, 0.5)`,
+    );
+    for (let index = 0; index < 11; index += 1) {
+      const ruleId = `metrics-r${String(index + 1)}`;
+      insertSetRule.run('metrics-set-11', ruleId, index, `bundle-${ruleId}`);
+      if (index < 10) {
+        insertSetRule.run('metrics-set-10', ruleId, index, `bundle-${ruleId}`);
+      }
+    }
+    const insertEvaluation = raw.prepare(
+      `INSERT INTO set_evaluations (
+         id, set_id, user_id, rating, created_at, updated_at
+       ) VALUES (?, ?, ?, ?, ?, ?)`,
+    );
+    insertEvaluation.run(
+      'evaluation-1',
+      'metrics-set-10',
+      'user-1',
+      'fun',
+      endedAt,
+      endedAt,
+    );
+    insertEvaluation.run(
+      'evaluation-2',
+      'metrics-set-10',
+      'user-2',
+      'neutral',
+      endedAt,
+      endedAt,
+    );
+    insertEvaluation.run(
+      'evaluation-3',
+      'metrics-set-11',
+      'user-3',
+      'boring',
+      endedAt + 1_000,
+      endedAt + 1_000,
+    );
+
+    const metrics = persistence.operations.metrics(
+      endedAt - 10_000,
+      endedAt + 10_000,
+    );
+    const catalog = persistence.rules.catalog({
+      includeRemoved: true,
+      sort: 'recent',
+      order: 'desc',
+      limit: 30,
+      offset: 0,
+    });
+
+    expect(metrics.byRuleBand).toEqual([
+      {
+        band: '00-10',
+        evaluations: 2,
+        funRate: 0.5,
+        boringRate: 0,
+      },
+      {
+        band: '11-20',
+        evaluations: 1,
+        funRate: 0,
+        boringRate: 1,
+      },
+    ]);
+    expect(metrics).toMatchObject({
+      rules: {
+        released: 11,
+        active: 10,
+        removed: 0,
+        reinstated: 0,
+      },
+      prefectureCoverage: 1,
+      completedSets: 1,
+      partialSets: 1,
+    });
+    expect(metrics.prefectureCoverage).toBe(catalog.summary.prefectureCoverage);
+  });
 });

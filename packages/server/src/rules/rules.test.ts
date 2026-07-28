@@ -475,6 +475,9 @@ describe('CX-04 rule registry', () => {
           onRuleIncident: (incident) => {
             service.recordIncident(incident);
           },
+          onRuleConflict: (conflict) => {
+            service.recordConflict(conflict);
+          },
         },
       });
       const created = rooms.create({
@@ -496,6 +499,35 @@ describe('CX-04 rule registry', () => {
     expect(persistence.rules.incidents('r0002-low')).toEqual([]);
     expect(persistence.rules.get('r0001-high')?.status).toBe('active');
     expect(persistence.rules.get('r0002-low')?.status).toBe('active');
+    const conflicts = service.conflicts({});
+    expect(conflicts).toHaveLength(3);
+    expect(
+      conflicts.map((conflict) => ({
+        setId: conflict.setId,
+        hook: conflict.hook,
+        conflictKey: conflict.conflictKey,
+        adoptedRuleId: conflict.adoptedRuleId,
+      })),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          hook: 'onGameStart',
+          conflictKey: expect.stringContaining('turn:'),
+          adoptedRuleId: 'r0001-high',
+        }),
+      ]),
+    );
+    const latest = conflicts[0]!;
+    service.recordConflict({
+      setId: latest.setId,
+      gameIndex: latest.gameIndex,
+      playSeq: latest.playSeq,
+      hook: latest.hook,
+      conflictKey: latest.conflictKey,
+      adoptedRuleId: latest.adoptedRuleId,
+      entries: latest.entries,
+    });
+    expect(service.conflicts({})).toHaveLength(3);
   });
 
   it('hook失敗後は同じsetの当該ルールだけを落とし、他ルールと基本進行を継続する', () => {

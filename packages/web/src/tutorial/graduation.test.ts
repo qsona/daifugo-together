@@ -27,6 +27,7 @@ function room(
     setResult:
       phase === 'setResult'
         ? {
+            setId: `${roomId}-set`,
             standings: [],
             finalGame: null,
             respondBy,
