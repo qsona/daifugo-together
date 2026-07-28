@@ -19,6 +19,7 @@ import {
   releaseDeployedRule,
   removeCompletedWorkspace,
   runTransient,
+  validatePreparedWorkspace,
   verifyGitHubPublisher,
 } from './implementation-cli-workflow.js';
 import type { ProcessPort, ProcessResult } from './process.js';
@@ -179,6 +180,21 @@ function storedVersion(
 }
 
 describe('implementation CLI workflow', () => {
+  it('submit対象workspaceをwork root直下のprepare生成名に限定する', () => {
+    expect(
+      validatePreparedWorkspace('/tmp/rules/daifugo-rule-abc123', '/tmp/rules'),
+    ).toBe('/tmp/rules/daifugo-rule-abc123');
+    expect(() => validatePreparedWorkspace('/tmp/rules', '/tmp/rules')).toThrow(
+      'prepared daifugo-rule directory',
+    );
+    expect(() =>
+      validatePreparedWorkspace(
+        '/tmp/rules/nested/daifugo-rule-abc123',
+        '/tmp/rules',
+      ),
+    ).toThrow('prepared daifugo-rule directory');
+  });
+
   it('repository ownerまたは追加allowlistのgh loginだけを許可する', async () => {
     const ownerProcess = processPort(async () =>
       result(0, { stdout: 'qsona\n' }),

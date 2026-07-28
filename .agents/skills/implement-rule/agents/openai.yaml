@@ -1,4 +1,4 @@
 interface:
   display_name: 'Implement Approved Rule'
-  short_description: 'Run the approved rule implementation pipeline safely'
-  default_prompt: 'Use $implement-rule to implement the next approved rule proposal.'
+  short_description: 'Implement approved rules in the current Codex session'
+  default_prompt: 'Use $implement-rule to implement the next approved rule in this Codex session.'

@@ -11,7 +11,12 @@ export default defineConfig({
           name: 'node',
           environment: 'node',
           include: ['**/*.test.ts'],
-          exclude: ['**/node_modules/**', '**/dist/**', 'packages/web/**'],
+          exclude: [
+            '**/node_modules/**',
+            '**/dist/**',
+            '**/.worktrees/**',
+            'packages/web/**',
+          ],
         },
       },
       // packages/web は jsdom 環境と @design alias が要るので、自前の vite.config.ts を使う。

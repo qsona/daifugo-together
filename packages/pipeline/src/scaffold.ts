@@ -45,11 +45,16 @@ export async function createRuleScaffold(
   item: QueuedImplementation,
   rulesRoot: string,
 ): Promise<ScaffoldResult> {
-  const directory = join(rulesRoot, item.job.ruleId);
-  await mkdir(directory, { recursive: true });
-  const metaPath = join(directory, 'meta.json');
-  const specPath = join(directory, 'SPEC.json');
-  const ruleMeta: RuleMeta = {
+  const scaffold = expectedRuleScaffold(item, rulesRoot);
+  const ruleMeta = ruleMetadata(item);
+  await mkdir(scaffold.directory, { recursive: true });
+  await writeImmutable(scaffold.metaPath, json(ruleMeta));
+  await writeImmutable(scaffold.specPath, json(item.spec));
+  return scaffold;
+}
+
+function ruleMetadata(item: QueuedImplementation): RuleMeta {
+  return {
     ruleId: item.job.ruleId,
     name: item.spec.name,
     description: item.spec.summary,
@@ -61,10 +66,17 @@ export async function createRuleScaffold(
     contractVersion: 1,
     messages: item.scaffoldMeta.messages,
   };
-  const meta = json(ruleMeta);
+}
+
+export function expectedRuleScaffold(
+  item: QueuedImplementation,
+  rulesRoot: string,
+): ScaffoldResult {
+  const directory = join(rulesRoot, item.job.ruleId);
+  const metaPath = join(directory, 'meta.json');
+  const specPath = join(directory, 'SPEC.json');
+  const meta = json(ruleMetadata(item));
   const spec = json(item.spec);
-  await writeImmutable(metaPath, meta);
-  await writeImmutable(specPath, spec);
   return {
     directory,
     metaPath,

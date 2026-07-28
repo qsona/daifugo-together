@@ -1,5 +1,5 @@
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
-import { join } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 
 import type { QueuedImplementation } from '@daifugo/server';
 
@@ -11,6 +11,23 @@ import {
 import type { ProcessPort, ProcessResult } from './process.js';
 
 const RELEASE_REMINDER_MS = 48 * 60 * 60 * 1_000;
+
+export function validatePreparedWorkspace(
+  workspaceValue: string,
+  workRootValue: string,
+): string {
+  const workspace = resolve(workspaceValue);
+  const workRoot = resolve(workRootValue);
+  if (
+    dirname(workspace) !== workRoot ||
+    !basename(workspace).startsWith('daifugo-rule-')
+  ) {
+    throw new Error(
+      'submitted workspace must be a prepared daifugo-rule directory directly under IMPLEMENT_WORK_ROOT',
+    );
+  }
+  return workspace;
+}
 
 export async function runTransient(
   process: ProcessPort,

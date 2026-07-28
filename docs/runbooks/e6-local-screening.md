@@ -41,10 +41,30 @@ pnpm --filter @daifugo/pipeline judge -- \
 thread では shell、Web 検索、MCP、connector、subagent、画像ツールを無効化し、read-only・network off・approval never を重ねている。応答にツール実行 item が現れた場合は記録せずエラーにする。
 
 同じコマンドが E6 pass 後の提案を CX-01 まで判定し、末尾に
-`stage=confirmation` の JSON 行を表示する。この行にある `checkId` または
-`judgementId` と、提案本文・理由・SPEC を確認してから確定する。
+`stage=confirmation` の JSON 行を表示する。普段は `--review` を付け、判定後に
+そのまま対話レビューへ進む。
 
-確定内容は JSON ファイルへ保存し、ローカルツールから送る。E6 遮断の確定例:
+```bash
+pnpm --filter @daifugo/pipeline judge:review
+```
+
+中断したレビューの再開や、すでに判定済みの提案だけを確認するときは
+`review` を単独で起動する。
+
+```bash
+pnpm --filter @daifugo/pipeline review
+```
+
+確定待ちの提案を1件ずつ表示し、`a`（SPEC承認）または `r`（却下確定）、
+`e`（エディタで内容を編集して確定）、`s`（保留）、`q`（終了）で処理する。
+キー入力には Enter が必要。`needs_review` は理由の編集を必須とし、そのまま
+確定する選択肢を出さない。中断・保留した提案は次回の `review` に再表示される。
+actor は Git の `user.email` を既定で使う。Git email がなければ
+`local:<ローカルユーザー名>` を使う。明示する場合だけ `.env.local` の
+`PIPELINE_ACTOR` または `--actor` で上書きする。
+
+非対話で確定する場合は、確定内容を JSON ファイルへ保存し、ローカルツールから
+送る。E6 遮断の確定例:
 
 ```json
 {
@@ -65,6 +85,30 @@ CX-01 の却下は `action=confirm_rejection` と `judgementId` を使う。
 `spec`（不変な `SPEC.json` の元）と `scaffoldMeta`（slug / messages）を分ける。
 サーバーは対象ID・提案状態・E6 passを再確認し、監査行・カード／却下または
 queuedジョブを同じtransactionで確定する。確定ファイルには管理tokenを書かない。
+
+## 承認済みルールを実装する
+
+Codex Appで新しいタスクを開き、次のようにskillを起動する。
+
+```text
+$implement-rule
+次の承認済みルールを実装して
+```
+
+skillは`implement:prepare`で不変scaffoldと一時workspaceを準備し、そのCodex
+セッション自身が`rule.ts` / `rule.test.ts`だけを実装する。続いて
+`implement:submit`が差分、scaffold SHA、静的制約、型検査、対象テストを再確認し、
+成功時だけcommit・push・PR作成と`pr_open`記録を行う。別の`codex exec`は起動しない。
+
+中断したjobは、新しいCodexタスクでjob IDを指定して同じattemptを再開する。
+
+```text
+$implement-rule
+job 1を再開して
+```
+
+`implement:retry`は同じworkspaceでの修正や通信再送には使わない。内容起因で
+scaffoldからやり直すと開発者が明示した場合だけ、1回の新attemptとして使う。
 
 ## モデル評価
 

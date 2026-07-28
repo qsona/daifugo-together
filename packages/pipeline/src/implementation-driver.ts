@@ -1,12 +1,17 @@
 import type { PipelineJob, QueuedImplementation } from '@daifugo/server';
 
+import { inspectGeneratedRule } from './inspector.js';
 import {
-  type CodexRunner,
+  createRuleScaffold,
+  expectedRuleScaffold,
+  type ScaffoldResult,
+} from './scaffold.js';
+
+export const IMPLEMENTATION_PROMPT_VERSION = 'cx02-v4';
+const SUPPORTED_PROMPT_VERSIONS = new Set([
+  'cx02-v3',
   IMPLEMENTATION_PROMPT_VERSION,
-  implementScaffold,
-  type ImplementationResult,
-} from './implement.js';
-import { createRuleScaffold, type ScaffoldResult } from './scaffold.js';
+]);
 
 type JobUpdateResult =
   | { status: 'updated'; job: PipelineJob }
@@ -60,32 +65,86 @@ export interface ScaffoldPublisher {
   }): Promise<{ prNumber: number; headSha: string }>;
 }
 
-export type RunNextImplementationResult =
+export interface ImplementationVerifier {
+  verify(input: {
+    workspace: string;
+    scaffold: ScaffoldResult;
+  }): Promise<string[]>;
+}
+
+type ClaimFailure = {
+  status: 'claim_failed';
+  jobId: number;
+  proposalId: string;
+  result: Exclude<JobUpdateResult, { status: 'updated' }>;
+};
+
+export type PrepareImplementationResult =
   | { status: 'idle' }
+  | ClaimFailure
   | {
-      status: 'claim_failed';
-      jobId: number;
-      proposalId: string;
-      result: Exclude<JobUpdateResult, { status: 'updated' }>;
-    }
-  | {
-      status: ImplementationResult['status'];
+      status: 'prepared';
       job: PipelineJob;
       proposalId: string;
-      result: ImplementationResult;
+      scaffold: ScaffoldResult;
     };
 
-export async function runNextImplementation(options: {
+export type SubmitImplementationResult =
+  | ClaimFailure
+  | {
+      status: 'inspect_failed';
+      job: PipelineJob;
+      proposalId: string;
+      violations: string[];
+      scaffold: ScaffoldResult;
+    }
+  | {
+      status: 'ready';
+      job: PipelineJob;
+      proposalId: string;
+      scaffold: ScaffoldResult;
+    };
+
+async function recordOpened(
+  jobs: PipelineJobPort,
+  item: QueuedImplementation,
+  pullRequest: { prNumber: number; headSha: string },
+): Promise<
+  | ClaimFailure
+  | {
+      status: 'ready';
+      job: PipelineJob;
+      proposalId: string;
+    }
+> {
+  const opened = await jobs.update(item.job.id, {
+    from: 'implementing',
+    to: 'pr_open',
+    prNumber: pullRequest.prNumber,
+    headSha: pullRequest.headSha,
+  });
+  if (opened.status !== 'updated') {
+    return {
+      status: 'claim_failed',
+      jobId: item.job.id,
+      proposalId: item.proposal.id,
+      result: opened,
+    };
+  }
+  return {
+    status: 'ready',
+    job: opened.job,
+    proposalId: item.proposal.id,
+  };
+}
+
+export async function prepareImplementation(options: {
+  item: QueuedImplementation;
   jobs: PipelineJobPort;
   publisher: ScaffoldPublisher;
-  runner: CodexRunner;
   rulesRoot: string;
-  promptPath: string;
-  item?: QueuedImplementation;
-}): Promise<RunNextImplementationResult> {
-  const item = options.item ?? (await options.jobs.next());
-  if (!item) return { status: 'idle' };
-
+}): Promise<PrepareImplementationResult> {
+  const { item } = options;
   const scaffold = await createRuleScaffold(item, options.rulesRoot);
   const published = await options.publisher.publish({ item, scaffold });
   const claimed =
@@ -111,7 +170,8 @@ export async function runNextImplementation(options: {
         : item.job.phase === 'implementing' &&
             item.job.branch === published.branch &&
             item.job.scaffoldSha === published.scaffoldSha &&
-            item.job.promptVersion === IMPLEMENTATION_PROMPT_VERSION
+            item.job.promptVersion !== null &&
+            SUPPORTED_PROMPT_VERSIONS.has(item.job.promptVersion)
           ? ({ status: 'updated', job: item.job } as const)
           : ({ status: 'conflict', error: 'resume_state_mismatch' } as const);
   if (claimed.status !== 'updated') {
@@ -122,76 +182,71 @@ export async function runNextImplementation(options: {
       result: claimed,
     };
   }
-  let finalJob = claimed.job;
+  return {
+    status: 'prepared',
+    job: claimed.job,
+    proposalId: item.proposal.id,
+    scaffold,
+  };
+}
+
+export async function submitPreparedImplementation(options: {
+  item: QueuedImplementation;
+  jobs: PipelineJobPort;
+  publisher: ScaffoldPublisher;
+  verifier: ImplementationVerifier;
+  workspace: string;
+  rulesRoot: string;
+}): Promise<SubmitImplementationResult> {
+  const { item } = options;
+  if (
+    item.job.phase !== 'implementing' ||
+    item.job.branch === null ||
+    item.job.scaffoldSha === null ||
+    item.job.promptVersion === null ||
+    !SUPPORTED_PROMPT_VERSIONS.has(item.job.promptVersion)
+  ) {
+    throw new Error('job is not prepared for implementation submission');
+  }
+  const scaffold = expectedRuleScaffold(item, options.rulesRoot);
+  const published = {
+    branch: item.job.branch,
+    scaffoldSha: item.job.scaffoldSha,
+  };
+  const local = await inspectGeneratedRule(scaffold);
+  const violations = [
+    ...(local.ok ? [] : local.violations),
+    ...(await options.publisher.inspect({ item, scaffold, ...published })),
+  ];
+  if (violations.length === 0) {
+    violations.push(
+      ...(await options.verifier.verify({
+        workspace: options.workspace,
+        scaffold,
+      })),
+    );
+  }
+  if (violations.length > 0) {
+    return {
+      status: 'inspect_failed',
+      job: item.job,
+      proposalId: item.proposal.id,
+      violations,
+      scaffold,
+    };
+  }
   const recovered = await options.publisher.recoverImplementation({
     item,
     scaffold,
     ...published,
   });
-  if (recovered) {
-    const opened = await options.jobs.update(item.job.id, {
-      from: 'implementing',
-      to: 'pr_open',
-      prNumber: recovered.prNumber,
-      headSha: recovered.headSha,
-    });
-    if (opened.status !== 'updated') {
-      return {
-        status: 'claim_failed',
-        jobId: item.job.id,
-        proposalId: item.proposal.id,
-        result: opened,
-      };
-    }
-    return {
-      status: 'ready',
-      job: opened.job,
-      proposalId: item.proposal.id,
-      result: { status: 'ready', scaffold },
-    };
-  }
-
-  let result = await implementScaffold({
-    scaffold,
-    promptPath: options.promptPath,
-    runner: options.runner,
-  });
-  if (result.status === 'ready') {
-    const violations = await options.publisher.inspect({
+  const pullRequest =
+    recovered ??
+    (await options.publisher.publishImplementation({
       item,
       scaffold,
       ...published,
-    });
-    if (violations.length > 0) {
-      result = { status: 'inspect_failed', violations, scaffold };
-    }
-  }
-  if (result.status === 'ready') {
-    const pullRequest = await options.publisher.publishImplementation({
-      item,
-      scaffold,
-      ...published,
-    });
-    const opened = await options.jobs.update(item.job.id, {
-      from: 'implementing',
-      to: 'pr_open',
-      prNumber: pullRequest.prNumber,
-      headSha: pullRequest.headSha,
-    });
-    if (opened.status !== 'updated') {
-      return {
-        status: 'claim_failed',
-        jobId: item.job.id,
-        proposalId: item.proposal.id,
-        result: opened,
-      };
-    }
-    finalJob = opened.job;
-  }
-  return {
-    status: result.status,
-    job: finalJob,
-    proposalId: item.proposal.id,
-    result,
-  };
+    }));
+  const opened = await recordOpened(options.jobs, item, pullRequest);
+  return opened.status === 'ready' ? { ...opened, scaffold } : opened;
 }

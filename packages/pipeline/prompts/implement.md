@@ -1,6 +1,7 @@
-# Daifugo rule implementation cx02-v3
+# Daifugo rule implementation cx02-v4
 
-Implement the rule described by `SPEC.json` in this directory.
+Implement the rule described by `SPEC.json` in this directory from the current
+Codex App session. Do not launch another Codex process or delegate the work.
 
 Before writing code, read `../../core/src/rules/README.md`. It is the
 authoritative rule authoring contract for hooks, Effects, fixtures, and examples.
@@ -17,6 +18,8 @@ Do not modify `meta.json`, `SPEC.json`, git history, configuration, lockfiles,
 other packages, or other rules. Use only the contract exported by
 `@daifugo/core`. Do not add dependencies, network access, filesystem access,
 process access, dynamic code execution, or nondeterministic external state.
+Do not use Web search, connectors, external network access, or unrelated
+repository files while implementing this rule.
 In `rule.ts`, imports and re-exports may target only `@daifugo/core`. In
 `rule.test.ts`, imports may target only `@daifugo/core` and `vitest`. Do not use
 `Date`, `Math.random`, dynamic `import()`, or any other nondeterministic global.

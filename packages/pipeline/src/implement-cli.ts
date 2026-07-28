@@ -1,23 +1,27 @@
-import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
 
 import type { QueuedImplementation } from '@daifugo/server';
 
-import { SubscriptionCodexRunner } from './codex-runner.js';
 import { GitImplementationPublisher } from './git-publisher.js';
 import {
   HttpPipelineJobPort,
   HttpRuleReleasePort,
 } from './implementation-api.js';
 import {
+  prepareImplementation,
+  submitPreparedImplementation,
+} from './implementation-driver.js';
+import { LocalImplementationVerifier } from './implementation-verifier.js';
+import {
   prepareImplementationRetry,
   prepareImplementationWorkspace,
   recordMergedImplementation,
   releaseDeployedRule,
   removeCompletedWorkspace,
+  validatePreparedWorkspace,
   verifyGitHubPublisher,
 } from './implementation-cli-workflow.js';
-import { runNextImplementation } from './implementation-driver.js';
 import { SpawnProcessPort } from './process.js';
 
 function requiredEnvironment(name: string): string {
@@ -36,6 +40,33 @@ function optionalDuration(name: string): number | undefined {
   return value;
 }
 
+function option(name: string): string | null {
+  const index = process.argv.indexOf(name);
+  const value = index >= 0 ? process.argv[index + 1] : undefined;
+  return value && !value.startsWith('--') ? value : null;
+}
+
+function positiveJobId(value: string | undefined, usage: string): number {
+  const jobId = Number(value);
+  if (!Number.isSafeInteger(jobId) || jobId <= 0) {
+    throw new Error(`usage: ${usage}`);
+  }
+  return jobId;
+}
+
+function implementationWorkRoot(): string {
+  return resolve(process.env.IMPLEMENT_WORK_ROOT?.trim() || tmpdir());
+}
+
+function submittedWorkspace(value: string | null): string {
+  if (!value) {
+    throw new Error(
+      'usage: implement-cli submit JOB_ID --workspace PREPARED_WORKSPACE',
+    );
+  }
+  return validatePreparedWorkspace(value, implementationWorkRoot());
+}
+
 async function main(): Promise<void> {
   const baseUrl = requiredEnvironment('ADMIN_PIPELINE_URL');
   const token = requiredEnvironment('ADMIN_PIPELINE_TOKEN');
@@ -45,12 +76,17 @@ async function main(): Promise<void> {
     onWarning: (warning) => process.stderr.write(`WARNING: ${warning}\n`),
   });
   const commands = new SpawnProcessPort();
-  if (process.argv[2] === 'fail') {
-    const jobId = Number(process.argv[3]);
+  const command = process.argv[2] ?? 'prepare';
+
+  if (command === 'fail') {
+    const jobId = positiveJobId(
+      process.argv[3],
+      'implement-cli fail JOB_ID FROM ERROR_CODE [ERROR_NOTE]',
+    );
     const from = process.argv[4];
     const errorCode = process.argv[5];
     const errorNote = process.argv[6];
-    if (!Number.isSafeInteger(jobId) || jobId <= 0 || !from || !errorCode) {
+    if (!from || !errorCode) {
       throw new Error(
         'usage: implement-cli fail JOB_ID FROM ERROR_CODE [ERROR_NOTE]',
       );
@@ -63,12 +99,11 @@ async function main(): Promise<void> {
     process.stdout.write(`${JSON.stringify({ result })}\n`);
     return;
   }
-  if (process.argv[2] === 'release-status' || process.argv[2] === 'release') {
-    const mode = process.argv[2];
-    const jobId = Number(process.argv[3]);
-    if (!Number.isSafeInteger(jobId) || jobId <= 0) {
-      throw new Error(`usage: implement-cli ${mode} JOB_ID`);
-    }
+  if (command === 'release-status' || command === 'release') {
+    const jobId = positiveJobId(
+      process.argv[3],
+      `implement-cli ${command} JOB_ID`,
+    );
     const maxWaitMs = optionalDuration('IMPLEMENT_RELEASE_WAIT_MS');
     const pollIntervalMs = optionalDuration('IMPLEMENT_RELEASE_POLL_MS');
     if (pollIntervalMs === 0) {
@@ -78,13 +113,14 @@ async function main(): Promise<void> {
       jobs,
       rules: new HttpRuleReleasePort({ baseUrl, token }),
       jobId,
-      enable: mode === 'release',
+      enable: command === 'release',
       ...(maxWaitMs === undefined ? {} : { maxWaitMs }),
       ...(pollIntervalMs === undefined ? {} : { pollIntervalMs }),
     });
     process.stdout.write(`${JSON.stringify({ result })}\n`);
     return;
   }
+
   const repositoryUrl = requiredEnvironment('RULE_REPOSITORY_URL');
   await verifyGitHubPublisher({
     process: commands,
@@ -94,11 +130,9 @@ async function main(): Promise<void> {
       : {}),
     cwd: process.cwd(),
   });
-  if (process.argv[2] === 'merged') {
-    const jobId = Number(process.argv[3]);
-    if (!Number.isSafeInteger(jobId) || jobId <= 0) {
-      throw new Error('usage: implement-cli merged JOB_ID');
-    }
+
+  if (command === 'merged') {
+    const jobId = positiveJobId(process.argv[3], 'implement-cli merged JOB_ID');
     const result = await recordMergedImplementation({
       jobs,
       process: commands,
@@ -108,76 +142,77 @@ async function main(): Promise<void> {
     process.stdout.write(`${JSON.stringify({ result })}\n`);
     return;
   }
-  const retryId =
-    process.argv[2] === 'retry' ? Number(process.argv[3]) : undefined;
-  let retryItem: QueuedImplementation | null = null;
-  if (retryId !== undefined) {
-    if (!Number.isSafeInteger(retryId) || retryId <= 0) {
-      throw new Error('usage: implement-cli retry JOB_ID');
-    }
-    retryItem = await prepareImplementationRetry({
+
+  if (command === 'submit') {
+    const jobId = positiveJobId(
+      process.argv[3],
+      'implement-cli submit JOB_ID --workspace PREPARED_WORKSPACE',
+    );
+    const workspace = submittedWorkspace(option('--workspace'));
+    const item = await jobs.resume(jobId);
+    if (!item) throw new Error('submission job was not found');
+    const result = await submitPreparedImplementation({
+      item,
       jobs,
-      process: commands,
-      repositoryUrl,
-      cwd: process.cwd(),
-      jobId: retryId,
+      publisher: new GitImplementationPublisher({ repoRoot: workspace }),
+      verifier: new LocalImplementationVerifier(commands),
+      workspace,
+      rulesRoot: join(workspace, 'packages/rules'),
     });
-  }
-  const resumeId =
-    process.argv[2] === 'resume' ? Number(process.argv[3]) : undefined;
-  if (
-    resumeId !== undefined &&
-    (!Number.isSafeInteger(resumeId) || resumeId <= 0)
-  ) {
-    throw new Error('usage: implement-cli resume JOB_ID');
-  }
-  const item =
-    retryItem ??
-    (resumeId === undefined ? await jobs.next() : await jobs.resume(resumeId));
-  if (!item) {
-    process.stdout.write(`${JSON.stringify({ status: 'idle' })}\n`);
-    return;
-  }
-  if (
-    item.job.phase === 'pr_open' ||
-    item.job.phase === 'merged' ||
-    item.job.phase === 'done'
-  ) {
+    const workspaceRemoved =
+      result.status === 'ready' && result.job.phase === 'pr_open';
+    if (workspaceRemoved) await removeCompletedWorkspace(workspace);
     process.stdout.write(
-      `${JSON.stringify({
-        workspace: null,
-        workspaceRemoved: false,
-        result: {
-          status: 'already_ready',
-          job: item.job,
-          proposalId: item.proposal.id,
-        },
-      })}\n`,
+      `${JSON.stringify({ workspace, workspaceRemoved, result })}\n`,
     );
     return;
   }
 
-  const workRoot = resolve(process.env.IMPLEMENT_WORK_ROOT?.trim() || tmpdir());
+  const retryMode = command === 'prepare-retry' || command === 'retry';
+  const resumeMode = command === 'prepare-resume' || command === 'resume';
+  if (command !== 'prepare' && !retryMode && !resumeMode) {
+    throw new Error(`unknown implement command: ${command}`);
+  }
+  let item: QueuedImplementation | null;
+  if (retryMode) {
+    const jobId = positiveJobId(
+      process.argv[3],
+      'implement-cli prepare-retry JOB_ID',
+    );
+    item = await prepareImplementationRetry({
+      jobs,
+      process: commands,
+      repositoryUrl,
+      cwd: process.cwd(),
+      jobId,
+    });
+  } else if (resumeMode) {
+    const jobId = positiveJobId(
+      process.argv[3],
+      'implement-cli prepare-resume JOB_ID',
+    );
+    item = await jobs.resume(jobId);
+  } else {
+    item = await jobs.next();
+  }
+  if (!item) {
+    process.stdout.write(`${JSON.stringify({ status: 'idle' })}\n`);
+    return;
+  }
+
   const workspace = await prepareImplementationWorkspace({
     process: commands,
     repositoryUrl,
-    workRoot,
+    workRoot: implementationWorkRoot(),
   });
-  const result = await runNextImplementation({
+  const result = await prepareImplementation({
     item,
     jobs,
     publisher: new GitImplementationPublisher({ repoRoot: workspace }),
-    runner: new SubscriptionCodexRunner(),
     rulesRoot: join(workspace, 'packages/rules'),
-    promptPath: join(workspace, 'packages/pipeline/prompts/implement.md'),
   });
-  const workspaceRemoved =
-    result.status === 'ready' && result.job.phase === 'pr_open';
-  if (workspaceRemoved) {
-    await removeCompletedWorkspace(workspace);
-  }
   process.stdout.write(
-    `${JSON.stringify({ workspace, workspaceRemoved, result })}\n`,
+    `${JSON.stringify({ workspace, workspaceRemoved: false, result })}\n`,
   );
 }
 
