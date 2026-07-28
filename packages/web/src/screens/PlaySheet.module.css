@@ -1,5 +1,37 @@
 /* 「あそぶ」の二択シート */
 
+.modeLabel {
+  position: relative;
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+}
+
+.beginnerIcon {
+  position: absolute;
+  right: 0;
+  width: 28px;
+  height: 28px;
+  overflow: visible;
+  stroke: var(--color-border-strong);
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.beginnerIconLeft {
+  fill: var(--color-action-primary);
+}
+
+.beginnerIconRight {
+  fill: var(--color-green-500);
+}
+
+.beginnerIconLine {
+  fill: none;
+  stroke-linecap: round;
+}
+
 .back {
   display: flex;
   justify-content: center;

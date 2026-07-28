@@ -51,7 +51,7 @@ export function WaitingRoomScreen({
         <InviteCode code={inviteCode} onCopy={onCopyInvite} />
         {/*
          * ルールセットは選べないので「変更不可」は書かない。対局画面と同じ語彙にする。
-         * 主導線は「開始する」なので、脇道であることが分かる大きさに留める。
+         * 主導線は「はじめる」なので、脇道であることが分かる大きさに留める。
          */}
         <div className={screen.inlineAction}>
           <Button size="small" onClick={onViewRules}>
@@ -66,7 +66,7 @@ export function WaitingRoomScreen({
             disabled={!canStart}
             onClick={onStart}
           >
-            {canStart ? '開始する' : 'ホストの開始を待っています'}
+            {canStart ? 'はじめる' : 'ホストの開始を待っています'}
           </Button>
         </div>
       </main>

@@ -102,26 +102,20 @@ describe('DS-02: フェーズ 1 の主要画面が 1 本の導線でつながる
     await user.click(screen.getByRole('button', { name: /はじめる/ }));
     await user.click(screen.getByRole('button', { name: 'あそぶ' }));
 
-    // 「あそぶ」はモードを選び、そのまま作る/入るの選択へ進む。
+    // 「あそぶ」はモードを選び、そのまま部屋を作る。
     expect(
       screen.getByRole('dialog', {
         name: 'あそびかたをえらぶ',
       }),
     ).toBeTruthy();
-    await user.click(screen.getByRole('button', { name: /きほん/ }));
-    expect(
-      screen.getByRole('dialog', {
-        name: 'じぶんの部屋をつくる',
-      }),
-    ).toBeTruthy();
     await user.click(
-      screen.getByRole('button', { name: 'じぶんの部屋をつくる' }),
+      screen.getByRole('button', { name: 'きほんルールであそぶ' }),
     );
 
     // 画面 2b: 招待コードと有効ルール件数。
     expect(screen.getByText('01234')).toBeTruthy();
     expect(screen.getByRole('button', { name: /有効ルール/ })).toBeTruthy();
-    await user.click(screen.getByRole('button', { name: '開始する' }));
+    await user.click(screen.getByRole('button', { name: 'はじめる' }));
 
     // 画面 3: 卓・手札・ルール発動。
     expect(screen.getByRole('region', { name: '卓' })).toBeTruthy();
@@ -1186,11 +1180,40 @@ describe('TU-03: はじめての1戦のガイド', () => {
     );
 
     const guide = await screen.findByRole('status');
-    expect(guide.textContent).toContain('すきなカードを 1 枚まい えらんで');
-    expect(guide.querySelectorAll('ruby')).toHaveLength(2);
+    expect(guide.textContent).toContain('すきなカードを 1 枚 えらんで');
+    expect(guide.querySelector('ruby')).toBeNull();
     expect(
       screen.getByLabelText('カードの強さ: 左がよわい、右がつよい'),
     ).toBeTruthy();
+  });
+
+  it('ガイドは時間では消えず、表示した手番が終わると消える', () => {
+    vi.useFakeTimers();
+    try {
+      const initial = tutorialHintRoom('basic', []);
+      const observable = observableTutorialClient(initial);
+      render(<App client={observable.client} />);
+
+      expect(screen.getByRole('status')).toBeTruthy();
+      act(() => {
+        vi.advanceTimersByTime(10_000);
+      });
+      expect(screen.getByRole('status')).toBeTruthy();
+
+      act(() => {
+        observable.setRoom({
+          ...initial,
+          v: initial.v + 1,
+          game: {
+            ...initial.game!,
+            turn: { seat: 1, turnSeq: 2, deadlineAt: null },
+          },
+        });
+      });
+      expect(screen.queryByRole('status')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('既プレイ端末と2戦目では、一言も強さ目盛りも表示しない', () => {
@@ -1564,7 +1587,7 @@ describe('TU-04: みんなのルールへの卒業導線', () => {
 
     expect(
       await screen.findByRole('dialog', {
-        name: 'じぶんの部屋をつくる',
+        name: 'あそびかたをえらぶ',
       }),
     ).toBeTruthy();
     expect(screen.getByRole('alert').textContent).toContain(
@@ -1574,7 +1597,7 @@ describe('TU-04: みんなのルールへの卒業導線', () => {
     expect(createRoom).toHaveBeenNthCalledWith(1, 'community');
 
     await user.click(
-      screen.getByRole('button', { name: 'じぶんの部屋をつくる' }),
+      screen.getByRole('button', { name: 'みんなのルールであそぶ' }),
     );
     await waitFor(() => expect(createRoom).toHaveBeenCalledTimes(2));
     expect(createRoom).toHaveBeenNthCalledWith(2, 'community');

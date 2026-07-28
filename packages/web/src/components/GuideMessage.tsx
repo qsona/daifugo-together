@@ -3,68 +3,14 @@ import type { GuideCue } from '../game/guide';
 export function GuideMessage({ cue }: { cue: GuideCue }) {
   switch (cue) {
     case 'firstTurn':
-      return (
-        <>
-          すきなカードを 1{' '}
-          <ruby>
-            枚<rt>まい</rt>
-          </ruby>{' '}
-          えらんで
-          <ruby>
-            出<rt>だ</rt>
-          </ruby>
-          そう
-        </>
-      );
+      return 'すきなカードを 1 枚 えらんで出そう';
     case 'followTurn':
-      return (
-        <>
-          <ruby>
-            場<rt>ば</rt>
-          </ruby>
-          のカードより つよいカードなら{' '}
-          <ruby>
-            出<rt>だ</rt>
-          </ruby>
-          せるよ
-        </>
-      );
+      return '場のカードより つよいカードなら 出せるよ';
     case 'pairAvailable':
-      return (
-        <>
-          おなじ
-          <ruby>
-            数字<rt>すうじ</rt>
-          </ruby>
-          は 2
-          <ruby>
-            枚<rt>まい</rt>
-          </ruby>{' '}
-          いっしょに
-          <ruby>
-            出<rt>だ</rt>
-          </ruby>
-          せるよ
-        </>
-      );
+      return 'おなじ数字は 2 枚 いっしょに出せるよ';
     case 'noLegalMove':
-      return (
-        <>
-          <ruby>
-            出<rt>だ</rt>
-          </ruby>
-          せないときは「パス」
-        </>
-      );
+      return '出せないときは「パス」';
     case 'fieldCleared':
-      return (
-        <>
-          みんながパスしたので{' '}
-          <ruby>
-            場<rt>ば</rt>
-          </ruby>
-          が ながれた! つぎは きみから
-        </>
-      );
+      return 'みんながパスしたので 場がながれた! つぎは きみから';
   }
 }

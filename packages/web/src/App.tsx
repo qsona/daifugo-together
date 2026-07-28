@@ -622,6 +622,7 @@ function ConnectedApp({
   } | null>(null);
   const guideState = useRef(createGuideState());
   const guideSessionKey = useRef<string | null>(null);
+  const guideTurnSeq = useRef<number | null>(null);
   const [guideCue, setGuideCue] = useState<GuideCue | null>(null);
   const [playedBefore, setPlayedBefore] = useState(() =>
     hasPlayedBefore(storage),
@@ -869,6 +870,7 @@ function ConnectedApp({
     if (guideSessionKey.current === tutorialSessionKey) return;
     guideSessionKey.current = tutorialSessionKey;
     guideState.current = createGuideState();
+    guideTurnSeq.current = null;
     setGuideCue(null);
   }, [tutorialSessionKey]);
 
@@ -884,14 +886,18 @@ function ConnectedApp({
       events: room.events,
     });
     guideState.current = result.state;
-    if (result.cue) setGuideCue(result.cue);
+    if (result.cue) {
+      guideTurnSeq.current = room.game.turn?.turnSeq ?? null;
+      setGuideCue(result.cue);
+    }
   }, [guideCue, room, tutorialEligible]);
 
   useEffect(() => {
     if (!guideCue) return;
-    const timer = window.setTimeout(() => setGuideCue(null), 3_000);
-    return () => window.clearTimeout(timer);
-  }, [guideCue]);
+    if (room?.game?.turn?.turnSeq === guideTurnSeq.current) return;
+    guideTurnSeq.current = null;
+    setGuideCue(null);
+  }, [guideCue, room?.game?.turn?.turnSeq]);
 
   const invoke = (operation: Promise<unknown>) => {
     void operation.catch(() => undefined);

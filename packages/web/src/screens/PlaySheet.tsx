@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { Button } from '../components/Button';
 import { ChoiceSheet } from '../components/ChoiceSheet';
 import { InputField } from '../components/Field';
-import { Tag } from '../components/Tag';
 
 import styles from './PlaySheet.module.css';
 
@@ -12,38 +11,27 @@ type PlaySheetProps = {
   onCreate: (mode: RoomMode) => void;
   onJoin: (code: string) => void;
   onClose: () => void;
-  playedBefore?: boolean;
-  initialMode?: RoomMode | null;
   error?: string | null;
 };
 
 /**
  * 「あそぶ」を押したときに下から出る選択シート。
  *
- * 部屋を作る人だけがモードを選ぶ。招待された人はモードを選ばず、
- * 同じシートから招待コード入力へ進んで部屋側のモードに従う。
+ * 部屋を作る人はモードを選ぶとそのまま作成する。招待された人は
+ * モードを選ばず、同じシートから招待コード入力へ進んで部屋側のモードに従う。
  */
 export function PlaySheet({
   onCreate,
   onJoin,
   onClose,
-  playedBefore = false,
-  initialMode = null,
   error,
 }: PlaySheetProps) {
-  const [mode, setMode] = useState<RoomMode | null>(initialMode);
   const [code, setCode] = useState('');
   const [isJoining, setIsJoining] = useState(false);
 
   return (
     <ChoiceSheet
-      label={
-        isJoining
-          ? '友だちの部屋にはいる'
-          : mode === null
-            ? 'あそびかたをえらぶ'
-            : 'じぶんの部屋をつくる'
-      }
+      label={isJoining ? '友だちの部屋にはいる' : 'あそびかたをえらぶ'}
       onClose={onClose}
     >
       {isJoining ? (
@@ -84,27 +72,40 @@ export function PlaySheet({
             </Button>
           </div>
         </>
-      ) : mode === null ? (
+      ) : (
         <>
           <Button
-            variant="primary"
             block
             onClick={() => {
-              setMode('basic');
+              onCreate('basic');
             }}
           >
-            きほん
-            {!playedBefore && (
-              <Tag variant="active">はじめてのひとはこちら</Tag>
-            )}
+            <span className={styles.modeLabel}>
+              <span>きほんルールであそぶ</span>
+              <svg
+                className={styles.beginnerIcon}
+                viewBox="0 0 32 32"
+                aria-hidden="true"
+              >
+                <path
+                  className={styles.beginnerIconLeft}
+                  d="M16 27C9.5 23.8 5.5 18.2 5.5 8.5c5.2.5 8.6 2.7 10.5 6.1V27Z"
+                />
+                <path
+                  className={styles.beginnerIconRight}
+                  d="M16 27c6.5-3.2 10.5-8.8 10.5-18.5-5.2.5-8.6 2.7-10.5 6.1V27Z"
+                />
+                <path className={styles.beginnerIconLine} d="M16 14.5V27" />
+              </svg>
+            </span>
           </Button>
           <Button
             block
             onClick={() => {
-              setMode('community');
+              onCreate('community');
             }}
           >
-            みんなのルール
+            みんなのルールであそぶ
           </Button>
           <Button
             block
@@ -114,29 +115,7 @@ export function PlaySheet({
           >
             友だちの部屋にはいる
           </Button>
-        </>
-      ) : (
-        <>
-          <Button
-            variant="primary"
-            block
-            onClick={() => {
-              onCreate(mode);
-            }}
-          >
-            じぶんの部屋をつくる
-          </Button>
           {error && <p role="alert">{error}</p>}
-          <div className={styles.back}>
-            <Button
-              size="small"
-              onClick={() => {
-                setMode(null);
-              }}
-            >
-              もどる
-            </Button>
-          </div>
         </>
       )}
     </ChoiceSheet>
