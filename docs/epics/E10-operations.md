@@ -1,7 +1,7 @@
 # E10: 運用・観測
 
 - 作成日: 2026-07-24
-- 状態: 提案(開発者の承認待ち)
+- 状態: 承認済み(2026-07-27 開発者レビュー。OP-01/02 実装時の読み替えは decision-log G 節と impl-progress「E10」節を参照)
 - 改訂: 2026-07-24 確定済みの E05(提案受付)・E08(評価・淘汰)の設計に合わせて計測方式を再構成(遮断は E6 検査ログを読む二源集計 / 評価は 3 値 rating / 排除は rule_eliminations を読む / テーブル名を game_sets・set_rules に修正)
 - 一次情報源: `docs/企画書.md`(§8 / §9-8 / §10 / §11)、`docs/product-backlog.md`(OP-01〜OP-04)、`docs/epics/E12-tech-stack.md`(§4.4 / §4.7 / §6)、`docs/epics/E05-rule-proposal.md`(proposals・状態機械)、`docs/epics/E08-evaluation.md`(game_sets・set_rules・set_evaluations・rule_evaluations・rule_eliminations)
 

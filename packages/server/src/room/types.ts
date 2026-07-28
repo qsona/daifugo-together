@@ -201,6 +201,15 @@ export interface RoomReducerOptions {
     type: 'invalid_effect';
     detail: string;
   }) => void;
+  onRuleConflict?: (conflict: {
+    setId: string;
+    gameIndex: number;
+    playSeq: number;
+    hook: string;
+    conflictKey: string;
+    adoptedRuleId: string;
+    entries: unknown[];
+  }) => void;
 }
 
 export type RoomEngineResult = GameResult;

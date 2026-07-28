@@ -31,7 +31,7 @@ const persistence = new SqlitePersistence(
 );
 
 try {
-  if (command === 'status') {
+  if (command === 'status' || command === 'budget') {
     const limit = nonNegativeIntegerOption(process.argv, '--limit', 20, 1_000);
     if (limit === 0) throw new Error('--limit must be greater than zero');
     const offset = nonNegativeIntegerOption(process.argv, '--offset', 0);
@@ -49,6 +49,50 @@ try {
     process.stdout.write(
       `${JSON.stringify(persistence.operations.funnel(since, now))}\n`,
     );
+  } else if (command === 'metrics') {
+    const now = Date.now();
+    const since = parseSince(option('--since'), now);
+    if (!Number.isSafeInteger(since) || since < 0 || since >= now) {
+      throw new Error('--since must be an ISO date before now');
+    }
+    process.stdout.write(
+      `${JSON.stringify(persistence.operations.metrics(since, now))}\n`,
+    );
+  } else if (command === 'settings') {
+    if (process.argv[3] !== 'set') {
+      throw new Error('settings requires: set KEY VALUE');
+    }
+    const key = process.argv[4];
+    const value = process.argv[5];
+    if (!key || value === undefined) {
+      throw new Error('settings set requires KEY and VALUE');
+    }
+    persistence.evaluations.setSetting(key, value, Date.now());
+    if (key.startsWith('elimination_')) {
+      persistence.evaluations.evaluateAll(Date.now());
+    }
+    process.stdout.write(`${JSON.stringify({ key, value })}\n`);
+  } else if (command === 'rule') {
+    if (process.argv[3] !== 'reinstate') {
+      throw new Error('rule requires: reinstate RULE_ID --reason TEXT');
+    }
+    const ruleId = process.argv[4];
+    if (!ruleId) throw new Error('rule reinstate requires RULE_ID');
+    const reinstated = persistence.evaluations.reinstate(
+      ruleId,
+      requiredOption('--reason'),
+      Date.now(),
+    );
+    if (!reinstated) throw new Error(`could not reinstate ${ruleId}`);
+    process.stdout.write(
+      `${JSON.stringify({ ruleId, status: 'reinstated' })}\n`,
+    );
+  } else if (command === 'popularity') {
+    if (process.argv[3] !== 'recompute') {
+      throw new Error('popularity requires: recompute');
+    }
+    persistence.evaluations.recomputeAllPopularity(Date.now());
+    process.stdout.write(`${JSON.stringify({ status: 'recomputed' })}\n`);
   } else if (command === 'list-appeals') {
     for (const appeal of persistence.injection.listOpenAppeals()) {
       process.stdout.write(`${JSON.stringify(appeal)}\n`);
@@ -81,7 +125,7 @@ try {
     );
   } else {
     throw new Error(
-      'command must be status, funnel, list-appeals, revoke-card, or reject-appeal',
+      'command must be status, budget, funnel, metrics, settings, rule, popularity, list-appeals, revoke-card, or reject-appeal',
     );
   }
 } finally {

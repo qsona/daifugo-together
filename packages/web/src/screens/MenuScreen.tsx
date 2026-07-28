@@ -9,13 +9,14 @@ type MenuScreenProps = {
   onPropose: () => void;
   onEncyclopedia: () => void;
   onMyProposals: () => void;
-  onHowToPlay: () => void;
   unreadProposalCount?: number;
 };
 
 /**
  * 画面 1b: メニュー。
- * ロゴ小 / 主要 3 導線 / 補助 2 導線。コンセプトの一文はキービジュアルの
+ * ロゴ小 / 主要 3 導線 / 補助導線(マイ提案)。「あそびかた」はページ仕様が
+ * 未決のため導線ごと非表示(2026-07-29 開発者判断。ページ設計は E8 実装時に再検討)。
+ * コンセプトの一文はキービジュアルの
  * コピーが既に言っているので画面には置かない(UI文言ガイド 原則 3)。
  */
 export function MenuScreen({
@@ -23,7 +24,6 @@ export function MenuScreen({
   onPropose,
   onEncyclopedia,
   onMyProposals,
-  onHowToPlay,
   unreadProposalCount = 0,
 }: MenuScreenProps) {
   return (
@@ -47,9 +47,6 @@ export function MenuScreen({
                 {unreadProposalCount > 99 ? '99+' : unreadProposalCount}
               </span>
             )}
-          </Button>
-          <Button size="small" onClick={onHowToPlay}>
-            あそびかた
           </Button>
         </div>
         <HillDivider />

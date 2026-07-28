@@ -1,5 +1,7 @@
 import type Database from 'better-sqlite3';
 
+import { rulePrefectureCoverage } from '../rules/coverage.js';
+
 const PROPOSAL_STATUSES = [
   'screening',
   'implementing',
@@ -101,6 +103,34 @@ export interface OperationsFunnel {
     /** released / 全投稿。進行中も分母に含む補助値。 */
     allSubmissions: number | null;
   };
+}
+
+export interface OperationsMetrics {
+  cohort: { since: number; until: number };
+  byRuleBand: Array<{
+    band: string;
+    evaluations: number;
+    funRate: number | null;
+    boringRate: number | null;
+  }>;
+  daily: Array<{
+    date: string;
+    evaluations: number;
+    funRate: number | null;
+    boringRate: number | null;
+    averageActiveRules: number;
+  }>;
+  rules: {
+    released: number;
+    active: number;
+    removed: number;
+    reinstated: number;
+    releasedDaily: Array<{ date: string; count: number }>;
+    eliminatedDaily: Array<{ date: string; count: number }>;
+  };
+  prefectureCoverage: number;
+  completedSets: number;
+  partialSets: number;
 }
 
 function zeroRecord<const T extends readonly string[]>(
@@ -284,6 +314,139 @@ export class OperationsRepository {
         terminalOutcomes: ratio(byStatus.released, terminal),
         allSubmissions: ratio(byStatus.released, total),
       },
+    };
+  }
+
+  metrics(since: number, until = Date.now()): OperationsMetrics {
+    if (
+      !Number.isSafeInteger(since) ||
+      !Number.isSafeInteger(until) ||
+      since < 0 ||
+      until <= since
+    ) {
+      throw new Error('metrics requires a valid [since, until) range');
+    }
+    const commonCte = `
+      WITH per_set AS (
+        SELECT g.id, g.ended_at, g.games_played,
+          COUNT(DISTINCT CASE WHEN sr.was_active = 1 THEN sr.rule_id END)
+            AS active_rules,
+          COUNT(DISTINCT se.id) AS evaluations,
+          COUNT(DISTINCT CASE WHEN se.rating = 'fun' THEN se.id END) AS fun,
+          COUNT(DISTINCT CASE WHEN se.rating = 'boring' THEN se.id END) AS boring
+        FROM game_sets g
+        LEFT JOIN set_rules sr ON sr.set_id = g.id
+        LEFT JOIN set_evaluations se ON se.set_id = g.id
+        WHERE g.ended_at >= ? AND g.ended_at < ?
+        GROUP BY g.id
+      )`;
+    const bandRows = this.#sqlite
+      .prepare(
+        `${commonCte}
+         SELECT CASE
+           WHEN active_rules <= 10 THEN '00-10'
+           WHEN active_rules <= 20 THEN '11-20'
+           WHEN active_rules <= 30 THEN '21-30'
+           ELSE '31+'
+         END AS band,
+         SUM(evaluations) AS evaluations,
+         1.0 * SUM(fun) / NULLIF(SUM(evaluations), 0) AS fun_rate,
+         1.0 * SUM(boring) / NULLIF(SUM(evaluations), 0) AS boring_rate
+         FROM per_set GROUP BY band ORDER BY band`,
+      )
+      .all(since, until) as Array<{
+      band: string;
+      evaluations: number;
+      fun_rate: number | null;
+      boring_rate: number | null;
+    }>;
+    const dailyRows = this.#sqlite
+      .prepare(
+        `${commonCte}
+         SELECT date(ended_at / 1000, 'unixepoch', '+9 hours') AS date,
+           SUM(evaluations) AS evaluations,
+           1.0 * SUM(fun) / NULLIF(SUM(evaluations), 0) AS fun_rate,
+           1.0 * SUM(boring) / NULLIF(SUM(evaluations), 0) AS boring_rate,
+           AVG(active_rules) AS average_active_rules
+         FROM per_set GROUP BY date ORDER BY date`,
+      )
+      .all(since, until) as Array<{
+      date: string;
+      evaluations: number;
+      fun_rate: number | null;
+      boring_rate: number | null;
+      average_active_rules: number;
+    }>;
+    const ruleCounts = this.#sqlite
+      .prepare(
+        `SELECT
+           (SELECT COUNT(*) FROM proposals WHERE status = 'released')
+             AS released,
+           (SELECT COUNT(*) FROM rules WHERE status = 'active') AS active,
+           (SELECT COUNT(*) FROM rule_eliminations
+             WHERE reverted_at IS NULL) AS removed,
+           (SELECT COUNT(*) FROM rule_eliminations
+             WHERE reverted_at IS NOT NULL) AS reinstated,
+           (SELECT COUNT(*) FROM game_sets
+             WHERE ended_at >= ? AND ended_at < ? AND games_played >= 3)
+             AS completed_sets,
+           (SELECT COUNT(*) FROM game_sets
+             WHERE ended_at >= ? AND ended_at < ? AND games_played < 3)
+             AS partial_sets`,
+      )
+      .get(since, until, since, until) as {
+      released: number;
+      active: number;
+      removed: number;
+      reinstated: number;
+      completed_sets: number;
+      partial_sets: number;
+    };
+    const releasedDaily = this.#sqlite
+      .prepare(
+        `SELECT date(status_changed_at / 1000, 'unixepoch', '+9 hours') AS date,
+           COUNT(*) AS count
+         FROM proposals
+         WHERE status = 'released' AND status_changed_at >= ?
+           AND status_changed_at < ?
+         GROUP BY date ORDER BY date`,
+      )
+      .all(since, until) as Array<{ date: string; count: number }>;
+    const eliminatedDaily = this.#sqlite
+      .prepare(
+        `SELECT date(eliminated_at / 1000, 'unixepoch', '+9 hours') AS date,
+           COUNT(*) AS count
+         FROM rule_eliminations
+         WHERE eliminated_at >= ? AND eliminated_at < ?
+         GROUP BY date ORDER BY date`,
+      )
+      .all(since, until) as Array<{ date: string; count: number }>;
+    return {
+      cohort: { since, until },
+      byRuleBand: bandRows.map((row) => ({
+        band: row.band,
+        evaluations: row.evaluations,
+        funRate: row.fun_rate,
+        boringRate: row.boring_rate,
+      })),
+      daily: dailyRows.map((row) => ({
+        date: row.date,
+        evaluations: row.evaluations,
+        funRate: row.fun_rate,
+        boringRate: row.boring_rate,
+        averageActiveRules: row.average_active_rules,
+      })),
+      rules: {
+        released: ruleCounts.released,
+        active: ruleCounts.active,
+        removed: ruleCounts.removed,
+        reinstated: ruleCounts.reinstated,
+        releasedDaily,
+        eliminatedDaily,
+      },
+      prefectureCoverage: rulePrefectureCoverage(this.#sqlite, true),
+      completedSets: ruleCounts.completed_sets,
+      partialSets: ruleCounts.partial_sets,
     };
   }
 

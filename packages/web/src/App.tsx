@@ -1,4 +1,4 @@
-import type { PlayerRoomView, RoomMode } from '@daifugo/core';
+import type { PlayerRoomView } from '@daifugo/core';
 import type { ReactNode } from 'react';
 import {
   useCallback,
@@ -54,6 +54,10 @@ import { WaitingRoomScreen } from './screens/WaitingRoomScreen';
 import { useScreenStore } from './store/screen';
 import { deriveCardHints } from './game/hints';
 import { FEATURES } from './features';
+import {
+  getBrowserEvaluationClient,
+  type EvaluationApi,
+} from './evaluation/client';
 import { createGuideState, reduceGuide, type GuideCue } from './game/guide';
 import {
   getPlayedBeforeStorage,
@@ -147,7 +151,7 @@ const DEMO_RULE_CATALOG_API: RuleCatalogApi = {
  * 各画面は表示専用で、ここが渡しているのは固定データ(`fixtures/demo`)。
  * サーバースナップショットの接続と合法手の判定は E1/E3 の責務。
  */
-function DemoApp({ storage }: { storage: PlayedBeforeStorage | undefined }) {
+function DemoApp() {
   const current = useScreenStore((state) => state.current);
   const go = useScreenStore((state) => state.go);
 
@@ -156,7 +160,6 @@ function DemoApp({ storage }: { storage: PlayedBeforeStorage | undefined }) {
   const [ruleVotes, setRuleVotes] = useState(DEMO_FIRED_RULES);
   /** 見本のカットインを順に再生するための位置。null は再生していない状態。 */
   const [isChoosingRoom, setIsChoosingRoom] = useState(false);
-  const [playedBefore] = useState(() => hasPlayedBefore(storage));
   const [volleyIndex, setVolleyIndex] = useState<number | null>(null);
   const [lastVolleyIndex, setLastVolleyIndex] = useState<number | null>(null);
   const [activeRulesReturn, setActiveRulesReturn] = useState<
@@ -215,11 +218,9 @@ function DemoApp({ storage }: { storage: PlayedBeforeStorage | undefined }) {
             onPropose={() => go('proposal')}
             onEncyclopedia={() => go('ruleDex')}
             onMyProposals={() => go('myProposals')}
-            onHowToPlay={() => undefined}
           />
           {isChoosingRoom && (
             <PlaySheet
-              playedBefore={playedBefore}
               onCreate={() => {
                 setIsChoosingRoom(false);
                 go('waitingRoom');
@@ -580,9 +581,11 @@ export function reconcileSelectedCardIds(
 function ConnectedApp({
   client,
   storage,
+  evaluationApi,
 }: {
   client: MultiplayerClient;
   storage: PlayedBeforeStorage | undefined;
+  evaluationApi: EvaluationApi;
 }) {
   const current = useScreenStore((state) => state.current);
   const go = useScreenStore((state) => state.go);
@@ -594,6 +597,14 @@ function ConnectedApp({
   const [isChoosingRoom, setIsChoosingRoom] = useState(false);
   const [selectedCardIds, setSelectedCardIds] = useState<readonly string[]>([]);
   const [funRating, setFunRating] = useState<SetFunRating | null>(null);
+  const [ruleVotes, setRuleVotes] = useState<Record<string, RuleVote>>({});
+  const [evaluationError, setEvaluationError] = useState<string | null>(null);
+  const evaluationGeneration = useRef(0);
+  const ratingRevision = useRef(0);
+  const votesRevision = useRef(0);
+  const evaluationQueue = useRef<Promise<void>>(Promise.resolve());
+  const confirmedRating = useRef<SetFunRating | null>(null);
+  const confirmedVotes = useRef<Record<string, RuleVote>>({});
   /** 最終戦リザルトを見終えたセット。sync や再接続で画面が巻き戻らないようにする。 */
   const [finalResultSeen, setFinalResultSeen] = useState<string | null>(null);
   const finalResultDeadline = useRef<{ key: string; at: number } | null>(null);
@@ -623,14 +634,143 @@ function ConnectedApp({
   );
   const [isGraduating, setIsGraduating] = useState(false);
   const [graduationError, setGraduationError] = useState<string | null>(null);
-  const [playSheetInitialMode, setPlaySheetInitialMode] =
-    useState<RoomMode | null>(null);
   const [playSheetError, setPlaySheetError] = useState<string | null>(null);
   const [roomOverlay, setRoomOverlay] = useState<
     'activeRules' | 'ruleDex' | null
   >(null);
   const ruleCatalogApi = getBrowserRuleCatalogClient();
   const room = state.room;
+  const evaluationSetId =
+    room?.phase === 'setResult'
+      ? (room.setResult?.setId ?? null)
+      : !room && isGraduating && graduationFrom?.phase === 'setResult'
+        ? (graduationFrom.setResult?.setId ?? null)
+        : null;
+  useEffect(() => {
+    let active = true;
+    const generation = ++evaluationGeneration.current;
+    ratingRevision.current = 0;
+    votesRevision.current = 0;
+    confirmedRating.current = null;
+    confirmedVotes.current = {};
+    const loadedRatingRevision = ratingRevision.current;
+    const loadedVotesRevision = votesRevision.current;
+    setFunRating(null);
+    setRuleVotes({});
+    setEvaluationError(null);
+    if (!evaluationSetId) return () => undefined;
+    void evaluationApi.get(evaluationSetId).then(
+      (evaluation) => {
+        if (!active || generation !== evaluationGeneration.current) return;
+        const loadedVotes = Object.fromEntries(
+          evaluation.ruleVotes.map((vote) => [vote.ruleId, vote.vote]),
+        );
+        if (ratingRevision.current === loadedRatingRevision) {
+          confirmedRating.current = evaluation.setRating;
+          setFunRating(evaluation.setRating);
+        }
+        if (votesRevision.current === loadedVotesRevision) {
+          confirmedVotes.current = loadedVotes;
+          setRuleVotes(loadedVotes);
+        }
+      },
+      () => {
+        if (
+          active &&
+          generation === evaluationGeneration.current &&
+          ratingRevision.current === loadedRatingRevision &&
+          votesRevision.current === loadedVotesRevision
+        ) {
+          setEvaluationError('評価を読み込めませんでした');
+        }
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [evaluationApi, evaluationSetId]);
+
+  const saveSetRating = (rating: SetFunRating) => {
+    if (!evaluationSetId) return;
+    const generation = evaluationGeneration.current;
+    const revision = ++ratingRevision.current;
+    setFunRating(rating);
+    setEvaluationError(null);
+    const request = evaluationQueue.current.then(() =>
+      evaluationApi.update(evaluationSetId, { setRating: rating }),
+    );
+    evaluationQueue.current = request.then(
+      () => undefined,
+      () => undefined,
+    );
+    void request.then(
+      (evaluation) => {
+        if (generation === evaluationGeneration.current) {
+          confirmedRating.current = evaluation.setRating;
+        }
+        if (
+          generation === evaluationGeneration.current &&
+          revision === ratingRevision.current
+        ) {
+          setFunRating(evaluation.setRating);
+        }
+      },
+      () => {
+        if (
+          generation === evaluationGeneration.current &&
+          revision === ratingRevision.current
+        ) {
+          setFunRating(confirmedRating.current);
+          setEvaluationError(
+            '評価を送れませんでした。もう一度ためしてください',
+          );
+        }
+      },
+    );
+  };
+  const saveRuleVote = (ruleId: string, vote: RuleVote) => {
+    if (!evaluationSetId) return;
+    const generation = evaluationGeneration.current;
+    const revision = ++votesRevision.current;
+    setRuleVotes((current) => ({ ...current, [ruleId]: vote }));
+    setEvaluationError(null);
+    const request = evaluationQueue.current.then(() =>
+      evaluationApi.update(evaluationSetId, {
+        ruleVote: { ruleId, vote },
+      }),
+    );
+    evaluationQueue.current = request.then(
+      () => undefined,
+      () => undefined,
+    );
+    void request.then(
+      (evaluation) => {
+        const confirmed = Object.fromEntries(
+          evaluation.ruleVotes.map((entry) => [entry.ruleId, entry.vote]),
+        );
+        if (generation === evaluationGeneration.current) {
+          confirmedVotes.current = confirmed;
+        }
+        if (
+          generation === evaluationGeneration.current &&
+          revision === votesRevision.current
+        ) {
+          setRuleVotes(confirmed);
+        }
+      },
+      () => {
+        if (
+          generation === evaluationGeneration.current &&
+          revision === votesRevision.current
+        ) {
+          setRuleVotes(confirmedVotes.current);
+          setEvaluationError(
+            '評価を送れませんでした。もう一度ためしてください',
+          );
+        }
+      },
+    );
+  };
   const tutorialEligible =
     !playedBefore &&
     room?.mode === 'basic' &&
@@ -982,10 +1122,10 @@ function ConnectedApp({
         firedRules={(resultRoom.setResult?.firedRules ?? []).map((rule) => ({
           ruleId: rule.ruleId,
           name: rule.ruleName,
-          vote: null,
+          vote: ruleVotes[rule.ruleId] ?? null,
         }))}
-        onChangeFunRating={setFunRating}
-        onVoteRule={() => undefined}
+        onChangeFunRating={saveSetRating}
+        onVoteRule={saveRuleVote}
         onPlayAgain={() => {
           invoke(client.continueRoom());
         }}
@@ -1006,7 +1146,6 @@ function ConnectedApp({
                       () => {
                         setIsGraduating(false);
                         setGraduationFrom(null);
-                        setPlaySheetInitialMode('community');
                         setPlaySheetError(GRADUATION_ERROR);
                         go('menu');
                         setIsChoosingRoom(true);
@@ -1033,10 +1172,10 @@ function ConnectedApp({
             }),
           );
         }}
-        showEvaluation={false}
+        actionError={evaluationError ?? graduationError}
+        showEvaluation
         waitingFor={waitingFor}
         actionPending={isGraduating}
-        actionError={graduationError}
       />,
     );
   }
@@ -1070,26 +1209,22 @@ function ConnectedApp({
     <>
       <MenuScreen
         onPlay={() => {
-          setPlaySheetInitialMode(null);
           setPlaySheetError(null);
           setIsChoosingRoom(true);
         }}
         onPropose={() => go('proposal')}
         onEncyclopedia={() => go('ruleDex')}
         onMyProposals={() => go('myProposals')}
-        onHowToPlay={() => undefined}
         unreadProposalCount={unreadProposalCount}
       />
       {isChoosingRoom && (
         <PlaySheet
-          playedBefore={playedBefore}
-          initialMode={playSheetInitialMode}
+          initialMode={playSheetError === GRADUATION_ERROR ? 'community' : null}
           onCreate={(mode) => {
             setPlaySheetError(null);
             invoke(
               client.createRoom(mode).then(() => {
                 setIsChoosingRoom(false);
-                setPlaySheetInitialMode(null);
               }),
             );
           }}
@@ -1102,7 +1237,6 @@ function ConnectedApp({
           }}
           onClose={() => {
             setIsChoosingRoom(false);
-            setPlaySheetInitialMode(null);
             setPlaySheetError(null);
           }}
           error={playSheetError ?? friendlyError(state.error)}
@@ -1127,9 +1261,11 @@ function friendlyError(error: string | null): string | null {
 export function App({
   client,
   storage,
+  evaluationApi,
 }: {
   client?: MultiplayerClient | null;
   storage?: PlayedBeforeStorage;
+  evaluationApi?: EvaluationApi;
 } = {}) {
   const effectiveClient =
     client === undefined
@@ -1144,9 +1280,37 @@ export function App({
       : getPlayedBeforeStorage(
           typeof window === 'undefined' ? undefined : window,
         ));
+  const effectiveEvaluationApi =
+    evaluationApi ??
+    (import.meta.env.MODE === 'test'
+      ? {
+          get: async () => ({ setRating: null, ruleVotes: [] }),
+          update: async (
+            _setId: string,
+            update:
+              | { setRating: SetFunRating }
+              | { ruleVote: { ruleId: string; vote: RuleVote } },
+          ) => ({
+            setRating: 'setRating' in update ? update.setRating : null,
+            ruleVotes:
+              'ruleVote' in update && update.ruleVote.vote !== null
+                ? [
+                    {
+                      ruleId: update.ruleVote.ruleId,
+                      vote: update.ruleVote.vote,
+                    },
+                  ]
+                : [],
+          }),
+        }
+      : getBrowserEvaluationClient());
   return effectiveClient ? (
-    <ConnectedApp client={effectiveClient} storage={effectiveStorage} />
+    <ConnectedApp
+      client={effectiveClient}
+      storage={effectiveStorage}
+      evaluationApi={effectiveEvaluationApi}
+    />
   ) : (
-    <DemoApp storage={effectiveStorage} />
+    <DemoApp />
   );
 }

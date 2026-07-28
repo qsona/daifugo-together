@@ -146,6 +146,7 @@ export interface MultiplayerGameView {
 }
 
 export interface SetResultView {
+  setId: string;
   standings: {
     memberId: string;
     totalRank: number;

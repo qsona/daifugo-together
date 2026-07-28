@@ -24,6 +24,7 @@ import type {
   SocketData,
 } from './room/protocol.js';
 import type { ProposalSubmissionPort } from './proposal/submission.js';
+import type { EvaluationService } from './evaluation/service.js';
 import type { LocalScreeningService } from './injection/local-screening.js';
 import type { YellowCardPort } from './injection/yellow-card-service.js';
 import type { PipelineJudgementService } from './pipeline/service.js';
@@ -49,6 +50,7 @@ export interface AppServerOptions {
   gateway?: RoomSocketGatewayOptions;
   checkDatabase?: () => boolean;
   proposals?: ProposalSubmissionPort;
+  evaluations?: Pick<EvaluationService, 'get' | 'update'>;
   ruleCatalog?: Pick<RuleCatalogService, 'list'>;
   ruleCatalogRateLimit?: { maxAttempts: number; windowMs: number };
   now?: () => number;
@@ -75,7 +77,10 @@ export interface AppServerOptions {
   };
   adminRules?: {
     token: string;
-    service: Pick<RuleRegistryService, 'get' | 'enable' | 'disable'>;
+    service: Pick<
+      RuleRegistryService,
+      'get' | 'enable' | 'disable' | 'priority' | 'conflicts' | 'snapshot'
+    >;
   };
 }
 
@@ -240,10 +245,15 @@ export function createAppServer(options: AppServerOptions): AppServer {
     response: ServerResponse,
   ): Promise<boolean> => {
     const pathname = new URL(request.url ?? '/', 'http://localhost').pathname;
+    const isPriority = pathname === '/api/admin/rules/priority';
+    const isConflicts = pathname === '/api/admin/conflict-events';
+    const snapshotMatch = /^\/api\/admin\/sets\/([^/]+)\/snapshot$/u.exec(
+      pathname,
+    );
     const match = /^\/admin\/rules\/([^/]+)(?:\/(enable|disable))?$/u.exec(
       pathname,
     );
-    if (!match) return false;
+    if (!match && !isPriority && !isConflicts && !snapshotMatch) return false;
     if (!options.adminRules) {
       writeJson(response, 503, { error: 'admin_rules_unavailable' });
       return true;
@@ -252,14 +262,59 @@ export function createAppServer(options: AppServerOptions): AppServer {
       writeJson(response, 401, { error: 'unauthorized' });
       return true;
     }
+    if (isPriority || isConflicts || snapshotMatch) {
+      if (request.method !== 'GET') {
+        response.setHeader('allow', 'GET');
+        writeJson(response, 405, { error: 'method_not_allowed' });
+        return true;
+      }
+      if (isPriority) {
+        writeJson(response, 200, {
+          items: options.adminRules.service.priority(),
+        });
+        return true;
+      }
+      if (isConflicts) {
+        const parameters = new URL(request.url ?? '/', 'http://localhost')
+          .searchParams;
+        const rawLimit = parameters.get('limit');
+        const limit =
+          rawLimit === null || !/^\d+$/u.test(rawLimit)
+            ? undefined
+            : Number(rawLimit);
+        writeJson(response, 200, {
+          items: options.adminRules.service.conflicts({
+            ...(parameters.get('setId')
+              ? { setId: parameters.get('setId')! }
+              : {}),
+            ...(parameters.get('ruleId')
+              ? { ruleId: parameters.get('ruleId')! }
+              : {}),
+            ...(limit === undefined ? {} : { limit }),
+          }),
+        });
+        return true;
+      }
+      let setId: string;
+      try {
+        setId = decodeURIComponent(snapshotMatch![1]!);
+      } catch {
+        writeJson(response, 400, { error: 'invalid_path_encoding' });
+        return true;
+      }
+      writeJson(response, 200, {
+        items: options.adminRules.service.snapshot(setId),
+      });
+      return true;
+    }
     let ruleId: string;
     try {
-      ruleId = decodeURIComponent(match[1]!);
+      ruleId = decodeURIComponent(match![1]!);
     } catch {
       writeJson(response, 400, { error: 'invalid_path_encoding' });
       return true;
     }
-    const action = match[2];
+    const action = match![2];
     if (!action) {
       if (request.method !== 'GET') {
         response.setHeader('allow', 'GET');
@@ -633,6 +688,52 @@ export function createAppServer(options: AppServerOptions): AppServer {
     writeJson(response, result.status, result.body);
     return true;
   };
+  const handleEvaluation = async (
+    request: IncomingMessage,
+    response: ServerResponse,
+  ): Promise<boolean> => {
+    const pathname = new URL(request.url ?? '/', 'http://localhost').pathname;
+    const match = /^\/api\/sets\/([^/]+)\/evaluation$/u.exec(pathname);
+    if (!match) return false;
+    if (!options.evaluations) {
+      writeJson(response, 503, { error: 'evaluation_service_unavailable' });
+      return true;
+    }
+    let setId: string;
+    try {
+      setId = decodeURIComponent(match[1]!);
+    } catch {
+      writeJson(response, 400, { error: 'invalid_path_encoding' });
+      return true;
+    }
+    if (request.method === 'GET') {
+      const result = options.evaluations.get(bearerToken(request), setId);
+      writeJson(response, result.status, result.body);
+      return true;
+    }
+    if (request.method !== 'POST') {
+      response.setHeader('allow', 'GET, POST');
+      writeJson(response, 405, { error: 'method_not_allowed' });
+      return true;
+    }
+    let body: unknown;
+    try {
+      body = await readJsonBody(request);
+    } catch (error) {
+      writeJson(response, error instanceof SyntaxError ? 400 : 413, {
+        error:
+          error instanceof SyntaxError ? 'invalid_json' : 'request_too_large',
+      });
+      return true;
+    }
+    const result = options.evaluations.update(
+      bearerToken(request),
+      setId,
+      body,
+    );
+    writeJson(response, result.status, result.body);
+    return true;
+  };
   const handleHealth = (
     request: IncomingMessage,
     response: ServerResponse,
@@ -687,6 +788,7 @@ export function createAppServer(options: AppServerOptions): AppServer {
       .then((handled) =>
         handled ? true : handleYellowCards(request, response),
       )
+      .then((handled) => (handled ? true : handleEvaluation(request, response)))
       .then((handled) => (handled ? true : handleProposal(request, response)))
       .then((handled) => {
         if (!handled) {

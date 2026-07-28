@@ -156,6 +156,11 @@ function storedRule(
     proposalId: 'proposal-1',
     status,
     disabledReason,
+    activatedAt: status === 'active' ? 1 : null,
+    ratingUp: 0,
+    ratingDown: 0,
+    popularityScore: 0.5,
+    popularityUpdatedAt: null,
     createdAt: 1,
     updatedAt: 1,
   };

@@ -29,13 +29,21 @@ function integer(value: string | undefined, fallback: number): number | null {
 export class RuleCatalogService {
   readonly #rules: RuleCatalogPort;
   readonly #eliminationEnabled: boolean;
+  readonly #priorityEnabled: boolean;
+  readonly #popularityEnabled: boolean;
 
   constructor(
     rules: RuleCatalogPort,
-    options: { eliminationEnabled?: boolean } = {},
+    options: {
+      eliminationEnabled?: boolean;
+      priorityEnabled?: boolean;
+      popularityEnabled?: boolean;
+    } = {},
   ) {
     this.#rules = rules;
     this.#eliminationEnabled = options.eliminationEnabled ?? false;
+    this.#priorityEnabled = options.priorityEnabled ?? false;
+    this.#popularityEnabled = options.popularityEnabled ?? false;
   }
 
   list(parameters: URLSearchParams): CatalogHttpResult {
@@ -50,12 +58,15 @@ export class RuleCatalogService {
       prefecture === null
         ? 'prefecture'
         : status === null ||
-            (status !== undefined && !['active', 'removed'].includes(status))
+            (status !== undefined &&
+              !['active', 'removed', 'all'].includes(status))
           ? 'status'
           : kind === null ||
               (kind !== undefined && !['local', 'original'].includes(kind))
             ? 'kind'
-            : sort === null || (sort !== undefined && sort !== 'recent')
+            : sort === null ||
+                (sort !== undefined &&
+                  !['recent', 'priority', 'popularity'].includes(sort))
               ? 'sort'
               : order === null ||
                   (order !== undefined && !['asc', 'desc'].includes(order))
@@ -71,11 +82,23 @@ export class RuleCatalogService {
         body: { error: 'invalid_query', field: invalidField },
       };
     }
+    if (
+      (sort === 'priority' && !this.#priorityEnabled) ||
+      (sort === 'popularity' && !this.#popularityEnabled)
+    ) {
+      return {
+        status: 400,
+        body: { error: 'invalid_query', field: 'sort' },
+      };
+    }
     const result = this.#rules.catalog({
       includeRemoved: this.#eliminationEnabled,
       ...(prefecture ? { prefecture } : {}),
-      ...(status ? { status: status as 'active' | 'removed' } : {}),
+      ...(status && status !== 'all'
+        ? { status: status as 'active' | 'removed' }
+        : {}),
       ...(kind ? { kind: kind as 'local' | 'original' } : {}),
+      sort: (sort ?? 'recent') as 'recent' | 'priority' | 'popularity',
       order: (order ?? 'desc') as 'asc' | 'desc',
       limit: limit!,
       offset: offset!,
@@ -92,8 +115,10 @@ export class RuleCatalogService {
           kind: rule.kind,
           prefecture: rule.prefecture,
           status: rule.status as 'active' | 'removed',
-          priority: null,
-          popularity: null,
+          priority: this.#priorityEnabled ? rule.priorityRank : null,
+          popularity: this.#popularityEnabled
+            ? Math.round(rule.popularityScore * 100)
+            : null,
           implementedAt: new Date(rule.createdAt).toISOString(),
           removedAt:
             rule.status === 'removed'

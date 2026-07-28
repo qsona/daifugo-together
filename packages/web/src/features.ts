@@ -11,8 +11,8 @@ function enabled(value: unknown, fallback: boolean): boolean {
 }
 
 export const FEATURES: FeatureFlags = {
-  priority: enabled(import.meta.env.VITE_FEATURE_PRIORITY, false),
-  popularity: enabled(import.meta.env.VITE_FEATURE_POPULARITY, false),
-  elimination: enabled(import.meta.env.VITE_FEATURE_ELIMINATION, false),
+  priority: enabled(import.meta.env.VITE_FEATURE_PRIORITY, true),
+  popularity: enabled(import.meta.env.VITE_FEATURE_POPULARITY, true),
+  elimination: enabled(import.meta.env.VITE_FEATURE_ELIMINATION, true),
   ruleDex: enabled(import.meta.env.VITE_FEATURE_RULE_DEX, true),
 };

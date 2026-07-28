@@ -330,8 +330,8 @@ export class RuleRegistryService {
         name: rule.name,
         position: entries.length,
         priority: {
-          score: 0,
-          activatedAt: rule.createdAt,
+          score: rule.popularityScore,
+          activatedAt: rule.activatedAt ?? rule.createdAt,
           ruleId: rule.id,
         },
         bundleHash: registration.bundleHash,
@@ -400,6 +400,38 @@ export class RuleRegistryService {
             null,
         }
       : { status: 'not_found' };
+  }
+
+  priority() {
+    return this.#repository.priority().map((rule) => ({
+      ruleId: rule.id,
+      up: rule.ratingUp,
+      down: rule.ratingDown,
+      popularityScore: rule.popularityScore,
+      priorityRank: rule.priorityRank,
+      activatedAt: rule.activatedAt,
+      popularityUpdatedAt: rule.popularityUpdatedAt,
+    }));
+  }
+
+  conflicts(query: { setId?: string; ruleId?: string; limit?: number }) {
+    return this.#repository.conflicts(query);
+  }
+
+  snapshot(setId: string) {
+    return this.#repository.snapshot(setId);
+  }
+
+  recordConflict(input: {
+    setId: string;
+    gameIndex: number;
+    playSeq: number;
+    hook: string;
+    conflictKey: string;
+    adoptedRuleId: string;
+    entries: unknown[];
+  }): void {
+    this.#repository.recordConflict({ ...input, now: this.#now() });
   }
 
   disable(ruleId: string, body: unknown): RuleControlResult {

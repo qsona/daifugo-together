@@ -58,6 +58,52 @@ function reportRuleIncidents(
   }
 }
 
+function reportRuleConflicts(
+  options: RoomReducerOptions,
+  setId: string,
+  gameIndex: number,
+  playSeq: number,
+  events: readonly (EngineEvent | SetEndedEvent)[],
+): void {
+  const resolutions = events.filter(
+    (
+      event,
+    ): event is Extract<
+      EngineEvent,
+      { type: 'effectApplied' | 'effectRejected' }
+    > =>
+      (event.type === 'effectApplied' || event.type === 'effectRejected') &&
+      event.conflictKey !== null,
+  );
+  const grouped = Map.groupBy(
+    resolutions,
+    (event) => `${event.hook}\u0000${event.conflictKey ?? ''}`,
+  );
+  for (const entries of grouped.values()) {
+    if (
+      entries.length < 2 &&
+      entries.every(({ resolution }) => resolution === 'adopted')
+    ) {
+      continue;
+    }
+    const first = entries[0];
+    if (!first?.conflictKey) continue;
+    const adopted =
+      entries.find(({ resolution }) => resolution === 'adopted')?.ruleId ??
+      entries.find((entry) => 'winnerRuleId' in entry)?.winnerRuleId ??
+      first.ruleId;
+    options.onRuleConflict?.({
+      setId,
+      gameIndex,
+      playSeq,
+      hook: first.hook,
+      conflictKey: first.conflictKey,
+      adoptedRuleId: adopted,
+      entries: structuredClone(entries),
+    });
+  }
+}
+
 export function createRoomState(input: CreateRoomInput): RoomState {
   return {
     roomId: input.roomId,
@@ -424,6 +470,7 @@ function startSet(
     rulePort(options, setId),
   );
   reportRuleIncidents(options, setId, started.events);
+  reportRuleConflicts(options, setId, 1, state.turnSeq, started.events);
   const settlement = settleMembersAtSetResult(members, started.state);
   const phase = phaseAfterSettlement(started.state, settlement.members);
   return committed(
@@ -982,6 +1029,15 @@ function gameAction(
     rulePort(options, state.engine.setId),
   );
   reportRuleIncidents(options, state.engine.setId, transition.events);
+  reportRuleConflicts(
+    options,
+    state.engine.setId,
+    state.engine.phase.name === 'setResult'
+      ? state.engine.results.length
+      : state.engine.phase.gameIndex + 1,
+    state.turnSeq,
+    transition.events,
+  );
   if (
     transition.rejections.length > 0 ||
     transition.acceptedAction === undefined
@@ -1055,6 +1111,13 @@ function advanceIntermission(
     rulePort(options, state.engine.setId),
   );
   reportRuleIncidents(options, state.engine.setId, transition.events);
+  reportRuleConflicts(
+    options,
+    state.engine.setId,
+    state.engine.phase.gameIndex + 1,
+    state.turnSeq,
+    transition.events,
+  );
   if (transition.rejections.length > 0) {
     return rejected(state, 'INVALID_SET_PHASE');
   }
@@ -1113,6 +1176,15 @@ function requestDrain(
     rulePort(options, state.engine.setId),
   );
   reportRuleIncidents(options, state.engine.setId, transition.events);
+  reportRuleConflicts(
+    options,
+    state.engine.setId,
+    state.engine.phase.name === 'setResult'
+      ? state.engine.results.length
+      : state.engine.phase.gameIndex + 1,
+    state.turnSeq,
+    transition.events,
+  );
   if (
     transition.rejections.length > 0 ||
     transition.acceptedAction === undefined

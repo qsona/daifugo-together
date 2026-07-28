@@ -259,6 +259,7 @@ function setResultView(
       ? engine.results.at(-1)
       : undefined;
   return {
+    setId: engine.setId,
     standings: engine.outcome.standings.map((standing) => ({
       memberId: standing.player,
       totalRank: standing.totalStanding,
