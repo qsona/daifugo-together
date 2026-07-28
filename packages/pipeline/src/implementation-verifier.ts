@@ -1,3 +1,6 @@
+import { access } from 'node:fs/promises';
+import { relative, sep } from 'node:path';
+
 import type { ProcessPort, ProcessResult } from './process.js';
 import { SpawnProcessPort } from './process.js';
 import type { ScaffoldResult } from './scaffold.js';
@@ -26,6 +29,19 @@ export class LocalImplementationVerifier implements ImplementationVerifier {
     workspace: string;
     scaffold: ScaffoldResult;
   }): Promise<string[]> {
+    try {
+      await access(`${input.workspace}/packages/core/dist/index.d.ts`);
+    } catch {
+      const coreBuild = await this.#process.run({
+        command: 'pnpm',
+        args: ['--filter', '@daifugo/core', 'build'],
+        cwd: input.workspace,
+        timeoutMs: COMMAND_TIMEOUT_MS,
+      });
+      if (coreBuild.timedOut || coreBuild.exitCode !== 0) {
+        return [failure('core build', coreBuild)];
+      }
+    }
     const typecheck = await this.#process.run({
       command: 'pnpm',
       args: ['--filter', '@daifugo/rules', 'typecheck'],
@@ -37,8 +53,15 @@ export class LocalImplementationVerifier implements ImplementationVerifier {
     }
     const test = await this.#process.run({
       command: 'pnpm',
-      args: ['exec', 'vitest', 'run', 'rule.test.ts'],
-      cwd: input.scaffold.directory,
+      args: [
+        'exec',
+        'vitest',
+        'run',
+        relative(input.workspace, `${input.scaffold.directory}/rule.test.ts`)
+          .split(sep)
+          .join('/'),
+      ],
+      cwd: input.workspace,
       timeoutMs: COMMAND_TIMEOUT_MS,
     });
     return test.timedOut || test.exitCode !== 0

@@ -21,20 +21,27 @@ const runtimeScripts = [
 ] as const;
 
 describe('pipeline local environment', () => {
-  it('loads the ignored root .env.local for every runtime command', async () => {
+  it('runs every command through the build-on-change environment loader', async () => {
     const packageJson = JSON.parse(
       await readFile(new URL('../package.json', import.meta.url), 'utf8'),
     ) as { scripts: Record<string, string> };
+    const runner = await readFile(
+      new URL('../scripts/run-cli.mjs', import.meta.url),
+      'utf8',
+    );
     const gitignore = await readFile(
       new URL('../../../.gitignore', import.meta.url),
       'utf8',
     );
 
     for (const script of runtimeScripts) {
-      expect(packageJson.scripts[script]).toContain(
-        'node --env-file-if-exists=../../.env.local ',
+      expect(packageJson.scripts[script]).toMatch(
+        /^node scripts\/run-cli\.mjs dist\/.+\.js/u,
       );
+      expect(packageJson.scripts[script]).not.toContain('pnpm build &&');
     }
+    expect(runner).toContain("'--env-file-if-exists=../../.env.local'");
+    expect(runner).toContain("argument !== '--'");
     expect(gitignore.split(/\r?\n/u)).toContain('.env.local');
   });
 });

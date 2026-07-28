@@ -15,6 +15,11 @@ RULE_REPOSITORY_URL=git@github.com:qsona/daifugo-together.git
 
 `DAIFUGO_ADMIN_URL` は `judge` / `confirm`、`ADMIN_PIPELINE_URL` と `RULE_REPOSITORY_URL` は `implement*` が使う。`packages/pipeline` の各運用コマンドは、このファイルがあれば自動で読み込む。シェルで同名の環境変数を明示した場合は、その値を優先する。`.env.local` は必ず Git 管理外のまま、ファイルモード `0600` で保持する。
 
+各運用コマンドは build 済みの pipeline CLI を再利用する。core / ai /
+rules / server / pipeline の source または依存設定が前回 build より新しい場合だけ、
+初回起動時に自動で 1 回 build する。連続する judge / review / implement 操作では
+毎回 build しない。
+
 macOS では ChatGPT アプリ同梱の Codex を優先して使う。それ以外の場所にあるバイナリを使う場合だけ `CODEX_BIN` を設定する。
 
 ```bash
@@ -99,6 +104,9 @@ skillは`implement:prepare`で不変scaffoldと一時workspaceを準備し、そ
 セッション自身が`rule.ts` / `rule.test.ts`だけを実装する。続いて
 `implement:submit`が差分、scaffold SHA、静的制約、型検査、対象テストを再確認し、
 成功時だけcommit・push・PR作成と`pr_open`記録を行う。別の`codex exec`は起動しない。
+Codex Appから`gh`を使うprepare / submitは、macOS Keychainを読めるよう
+sandbox外の承認付きで実行する。sandbox内だけで`gh auth status`が失敗しても、
+すぐに再ログインせず承認付き実行で再確認する。
 
 中断したjobは、新しいCodexタスクでjob IDを指定して同じattemptを再開する。
 

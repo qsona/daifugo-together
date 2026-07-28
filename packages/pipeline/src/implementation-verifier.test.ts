@@ -27,13 +27,23 @@ describe('local implementation verifier', () => {
     expect(inputs).toMatchObject([
       {
         command: 'pnpm',
+        args: ['--filter', '@daifugo/core', 'build'],
+        cwd: '/workspace',
+      },
+      {
+        command: 'pnpm',
         args: ['--filter', '@daifugo/rules', 'typecheck'],
         cwd: '/workspace',
       },
       {
         command: 'pnpm',
-        args: ['exec', 'vitest', 'run', 'rule.test.ts'],
-        cwd: '/workspace/packages/rules/r0001-yagiri',
+        args: [
+          'exec',
+          'vitest',
+          'run',
+          'packages/rules/r0001-yagiri/rule.test.ts',
+        ],
+        cwd: '/workspace',
       },
     ]);
   });
@@ -43,6 +53,14 @@ describe('local implementation verifier', () => {
     const verifier = new LocalImplementationVerifier({
       run: async () => {
         calls += 1;
+        if (calls === 1) {
+          return {
+            exitCode: 0,
+            stdout: '',
+            stderr: '',
+            timedOut: false,
+          };
+        }
         return {
           exitCode: 2,
           stdout: '',
@@ -63,6 +81,6 @@ describe('local implementation verifier', () => {
         },
       }),
     ).resolves.toEqual(['typecheck: type error']);
-    expect(calls).toBe(1);
+    expect(calls).toBe(2);
   });
 });
