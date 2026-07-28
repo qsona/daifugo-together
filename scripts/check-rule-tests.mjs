@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -52,6 +52,15 @@ export function validateRuleTestReport(report) {
   ];
 }
 
+export function ruleTestFailureMessages(report) {
+  if (!Array.isArray(report?.testResults)) return [];
+  return report.testResults.flatMap((file) =>
+    file?.status === 'failed' && typeof file?.message === 'string'
+      ? [file.message]
+      : [],
+  );
+}
+
 function argument(name) {
   const index = process.argv.indexOf(name);
   return index < 0 ? undefined : process.argv[index + 1];
@@ -69,6 +78,19 @@ function main() {
   const reportPath = join(outputRoot, 'report.json');
   const ruleRoot = `${rulesRoot}/${directory}`;
   try {
+    if (!existsSync(join(process.cwd(), 'packages/core/dist/index.js'))) {
+      const build = spawnSync('pnpm', ['--filter', '@daifugo/core', 'build'], {
+        cwd: process.cwd(),
+        encoding: 'utf8',
+        stdio: 'pipe',
+      });
+      process.stdout.write(build.stdout ?? '');
+      process.stderr.write(build.stderr ?? '');
+      if (build.status !== 0) {
+        process.exitCode = build.status ?? 1;
+        return;
+      }
+    }
     const result = spawnSync(
       'pnpm',
       [
@@ -89,6 +111,12 @@ function main() {
     process.stdout.write(result.stdout ?? '');
     process.stderr.write(result.stderr ?? '');
     if (result.status !== 0) {
+      if (existsSync(reportPath)) {
+        const report = JSON.parse(readFileSync(reportPath, 'utf8'));
+        for (const message of ruleTestFailureMessages(report)) {
+          console.error(message);
+        }
+      }
       process.exitCode = result.status ?? 1;
       return;
     }

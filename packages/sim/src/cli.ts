@@ -1,4 +1,5 @@
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { loadRuleBundles } from './loader.js';
 import { runAiRuleSimulations, simulationViolations } from './runner.js';
@@ -17,6 +18,10 @@ function positiveInteger(name: string, fallback: number): number {
   return value;
 }
 
+export function defaultRulesRoot(moduleUrl = import.meta.url): string {
+  return resolve(dirname(fileURLToPath(moduleUrl)), '../../rules');
+}
+
 async function main(): Promise<void> {
   const newRuleId = argument('--rule');
   if (!newRuleId) {
@@ -24,7 +29,7 @@ async function main(): Promise<void> {
       'usage: sim --rule r0001-slug [--games 200] [--seeds 5] [--rules-root packages/rules]',
     );
   }
-  const rulesRoot = resolve(argument('--rules-root') ?? 'packages/rules');
+  const rulesRoot = resolve(argument('--rules-root') ?? defaultRulesRoot());
   const games = positiveInteger('--games', 200);
   const seeds = positiveInteger('--seeds', 5);
   const bundles = await loadRuleBundles({ rulesRoot, newRuleId });
@@ -41,4 +46,9 @@ async function main(): Promise<void> {
   if (violations.length > 0) process.exitCode = 1;
 }
 
-await main();
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
+  await main();
+}

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { validateRuleTestReport } from './check-rule-tests.mjs';
+import {
+  ruleTestFailureMessages,
+  validateRuleTestReport,
+} from './check-rule-tests.mjs';
 
 describe('rule test quality gate', () => {
   it('3件以上のtest caseを許可する', () => {
@@ -48,5 +51,16 @@ describe('rule test quality gate', () => {
         numPendingTests: 1,
       }),
     ).toEqual(['rule.test.ts must not skip or defer tests (actual=1)']);
+  });
+
+  it('test runnerの失敗理由をreportから取り出す', () => {
+    expect(
+      ruleTestFailureMessages({
+        testResults: [
+          { status: 'passed' },
+          { status: 'failed', message: 'failed to resolve core' },
+        ],
+      }),
+    ).toEqual(['failed to resolve core']);
   });
 });
