@@ -66,12 +66,9 @@ const CX01_OUTPUT_SCHEMA = {
       ],
     },
     reasonForUser: {
-      anyOf: [
-        { type: 'string', minLength: 1, maxLength: 1_000 },
-        { type: 'null' },
-      ],
+      anyOf: [{ type: 'string' }, { type: 'null' }],
     },
-    reasonInternal: { type: 'string', minLength: 1, maxLength: 4_000 },
+    reasonInternal: { type: 'string' },
     spec: {
       anyOf: [
         {
@@ -87,12 +84,11 @@ const CX01_OUTPUT_SCHEMA = {
             'notes',
           ],
           properties: {
-            specVersion: { type: 'integer', const: 1 },
-            name: { type: 'string', minLength: 1, maxLength: 40 },
-            summary: { type: 'string', minLength: 1, maxLength: 1_000 },
+            specVersion: { type: 'integer', enum: [1] },
+            name: { type: 'string' },
+            summary: { type: 'string' },
             hooks: {
               type: 'array',
-              uniqueItems: true,
               maxItems: 6,
               items: {
                 type: 'string',
@@ -108,7 +104,6 @@ const CX01_OUTPUT_SCHEMA = {
             },
             effects: {
               type: 'array',
-              uniqueItems: true,
               maxItems: 7,
               items: {
                 type: 'string',
@@ -127,9 +122,9 @@ const CX01_OUTPUT_SCHEMA = {
               type: 'array',
               minItems: 1,
               maxItems: 20,
-              items: { type: 'string', minLength: 1, maxLength: 300 },
+              items: { type: 'string' },
             },
-            notes: { type: 'string', maxLength: 1_000 },
+            notes: { type: 'string' },
           },
         },
         { type: 'null' },
@@ -145,16 +140,21 @@ const CX01_OUTPUT_SCHEMA = {
             slug: {
               type: 'string',
               pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$',
-              maxLength: 48,
             },
             messages: {
-              type: 'object',
-              maxProperties: 20,
-              propertyNames: { pattern: '^[a-z][a-z0-9_]{0,63}$' },
-              additionalProperties: {
-                type: 'string',
-                minLength: 1,
-                maxLength: 200,
+              type: 'array',
+              maxItems: 20,
+              items: {
+                type: 'object',
+                additionalProperties: false,
+                required: ['key', 'value'],
+                properties: {
+                  key: {
+                    type: 'string',
+                    pattern: '^[a-z][a-z0-9_]{0,63}$',
+                  },
+                  value: { type: 'string' },
+                },
               },
             },
           },
@@ -166,6 +166,52 @@ const CX01_OUTPUT_SCHEMA = {
   },
 } as const;
 
+type JsonObject = Record<string, unknown>;
+
+function object(value: unknown): JsonObject | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as JsonObject)
+    : null;
+}
+
+function messageRecord(value: unknown): Record<string, string> | null {
+  if (!Array.isArray(value)) return null;
+
+  const result: Record<string, string> = {};
+  for (const valueEntry of value) {
+    const entry = object(valueEntry);
+    if (
+      !entry ||
+      typeof entry.key !== 'string' ||
+      typeof entry.value !== 'string' ||
+      Object.hasOwn(result, entry.key)
+    ) {
+      return null;
+    }
+    result[entry.key] = entry.value;
+  }
+  return result;
+}
+
+function normalizeTransportOutput(value: unknown): JsonObject | null {
+  const input = object(value);
+  if (!input) return null;
+  if (input.scaffoldMeta === null) return input;
+
+  const scaffoldMeta = object(input.scaffoldMeta);
+  if (!scaffoldMeta) return null;
+  const messages = messageRecord(scaffoldMeta.messages);
+  if (!messages) return null;
+
+  return {
+    ...input,
+    scaffoldMeta: {
+      ...scaffoldMeta,
+      messages,
+    },
+  };
+}
+
 function parseOutput(
   text: string,
   metadata: { model: string; latencyMs: number },
@@ -176,11 +222,14 @@ function parseOutput(
   } catch {
     throw new Error('CX-01 turn returned non-JSON output');
   }
-  const parsed = parseAiJudgement({
-    ...(value as object),
-    ...metadata,
-    promptVersion: CX01_PROMPT_VERSION,
-  });
+  const normalized = normalizeTransportOutput(value);
+  const parsed = normalized
+    ? parseAiJudgement({
+        ...normalized,
+        ...metadata,
+        promptVersion: CX01_PROMPT_VERSION,
+      })
+    : null;
   if (!parsed) throw new Error('CX-01 turn returned invalid structured output');
   return parsed;
 }
