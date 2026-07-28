@@ -75,6 +75,9 @@ only when source or workspace dependencies changed since the last build.
 7. Run from the returned workspace:
 
 ```sh
+pnpm exec prettier --write \
+  packages/rules/RULE_ID/rule.ts \
+  packages/rules/RULE_ID/rule.test.ts
 pnpm --filter @daifugo/core build
 pnpm --filter @daifugo/rules typecheck
 ```

@@ -49,6 +49,7 @@ The exported `rule.meta` must be deeply equal to `meta.json`.
 Before finishing, run these commands from the prepared repository workspace and
 fix any failure:
 
+- `pnpm exec prettier --write packages/rules/<this-directory-name>/rule.ts packages/rules/<this-directory-name>/rule.test.ts`
 - `pnpm --filter @daifugo/core build`
 - `pnpm --filter @daifugo/rules typecheck`
 - `pnpm exec vitest run packages/rules/<this-directory-name>/rule.test.ts`

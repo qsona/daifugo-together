@@ -27,6 +27,17 @@ describe('local implementation verifier', () => {
     expect(inputs).toMatchObject([
       {
         command: 'pnpm',
+        args: [
+          'exec',
+          'prettier',
+          '--check',
+          'packages/rules/r0001-yagiri/rule.ts',
+          'packages/rules/r0001-yagiri/rule.test.ts',
+        ],
+        cwd: '/workspace',
+      },
+      {
+        command: 'pnpm',
         args: ['--filter', '@daifugo/core', 'build'],
         cwd: '/workspace',
       },
@@ -53,7 +64,7 @@ describe('local implementation verifier', () => {
     const verifier = new LocalImplementationVerifier({
       run: async () => {
         calls += 1;
-        if (calls === 1) {
+        if (calls <= 2) {
           return {
             exitCode: 0,
             stdout: '',
@@ -81,6 +92,34 @@ describe('local implementation verifier', () => {
         },
       }),
     ).resolves.toEqual(['typecheck: type error']);
-    expect(calls).toBe(2);
+    expect(calls).toBe(3);
+  });
+
+  it('format不一致時はbuild前に検収違反として返す', async () => {
+    let calls = 0;
+    const verifier = new LocalImplementationVerifier({
+      run: async () => {
+        calls += 1;
+        return {
+          exitCode: 1,
+          stdout: 'Code style issues found',
+          stderr: '',
+          timedOut: false,
+        };
+      },
+    });
+    await expect(
+      verifier.verify({
+        workspace: '/workspace',
+        scaffold: {
+          directory: '/workspace/packages/rules/r0001-yagiri',
+          metaPath: '/workspace/packages/rules/r0001-yagiri/meta.json',
+          specPath: '/workspace/packages/rules/r0001-yagiri/SPEC.json',
+          metaSha256: 'a',
+          specSha256: 'b',
+        },
+      }),
+    ).resolves.toEqual(['format: Code style issues found']);
+    expect(calls).toBe(1);
   });
 });

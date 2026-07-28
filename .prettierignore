@@ -4,3 +4,4 @@ coverage/
 .pnpm-store/
 pnpm-lock.yaml
 docs/
+packages/rules/*/SPEC.json

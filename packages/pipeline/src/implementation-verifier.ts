@@ -29,6 +29,27 @@ export class LocalImplementationVerifier implements ImplementationVerifier {
     workspace: string;
     scaffold: ScaffoldResult;
   }): Promise<string[]> {
+    const rulePath = relative(
+      input.workspace,
+      `${input.scaffold.directory}/rule.ts`,
+    )
+      .split(sep)
+      .join('/');
+    const testPath = relative(
+      input.workspace,
+      `${input.scaffold.directory}/rule.test.ts`,
+    )
+      .split(sep)
+      .join('/');
+    const format = await this.#process.run({
+      command: 'pnpm',
+      args: ['exec', 'prettier', '--check', rulePath, testPath],
+      cwd: input.workspace,
+      timeoutMs: COMMAND_TIMEOUT_MS,
+    });
+    if (format.timedOut || format.exitCode !== 0) {
+      return [failure('format', format)];
+    }
     try {
       await access(`${input.workspace}/packages/core/dist/index.d.ts`);
     } catch {
@@ -53,14 +74,7 @@ export class LocalImplementationVerifier implements ImplementationVerifier {
     }
     const test = await this.#process.run({
       command: 'pnpm',
-      args: [
-        'exec',
-        'vitest',
-        'run',
-        relative(input.workspace, `${input.scaffold.directory}/rule.test.ts`)
-          .split(sep)
-          .join('/'),
-      ],
+      args: ['exec', 'vitest', 'run', testPath],
       cwd: input.workspace,
       timeoutMs: COMMAND_TIMEOUT_MS,
     });
