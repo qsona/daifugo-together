@@ -1,4 +1,4 @@
-import type { PlayerRoomView, RoomMode } from '@daifugo/core';
+import type { PlayerRoomView } from '@daifugo/core';
 import type { ReactNode } from 'react';
 import {
   useCallback,
@@ -147,7 +147,7 @@ const DEMO_RULE_CATALOG_API: RuleCatalogApi = {
  * 各画面は表示専用で、ここが渡しているのは固定データ(`fixtures/demo`)。
  * サーバースナップショットの接続と合法手の判定は E1/E3 の責務。
  */
-function DemoApp({ storage }: { storage: PlayedBeforeStorage | undefined }) {
+function DemoApp() {
   const current = useScreenStore((state) => state.current);
   const go = useScreenStore((state) => state.go);
 
@@ -156,7 +156,6 @@ function DemoApp({ storage }: { storage: PlayedBeforeStorage | undefined }) {
   const [ruleVotes, setRuleVotes] = useState(DEMO_FIRED_RULES);
   /** 見本のカットインを順に再生するための位置。null は再生していない状態。 */
   const [isChoosingRoom, setIsChoosingRoom] = useState(false);
-  const [playedBefore] = useState(() => hasPlayedBefore(storage));
   const [volleyIndex, setVolleyIndex] = useState<number | null>(null);
   const [lastVolleyIndex, setLastVolleyIndex] = useState<number | null>(null);
   const [activeRulesReturn, setActiveRulesReturn] = useState<
@@ -215,11 +214,9 @@ function DemoApp({ storage }: { storage: PlayedBeforeStorage | undefined }) {
             onPropose={() => go('proposal')}
             onEncyclopedia={() => go('ruleDex')}
             onMyProposals={() => go('myProposals')}
-            onHowToPlay={() => undefined}
           />
           {isChoosingRoom && (
             <PlaySheet
-              playedBefore={playedBefore}
               onCreate={() => {
                 setIsChoosingRoom(false);
                 go('waitingRoom');
@@ -623,8 +620,6 @@ function ConnectedApp({
   );
   const [isGraduating, setIsGraduating] = useState(false);
   const [graduationError, setGraduationError] = useState<string | null>(null);
-  const [playSheetInitialMode, setPlaySheetInitialMode] =
-    useState<RoomMode | null>(null);
   const [playSheetError, setPlaySheetError] = useState<string | null>(null);
   const [roomOverlay, setRoomOverlay] = useState<
     'activeRules' | 'ruleDex' | null
@@ -1006,7 +1001,6 @@ function ConnectedApp({
                       () => {
                         setIsGraduating(false);
                         setGraduationFrom(null);
-                        setPlaySheetInitialMode('community');
                         setPlaySheetError(GRADUATION_ERROR);
                         go('menu');
                         setIsChoosingRoom(true);
@@ -1070,26 +1064,21 @@ function ConnectedApp({
     <>
       <MenuScreen
         onPlay={() => {
-          setPlaySheetInitialMode(null);
           setPlaySheetError(null);
           setIsChoosingRoom(true);
         }}
         onPropose={() => go('proposal')}
         onEncyclopedia={() => go('ruleDex')}
         onMyProposals={() => go('myProposals')}
-        onHowToPlay={() => undefined}
         unreadProposalCount={unreadProposalCount}
       />
       {isChoosingRoom && (
         <PlaySheet
-          playedBefore={playedBefore}
-          initialMode={playSheetInitialMode}
           onCreate={(mode) => {
             setPlaySheetError(null);
             invoke(
               client.createRoom(mode).then(() => {
                 setIsChoosingRoom(false);
-                setPlaySheetInitialMode(null);
               }),
             );
           }}
@@ -1102,7 +1091,6 @@ function ConnectedApp({
           }}
           onClose={() => {
             setIsChoosingRoom(false);
-            setPlaySheetInitialMode(null);
             setPlaySheetError(null);
           }}
           error={playSheetError ?? friendlyError(state.error)}
@@ -1147,6 +1135,6 @@ export function App({
   return effectiveClient ? (
     <ConnectedApp client={effectiveClient} storage={effectiveStorage} />
   ) : (
-    <DemoApp storage={effectiveStorage} />
+    <DemoApp />
   );
 }

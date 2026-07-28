@@ -12,7 +12,6 @@ describe('MenuScreen', () => {
       onPropose: vi.fn(),
       onEncyclopedia: vi.fn(),
       onMyProposals: vi.fn(),
-      onHowToPlay: vi.fn(),
     };
     const { rerender } = render(
       <MenuScreen {...props} unreadProposalCount={3} />,
