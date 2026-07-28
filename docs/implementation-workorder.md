@@ -130,4 +130,5 @@ Epic ごとの発注は本書から分離し、**発注のたびに `docs/workor
 | [workorders/phase1.md](workorders/phase1.md) | 完了(記録) |
 | [workorders/phase2.md](workorders/phase2.md) | 大半完了。残件は発注書内に記載 |
 | [workorders/E15-auth-account.md](workorders/E15-auth-account.md) | **発注中**(2026-07-28) |
+| [workorders/phase3.md](workorders/phase3.md) | **発注中**(2026-07-29) |
 
