@@ -57,7 +57,11 @@ export function scoreSet(
         right.points - left.points || left.lastStanding - right.lastStanding,
     );
   const standings = ordered.map((entry, index) => {
-    const totalStanding = (index + 1) as Standing;
+    const previous = index > 0 ? ordered[index - 1] : undefined;
+    // 同点は最終戦順位で表示順だけ決め、総合順位は同率にする。
+    const totalStanding = (
+      previous && previous.points === entry.points ? index : index + 1
+    ) as Standing;
     return {
       player: entry.player,
       totalStanding,

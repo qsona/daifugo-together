@@ -65,4 +65,20 @@ describe('SetRankRows', () => {
 
     expect(screen.queryByText(/→/)).toBeNull();
   });
+
+  it('同率1位の全員を花形カードで表示する', () => {
+    const tiedRanks = [
+      RANKS[0]!,
+      { ...RANKS[1]!, place: 1, name: 'プレイヤーB', isYou: false },
+    ];
+
+    const view = render(<SetRankRows ranks={tiedRanks} />);
+
+    expect(view.container.querySelectorAll(`.${styles.champion}`)).toHaveLength(
+      2,
+    );
+    expect(screen.getAllByText('1位')).toHaveLength(2);
+    expect(screen.getByText('あなた')).toBeTruthy();
+    expect(screen.getByText('プレイヤーB')).toBeTruthy();
+  });
 });

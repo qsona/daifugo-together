@@ -554,12 +554,12 @@ function setRanks(room: PlayerRoomView): SetRankView[] {
   const standings = room.setResult?.standings ?? [];
   return [...standings]
     .sort((left, right) => left.totalRank - right.totalRank)
-    .map((standing, index) => {
+    .map((standing) => {
       const member = room.members.find(
         (candidate) => candidate.memberId === standing.memberId,
       );
       return {
-        place: index + 1,
+        place: standing.totalRank,
         name:
           standing.memberId === room.you.memberId
             ? 'あなた'

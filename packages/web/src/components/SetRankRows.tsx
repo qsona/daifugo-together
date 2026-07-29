@@ -16,16 +16,20 @@ export type SetRankView = {
 };
 
 /**
- * セットリザルトの順位。1 位だけ花形カードにして、2 位以下は 1 行ずつ。
+ * セットリザルトの順位。1 位は花形カードにして、2 位以下は 1 行ずつ。
+ * 同率 1 位がいる場合は、全員を花形カードで表示する。
  * 各戦の内訳は直前の最終戦リザルトが見せているので、ここは合計点だけを言う。
  */
 export function SetRankRows({ ranks }: { ranks: readonly SetRankView[] }) {
-  const champion = ranks.find((rank) => rank.place === 1);
+  const champions = ranks.filter((rank) => rank.place === 1);
   const rest = ranks.filter((rank) => rank.place !== 1);
   return (
     <div className={styles.wrap}>
-      {champion && (
-        <div className={cx(styles.champion, champion.isYou && styles.you)}>
+      {champions.map((champion) => (
+        <div
+          key={champion.name}
+          className={cx(styles.champion, champion.isYou && styles.you)}
+        >
           <span className={styles.crown}>{champion.place}位</span>
           {champion.title && (
             <span className={styles.championTitle}>{champion.title}</span>
@@ -38,7 +42,7 @@ export function SetRankRows({ ranks }: { ranks: readonly SetRankView[] }) {
             {champion.kind === 'human' ? '人間' : 'AI'}
           </Tag>
         </div>
-      )}
+      ))}
       <ol className={styles.rows}>
         {rest.map((rank) => (
           <li

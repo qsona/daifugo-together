@@ -326,7 +326,7 @@ describe('GE-05 set progression', () => {
     ).toHaveLength(3);
   });
 
-  it('順位点を合計し、同点は最終戦順位で決める', () => {
+  it('順位点を合計し、同点は同率順位にする', () => {
     const results = [
       {
         gameIndex: 0,
@@ -354,7 +354,7 @@ describe('GE-05 set progression', () => {
       ruleChain: [],
       results,
     });
-    // 1 位 5 点 + 2 位 3 点 = 8 点で並び、最終戦 1 位の p2 が総合 1 位。
+    // 1 位 5 点 + 2 位 3 点 = 8 点で並ぶが、総合順位は同率にする。
     expect(outcome.standings.slice(0, 2)).toEqual([
       {
         player: 'p2',
@@ -365,10 +365,63 @@ describe('GE-05 set progression', () => {
       {
         player: 'p1',
         points: 8,
-        totalStanding: 2,
-        title: '富豪',
+        totalStanding: 1,
+        title: '大富豪',
       },
     ]);
+  });
+
+  it('複数の同点グループは競技順位で並べる', () => {
+    const outcome = scoreSet('set-tied-groups', {
+      members,
+      ruleChain: [],
+      results: [
+        {
+          gameIndex: 0,
+          standings: [
+            { player: 'p1', standing: 1 as const, title: '大富豪' as const },
+            { player: 'p3', standing: 2 as const, title: '富豪' as const },
+            { player: 'p2', standing: 3 as const, title: '貧民' as const },
+            { player: 'p4', standing: 4 as const, title: '大貧民' as const },
+          ],
+          firedRuleIds: [],
+        },
+        {
+          gameIndex: 1,
+          standings: [
+            { player: 'p1', standing: 1 as const, title: '大富豪' as const },
+            { player: 'p2', standing: 2 as const, title: '富豪' as const },
+            { player: 'p4', standing: 3 as const, title: '貧民' as const },
+            { player: 'p3', standing: 4 as const, title: '大貧民' as const },
+          ],
+          firedRuleIds: [],
+        },
+        {
+          gameIndex: 2,
+          standings: [
+            { player: 'p2', standing: 1 as const, title: '大富豪' as const },
+            { player: 'p1', standing: 2 as const, title: '富豪' as const },
+            { player: 'p3', standing: 3 as const, title: '貧民' as const },
+            { player: 'p4', standing: 4 as const, title: '大貧民' as const },
+          ],
+          firedRuleIds: [],
+        },
+        {
+          gameIndex: 3,
+          standings: [
+            { player: 'p2', standing: 1 as const, title: '大富豪' as const },
+            { player: 'p4', standing: 2 as const, title: '富豪' as const },
+            { player: 'p1', standing: 3 as const, title: '貧民' as const },
+            { player: 'p3', standing: 4 as const, title: '大貧民' as const },
+          ],
+          firedRuleIds: [],
+        },
+      ],
+    });
+
+    expect(outcome.standings.map((standing) => standing.totalStanding)).toEqual(
+      [1, 1, 3, 3],
+    );
   });
 
   it('順位点は上から 5-3-2-1', () => {
