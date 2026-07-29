@@ -9,9 +9,10 @@ import { MyProposalsScreen } from './MyProposalsScreen';
 afterEach(cleanup);
 
 describe('MyProposalsScreen', () => {
-  it('状態・理由・未読・リリース導線を表示して明示的に既読化する', async () => {
+  it('状態・理由・未読・ルール導線を表示して明示的に既読化する', async () => {
     const markProposalsSeen = vi.fn(async () => undefined);
     const onUnreadCountChange = vi.fn();
+    const statusChangedAt = Date.UTC(2026, 6, 29, 3);
     const api: ProposalApi = {
       submit: vi.fn(),
       mine: async () => ({
@@ -31,7 +32,7 @@ describe('MyProposalsScreen', () => {
             priorityRank: null,
             unread: true,
             createdAt: 1,
-            statusChangedAt: 2,
+            statusChangedAt,
           },
           {
             id: 'failed',
@@ -50,7 +51,7 @@ describe('MyProposalsScreen', () => {
             priorityRank: null,
             unread: true,
             createdAt: 1,
-            statusChangedAt: 2,
+            statusChangedAt,
           },
         ],
       }),
@@ -71,8 +72,103 @@ describe('MyProposalsScreen', () => {
     expect(screen.getByText('実装を完了できませんでした')).toBeTruthy();
     expect(screen.getAllByText('未読')).toHaveLength(2);
     await waitFor(() => expect(markProposalsSeen).toHaveBeenCalledOnce());
-    expect(markProposalsSeen).toHaveBeenCalledWith(2);
+    expect(markProposalsSeen).toHaveBeenCalledWith(statusChangedAt);
     expect(onUnreadCountChange.mock.calls).toEqual([[2], [0]]);
+    expect(screen.getByText('あそべる')).toBeTruthy();
+    expect(screen.getByText('開発できず')).toBeTruthy();
+    expect(screen.queryByText('リリース')).toBe(null);
+    expect(screen.queryByText('実装失敗')).toBe(null);
+    expect(screen.getByText('2026/7/29 から あそべる')).toBeTruthy();
+  });
+
+  it('状態はステッパーだけが持ち、見出しにバッジを重ねない', async () => {
+    const api: ProposalApi = {
+      submit: vi.fn(),
+      mine: async () => ({
+        unreadCount: 0,
+        items: [
+          {
+            id: 'implementing',
+            kind: 'original',
+            prefectureCode: null,
+            prefectureName: null,
+            name: '開発中ルール',
+            body: '本文',
+            status: 'implementing',
+            reason: null,
+            releasedRuleId: null,
+            popularity: null,
+            priorityRank: null,
+            unread: false,
+            createdAt: 1,
+            statusChangedAt: Date.UTC(2026, 6, 29, 3),
+          },
+        ],
+      }),
+      markProposalsSeen: vi.fn(async () => undefined),
+    };
+
+    render(<MyProposalsScreen api={api} onBack={() => undefined} />);
+
+    expect(await screen.findByText('開発中')).toBeTruthy();
+    expect(screen.getAllByText('開発中')).toHaveLength(1);
+    expect(
+      screen.getByRole('listitem', { current: 'step' }).textContent,
+    ).toContain('いま開発中');
+    expect(screen.getByText('2026/7/29 更新')).toBeTruthy();
+  });
+
+  it('確認中と見送りを平易な表示語で示す', async () => {
+    const items: ProposalListItem[] = [
+      {
+        id: 'screening',
+        kind: 'original',
+        prefectureCode: null,
+        prefectureName: null,
+        name: '確認待ちルール',
+        body: '本文',
+        status: 'screening',
+        reason: null,
+        releasedRuleId: null,
+        popularity: null,
+        priorityRank: null,
+        unread: false,
+        createdAt: 1,
+        statusChangedAt: 2,
+      },
+      {
+        id: 'rejected',
+        kind: 'original',
+        prefectureCode: null,
+        prefectureName: null,
+        name: '見送りルール',
+        body: '本文',
+        status: 'rejected',
+        reason: null,
+        releasedRuleId: null,
+        popularity: null,
+        priorityRank: null,
+        unread: false,
+        createdAt: 1,
+        statusChangedAt: 2,
+      },
+    ];
+
+    render(
+      <MyProposalsScreen
+        api={{
+          submit: vi.fn(),
+          mine: async () => ({ items, unreadCount: 0 }),
+          markProposalsSeen: async () => undefined,
+        }}
+        onBack={() => undefined}
+      />,
+    );
+
+    expect(await screen.findByText('いま')).toBeTruthy();
+    expect(screen.getByText('見送り')).toBeTruthy();
+    expect(screen.queryByText('審査中')).toBe(null);
+    expect(screen.queryByText('却下')).toBe(null);
   });
 
   it('C-6の全理由codeを固定文言または詳細理由へ変換する', async () => {
