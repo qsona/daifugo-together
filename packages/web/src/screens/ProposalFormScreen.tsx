@@ -18,6 +18,7 @@ import { SegmentedControl } from '../components/SegmentedControl';
 import { YellowCardModal } from '../components/YellowCardModal';
 import type { ProposalApi } from '../proposal/client';
 import { ProposalApiError } from '../proposal/client';
+import { STATUS_LABELS } from '../proposal/status-labels';
 
 import styles from './ProposalFormScreen.module.css';
 import screen from './screen.module.css';
@@ -58,9 +59,36 @@ export function ProposalFormScreen({
   const [showCard, setShowCard] = useState(false);
   const [animateSuspension, setAnimateSuspension] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [registrationRequired, setRegistrationRequired] = useState(!registered);
+  const [slotHolder, setSlotHolder] = useState<ProposalListItem | null>(null);
+  const [slotChecked, setSlotChecked] = useState(registered);
+  const [slotLimited, setSlotLimited] = useState(false);
   const shownCardIds = useRef(new Set<number>());
   const previousCardSummary = useRef<YellowCardSummary | null>(null);
+
+  useEffect(() => {
+    if (registered || !api.mine) {
+      setSlotChecked(true);
+      return;
+    }
+    let active = true;
+    void api
+      .mine()
+      .then((response) => {
+        if (!active) return;
+        setSlotHolder(
+          response.items.find((item) => item.occupiesSlot) ?? null,
+        );
+      })
+      .catch(() => {
+        // 枠確認に失敗してもフォームは塞がず、送信時の403で拾う。
+      })
+      .finally(() => {
+        if (active) setSlotChecked(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, [api, registered]);
 
   const refreshCards = async (): Promise<YellowCardSummary | null> => {
     if (!api.getYellowCards) return null;
@@ -160,8 +188,22 @@ export function ProposalFormScreen({
       setAccepted(response.proposal);
     } catch (error) {
       if (error instanceof ProposalApiError) {
-        if (error.status === 403 && error.code === 'registration_required') {
-          setRegistrationRequired(true);
+        if (
+          error.status === 403 &&
+          error.code === 'anonymous_inflight_limit'
+        ) {
+          if (api.mine) {
+            try {
+              const response = await api.mine();
+              setSlotHolder(
+                response.items.find((item) => item.occupiesSlot) ?? null,
+              );
+            } catch {
+              // 取得できなくても汎用の枠埋まり表示に落とす。
+            }
+          }
+          setSlotLimited(true);
+          return;
         }
         setErrors(error.fields);
         setMessage(error.message);
@@ -173,11 +215,23 @@ export function ProposalFormScreen({
     }
   };
 
-  if (registrationRequired) {
+  if (
+    !registered &&
+    !cardSummary?.suspension &&
+    (slotLimited || slotHolder !== null)
+  ) {
     return (
       <div className={screen.screen}>
         <AppBar title="ルールをていあんする" onBack={onBack} />
         <main className={screen.body}>
+          {slotHolder && (
+            <div className={styles.accepted} role="status">
+              <span className={styles.acceptedName}>{slotHolder.name}</span>
+              <span className={styles.status}>
+                {STATUS_LABELS[slotHolder.status]}
+              </span>
+            </div>
+          )}
           <Callout
             action={
               onLogin ? (
@@ -187,7 +241,8 @@ export function ProposalFormScreen({
               ) : undefined
             }
           >
-            提案するには引き継ぎ登録が必要です
+            ていあんは 1 つずつ。けっかが出たら、つぎの ていあんが
+            できるよ。Google とうろくすると いくつでも ていあんできるよ。
           </Callout>
         </main>
       </div>
@@ -310,9 +365,20 @@ export function ProposalFormScreen({
             </div>
           )}
           {!accepted && !cardSummary?.suspension && (
-            <Button type="submit" variant="primary" block disabled={submitting}>
+            <Button
+              type="submit"
+              variant="primary"
+              block
+              disabled={submitting || (!registered && !slotChecked)}
+            >
               {submitting ? '送信中…' : '提案を送信する'}
             </Button>
+          )}
+          {!registered && (
+            <Callout>
+              とうろくしなくても 1 つずつ ていあんできるよ。Google
+              とうろくすると いくつでも ていあんできるよ。
+            </Callout>
           )}
           <Callout>
             提案はAIが確認します。不正な命令はイエローカードの対象です。都道府県は遊んでいた記録として残ります。

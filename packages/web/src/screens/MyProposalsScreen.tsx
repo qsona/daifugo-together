@@ -11,17 +11,10 @@ import {
   type ProposalStep,
 } from '../components/ProposalStepper';
 import type { ProposalApi } from '../proposal/client';
+import { STATUS_LABELS } from '../proposal/status-labels';
 
 import styles from './MyProposalsScreen.module.css';
 import screen from './screen.module.css';
-
-const STATUS_LABELS: Record<ProposalStatus, string> = {
-  screening: '確認中',
-  implementing: '開発中',
-  released: 'あそべる',
-  rejected: '見送り',
-  failed: '開発できず',
-};
 
 const REASON_LABELS: Record<string, string> = {
   infeasible_technical: '現在のしくみでは実装できませんでした。',

@@ -16,46 +16,113 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+const slotHolder = {
+  id: 'p-1',
+  kind: 'local' as const,
+  prefectureCode: null,
+  prefectureName: null,
+  name: '8切り',
+  body: '8を出すと場が流れる。',
+  status: 'screening' as const,
+  reason: null,
+  releasedRuleId: null,
+  popularity: null,
+  priorityRank: null,
+  unread: false,
+  occupiesSlot: true,
+  createdAt: 1,
+  statusChangedAt: 1,
+};
+
 describe('ProposalFormScreen', () => {
-  it('未登録ならフォームを隠してGoogleログインへ誘導する', async () => {
-    const user = userEvent.setup();
-    const onLogin = vi.fn();
+  it('未登録でも枠が空いていればフォームと注記を表示する', async () => {
+    const mine = vi.fn().mockResolvedValue({ items: [], unreadCount: 0 });
     render(
       <ProposalFormScreen
-        api={{ submit: vi.fn() }}
+        api={{ submit: vi.fn(), mine }}
+        onBack={() => undefined}
+        registered={false}
+        onLogin={() => undefined}
+      />,
+    );
+
+    expect(await screen.findByLabelText('ルール名')).toBeTruthy();
+    expect(
+      screen.getByText(/とうろくしなくても 1 つずつ ていあんできるよ/),
+    ).toBeTruthy();
+  });
+
+  it('未登録で枠が埋まっていれば進行中の提案とログイン導線を出す', async () => {
+    const onLogin = vi.fn();
+    const user = userEvent.setup();
+    const mine = vi
+      .fn()
+      .mockResolvedValue({ items: [slotHolder], unreadCount: 0 });
+    render(
+      <ProposalFormScreen
+        api={{ submit: vi.fn(), mine }}
         onBack={() => undefined}
         registered={false}
         onLogin={onLogin}
       />,
     );
 
+    expect(await screen.findByText('8切り')).toBeTruthy();
+    expect(screen.getByText('確認中')).toBeTruthy();
+    expect(
+      screen.getByText(/けっかが出たら、つぎの ていあんが できるよ/),
+    ).toBeTruthy();
     expect(screen.queryByLabelText('ルール名')).toBeNull();
-    expect(screen.getByText('提案するには引き継ぎ登録が必要です')).toBeTruthy();
     await user.click(screen.getByRole('button', { name: 'Googleでログイン' }));
     expect(onLogin).toHaveBeenCalledOnce();
   });
 
-  it('送信時のregistration_requiredでもログイン導線へ切り替える', async () => {
+  it('送信時のanonymous_inflight_limitで枠埋まり表示へ切り替える', async () => {
     const user = userEvent.setup();
     const submit = vi
       .fn<ProposalApi['submit']>()
       .mockRejectedValue(
-        new ProposalApiError(
-          403,
-          '表示文言は変更されてもよい',
-          [],
-          'registration_required',
-        ),
+        new ProposalApiError(403, '表示文言', [], 'anonymous_inflight_limit'),
       );
-    render(<ProposalFormScreen api={{ submit }} onBack={() => undefined} />);
-    await user.type(screen.getByLabelText('ルール名'), '8切り');
-    await user.type(screen.getByLabelText('ルールの内容'), '8で場が流れる。');
+    const mine = vi
+      .fn()
+      .mockResolvedValueOnce({ items: [], unreadCount: 0 })
+      .mockResolvedValue({ items: [slotHolder], unreadCount: 0 });
+    render(
+      <ProposalFormScreen
+        api={{ submit, mine }}
+        onBack={() => undefined}
+        registered={false}
+        onLogin={() => undefined}
+      />,
+    );
+    await user.type(await screen.findByLabelText('ルール名'), '11バック');
+    await user.type(
+      screen.getByLabelText('ルールの内容'),
+      'Jで強さが逆になる。',
+    );
     await user.click(screen.getByRole('button', { name: '提案を送信する' }));
 
     expect(
-      await screen.findByText('提案するには引き継ぎ登録が必要です'),
+      await screen.findByText(
+        /けっかが出たら、つぎの ていあんが できるよ/,
+      ),
     ).toBeTruthy();
     expect(screen.queryByLabelText('ルール名')).toBeNull();
+  });
+
+  it('登録済みならmineを呼ばずフォームを表示する', () => {
+    const mine = vi.fn();
+    render(
+      <ProposalFormScreen
+        api={{ submit: vi.fn(), mine }}
+        onBack={() => undefined}
+        registered
+      />,
+    );
+    expect(screen.getByLabelText('ルール名')).toBeTruthy();
+    expect(mine).not.toHaveBeenCalled();
+    expect(screen.queryByText(/とうろくしなくても 1 つずつ/)).toBeNull();
   });
 
   it('区分と任意の都道府県を選んで提案し、確認中の結果を表示する', async () => {

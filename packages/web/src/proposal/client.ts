@@ -85,7 +85,8 @@ export class ProposalClient implements ProposalApi {
         {
           validation_failed: '入力内容をたしかめてください',
           unauthorized: '接続し直してから、もう一度ためしてください',
-          registration_required: 'Googleでログインしてください',
+          anonymous_inflight_limit:
+            'ていあんは 1 つずつ。けっかが出たら つぎを ていあんできるよ',
           proposal_suspended: 'いまはルールを提案できません',
         }[body.error ?? ''] ?? '提案を送信できませんでした';
       throw new ProposalApiError(
