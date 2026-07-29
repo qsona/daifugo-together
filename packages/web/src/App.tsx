@@ -672,17 +672,19 @@ function ConnectedApp({
     }
     setAuthPending(true);
     setAuthMessage(null);
-    void auth
-      .begin(userToken)
-      .then((authUrl) => window.location.assign(authUrl))
-      .catch((error: unknown) => {
+    void auth.begin(userToken).then(
+      (authUrl) => {
+        window.location.href = authUrl;
+      },
+      (error: unknown) => {
         setAuthPending(false);
         setAuthMessage(
           error instanceof Error && error.message === 'auth_unavailable'
             ? 'いまは使えないみたい'
             : 'うまくいかなかったみたい。もういちどためしてね',
         );
-      });
+      },
+    );
   }, [auth, client, state.connection, state.registered]);
   const routeAtRender =
     typeof window === 'undefined'
