@@ -36,30 +36,57 @@ describe('AuthClient', () => {
     submit.mockRestore();
   });
 
-  it('completeはottをbodyで引き換え、URLへ載せない', async () => {
-    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
-      new Response(
+  it('completeはottをURLへ載せずform POSTする', () => {
+    let submittedAction = '';
+    let submittedOtt: HTMLInputElement | null = null;
+    const submit = vi
+      .spyOn(HTMLFormElement.prototype, 'submit')
+      .mockImplementation(function (this: HTMLFormElement) {
+        submittedAction = this.action;
+        submittedOtt =
+          this.querySelector<HTMLInputElement>('input[name="ott"]');
+      });
+    const client = new AuthClient('https://game.example.test');
+
+    client.complete('one-time-code');
+
+    expect(submittedAction).toBe(
+      'https://game.example.test/auth/google/complete',
+    );
+    expect(submittedAction).not.toContain('one-time-code');
+    expect(submittedOtt).toMatchObject({
+      type: 'hidden',
+      value: 'one-time-code',
+    });
+    expect(document.querySelector('input[name="ott"]')).toBeNull();
+
+    submit.mockRestore();
+  });
+
+  it('一時cookieの認証結果を一度だけ取り出す', () => {
+    let cookie =
+      '__Secure-daifugo-auth-result=' +
+      encodeURIComponent(
         JSON.stringify({
           outcome: 'switched',
           userToken: 'restored-token',
           displayName: 'ゲスト1',
         }),
-        { status: 200, headers: { 'content-type': 'application/json' } },
-      ),
-    );
-    const client = new AuthClient('https://game.example.test', fetcher);
+      );
+    const documentRef = {
+      get cookie() {
+        return cookie;
+      },
+      set cookie(value: string) {
+        cookie = value;
+      },
+    } as Document;
+    const client = new AuthClient('https://game.example.test', documentRef);
 
-    await expect(client.complete('one-time-code')).resolves.toMatchObject({
+    expect(client.takeResult()).toMatchObject({
       outcome: 'switched',
       userToken: 'restored-token',
     });
-    expect(fetcher).toHaveBeenCalledWith(
-      'https://game.example.test/api/auth/complete',
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({ ott: 'one-time-code' }),
-      }),
-    );
-    expect(fetcher.mock.calls[0]?.[0]).not.toContain('one-time-code');
+    expect(cookie).toContain('Max-Age=0');
   });
 });

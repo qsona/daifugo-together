@@ -37,6 +37,8 @@ import type { AuthService } from './auth/service.js';
 const RELEASE_REMINDER_MS = 48 * 60 * 60 * 1_000;
 const AUTH_FLOW_COOKIE = '__Host-daifugo-auth-flow';
 const AUTH_FLOW_COOKIE_ATTRIBUTES = 'Path=/; HttpOnly; Secure; SameSite=None';
+const AUTH_RESULT_COOKIE = '__Secure-daifugo-auth-result';
+const AUTH_RESULT_COOKIE_ATTRIBUTES = 'Path=/menu; Secure; SameSite=Strict';
 
 const CONTENT_TYPES: Record<string, string> = {
   '.css': 'text/css; charset=utf-8',
@@ -247,8 +249,15 @@ export function createAppServer(options: AppServerOptions): AppServer {
     const isApiBegin = url.pathname === '/api/auth/begin';
     const isBrowserBegin = url.pathname === '/auth/google/begin';
     const isCallback = url.pathname === '/auth/google/callback';
-    const isComplete = url.pathname === '/api/auth/complete';
-    if (!isApiBegin && !isBrowserBegin && !isCallback && !isComplete) {
+    const isApiComplete = url.pathname === '/api/auth/complete';
+    const isBrowserComplete = url.pathname === '/auth/google/complete';
+    if (
+      !isApiBegin &&
+      !isBrowserBegin &&
+      !isCallback &&
+      !isApiComplete &&
+      !isBrowserComplete
+    ) {
       return false;
     }
     const allowedMethod = 'POST';
@@ -303,21 +312,42 @@ export function createAppServer(options: AppServerOptions): AppServer {
       response.end();
       return true;
     }
-    let body: unknown;
-    try {
-      body = await readJsonBody(request);
-    } catch (error) {
-      writeJson(response, error instanceof SyntaxError ? 400 : 413, {
-        error:
-          error instanceof SyntaxError ? 'invalid_json' : 'request_too_large',
-      });
+    let ott: unknown;
+    if (isBrowserComplete) {
+      ott = (await readFormBody(request)).get('ott');
+    } else {
+      let body: unknown;
+      try {
+        body = await readJsonBody(request);
+      } catch (error) {
+        writeJson(response, error instanceof SyntaxError ? 400 : 413, {
+          error:
+            error instanceof SyntaxError ? 'invalid_json' : 'request_too_large',
+        });
+        return true;
+      }
+      ott =
+        typeof body === 'object' && body !== null && 'ott' in body
+          ? body.ott
+          : undefined;
+    }
+    const result = options.auth.complete(ott);
+    if (isBrowserComplete) {
+      if (result.status === 200) {
+        response.setHeader(
+          'set-cookie',
+          `${AUTH_RESULT_COOKIE}=${encodeURIComponent(JSON.stringify(result.body))}; Max-Age=60; ${AUTH_RESULT_COOKIE_ATTRIBUTES}`,
+        );
+        response.statusCode = 303;
+        response.setHeader('location', '/menu#/auth/result');
+      } else {
+        response.statusCode = 303;
+        response.setHeader('location', '/menu#/auth/complete?error=expired');
+      }
+      response.setHeader('cache-control', 'no-store');
+      response.end();
       return true;
     }
-    const ott =
-      typeof body === 'object' && body !== null && 'ott' in body
-        ? body.ott
-        : undefined;
-    const result = options.auth.complete(ott);
     writeJson(response, result.status, result.body);
     return true;
   };

@@ -1942,7 +1942,7 @@ describe('AU-01: 認証完了のアプリ統合', () => {
     window.history.replaceState(null, '', '/');
   });
 
-  it('hashのottを引き換え、socket sessionを切り替えてURLから消す', async () => {
+  it('hashのottをURLへ載せずform POSTで引き換える', async () => {
     useScreenStore.setState({ current: 'title' });
     window.history.replaceState(null, '', '/menu#/auth/complete?ott=one-time');
     const state: MultiplayerState = {
@@ -1961,7 +1961,38 @@ describe('AU-01: 認証完了のアプリ統合', () => {
     } as unknown as MultiplayerClient;
     const auth = {
       begin: vi.fn(),
-      complete: vi.fn(async () => ({
+      complete: vi.fn(),
+      takeResult: vi.fn(),
+    };
+
+    render(<App client={client} auth={auth} />);
+
+    await waitFor(() => expect(auth.complete).toHaveBeenCalledWith('one-time'));
+    expect(switchSession).not.toHaveBeenCalled();
+    expect(window.location.hash).toBe('');
+  });
+
+  it('一時cookieの認証結果を取り出してsocket sessionを切り替える', async () => {
+    useScreenStore.setState({ current: 'title' });
+    window.history.replaceState(null, '', '/menu#/auth/result');
+    const state: MultiplayerState = {
+      connection: 'ready',
+      registered: false,
+      displayName: 'ゲスト',
+      room: null,
+      roomClosedReason: null,
+      error: null,
+    };
+    const switchSession = vi.fn();
+    const client = {
+      subscribe: () => () => undefined,
+      snapshot: () => state,
+      switchSession,
+    } as unknown as MultiplayerClient;
+    const auth = {
+      begin: vi.fn(),
+      complete: vi.fn(),
+      takeResult: vi.fn(() => ({
         outcome: 'switched' as const,
         userToken: 'restored-token',
         displayName: 'ゲスト1',
@@ -1970,7 +2001,6 @@ describe('AU-01: 認証完了のアプリ統合', () => {
 
     render(<App client={client} auth={auth} />);
 
-    await waitFor(() => expect(auth.complete).toHaveBeenCalledWith('one-time'));
     await waitFor(() =>
       expect(switchSession).toHaveBeenCalledWith('restored-token'),
     );
@@ -1998,6 +2028,7 @@ describe('AU-01: 認証完了のアプリ統合', () => {
     const auth = {
       begin: vi.fn(),
       complete: vi.fn(),
+      takeResult: vi.fn(),
     };
 
     render(<App client={client} auth={auth} />);
@@ -2030,6 +2061,7 @@ describe('AU-01: 認証完了のアプリ統合', () => {
     const auth = {
       begin: vi.fn(),
       complete: vi.fn(),
+      takeResult: vi.fn(),
     };
 
     render(<App client={client} auth={auth} />);

@@ -968,6 +968,20 @@ function ConnectedApp({
 
   useEffect(() => {
     const hash = window.location.hash;
+    if (hash === '#/auth/result') {
+      window.history.replaceState(null, '', '/menu');
+      go('menu');
+      const result = auth.takeResult();
+      if (!result) {
+        setAuthMessage('うまくいかなかったみたい。もういちどためしてね');
+        return;
+      }
+      client.switchSession(result.userToken);
+      setAuthMessage(
+        result.outcome === 'linked' ? '引き継ぎ登録したよ' : 'おかえり!',
+      );
+      return;
+    }
     if (!hash.startsWith('#/auth/complete')) return;
     const query = hash.includes('?') ? hash.slice(hash.indexOf('?') + 1) : '';
     const parameters = new URLSearchParams(query);
@@ -984,18 +998,12 @@ function ConnectedApp({
       return;
     }
     setAuthPending(true);
-    void auth
-      .complete(ott)
-      .then((result) => {
-        client.switchSession(result.userToken);
-        setAuthMessage(
-          result.outcome === 'linked' ? '引き継ぎ登録したよ' : 'おかえり!',
-        );
-      })
-      .catch(() => {
-        setAuthMessage('うまくいかなかったみたい。もういちどためしてね');
-      })
-      .finally(() => setAuthPending(false));
+    try {
+      auth.complete(ott);
+    } catch {
+      setAuthPending(false);
+      setAuthMessage('うまくいかなかったみたい。もういちどためしてね');
+    }
   }, [auth, client, go]);
 
   useEffect(() => {
@@ -1501,12 +1509,13 @@ export function App({
     auth ??
     (typeof window === 'undefined'
       ? {
-          begin: async () => {
+          begin: () => {
             throw new Error('auth_unavailable');
           },
-          complete: async () => {
+          complete: () => {
             throw new Error('auth_unavailable');
           },
+          takeResult: () => null,
         }
       : getBrowserAuthClient());
   return effectiveClient ? (
