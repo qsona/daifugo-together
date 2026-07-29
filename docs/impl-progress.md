@@ -2,7 +2,7 @@
 
 ## 現在
 
-- **匿名おためし提案枠 / プロセス2コード完了・完了レビュー待ち**: 未登録ユーザーの同時進行1件枠、投稿ゲート、枠埋まり画面、設計差分を実装済み。対象テストと全体テストは成功。独立完了レビュー、`pnpm verify`、375×812実画面確認後にmain取り込み前で停止する
+- **匿名おためし提案枠 / プロセス2完了・完了再レビュー待ち**: 未登録ユーザーの同時進行1件枠、投稿ゲート、枠埋まり画面、設計差分を実装済み。初回独立完了レビューのImportant 1件(HTTP前段が冪等再送を遮断)を修正し、実HTTP回帰テストを追加。`pnpm verify`成功。375×812実画面だけブラウザのlocalhost遮断で未確認
 - **フェーズ 2 / E14 TU-01〜04 プロセス2完了・完了レビューPASS**: きほんの部屋、カード案内、初戦ガイド、初回卒業導線まで実装・自動テスト・375×812実画面確認を完了。独立完了レビューのImportant 1件を修正し、最新`main` (`1b15732`) 基点へ統合・全検証・独立再レビュー済み
 - **フェーズ 1 完了(2026-07-27)**: TS-02・E1・E2・E3・E4 は main に統合済み、E13 は本番デプロイと動作検証(DP-01・DP-03)まで完了(`https://daifugo-together.fly.dev/`)。残りは DP-02 の仕上げ(GitHub Environment `production` + `FLY_API_TOKEN` 登録と初回 CD 実行確認)のみ
 - **フェーズ 2 / E5 RP-01〜03 プロセス2完了**: E-18/C-3 の非同期受付に加え、マイ提案API・競合安全な未読/seen・画面7・メニューバッジを接続。独立完了レビューは **GO**、Critical / Important / Minorなし
@@ -20,20 +20,31 @@
 
 ## 匿名おためし提案枠(AU-D4緩和、2026-07-30)
 
-- 状態: プロセス2コード完了・独立完了レビュー待ち
+- 状態: プロセス2完了・独立完了再レビュー待ち
 - ブランチ: `codex/anonymous-trial-proposal`
 - コミット:
   - `977102b` `ProposalListItem.occupiesSlot` と `ProposalRepository.hasInflight`
   - `d09ff92` 登録必須ゲートから匿名1件枠ゲートへの置換
   - `f105ccc` 未登録フォーム・枠埋まりパネル・403フォールバック
-  - ドキュメント差分と本記録は次コミット
+  - `9c15ff7` 設計差分と本記録
+  - `93845cc` Prettier整形
+  - 初回完了レビュー修正は次コミット
 
 ### ユーザーストーリーの確認
 
 - `packages/server/src/proposal/submission.test.ts` で、匿名の初回受理、別内容2件目の403、終端後の再受理、同一内容再送の冪等200、登録済みの複数進行、停止中の拒否、`authorize` の入口判定を確認
+- `packages/server/src/proposal/proposal.test.ts` の実 `createAppServer` + `ProposalSubmissionService` HTTPテストで、枠占有後も同一内容再送は同じIDの200、不正入力は400、別内容は枠403、停止中は停止403になる順序を確認
 - 同テストで `screening` / `implementing` / `failed + attempt_count=0` の枠占有と、`attempt_count=1` の非占有を確認。`mine()` が同じ判定を `occupiesSlot` として返すことも固定
 - `packages/web/src/screens/ProposalFormScreen.test.tsx` で、未登録・枠空きのフォームと注記、枠埋まり時の進行中提案+状態+ログイン導線、送信競合時の403フォールバック、登録済みでは枠照会を行わないことを確認
-- `pnpm build && pnpm test`: 全 package build成功、**100 files / 673 tests成功**
+- `CI=true pnpm verify`: format / lint / AI boundary / design lint / typecheck / 全テスト / 全build成功(**100 files / 674 tests成功**)
+
+### 独立完了レビュー
+
+- 初回判定: 要件適合 `PARTIAL` / 品質 `NEEDS_FIXES`。Criticalなし、Important 1件、Minor 1件
+- Important: HTTP POSTがbody前の`authorize()`で匿名枠を拒否し、`submit()`の停止・検証・重複順へ到達しない問題。`authorize()`を認証+停止だけに限定し、実HTTP回帰テストを追加して修正
+- Minor: 匿名枠設計書の状態が「実装計画は未着手」のままだったため、「実装済み(main取り込み前)」へ更新
+- ANON-P1は採用、ANON-P2はImportant修正を前提に採用
+- 同じ独立レビュアーへ再レビューを依頼する
 
 ### 置いた仮定(レビューで裁定してもらう)
 
@@ -46,9 +57,9 @@
 
 | 内容 | 状態 |
 |---|---|
-| 全体のformat / lint / design lint / typecheck / test / build | `pnpm verify`を独立レビュー反映後に実行 |
-| 375×812で未登録フォームと枠埋まりパネルを実画面確認 | 自動テスト後に実施 |
-| 独立GPT-5.6 Sol完了レビュー | 本記録をコミット後、実装履歴を渡さない別コンテキストで実施 |
+| 全体のformat / lint / design lint / typecheck / test / build | Important修正後も成功(**100 files / 674 tests**) |
+| 375×812で未登録フォームと枠埋まりパネルを実画面確認 | Browser / Chromeともlocalhostをクライアント側で遮断したため未確認。自動UIテストは成功 |
+| 独立GPT-5.6 Sol完了レビュー | 初回指摘を反映し、同じレビュアーの再レビュー待ち |
 
 ### 詰まっている点
 

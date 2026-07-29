@@ -29,11 +29,11 @@ afterEach(async () => {
   }
 });
 
-function postJson(
+function postJson<T = CreateProposalResponse>(
   url: string,
   token: string,
   body: unknown,
-): Promise<{ status: number | undefined; body: CreateProposalResponse }> {
+): Promise<{ status: number | undefined; body: T }> {
   return new Promise((resolve, reject) => {
     const payload = JSON.stringify(body);
     const outgoing = request(
@@ -55,7 +55,7 @@ function postJson(
         response.on('end', () => {
           resolve({
             status: response.statusCode,
-            body: JSON.parse(responseBody) as CreateProposalResponse,
+            body: JSON.parse(responseBody) as T,
           });
         });
       },
@@ -66,6 +66,95 @@ function postJson(
 }
 
 describe('proposal vertical slice', () => {
+  it('匿名枠の停止・検証・重複・枠拒否順を実HTTP経路で守る', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'daifugo-anonymous-slot-'));
+    directories.push(directory);
+    const path = join(directory, 'proposal.sqlite');
+    const persistence = new SqlitePersistence(path, {
+      createUserId: () => 'anonymous-http-author',
+      createToken: () => 'anonymous-http-token',
+    });
+    persistenceInstances.push(persistence);
+    const session = persistence.sessions.resolve(undefined);
+    let proposalSequence = 0;
+    const app = createAppServer({
+      webDistDir: directory,
+      proposals: new ProposalSubmissionService(persistence.proposals, {
+        signals: NOOP_SIGNALS,
+        createId: () => `ANONYMOUS-HTTP-${String(++proposalSequence)}`,
+        now: () => 10_000,
+      }),
+    });
+    apps.push(app);
+    const port = await app.listen(0, '127.0.0.1');
+    const url = `http://127.0.0.1:${String(port)}/api/proposals`;
+
+    const first = await postJson(url, session.userToken, {
+      kind: 'local',
+      prefectureCode: null,
+      name: '8切り',
+      body: '8を出すと場が流れる。',
+    });
+    expect(first.status).toBe(200);
+    expect(first.body).toMatchObject({
+      outcome: 'accepted',
+      proposal: { id: 'ANONYMOUS-HTTP-1' },
+    });
+
+    const retry = await postJson(url, session.userToken, {
+      kind: 'local',
+      prefectureCode: null,
+      name: '8切り',
+      body: '8を出すと場が流れる。',
+    });
+    expect(retry.status).toBe(200);
+    expect(retry.body).toMatchObject({
+      outcome: 'accepted',
+      proposal: { id: 'ANONYMOUS-HTTP-1' },
+    });
+
+    const invalid = await postJson<{ error: string }>(url, session.userToken, {
+      kind: 'local',
+      prefectureCode: null,
+      name: '入力エラー',
+      body: '',
+    });
+    expect(invalid.status).toBe(400);
+    expect(invalid.body).toMatchObject({ error: 'validation_failed' });
+
+    const limited = await postJson<{ error: string }>(url, session.userToken, {
+      kind: 'local',
+      prefectureCode: null,
+      name: '11バック',
+      body: 'Jで強さが逆になる。',
+    });
+    expect(limited).toEqual({
+      status: 403,
+      body: { error: 'anonymous_inflight_limit' },
+    });
+
+    const sqlite = new Database(path);
+    sqlite
+      .prepare(
+        'UPDATE users SET proposal_suspended_until = ? WHERE user_id = ?',
+      )
+      .run(20_000, session.userId);
+    sqlite.close();
+    const suspended = await postJson<{
+      error: string;
+      suspendedUntil: number;
+    }>(url, session.userToken, {
+      kind: 'local',
+      prefectureCode: null,
+      name: '11バック',
+      body: 'Jで強さが逆になる。',
+    });
+    expect(suspended).toEqual({
+      status: 403,
+      body: { error: 'proposal_suspended', suspendedUntil: 20_000 },
+    });
+  });
+
   it('認証済みユーザーがローカル提案をAPIから保存し、後続キューで参照できる', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'daifugo-proposal-'));
     directories.push(directory);

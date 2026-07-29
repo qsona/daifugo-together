@@ -35,7 +35,6 @@ export type ProposalSubmissionResult =
 export type ProposalAuthorizationResult =
   | { status: 204 }
   | { status: 401; body: { error: 'unauthorized' } }
-  | { status: 403; body: { error: 'anonymous_inflight_limit' } }
   | {
       status: 403;
       body: { error: 'proposal_suspended'; suspendedUntil: number };
@@ -91,12 +90,6 @@ export class ProposalSubmissionService implements ProposalSubmissionPort {
     const authorId = this.#repository.authorIdForToken(token);
     if (!authorId) {
       return { status: 401, body: { error: 'unauthorized' } };
-    }
-    if (
-      !this.#repository.isRegistered(authorId) &&
-      this.#repository.hasInflight(authorId)
-    ) {
-      return { status: 403, body: { error: 'anonymous_inflight_limit' } };
     }
     const suspendedUntil = this.#repository.suspendedUntil(authorId);
     if (suspendedUntil !== null && suspendedUntil > this.#now()) {

@@ -256,7 +256,7 @@ describe('ProposalSubmissionService', () => {
     expect(retry.body.proposal.id).toBe(first.body.proposal.id);
   });
 
-  it('authorizeも匿名枠で判定する', async () => {
+  it('authorizeはbody前の認証・停止だけを担い、匿名枠は確定しない', async () => {
     const { persistence, service } = setup();
     const anonymous = persistence.sessions.resolve(undefined);
     expect(service.authorize(anonymous.userToken)).toEqual({ status: 204 });
@@ -265,10 +265,7 @@ describe('ProposalSubmissionService', () => {
       ip: 'ip',
       body: validBody,
     });
-    expect(service.authorize(anonymous.userToken)).toEqual({
-      status: 403,
-      body: { error: 'anonymous_inflight_limit' },
-    });
+    expect(service.authorize(anonymous.userToken)).toEqual({ status: 204 });
   });
 
   it('攻撃シグナルがあっても送信時は遮断せず審査中として保存する', async () => {

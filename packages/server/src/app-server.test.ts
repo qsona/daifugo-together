@@ -123,7 +123,7 @@ describe('production app server', () => {
     });
   });
 
-  it('提案POSTはbody解析より認証・登録判定を先に行う', async () => {
+  it('提案POSTはbody解析より認証・停止判定を先に行う', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'daifugo-web-dist-'));
     directories.push(directory);
     const submit = vi.fn();
@@ -131,10 +131,13 @@ describe('production app server', () => {
       webDistDir: directory,
       proposals: {
         authorize: (token) =>
-          token === 'anonymous-token'
+          token === 'suspended-token'
             ? {
                 status: 403 as const,
-                body: { error: 'anonymous_inflight_limit' as const },
+                body: {
+                  error: 'proposal_suspended' as const,
+                  suspendedUntil: 20_000,
+                },
               }
             : {
                 status: 401 as const,
@@ -165,17 +168,18 @@ describe('production app server', () => {
       error: 'unauthorized',
     });
 
-    const unregistered = await fetch(`${baseUrl}/api/proposals`, {
+    const suspended = await fetch(`${baseUrl}/api/proposals`, {
       method: 'POST',
       headers: {
-        authorization: 'Bearer anonymous-token',
+        authorization: 'Bearer suspended-token',
         'content-type': 'application/json',
       },
       body: '{',
     });
-    expect(unregistered.status).toBe(403);
-    await expect(unregistered.json()).resolves.toEqual({
-      error: 'anonymous_inflight_limit',
+    expect(suspended.status).toBe(403);
+    await expect(suspended.json()).resolves.toEqual({
+      error: 'proposal_suspended',
+      suspendedUntil: 20_000,
     });
     expect(submit).not.toHaveBeenCalled();
   });
