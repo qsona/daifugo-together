@@ -37,6 +37,22 @@
 .cards {
   --card-w: 52px;
   --card-gap: 6px;
+  /*
+   * 選択札はタップ最小幅ぶん見せ、残り幅を未選択札へ配る。
+   * 選択枚数が多すぎる場合だけ、全選択札を収められる幅まで縮める。
+   */
+  --selected-step: min(
+    var(--size-tap-min),
+    (100% - var(--card-w)) / max(1, var(--selected-gaps))
+  );
+  --unselected-step: min(
+    var(--card-w) + var(--card-gap),
+    max(
+      0px,
+      (100% - var(--card-w) - var(--selected-step) * var(--selected-gaps)) /
+        max(1, var(--unselected-gaps))
+    )
+  );
 
   display: flex;
   list-style: none;
@@ -46,18 +62,15 @@
 }
 
 /*
- * 札 1 枚ぶんの送り幅を、コンテナ幅に必ず収まるところまで詰める。
- *   送り = min(重ならない間隔, (使える幅 - 札 1 枚) / (枚数 - 1))
- * 負のマージンで送りを実現するので、枚数が増えるほど深く重なる。
+ * 負のマージンで送りを実現する。未選択札は残り幅へ詰め、選択札の
+ * 次だけは --size-tap-min を確保するため、戻したい札を直接タップできる。
  */
 .slot + .slot {
-  margin-left: calc(
-    min(
-        var(--card-w) + var(--card-gap),
-        (100% - var(--card-w)) / (var(--count) - 1)
-      ) -
-      var(--card-w)
-  );
+  margin-left: calc(var(--unselected-step) - var(--card-w));
+}
+
+.selectedSlot + .slot {
+  margin-left: calc(var(--selected-step) - var(--card-w));
 }
 
 .actions {

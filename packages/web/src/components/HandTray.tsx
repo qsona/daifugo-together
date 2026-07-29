@@ -3,6 +3,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import { Card } from './Card';
 import type { CardView } from './Card';
 import type { CardHint } from '../game/hints';
+import { cx } from '../lib/cx';
 import styles from './HandTray.module.css';
 
 type HandTrayProps = {
@@ -31,6 +32,12 @@ export function HandTray({
   onDimmedCardTap,
   actions,
 }: HandTrayProps) {
+  const selectedIdSet = new Set(selectedIds);
+  const selectedGapCount = cards
+    .slice(0, -1)
+    .filter((card) => selectedIdSet.has(card.id)).length;
+  const unselectedGapCount = Math.max(0, cards.length - 1 - selectedGapCount);
+
   return (
     <section className={styles.tray} aria-label="あなたの手札">
       {showStrengthScale && (
@@ -45,19 +52,30 @@ export function HandTray({
       )}
       <ul
         className={styles.cards}
-        style={{ '--count': cards.length } as CSSProperties}
+        style={
+          {
+            '--selected-gaps': selectedGapCount,
+            '--unselected-gaps': unselectedGapCount,
+          } as CSSProperties
+        }
       >
-        {cards.map((card) => (
-          <li key={card.id} className={styles.slot}>
-            <Card
-              card={card}
-              selected={selectedIds.includes(card.id)}
-              dimmed={cardHints?.get(card.id) === 'dimmed'}
-              onToggle={onToggle}
-              {...(onDimmedCardTap ? { onDimmedTap: onDimmedCardTap } : {})}
-            />
-          </li>
-        ))}
+        {cards.map((card) => {
+          const selected = selectedIdSet.has(card.id);
+          return (
+            <li
+              key={card.id}
+              className={cx(styles.slot, selected && styles.selectedSlot)}
+            >
+              <Card
+                card={card}
+                selected={selected}
+                dimmed={cardHints?.get(card.id) === 'dimmed'}
+                onToggle={onToggle}
+                {...(onDimmedCardTap ? { onDimmedTap: onDimmedCardTap } : {})}
+              />
+            </li>
+          );
+        })}
       </ul>
       {actions && <div className={styles.actions}>{actions}</div>}
     </section>
