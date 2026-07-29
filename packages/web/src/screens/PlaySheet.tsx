@@ -11,6 +11,7 @@ type PlaySheetProps = {
   onCreate: (mode: RoomMode) => void;
   onJoin: (code: string) => void;
   onClose: () => void;
+  initialMode?: RoomMode | null;
   error?: string | null;
 };
 
@@ -24,6 +25,7 @@ export function PlaySheet({
   onCreate,
   onJoin,
   onClose,
+  initialMode = null,
   error,
 }: PlaySheetProps) {
   const [code, setCode] = useState('');
@@ -100,6 +102,7 @@ export function PlaySheet({
             </span>
           </Button>
           <Button
+            variant={initialMode === 'community' ? 'primary' : 'secondary'}
             block
             onClick={() => {
               onCreate('community');

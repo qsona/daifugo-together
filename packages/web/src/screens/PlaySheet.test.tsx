@@ -92,4 +92,19 @@ describe('TU-01: あそぶモードの選択', () => {
     );
     expect(onCreate).toHaveBeenCalledWith('community');
   });
+
+  it('みんなのルールへの再試行では該当ボタンを主ボタンにする', () => {
+    render(
+      <PlaySheet
+        initialMode="community"
+        onCreate={vi.fn()}
+        onJoin={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole('button', { name: 'みんなのルールであそぶ' }).className,
+    ).toContain('primary');
+  });
 });
