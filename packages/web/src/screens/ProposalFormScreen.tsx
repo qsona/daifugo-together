@@ -75,9 +75,7 @@ export function ProposalFormScreen({
       .mine()
       .then((response) => {
         if (!active) return;
-        setSlotHolder(
-          response.items.find((item) => item.occupiesSlot) ?? null,
-        );
+        setSlotHolder(response.items.find((item) => item.occupiesSlot) ?? null);
       })
       .catch(() => {
         // 枠確認に失敗してもフォームは塞がず、送信時の403で拾う。
@@ -188,10 +186,7 @@ export function ProposalFormScreen({
       setAccepted(response.proposal);
     } catch (error) {
       if (error instanceof ProposalApiError) {
-        if (
-          error.status === 403 &&
-          error.code === 'anonymous_inflight_limit'
-        ) {
+        if (error.status === 403 && error.code === 'anonymous_inflight_limit') {
           if (api.mine) {
             try {
               const response = await api.mine();

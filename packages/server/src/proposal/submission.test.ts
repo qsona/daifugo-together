@@ -247,7 +247,10 @@ describe('ProposalSubmissionService', () => {
     if (first.status !== 200 || retry.status !== 200) {
       throw new Error('expected 200');
     }
-    if (first.body.outcome !== 'accepted' || retry.body.outcome !== 'accepted') {
+    if (
+      first.body.outcome !== 'accepted' ||
+      retry.body.outcome !== 'accepted'
+    ) {
       throw new Error('expected accepted');
     }
     expect(retry.body.proposal.id).toBe(first.body.proposal.id);

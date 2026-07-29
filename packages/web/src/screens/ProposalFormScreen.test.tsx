@@ -104,9 +104,7 @@ describe('ProposalFormScreen', () => {
     await user.click(screen.getByRole('button', { name: '提案を送信する' }));
 
     expect(
-      await screen.findByText(
-        /けっかが出たら、つぎの ていあんが できるよ/,
-      ),
+      await screen.findByText(/けっかが出たら、つぎの ていあんが できるよ/),
     ).toBeTruthy();
     expect(screen.queryByLabelText('ルール名')).toBeNull();
   });
