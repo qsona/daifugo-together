@@ -15,6 +15,8 @@ import { ProposalSubmissionService } from './proposal/submission.js';
 import { RoomManager } from './room/manager.js';
 import { RuleRegistryService } from './rules/service.js';
 import { RuleCatalogService } from './rules/catalog.js';
+import { AuthService } from './auth/service.js';
+import { createGoogleAuthProvider } from './auth/provider.js';
 
 function errorFields(error: unknown): Record<string, unknown> {
   return error instanceof Error
@@ -51,6 +53,21 @@ const signals = new InjectionSignalRecorder(
 const adminPipelineToken = process.env.ADMIN_PIPELINE_TOKEN;
 if (adminPipelineToken !== undefined && adminPipelineToken.length < 32) {
   throw new Error('ADMIN_PIPELINE_TOKEN must be at least 32 characters');
+}
+const publicOrigin =
+  process.env.PUBLIC_ORIGIN ?? `http://localhost:${String(port)}`;
+let authProvider;
+try {
+  authProvider = await createGoogleAuthProvider({
+    ...(process.env.GOOGLE_CLIENT_ID
+      ? { clientId: process.env.GOOGLE_CLIENT_ID }
+      : {}),
+    ...(process.env.GOOGLE_CLIENT_SECRET
+      ? { clientSecret: process.env.GOOGLE_CLIENT_SECRET }
+      : {}),
+  });
+} catch (error) {
+  writeLog('error', 'google_auth_provider_unavailable', errorFields(error));
 }
 const codeRules = await loadRuleCodeBundles();
 let refreshWaitingRules = (): void => undefined;
@@ -115,6 +132,10 @@ const roomManager = new RoomManager({
 const app = createAppServer({
   webDistDir: resolve(process.env.WEB_DIST_DIR ?? 'packages/web/dist'),
   checkDatabase: () => persistence.checkHealth(),
+  auth: new AuthService(persistence.auth, {
+    ...(authProvider ? { provider: authProvider } : {}),
+    publicOrigin,
+  }),
   proposals: new ProposalSubmissionService(persistence.proposals, {
     signals,
   }),

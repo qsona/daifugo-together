@@ -57,6 +57,10 @@ class FakeSocket {
     return this;
   }
 
+  connect(): this {
+    return this;
+  }
+
   trigger<Event extends keyof ServerToClientEvents>(
     event: Event,
     ...args: Parameters<ServerToClientEvents[Event]>
@@ -72,6 +76,7 @@ describe('MultiplayerClient', () => {
     const storage = {
       getItem: (key: string) => values.get(key) ?? null,
       setItem: (key: string, value: string) => values.set(key, value),
+      removeItem: (key: string) => values.delete(key),
     };
     const client = new MultiplayerClient(
       'http://example.test',
@@ -85,6 +90,7 @@ describe('MultiplayerClient', () => {
       userId: 'user-1',
       userToken: 'persistent-token-0001',
       displayName: 'ホスト',
+      registered: false,
       room: room(3),
     });
     socket.trigger('room:state', room(2));
@@ -103,13 +109,18 @@ describe('MultiplayerClient', () => {
     const socket = new FakeSocket();
     const client = new MultiplayerClient(
       'http://example.test',
-      { getItem: () => null, setItem: () => undefined },
+      {
+        getItem: () => null,
+        setItem: () => undefined,
+        removeItem: () => undefined,
+      },
       () => socket as never,
     );
     socket.trigger('session:ready', {
       userId: 'user-1',
       userToken: 'persistent-token-0001',
       displayName: 'ホスト',
+      registered: false,
       room: room(1),
     });
 
@@ -130,7 +141,11 @@ describe('MultiplayerClient', () => {
     const socket = new FakeSocket();
     const client = new MultiplayerClient(
       'http://example.test',
-      { getItem: () => null, setItem: () => undefined },
+      {
+        getItem: () => null,
+        setItem: () => undefined,
+        removeItem: () => undefined,
+      },
       () => socket as never,
     );
 
@@ -140,5 +155,65 @@ describe('MultiplayerClient', () => {
       event: 'room:create',
       payload: { mode: 'basic' },
     });
+  });
+
+  it('ログイン完了とログアウトでtokenを差し替えて再接続する', () => {
+    const socket = new FakeSocket();
+    const values = new Map<string, string>();
+    const client = new MultiplayerClient(
+      'http://example.test',
+      {
+        getItem: (key) => values.get(key) ?? null,
+        setItem: (key, value) => values.set(key, value),
+        removeItem: (key) => values.delete(key),
+      },
+      () => socket as never,
+    );
+    const disconnect = vi.spyOn(socket, 'disconnect');
+    const connect = vi.spyOn(socket, 'connect');
+
+    client.switchSession('restored-token');
+    expect(values.get('daifugo.userToken')).toBe('restored-token');
+    expect(socket.auth).toEqual({ userToken: 'restored-token' });
+
+    client.switchSession(null);
+    expect(values.has('daifugo.userToken')).toBe(false);
+    expect(socket.auth).toEqual({ userToken: null });
+    expect(disconnect).toHaveBeenCalledTimes(2);
+    expect(connect).toHaveBeenCalledTimes(2);
+  });
+
+  it('storage例外でも接続・token切替・ログアウトを続行する', () => {
+    const socket = new FakeSocket();
+    const blockedStorage = {
+      getItem: () => {
+        throw new Error('blocked');
+      },
+      setItem: () => {
+        throw new Error('blocked');
+      },
+      removeItem: () => {
+        throw new Error('blocked');
+      },
+    };
+
+    const client = new MultiplayerClient(
+      'http://example.test',
+      blockedStorage,
+      () => socket as never,
+    );
+
+    expect(() => {
+      socket.trigger('session:ready', {
+        userId: 'user-1',
+        userToken: 'persistent-token-0001',
+        displayName: 'ホスト',
+        registered: true,
+        room: null,
+      });
+      client.switchSession('restored-token');
+      client.switchSession(null);
+    }).not.toThrow();
+    expect(socket.auth).toEqual({ userToken: null });
   });
 });

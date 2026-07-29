@@ -275,4 +275,24 @@ describe('SetResultScreen phase boundary', () => {
         .hasAttribute('disabled'),
     ).toBe(false);
   });
+
+  it('未登録者向けの控えめな引き継ぎ導線を任意表示する', async () => {
+    const user = userEvent.setup();
+    const onRegister = vi.fn();
+    render(
+      <SetResultScreen
+        ranks={[]}
+        funRating={null}
+        firedRules={[]}
+        onChangeFunRating={() => undefined}
+        onVoteRule={() => undefined}
+        onPlayAgain={() => undefined}
+        onHome={() => undefined}
+        showEvaluation={false}
+        onRegister={onRegister}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'きろくをのこす' }));
+    expect(onRegister).toHaveBeenCalledOnce();
+  });
 });

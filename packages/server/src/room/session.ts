@@ -4,6 +4,7 @@ export interface AnonymousSession {
   userId: string;
   userToken: string;
   displayName: string;
+  registered: boolean;
 }
 
 export interface SessionStore {
@@ -45,6 +46,7 @@ export class InMemorySessionStore implements SessionStore {
       userId: this.#createUserId(),
       userToken: this.#uniqueToken(),
       displayName: this.#createDisplayName(++this.#sequence),
+      registered: false,
     };
     this.#byToken.set(session.userToken, session);
     return structuredClone(session);

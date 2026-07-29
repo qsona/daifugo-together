@@ -270,6 +270,7 @@ export interface ServerToClientEvents {
     userId: string;
     userToken: string;
     displayName: string;
+    registered: boolean;
     room: PlayerRoomView | null;
   }) => void;
   'room:state': (payload: PlayerRoomView) => void;
@@ -284,5 +285,6 @@ export interface SocketData {
     userId: string;
     userToken: string;
     displayName: string;
+    registered: boolean;
   };
 }

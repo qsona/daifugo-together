@@ -42,6 +42,7 @@ function setup(now: number | (() => number) = 1_000) {
   });
   persistenceInstances.push(persistence);
   const session = persistence.sessions.resolve(undefined);
+  persistence.auth.complete(session.userId, 'test-injection-user', 1);
   const getNow = typeof now === 'function' ? now : () => now;
   let sequence = 0;
   const service = new ProposalSubmissionService(persistence.proposals, {

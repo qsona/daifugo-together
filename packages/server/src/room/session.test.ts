@@ -18,6 +18,7 @@ describe('InMemorySessionStore', () => {
       userId: 'user-1',
       userToken: 'token-0000000000000001',
       displayName: 'ゲスト1',
+      registered: false,
     });
     expect(restored).toEqual(first);
     expect(restored).not.toBe(first);

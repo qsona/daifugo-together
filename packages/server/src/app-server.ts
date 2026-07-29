@@ -32,8 +32,11 @@ import type { PipelineJobService } from './pipeline/jobs.js';
 import type { RuleRegistryService } from './rules/service.js';
 import type { RuleCatalogService } from './rules/catalog.js';
 import { FixedWindowRateLimiter } from './room/rate-limit.js';
+import type { AuthService } from './auth/service.js';
 
 const RELEASE_REMINDER_MS = 48 * 60 * 60 * 1_000;
+const AUTH_FLOW_COOKIE = '__Host-daifugo-auth-flow';
+const AUTH_FLOW_COOKIE_ATTRIBUTES = 'Path=/; HttpOnly; Secure; SameSite=None';
 
 const CONTENT_TYPES: Record<string, string> = {
   '.css': 'text/css; charset=utf-8',
@@ -55,6 +58,7 @@ export interface AppServerOptions {
   ruleCatalogRateLimit?: { maxAttempts: number; windowMs: number };
   now?: () => number;
   yellowCards?: YellowCardPort;
+  auth?: Pick<AuthService, 'begin' | 'callback' | 'complete'>;
   adminScreening?: {
     token: string;
     service: Pick<LocalScreeningService, 'pending' | 'record'>;
@@ -187,6 +191,35 @@ async function readJsonBody(
   return JSON.parse(Buffer.concat(chunks).toString('utf8'));
 }
 
+async function readFormBody(
+  request: IncomingMessage,
+  maxBytes = 8 * 1024,
+): Promise<URLSearchParams> {
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of request) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    size += buffer.length;
+    if (size > maxBytes) throw new Error('request_too_large');
+    chunks.push(buffer);
+  }
+  return new URLSearchParams(Buffer.concat(chunks).toString('utf8'));
+}
+
+function cookieValue(request: IncomingMessage, name: string): string | null {
+  for (const part of (request.headers.cookie ?? '').split(';')) {
+    const [key, ...value] = part.trim().split('=');
+    if (key === name) {
+      try {
+        return decodeURIComponent(value.join('='));
+      } catch {
+        return null;
+      }
+    }
+  }
+  return null;
+}
+
 function writeJson(
   response: ServerResponse,
   status: number,
@@ -206,6 +239,75 @@ export function createAppServer(options: AppServerOptions): AppServer {
       windowMs: 60_000,
     },
   );
+  const handleAuth = async (
+    request: IncomingMessage,
+    response: ServerResponse,
+  ): Promise<boolean> => {
+    const url = new URL(request.url ?? '/', 'http://localhost');
+    const isBegin = url.pathname === '/api/auth/begin';
+    const isCallback = url.pathname === '/auth/google/callback';
+    const isComplete = url.pathname === '/api/auth/complete';
+    if (!isBegin && !isCallback && !isComplete) return false;
+    const allowedMethod = 'POST';
+    if (request.method !== allowedMethod) {
+      response.setHeader('allow', allowedMethod);
+      writeJson(response, 405, { error: 'method_not_allowed' });
+      return true;
+    }
+    if (!options.auth) {
+      writeJson(response, 503, { error: 'auth_unavailable' });
+      return true;
+    }
+    if (isBegin) {
+      const result = await options.auth.begin(bearerToken(request));
+      if (result.status === 200) {
+        response.setHeader(
+          'set-cookie',
+          `${AUTH_FLOW_COOKIE}=${encodeURIComponent(result.flowNonce)}; Max-Age=600; ${AUTH_FLOW_COOKIE_ATTRIBUTES}`,
+        );
+      }
+      writeJson(response, result.status, result.body);
+      return true;
+    }
+    if (isCallback) {
+      let parameters: URLSearchParams;
+      try {
+        parameters = await readFormBody(request);
+      } catch {
+        parameters = new URLSearchParams();
+      }
+      const location = await options.auth.callback(
+        parameters,
+        cookieValue(request, AUTH_FLOW_COOKIE),
+      );
+      response.statusCode = 302;
+      response.setHeader('location', location);
+      response.setHeader(
+        'set-cookie',
+        `${AUTH_FLOW_COOKIE}=; Max-Age=0; ${AUTH_FLOW_COOKIE_ATTRIBUTES}`,
+      );
+      response.setHeader('cache-control', 'no-store');
+      response.end();
+      return true;
+    }
+    let body: unknown;
+    try {
+      body = await readJsonBody(request);
+    } catch (error) {
+      writeJson(response, error instanceof SyntaxError ? 400 : 413, {
+        error:
+          error instanceof SyntaxError ? 'invalid_json' : 'request_too_large',
+      });
+      return true;
+    }
+    const ott =
+      typeof body === 'object' && body !== null && 'ott' in body
+        ? body.ott
+        : undefined;
+    const result = options.auth.complete(ott);
+    writeJson(response, result.status, result.body);
+    return true;
+  };
   const handleRuleCatalog = (
     request: IncomingMessage,
     response: ServerResponse,
@@ -670,6 +772,11 @@ export function createAppServer(options: AppServerOptions): AppServer {
       }
       return true;
     }
+    const authorization = options.proposals.authorize(bearerToken(request));
+    if (authorization.status !== 204) {
+      writeJson(response, authorization.status, authorization.body);
+      return true;
+    }
     let body: unknown;
     try {
       body = await readJsonBody(request);
@@ -781,7 +888,8 @@ export function createAppServer(options: AppServerOptions): AppServer {
       response.end();
       return;
     }
-    void handleAdminRules(request, response)
+    void handleAuth(request, response)
+      .then((handled) => (handled ? true : handleAdminRules(request, response)))
       .then((handled) =>
         handled ? true : handleAdminScreening(request, response),
       )

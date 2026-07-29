@@ -7,21 +7,26 @@ import type {
   YellowCardSummary,
 } from '@daifugo/core';
 
+import { getSafeLocalStorage } from '../browser-storage';
+
 const TOKEN_KEY = 'daifugo.userToken';
 
 export class ProposalApiError extends Error {
   readonly status: number;
   readonly fields: ProposalValidationError[];
+  readonly code: string | null;
 
   constructor(
     status: number,
     message: string,
     fields: ProposalValidationError[] = [],
+    code: string | null = null,
   ) {
     super(message);
     this.name = 'ProposalApiError';
     this.status = status;
     this.fields = fields;
+    this.code = code;
   }
 }
 
@@ -80,9 +85,15 @@ export class ProposalClient implements ProposalApi {
         {
           validation_failed: '入力内容をたしかめてください',
           unauthorized: '接続し直してから、もう一度ためしてください',
+          registration_required: 'Googleでログインしてください',
           proposal_suspended: 'いまはルールを提案できません',
         }[body.error ?? ''] ?? '提案を送信できませんでした';
-      throw new ProposalApiError(response.status, message, body.fields ?? []);
+      throw new ProposalApiError(
+        response.status,
+        message,
+        body.fields ?? [],
+        body.error ?? null,
+      );
     }
     return body as CreateProposalResponse;
   }
@@ -160,6 +171,9 @@ export class ProposalClient implements ProposalApi {
 let browserClient: ProposalClient | undefined;
 
 export function getBrowserProposalClient(): ProposalClient {
-  browserClient ??= new ProposalClient(window.location.origin, localStorage);
+  browserClient ??= new ProposalClient(
+    window.location.origin,
+    getSafeLocalStorage(window),
+  );
   return browserClient;
 }
