@@ -1,0 +1,1129 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>認証・アカウント・なまえ — ワイヤーフレーム(low-fi)</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --ink: #1a1a1a;
+    --g1: #fafafa;
+    --g2: #eeeeee;
+    --g3: #cccccc;
+    --g4: #999999;
+    --g5: #666666;
+    --accent: #f2c200;      /* 強調1色(黄)。注記マーカーのみ */
+    --accent-dark: #8a6d00;
+  }
+  body {
+    font-family: -apple-system, "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic", Meiryo, sans-serif;
+    background: #d9d9d9;
+    color: var(--ink);
+    line-height: 1.6;
+    padding: 32px 20px 80px;
+  }
+
+  /* ===== ドキュメント枠 ===== */
+  .doc { max-width: 1240px; margin: 0 auto 28px; background: #fff; border: 2px solid #222; padding: 24px 28px; }
+  .doc h1 { font-size: 22px; margin-bottom: 4px; }
+  .doc .sub { font-size: 13px; color: var(--g5); margin-bottom: 14px; }
+  .doc h2 { font-size: 16px; margin: 18px 0 8px; padding-left: 10px; border-left: 6px solid #222; }
+  .doc h3 { font-size: 13.5px; margin: 12px 0 4px; }
+  .doc p, .doc li { font-size: 13px; }
+  .doc ul, .doc ol { margin: 4px 0 4px 22px; }
+  .kv { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+  .kv .k { font-weight: 700; min-width: 5.5em; }
+  .legend-mk { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; background: var(--accent); border: 1px solid var(--accent-dark); font-size: 11px; font-weight: 700; }
+
+  table.map { border-collapse: collapse; width: 100%; font-size: 12.5px; margin-top: 6px; }
+  table.map th, table.map td { border: 1px solid var(--g4); padding: 5px 9px; text-align: left; vertical-align: top; }
+  table.map th { background: var(--g2); white-space: nowrap; }
+  .tbl-wrap { overflow-x: auto; }
+  code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12px; background: var(--g2); padding: 0 3px; border-radius: 3px; }
+
+  pre.flow {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12px; line-height: 1.8;
+    background: var(--g1); border: 1px solid var(--g4);
+    padding: 14px 18px; overflow-x: auto; margin-top: 6px;
+  }
+
+  /* ===== 画面グリッド ===== */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(383px, 100%), 1fr));
+    gap: 44px 28px;
+    max-width: 1420px; margin: 0 auto;
+    justify-items: center;
+  }
+  .cell { width: 100%; max-width: 430px; }
+  .cell h3 { font-size: 15px; margin-bottom: 6px; line-height: 1.4; }
+  .chip { display: inline-block; font-size: 11px; font-weight: 400; background: var(--g2); border: 1px solid var(--g4); border-radius: 3px; padding: 0 6px; margin-left: 6px; white-space: nowrap; }
+  .notes { margin-top: 10px; font-size: 12px; background: #ececec; border: 1px dashed var(--g4); padding: 9px 12px; }
+  .notes .nt { font-weight: 700; font-size: 11.5px; margin-bottom: 3px; }
+  .notes ul { list-style: none; }
+  .notes li { margin: 3px 0; }
+
+  /* ===== スマホフレーム ===== */
+  .frame {
+    width: 375px; max-width: 100%;
+    background: #fff; border: 2px solid #222; border-radius: 22px;
+    overflow: hidden; box-shadow: 0 4px 14px rgba(0,0,0,.15);
+    display: flex; flex-direction: column;
+  }
+  .statusbar { display: flex; justify-content: space-between; align-items: center; padding: 5px 16px; font-size: 11px; color: var(--g5); background: var(--g1); border-bottom: 1px solid var(--g3); }
+  .statusbar .icons { display: flex; gap: 4px; }
+  .statusbar .icons i { display: block; width: 14px; height: 8px; background: var(--g3); border-radius: 2px; }
+  .appbar { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 2px solid #222; font-weight: 700; font-size: 15px; background: #fff; }
+  .appbar .back { font-weight: 400; color: var(--g5); }
+  .appbar .spacer { flex: 1; }
+  .appbar .action { font-size: 11px; font-weight: 700; border: 1.5px solid #222; border-radius: 14px; padding: 2px 10px; background: #fff; white-space: nowrap; }
+  .body { padding: 12px; display: flex; flex-direction: column; gap: 12px; flex: 1; }
+
+  /* 汎用パーツ(wireframes.html と共通) */
+  .ph {
+    background:
+      linear-gradient(to top right, transparent calc(50% - 0.5px), var(--g3), transparent calc(50% + 0.5px)),
+      linear-gradient(to top left, transparent calc(50% - 0.5px), var(--g3), transparent calc(50% + 0.5px)),
+      var(--g2);
+    border: 1px solid var(--g4);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--g5); font-size: 11px; text-align: center;
+  }
+  .ph span { background: #fff; border: 1px solid var(--g3); padding: 2px 10px; line-height: 1.5; }
+  .btn { display: flex; align-items: center; justify-content: center; gap: 8px; text-align: center; padding: 12px 10px; border: 2px solid #222; border-radius: 8px; font-weight: 700; font-size: 14px; background: #fff; }
+  .btn.primary { background: #222; color: #fff; }
+  .btn.small { padding: 7px 10px; font-size: 12px; border-width: 1.5px; }
+  .btn.off { border-color: var(--g4); color: var(--g4); background: var(--g1); }
+  .btn.off.primary { background: var(--g3); color: var(--g1); border-color: var(--g4); }
+  .btn .goto { font-size: 10px; font-weight: 400; opacity: .65; white-space: nowrap; }
+  .row { display: flex; gap: 8px; }
+  .row > * { flex: 1; }
+  .box { border: 1px solid var(--g4); border-radius: 8px; padding: 10px; }
+  .box .bt { font-size: 12px; font-weight: 700; margin-bottom: 6px; }
+  .cap { font-size: 10.5px; color: var(--g5); line-height: 1.5; }
+  .divider { display: flex; align-items: center; gap: 10px; color: var(--g4); font-size: 11px; }
+  .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--g3); }
+  .mk { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; border-radius: 50%; background: var(--accent); color: var(--ink); font-size: 11px; font-weight: 700; border: 1px solid var(--accent-dark); vertical-align: middle; flex-shrink: 0; }
+  .field label { font-size: 12px; font-weight: 700; display: block; margin-bottom: 4px; }
+  .input, .select, .textarea { border: 1.5px solid var(--g5); border-radius: 6px; padding: 8px 10px; font-size: 13px; color: var(--g4); background: #fff; }
+  .input.filled { color: var(--ink); }
+  .input.bad { border-width: 2.5px; border-color: #222; }
+  .select { display: flex; justify-content: space-between; align-items: center; }
+  .textarea { min-height: 74px; }
+  .field .cap { margin-top: 3px; }
+  .tag { display: inline-block; font-size: 10px; border: 1px solid var(--g4); border-radius: 3px; padding: 0 5px; color: var(--g5); background: #fff; white-space: nowrap; }
+  .tag.dark { background: #444; color: #fff; border-color: #444; }
+  .callout { border: 1.5px solid var(--g4); border-radius: 8px; background: var(--g1); padding: 9px 11px; font-size: 11.5px; display: flex; flex-direction: column; gap: 8px; }
+
+  /* モーダル(Dialog) */
+  .modalbg { background: #8c8c8c; padding: 24px 14px; flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 8px; }
+  .modalbg .behind { text-align: center; font-size: 10px; color: #efefef; margin-bottom: 4px; }
+  .modal { background: #fff; border: 2px solid #222; border-radius: 12px; padding: 16px 14px; display: flex; flex-direction: column; gap: 10px; }
+  .modal h4 { font-size: 16px; text-align: center; }
+  .modal p { font-size: 12px; text-align: left; }
+
+  /* ===== この文書で追加した部品 ===== */
+  /* アカウント行(N-1 / N-6)。表示名 + 状態バッジ + 詳細へのシェブロン */
+  .acct { display: flex; align-items: center; gap: 8px; border: 1.5px solid #222; border-radius: 10px; padding: 10px 12px; background: #fff; }
+  .acct .nm { font-size: 15px; font-weight: 700; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .acct .nm.unset { color: var(--g4); font-weight: 400; }
+  .acct .chev { color: var(--g5); font-size: 13px; }
+  .acct.off { border-color: var(--g4); background: var(--g1); }
+  .acct.off .nm { color: var(--g4); }
+  /* トースト(N-4 成功系)。画面下部に 1 件・3 秒で退場 */
+  .toast { background: #222; color: #fff; border-radius: 8px; padding: 9px 12px; font-size: 12px; font-weight: 700; text-align: center; margin-top: auto; }
+  /* 入力の下流に出すエラー */
+  .errmsg { font-size: 11.5px; font-weight: 700; color: #222; display: flex; gap: 5px; align-items: baseline; }
+  .errmsg::before { content: "▲"; font-size: 9px; }
+  .counterrow { display: flex; justify-content: space-between; align-items: baseline; }
+  .counterrow .c { font-size: 11px; color: var(--g5); }
+  .counterrow .c.max { font-weight: 700; color: #222; }
+  /* 1 フレーム内に状態の変種を並べるときの仕切り */
+  .statelabel { font-size: 11px; font-weight: 700; color: var(--g5); border-top: 1px dashed var(--g3); padding-top: 9px; }
+  .statelabel:first-child { border-top: none; padding-top: 0; }
+
+  .grid-title { max-width: 1420px; margin: 0 auto 18px; font-size: 18px; padding-left: 10px; border-left: 6px solid #222; }
+  .grid-title small { display: block; font-size: 12px; font-weight: 400; color: var(--g5); }
+</style>
+</head>
+<body>
+
+<!-- ================= ドキュメントヘッダー ================= -->
+<div class="doc">
+  <h1>認証・アカウント・なまえ — ワイヤーフレーム(low-fi)</h1>
+  <div class="sub">作成日: 2026-07-30 / 対象: 引き継ぎ登録・別端末ログイン・アカウント切替・サインアウト・表示名 / 入力: <b>docs/design/認証UXレビュー.md §5</b>(設計指針の正)・E15(バックエンド仕様の正)・UI文言・情報量ガイド・デザインシステム</div>
+  <div class="kv"><span class="k">位置づけ</span><span>既存の <b>wireframes.html</b>(フェーズ 1 の 9 画面)は変更しない。本書はそこに<b>足す/差し替える</b>ぶんだけを、ゼロベースで設計し直したもの。表現の流儀(low-fi グレースケール・375px フレーム・黄マーカーは注記のみ)は wireframes.html を踏襲する。</span></div>
+  <div class="kv"><span class="k">前提(動かさない)</span><span>E15 のバックエンド仕様(<code>POST /api/auth/begin</code> → <code>authUrl</code> → <code>/auth/google/callback</code> → <code>POST /api/auth/complete</code>、outcome = linked / switched / already)と、改名プロトコル <code>user:rename</code>、なまえの制約(trim 後 1〜10 コードポイント・制御文字禁止)。<b>本ワイヤーはサーバー変更を要する設計を含まない。</b></span></div>
+  <div class="kv"><span class="k">凡例</span><span>名前・件数はダミー。ボタン内の「→ 〇〇」は遷移先を示す設計注記であり実画面には出さない。<span class="legend-mk">1</span> は各フレーム下の注記への参照。</span></div>
+
+  <h2>1. このワイヤーが解消する指摘</h2>
+  <div class="tbl-wrap">
+  <table class="map">
+    <tr><th>レビュー</th><th>内容</th><th>本書での解き方</th></tr>
+    <tr><td><b>N-1 / N-6 / U-5</b></td><td>アカウント表示(表示名+登録状態)がどこにもない</td><td>メニュー最上部に<b>アカウント行</b>を新設。表示名そのものが行の主役で、状態はバッジ。触ってもアカウント操作は起きず、アカウント画面へ行くだけ(A-1〜A-6)</td></tr>
+    <tr><td><b>N-2 / U-1 / 廃止D-1</b></td><td>認証の入口が 3 か所に分散し、状態表示とログアウトが同じボタン</td><td><b>アカウント画面</b>を新設し、状態と操作メニューの置き場をここ 1 つにする。状態表示ボタンは廃止(B-1・B-2)</td></tr>
+    <tr><td><b>N-3 / 廃止D-3</b></td><td>押した瞬間に予告なく Google へ全画面遷移する / <code>window.confirm</code></td><td>実行の直前に <b>Dialog</b> を 1 枚挟む。目的・取るもの・戻ることを 2 文。<b>実行口はこのダイアログただ 1 つ</b>(DLG-1・DLG-2)</td></tr>
+    <tr><td><b>N-4 / 廃止D-2</b></td><td>結果が裸の <code>&lt;p&gt;</code> で、消えず、見えない経路がある</td><td>結果はルート直下に出す。成功はトースト(3 秒で退場)、取り返しのつかない事実と失敗は Dialog(RES-1〜RES-3)</td></tr>
+    <tr><td><b>N-5</b></td><td>匿名の記録が放棄されることが誰にも伝わらない</td><td><code>switched</code> の<b>完了後</b>に 1 文で伝える。事前予告はしない(RES-2)</td></tr>
+    <tr><td><b>N-7</b></td><td>なまえを変える手段が Web にない(サーバーは実装済み)</td><td>アカウント画面に「なまえをかえる」。制約はサーバーの写し(C-1〜C-3)</td></tr>
+    <tr><td><b>U-2 / U-3</b></td><td>同じ操作に 5 つの呼び名・3 つの文体</td><td>下の §2 で語彙と文体を 1 系統に確定(全フレームで統一)</td></tr>
+    <tr><td><b>U-4 / 廃止D-4</b></td><td>提案画面に Callout が 2 枚・未登録者への常設予告</td><td>常設 Callout を削除し 1 枚に。都道府県の断りは都道府県欄の下へ畳む(G-1・G-2)</td></tr>
+    <tr><td><b>廃止D-5</b></td><td>リザルトから直接 OAuth に飛ぶ(対局中のフルページ遷移)</td><td>リザルトの導線を廃止(Q-1=B)。退室後のメニューで 1 回だけ誘う(F-1・F-2)</td></tr>
+    <tr><td><b>廃止D-6</b></td><td>隠しフォーム POST で失敗が生 JSON になる</td><td>画面には出ないが、RES-3 の失敗ダイアログが成立する前提として <code>POST /api/auth/begin</code> + <code>location.href</code> への差し替えが必要(実装メモに記載)</td></tr>
+  </table>
+  </div>
+
+  <h2>2. 用語と文体(1 系統に確定)</h2>
+  <p>レビュー §3.1 の指摘(「引き継ぎ / 登録 / ログイン / きろくをのこす / とうろく」の 5 系統)を、<b>名詞 1 語 + 動詞 3 語</b>に畳む。以後この表以外の言い方を画面に出さない。</p>
+  <div class="tbl-wrap">
+  <table class="map">
+    <tr><th>概念</th><th>画面に出す語</th><th>使う場所</th><th>採った理由</th></tr>
+    <tr><td>ユーザーが持っているもの(表示名・提案・イエローカード等、<code>users</code> 行に紐づく一切)</td><td><b>きろく</b></td><td>アカウント画面のタイトル、誘い文</td><td>プレイヤーが失う/得るものを名指しできる唯一の語。「アカウント」「引き継ぎ」は設計語彙で、子どもが自分の状況に当てはめられない</td></tr>
+    <tr><td>Google と紐付ける(初回・別端末とも)</td><td><b>Googleでつなぐ</b></td><td>アカウント画面の主 CTA、確認ダイアログ、提案画面・誘いの Callout</td><td>初回登録(linked)と別端末ログイン(switched)は<b>ユーザーには同じ 1 操作</b>。「登録」と「ログイン」に割ると、どちらが自分かをユーザーに判定させることになる(レビュー §3.1)</td></tr>
+    <tr><td>別の Google アカウントに切り替える</td><td><b>べつのアカウントにする</b></td><td>アカウント画面(登録済み)、切替確認</td><td>共有端末での使い分け(E15 §2.4 ケース 4)。「つなぐ」と同じ語にすると切替が事故になる</td></tr>
+    <tr><td>この端末からきろくを離す</td><td><b>サインアウト</b></td><td>アカウント画面(登録済み)、確認、完了トースト</td><td>外部語彙は無理にひらがな化しない(デザインシステム §4「語彙は大人にも自然に」)。「ログアウト」と混在させず<b>サインアウト</b>に固定</td></tr>
+    <tr><td>ユーザーの呼び名</td><td><b>なまえ</b></td><td>アカウント行、なまえ入力</td><td>「表示名」「プレイヤー名」は設計語彙。行の主役の位置に文字列が置かれていれば「なまえ」というラベルすら要らない(原則 2)</td></tr>
+  </table>
+  </div>
+  <p style="margin-top:8px;"><b>文体</b>: <b>常体・ひらがな主体</b>に統一する(U-3)。敬体(「ログアウトしました」)と常体(「引き継ぎ登録したよ」)が同じスロットに交互に入る現状を解消する。<b>分かち書きの空白は全角・半角とも使わない</b>(デザインシステム §2.3 規約 2・§4 文言 Don't。レビュー §3.3)。「!」は連打しない。</p>
+  <p><b>状態バッジ</b>: 未登録 =「この端末だけ」/ 登録済み =「どの端末でも」。バッジで<b>登録の有無</b>ではなく<b>きろくがどこまで届くか</b>を言う。「未登録」は欠落を責める語で、登録ゼロで遊べる(E15 §1.1)という前提と噛み合わない。代替案は「未登録 / つないである」。</p>
+
+  <h2>3. 画面マップ</h2>
+  <pre class="flow">
+[メニュー]
+  ├─ アカウント行(なまえ + バッジ)──タップ──→ [アカウント画面]
+  │        ※触ってもアカウント操作は起きない。行は状態表示 + 詳細への入口だけ
+  │
+  └─ あそぶ / ていあん / 図鑑 / マイ提案 (既存のまま)
+
+[アカウント画面]  ← 認証の「状態と操作メニュー」の唯一の置き場(U-1)
+  ├─ なまえ ────────「なまえをかえる」→ [なまえ入力 C-1]──保存──→ アカウント画面へもどる
+  │                                        ※C-1 の入口と戻り先はアカウント画面だけ。
+  │                                          トーストは出さない(行の表示が変わることが確認)
+  ├─ きろくの中身(ていあん n件 / イエローカード n まい)
+  ├─[未登録]  「Googleでつなぐ」──────→ (DLG-1 確認ダイアログ)
+  ├─[登録済み]「べつのアカウントにする」──→ (DLG-2 切替確認ダイアログ)
+  └─[登録済み]「サインアウト」───────→ (DLG-3 サインアウト確認)
+
+(DLG-1/DLG-2 確認ダイアログ) ← 認証の「実行」の唯一の入口
+  提案画面 G-2 の「Googleでつなぐ」/ 退室後メニュー F-2 の誘いも、ここを直接開く
+  DLG-1 の「かえる」は C-1 へ遷移せず、ダイアログの中で名前を直す(インライン編集)
+    ← 独立画面へ抜けるとダイアログが閉じて認証フローが切れるため
+  </pre>
+  <p class="cap" style="font-size:12px; color:var(--ink);"><b>U-1 からの逸脱(コントローラー承認済み・2026-07-30)</b>: レビューは「入口をアカウント画面 1 つに集約」としているが、その狙いは<b>状態と操作がばらばらの文言・部品で語られること</b>の解消である。本書は「<b>状態と操作メニューの置き場 = アカウント画面(1 つ)</b>」「<b>実行の入口 = 確認ダイアログ(1 つ)</b>」の二段で満たし、動機が最も強い瞬間(提案の枠が埋まった / セットを遊び終えた)に画面遷移を 1 段挟まない形にした。文言・確認内容はどの経路から来ても同一である。<b>この読み替えはコントローラーの裁定として承認済みで</b>、レビュー側(認証UXレビュー.md の U-1)にも同趣旨の 1 文を追記した。</p>
+
+  <h2>4. 認証フロー</h2>
+  <pre class="flow">
+■ 匿名 → 登録 (E15 §2.4 ケース1 outcome=linked)
+  メニュー[アカウント行: ゲスト000001 / この端末だけ]
+    → アカウント画面 →「Googleでつなぐ」
+    → DLG-1 確認ダイアログ(目的・取るもの・もどること + いまのなまえの確認/変更)
+    → 「Googleへすすむ」 → POST /api/auth/begin → location.href = authUrl
+    → Google の画面(アプリの外) → /auth/google/callback → /#/auth/complete?ott=…
+    → POST /api/auth/complete → localStorage 差し替え → Socket 張り直し
+    → メニューへ + トースト「Googleとつないだよ」(RES-1)
+    → アカウント行のバッジが「どの端末でも」に変わる  ← 確認の本体はこちら
+
+■ 別端末でログイン (outcome=switched / ★直前は匿名 → RES-2 の S-a)
+    ※サーバー側はケース2「sub が登録済み」。自分が匿名だったかは条件に入らない
+    …同じ経路… → 完了 → RES-2 ダイアログ S-a
+      「おかえり、ゆうた」+「この端末でまえにあそんでいたきろくは、もう見られないよ」
+    → 表示名・マイ提案がまるごと切り替わる
+
+■ 再ログイン (ケース3 outcome=already)
+    → トースト「もうつないであるよ」(RES-1)。ほかに何も起きない
+
+■ アカウント切替 (outcome=switched / ★直前は登録済み → RES-2 の S-b)
+    ※サーバー側はケース4「sub が未登録 + 自分は別の sub で登録済み → 新規行を作成」。
+      同じ S-b には、登録済みのまま別の"既存"アカウントに入った場合(ケース2)も入る
+  アカウント画面 →「べつのアカウントにする」
+    → DLG-2 切替確認ダイアログ → Google → 完了 → RES-2 ダイアログ S-b
+      「べつのアカウントにきりかわったよ」(名前は complete が返す displayName。
+       ケース4 では発番されたばかりの既定名になりうる)
+
+■ サインアウト
+  アカウント画面 →「サインアウト」→ DLG-3 確認 →「サインアウトする」
+    → localStorage の userToken を消す → 新規匿名として再接続
+    → メニューに留まる + トースト「サインアウトしたよ」
+    → 再接続が済むとアカウント行が新しいゲスト名に変わる(A-6)
+
+■ 失敗系
+  denied (自分でやめた)      → 何も出さない。匿名のまま続行
+  expired / 410 (時間切れ)   → RES-3 ダイアログ「もういちど」つき
+  503 auth_unavailable       → RES-3 ダイアログ「とじる」だけ
+  begin が 401 (トークン無効)  → 画面を出さない。セッション再取得(既存フロー)→ 自動で再試行し、
+                                 それでも失敗したら「時間がすぎちゃった」と同じ RES-3 を出す
+  接続未確立 (connection≠ready) → そもそも押せない。理由をボタンの下に出す(A-5)
+  対局中                     → 部屋の画面にアカウント行を出さない(A-7)
+  </pre>
+
+  <h2>5. 裁定事項(Q-1〜Q-8)の仮決めと代替案</h2>
+  <div class="tbl-wrap">
+  <table class="map">
+    <tr><th>#</th><th>論点</th><th>本ワイヤーの仮決め</th><th>根拠</th><th>代替案(採らなかった側)</th></tr>
+    <tr>
+      <td><b>Q-1</b></td><td>リザルト誘導を A(予約)/ B(廃止)のどちらにするか</td>
+      <td><b>B: リザルトの導線は廃止</b>。誘いは<b>退室直後のメニュー</b>に 1 枚だけ出す(F-1・F-2)</td>
+      <td>リザルトは部屋の中であり、押した瞬間に OAuth のフルページ遷移が起きると同席者の卓から黙って消える(J3-1)。B は E15 §2.3 と衝突せず、導線も 1 段で済む。A は「気づかせる」と「実行する」で 2 段になり、予約状態という新しい状態を 1 つ増やす</td>
+      <td>A(リザルトでは合図だけ残し、メニューにバッジで予約を持ち越す)。段が増えたぶんの脱落は<b>推測</b>で、本プロダクトに実測はない(レビュー §4.4)。登録率を観測できるようになったら再検討する</td>
+    </tr>
+    <tr>
+      <td><b>Q-2</b></td><td>登録誘導の表示頻度(現状は端末で生涯 1 回)</td>
+      <td><b>セットを遊び終えて退室したときに出す。初回 + 以降は 3 セットごと。表示済みフラグは実際に描画された時点で立てる</b></td>
+      <td>現状は「まだ価値が分かっていない初回」に消費され、価値が分かる頃には二度と出ない(J3-4)。回数ではなく<b>遊んだ量</b>に連動させる。ダイアログではなく Callout なので、出続けても操作は塞がない</td>
+      <td>(a) 生涯 1 回のまま(いまの実装)。(b)「ていあんが 1 件たまったら」等の到達条件連動。(b) は条件の観測点が増えるため v1 では採らない。AU-T2 の裁定はこの行で足りる</td>
+    </tr>
+    <tr>
+      <td><b>Q-3</b></td><td>語彙の最終決定</td>
+      <td><b>§2 の表のとおり</b>(きろく / Googleでつなぐ / べつのアカウントにする / サインアウト / なまえ)</td>
+      <td>レビュー §3.1・U-2 の推奨に沿う。「登録」と「ログイン」を分けないのは、ユーザー側にケース判定をさせないため</td>
+      <td>「Googleでもどす」を別ラベルとして持つ案(レビュー原案)。<b>どちらが自分の状況かをユーザーは事前に知り得ない</b>ため 1 語に畳んだ。「もどってくる」感は完了時の文言(「おかえり、ゆうた」)で担保する</td>
+    </tr>
+    <tr>
+      <td><b>Q-4</b></td><td>メニューの語彙(「マイ提案」の漢字)を今回あわせて整理するか</td>
+      <td><b>今回は触らない</b>。認証まわりの新規文言だけを §2 で統一する</td>
+      <td>「マイ提案」は認証と独立した既存導線で、変えるとマイ提案画面・未読バッジ・図鑑側の呼称まで波及する。認証の再設計と同じコミットに混ぜると、レビューの対象が二重になる</td>
+      <td>「じぶんのていあん」へ改称。やるなら独立した文言統一タスクとして、図鑑・ステータス表示とまとめて行う</td>
+    </tr>
+    <tr>
+      <td><b>Q-5</b></td><td>失敗系フィードバックをトーストにするか、モーダルにするか(design-system.html §5-13 と E15 §2.8 の衝突)</td>
+      <td><b>モーダル(Dialog)</b>。ただし denied(自分でやめた)は<b>何も出さない</b>(RES-3)</td>
+      <td>(1) DS §5-13 は「エラーはトーストにせず、その場のフォームエラーかモーダルで返す」と明示し、<code>Toast.tsx</code> のコメントもこれを引いている。(2) 認証の失敗は「その場のフォームエラー」に落とせない(戻ってきた画面に入力欄がない)。(3) 失敗には<b>「もういちど」という次の操作</b>が要り、トーストにはボタンを載せられない。(4) 外部サイトから戻った直後は注意が画面外にあり、3 秒で消える通知を見落とす</td>
+      <td>トースト(E15 §2.8)。<b>裁定後は E15 §2.8 の「トースト」の記述に読み替えノートを入れること</b>(503・ott 失効・denied の 3 行)。逆に本書が負けた場合は RES-3 をトースト化し、「もういちど」はアカウント画面から再操作させる</td>
+    </tr>
+    <tr>
+      <td><b>Q-6</b></td><td>なまえの設定をいつ促すか</td>
+      <td><b>B: 登録の直前だけ</b>。DLG-1 の確認ダイアログにいまのなまえを出し、その場で直せる。あわせて、既定名のときだけアカウント行の名前を<b>控えめな未設定スタイル</b>にする(文では促さない)</td>
+      <td>レビュー §5.6 の推奨。なまえが恒久化される瞬間は登録であり、その瞬間が唯一「なまえが要る理由」を経験している時点である(原則 1)。DLG-1 は登録ボタンを押した<b>あと</b>に出るので位置テスト(下流)も満たす</td>
+      <td>A(促さない)は J8-3 が解けない。C(初回の待機画面でも促す)は動機が最も強い場所だが、対局中の改名が部屋の状態変化を伴うため描画の考慮が要る。<b>C は Q-7 の待機画面表示(なまえが他人に見えている事実の可視化)で代替した</b>。効果が足りなければ C を足す</td>
+    </tr>
+    <tr>
+      <td><b>Q-7</b></td><td>対局画面の自席を「あなた」のままにするか(8 か所)</td>
+      <td><b>対戦・リザルトの 7 か所は「あなた」のまま。待機画面の自席だけ「ゆうた(あなた)」にする</b>(A-7)</td>
+      <td>対局中の視認性としては「あなた」が合理的で、変える理由がない。一方、待機画面は「これから遊ぶ相手に自分がどう見えているか」を確かめる唯一の場面であり、ここで他席に他人のなまえが並ぶ対称性から、自分のなまえも見えていると分かる(§5.6 の「説得ではなく事実の可視化」)</td>
+      <td>(a) 全 8 か所を「あなた」で通す(なまえを見る場所はアカウント行だけになる)。(b) 全 8 か所をなまえにする(自席が探しにくくなる)。<b>実装規則</b>: 自席の呼び方は view-model を組む時点で 1 か所に寄せる。<code>App.tsx:465</code> と <code>Table.tsx:81</code> は二重置換なので必ず対で直す</td>
+    </tr>
+    <tr>
+      <td><b>Q-8</b></td><td><code>switched</code> の完了通知をトーストにするかダイアログにするか(レビュー §5.4 行12「完了通知 × 3(成功系 = <code>Toast</code>)」との矛盾)</td>
+      <td><b>ダイアログ</b>。<code>switched</code> の 2 種(S-a / S-b)だけ <code>Dialog</code> にし、<code>linked</code> と <code>already</code> はトーストのまま(RES-1・RES-2)。<b>コントローラー承認済み(2026-07-30)</b></td>
+      <td>S-a は<b>匿名のきろくの放棄という不可逆な事実</b>(AU-D3: マージなし)を伴い、3 秒で消えるトーストでは見落とす。外部サイトから戻った直後は注意が画面外にあり、見落とすと「記録が勝手に消えた」という誤解だけが残る(J5-2)。S-b は失うものが無いが、<b>誰のきろくに入ったか</b>を取り違えると以後の行動が全部ずれるため、2 種を同じ部品で揃えた。Q-5(失敗系 = モーダル)と同じ判断基準「<b>次の理解が必要なものは消さない</b>」</td>
+      <td>レビュー原案どおり <b>3 outcome すべてトースト</b>(部品の使い分けが減る)。中間案として <b>S-a だけダイアログ・S-b はトースト</b>。裁定が覆る場合は本書 RES-2 を直す</td>
+    </tr>
+  </table>
+  </div>
+  <p><b>裁定が確定したあとに読み替えノートが要る文書</b>(引き継ぎ事項): <b>Q-1 = B</b> を確定させるときは、E15 §2.7 の「セットリザルト後」の行と、AU-03 の受け入れ条件「初回セットリザルト後に未登録者へ登録導線が出る」にも読み替えノートが要る(導線はリザルトではなく退室後のメニューに移る)。<b>Q-8</b> を確定させるときは、E15 §2.7 の「outcome に応じたトースト」も対象になる(<code>switched</code> だけダイアログ)。<b>Q-5</b> は §2.8 の 3 行(503・ott 失効・denied)が対象(上表の Q-5 行を参照)。</p>
+
+  <h2>6. §5.4「描くべき画面・状態」との照合(20 行 / 漏れ 0)</h2>
+  <p>§5.4 の表は <b>20 行</b>である。下表の 21 行目は §5.4 ではなく <b>§5.6 / Q-7</b>(自席のなまえの見せ方)への対応で、参考として同じ表に載せている。</p>
+  <div class="tbl-wrap">
+  <table class="map">
+    <tr><th>#</th><th>§5.4 の行</th><th>本書のフレーム</th></tr>
+    <tr><td>1</td><td>メニュー(未登録)</td><td>A-2</td></tr>
+    <tr><td>2</td><td>メニュー(登録済み)</td><td>A-3</td></tr>
+    <tr><td>3</td><td>メニュー(既定名のまま)</td><td>A-1</td></tr>
+    <tr><td>4</td><td>アカウント画面(未登録)</td><td>B-1</td></tr>
+    <tr><td>5</td><td>アカウント画面(登録済み)</td><td>B-2</td></tr>
+    <tr><td>6</td><td>なまえ入力(§5.4 の字義は「アカウント画面内」)</td><td>C-1(+ DLG-1 のインライン編集)<br><span style="font-size:11.5px; color:var(--g5);"><b>字義との差異は意図的</b>: C-1 は独立画面だが、<b>入口も戻り先もアカウント画面に限定</b>しているため「アカウント画面内」の意図(なまえの置き場をアカウントに畳む・U-5)は満たす。認証の途中(DLG-1)からは独立画面へ抜けずインライン編集で完結させる — 画面遷移するとダイアログが閉じて認証フローが切れるため(C1)。入力欄・カウンタ・検証・エラー文言は両者で共通。</span></td></tr>
+    <tr><td>7</td><td>なまえ入力のエラー(3 条件)</td><td>C-2</td></tr>
+    <tr><td>8</td><td>なまえの保存中・保存失敗</td><td>C-3</td></tr>
+    <tr><td>9</td><td>ログイン前確認ダイアログ(なまえの確認と変更)</td><td>DLG-1</td></tr>
+    <tr><td>10</td><td>切替前確認ダイアログ</td><td>DLG-2</td></tr>
+    <tr><td>11</td><td>サインアウト確認ダイアログ</td><td>DLG-3</td></tr>
+    <tr><td>12</td><td>完了通知 × 3(linked / switched / already)</td><td>RES-1(linked・already)/ RES-2(switched。直前が匿名 = S-a / 直前が登録済み = S-b の 2 種)</td></tr>
+    <tr><td>13</td><td>失敗通知(原因別 2〜3 種)</td><td>RES-3</td></tr>
+    <tr><td>14</td><td>処理中(authPending)</td><td>A-4(+ DLG-1 のボタン内表示)</td></tr>
+    <tr><td>15</td><td>接続未確立(connection ≠ ready)</td><td>A-5</td></tr>
+    <tr><td>16</td><td>対局中(認証導線を出さない)</td><td>A-7</td></tr>
+    <tr><td>17</td><td>サインアウト直後</td><td>A-6</td></tr>
+    <tr><td>18</td><td>リザルトの誘導(A/B の決定に従う)</td><td>F-1(廃止後のリザルト)+ F-2(退室直後の誘い)</td></tr>
+    <tr><td>19</td><td>提案画面(未登録・枠あき)</td><td>G-1</td></tr>
+    <tr><td>20</td><td>提案画面(未登録・枠うまり)</td><td>G-2</td></tr>
+    <tr><td>(参考)</td><td><b>§5.4 外</b> — §5.6 / Q-7: 自席のなまえの見せ方</td><td>A-7</td></tr>
+  </table>
+  </div>
+
+  <h2>7. 実装メモ(部品と、画面に出ない前提)</h2>
+  <ul>
+    <li><b>既存部品で組む</b>: アカウント行 = <code>Button</code>(block・内容自由)か新規 <code>AccountRow</code>、状態バッジ = <code>Tag</code>、確認 = <code>Dialog</code>、注記 = <code>Callout</code>、成功通知 = <code>Toast</code>、入力 = <code>Field</code>(提案フォームと同じカウンタ・<code>clampCodePoints</code>)。<b>新規部品は AccountRow の 1 つだけ</b>で足りる想定。追加するなら design-system.html に見本を先に足す(デザインシステム §5)。</li>
+    <li><b>Toast の自動退場は新規実装</b>: 現行 <code>Toast.tsx</code> はタイマーを持たない純粋な表示部品。DS §5-13 の「3 秒で退場」を満たすには退場タイマーと退場アニメーションが要る(レビュー N-4 補足 2)。工数に含める。</li>
+    <li><b>通知の設置場所はアプリのルート</b>: メニュー内に置くと、部屋が生きている経路で一度も見えない(J3-2)。</li>
+    <li><b>認証開始の経路を差し替える</b>(廃止D-6): 隠しフォーム POST をやめ、<code>POST /api/auth/begin</code> を fetch → <code>{ authUrl }</code> → <code>location.href</code>。これをやらないと 503・401 がブラウザに生 JSON で出て、RES-3 のダイアログは<b>そもそも表示されない</b>。サーバー変更は不要(エンドポイントは実装済み)。</li>
+    <li><b>なまえの検証は core の写し</b>: <code>protocol.ts</code> の 3 条件(trim 後 1 以上 / 10 以下 / 制御文字 <code>&lt;=31</code>・<code>127</code> 禁止)をクライアントでも使う。UI 側で条件を足さない(J8-4)。送信は <code>user:rename</code>。<b>永続化は部屋の外でも走る</b>(<code>socket-gateway.ts:664</code> が <code>if (current)</code> ブロックの外)ので、メニューからの改名にサーバー変更は要らない。</li>
+    <li><b><code>switched</code> の 2 通りの見せ分け</b>: サーバーの outcome は 1 つ(<code>switched</code>)で、E15 §2.4 の<b>ケース番号はクライアントからは判定できない</b>(ケース 2 の条件は「<code>sub</code> が登録済み」だけ、ケース 4 は「<code>sub</code> 未登録 + 自分は別の <code>sub</code> で登録済み」)。判定できるのは<b>begin を押した時点で自分が登録済みだったか</b>だけなので、<b>直前が匿名 = S-a「おかえり」/ 直前が登録済み = S-b「きりかわったよ」</b>で出し分ける(RES-2)。表示名は <code>complete</code> が返す <code>displayName</code> をそのまま使う。サーバー変更は不要。</li>
+    <li><b>アカウント画面の件数の取得元</b>: ていあん件数 = <code>GET /api/proposals/mine</code>、イエローカード = <code>GET /api/me/yellow-cards</code>(どちらも読み取り系で匿名でも通る。E15 §2.6)。<b>認証操作はこの 2 つの取得完了を待たない</b> — 件数は付随情報で、遅くても「Googleでつなぐ」は押せる(B-1・B-2 の注記)。</li>
+    <li><b>ログアウト後の遷移先</b>: メニューに留まる(タイトルへ戻さない)。再接続が完了するまでアカウント行は「つなぎなおしているところ」を出し、新しいゲスト名は接続完了後に入る(A-6)。</li>
+  </ul>
+</div>
+
+<!-- ================= 画面一覧 ================= -->
+<div class="grid-title">フレーム一覧(全 22 フレーム)<small>A: メニューとアカウント行 / B: アカウント画面 / C: なまえ / DLG: 確認ダイアログ / RES: 結果 / F: リザルトと誘い / G: 提案画面</small></div>
+<div class="grid">
+
+  <!-- A-1 -->
+  <div class="cell">
+    <h3>A-1. メニュー(未登録・既定名のまま) <span class="chip">§5.4 行3 / N-1・N-6</span></h3>
+    <div class="frame">
+      <div class="statusbar"><span>9:41</span><span class="icons"><i></i><i></i><i></i></span></div>
+      <div class="body">
+        <div class="acct">
+          <span class="nm unset">ゲスト000001 <span class="mk">1</span></span>
+          <span class="tag">この端末だけ</span>
+          <span class="chev">›</span>
+        </div>
+        <div class="ph" style="height: 78px;"><span>ロゴ(小)</span></div>
+        <div class="btn primary">あそぶ</div>
+        <div class="btn">ルールをていあんする</div>
+        <div class="btn">ルール図鑑</div>
+        <div class="row"><div class="btn small">マイ提案</div></div>
+      </div>
+    </div>
+    <div class="notes">
+      <div class="nt">解消する指摘 / 文言の根拠 / 実装メモ</div>
+      <ul>
+        <li><b>解消</b>: J1-1(自分が誰かが出ない)・J1-2(入口の分散)・J6-2(状態表示とログアウトの兼務)・J8-1(自分のなまえが見えない)。N-1・N-6・U-5・廃止D-1。</li>
+        <li><span class="mk">1</span> <b>既定名は控えめな未設定スタイル</b>(細字・淡色)で出す。「なまえを決めよう」の催促文やバナーは<b>置かない</b> — 操作対象の上流に置いた説明そのもので、読まれないまま画面を圧迫する(原則 1、§5.6「やってはいけないこと」)。促すのは<b>文ではなく状態</b>(原則 3)。Q-6 = B。</li>
+        <li><b>ラベルを置かない</b>: 「なまえ: ゲスト000001」ではなく、行の主役の位置に名前だけを置く(原則 2「ラベルは最後の手段」)。バッジ「この端末だけ」は登録状態を<b>結果</b>の言い方に畳んだもの。</li>
+        <li><b>行は破壊的操作をしない</b>: タップ先はアカウント画面のみ。「自分が誰か確かめようとして触ったらログアウトしていた」(J6-2)を構造的に潰す。</li>
+        <li><b>実装</b>: 新規 <code>AccountRow</code>(<code>Button</code> の block 変種でも可)+ <code>Tag</code>。表示名は <code>multiplayer/client.ts</code> の <code>displayName</code> を <code>MenuScreen</code> へ渡すだけで足りる。</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- A-2 -->
+  <div class="cell">
+    <h3>A-2. メニュー(未登録・なまえ設定ずみ) <span class="chip">§5.4 行1</span></h3>
+    <div class="frame">
+      <div class="statusbar"><span>9:41</span><span class="icons"><i></i><i></i><i></i></span></div>
+      <div class="body">
+        <div class="acct">
+          <span class="nm">ゆうた</span>
+          <span class="tag">この端末だけ <span class="mk">1</span></span>
+          <span class="chev">›</span>
+        </div>
+        <div class="ph" style="height: 78px;"><span>ロゴ(小)</span></div>
+        <div class="btn primary">あそぶ</div>
+        <div class="btn">ルールをていあんする</div>
+        <div class="btn">ルール図鑑</div>
+        <div class="row"><div class="btn small">マイ提案</div></div>
+      </div>
+    </div>
+    <div class="notes">
+      <div class="nt">解消する指摘 / 文言の根拠 / 実装メモ</div>
+      <ul>
+        <li><b>解消</b>: J1-1・J8-1。A-1 との差は名前の見え方(通常字)だけで、レイアウトは同一。</li>
+        <li><span class="mk">1</span> バッジは<b>常時出す</b>。未登録を責める語(「未登録」)を使わず、きろくがどこまで届くかという事実で言う。登録ゼロで遊べること(E15 §1.1)を否定しない言い方。</li>
+        <li><b>誘い文は置かない</b>: 「Googleとつなぐと…」の常設テキストはここに置かない(原則 1・原則 4)。誘うのは F-2 の 1 枚だけ。</li>
+        <li><b>コアコンセプトの一文について</b>: wireframes.html の画面1b にはコアコンセプトの一文(ガイド §3 の意図的な例外)が置かれていたが、<b>実装では既に削除されている</b>(<code>MenuScreen.tsx</code> のコメント: 「コンセプトの一文はキービジュアルのコピーが既に言っているので画面には置かない」2026-07-29)。本書はその実装の判断を<b>踏襲して描かない</b>。アカウント行の新設で最上部の情報量が増えるため、ここで復活させると 1 画面 1 主役(デザインシステム §4)が崩れる。<b>本書は一文の有無を変更しない</b> — 復活させる判断が別途あれば、置き場はロゴ直下(アカウント行の下)になる。</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- A-3 -->
+  <div class="cell">
+    <h3>A-3. メニュー(登録済み) <span class="chip">§5.4 行2</span></h3>
+    <div class="frame">
+      <div class="statusbar"><span>9:41</span><span class="icons"><i></i><i></i><i></i></span></div>
+      <div class="body">
+        <div class="acct">
+          <span class="nm">ゆうた</span>
+          <span class="tag dark">どの端末でも <span class="mk">1</span></span>
+          <span class="chev">›</span>
+        </div>
+        <div class="ph" style="height: 78px;"><span>ロゴ(小)</span></div>
+        <div class="btn primary">あそぶ</div>
+        <div class="btn">ルールをていあんする</div>
+        <div class="btn">ルール図鑑</div>
+        <div class="row"><div class="btn small">マイ提案</div></div>
+      </div>
+    </div>
+    <div class="notes">
+      <div class="nt">解消する指摘 / 文言の根拠 / 実装メモ</div>
+      <ul>
+        <li><b>解消</b>: J1-1・J6-1(切替が到達不能)・J6-2。「登録済み・ログアウト」ボタンは<b>廃止</b>(廃止D-1)。</li>
+        <li><span class="mk">1</span> 塗りバッジで「済み」を示す。これが常時見えているので、<b>成功トーストは状態表示の代わりではない</b>(N-4 補足 1)。トーストは戻ってきた直後の 1 回だけ。</li>
+        <li><b>別端末で切り替わったことの確認手段</b>がここで初めて成立する(E15 §2.4 ケース 2 の受け入れ条件)。</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- A-4 -->
+  <div class="cell">
+    <h3>A-4. メニュー(authPending / 処理中) <span class="chip">§5.4 行14</span></h3>
+    <div class="frame">
+      <div class="statusbar"><span>9:41</span><span class="icons"><i></i><i></i><i></i></span></div>
+      <div class="body">
+        <div class="acct off">
+          <span class="nm">ゆうた</span>
+          <span class="tag">つないでいるところ <span class="mk">1</span></span>
+          <span class="chev">›</span>
+        </div>
+        <div class="ph" style="height: 78px;"><span>ロゴ(小)</span></div>
+        <div class="btn primary">あそぶ</div>
+        <div class="btn">ルールをていあんする</div>
+        <div class="btn">ルール図鑑</div>
+        <div class="row"><div class="btn small">マイ提案</div></div>
+      </div>
+    </div>
+    <div class="notes">
+      <div class="nt">解消する指摘 / 文言の根拠 / 実装メモ</div>
+      <ul>
+        <li><b>解消</b>: §5.4「処理中」。現状は小ボタンが <code>disabled</code> になるだけでラベルも変わらない(<code>MenuScreen.tsx:65</code>)。</li>
+        <li><span class="mk">1</span> この状態が<b>見えるのは一瞬</b>である。ユーザーが実際に見るのは DLG-1 のダイアログのボタン内表示(「すすんでいるところ…」)で、<code>begin</code> の応答を待つ数百 ms と <code>location.href</code> 直前だけ。ここはブラウザバックで戻ってきた場合の保険。</li>
+        <li><b>完了の往復中</b>(<code>/#/auth/complete</code> で ott を引き換えている間)も同じ表示にする。この間はアカウント行をタップさせない。</li>
+        <li><b>実装</b>: <code>authPending</code> を <code>AccountRow</code> に渡し、<code>disabled</code> + バッジ差し替え。</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- A-5 -->
+  <div class="cell">
+    <h3>A-5. メニュー / アカウント画面(接続未確立) <span class="chip">§5.4 行15</span></h3>
+    <div class="frame">
+      <div class="statusbar"><span>9:41</span><span class="icons"><i></i><i></i><i></i></span></div>
+      <div class="body">
+        <div class="acct off">
+          <span class="nm">つなぎ中…</span>
+          <span class="tag">せつぞく中 <span class="mk">1</span></span>
+        </div>
+        <div class="ph" style="height: 60px;"><span>ロゴ(小)</span></div>
+        <div class="btn off primary">あそぶ</div>
+        <div class="btn off">ルールをていあんする</div>
+        <div class="statelabel">アカウント画面まで来ていた場合 <span class="mk">2</span></div>
+        <div class="btn off primary">Googleでつなぐ</div>
+        <div class="cap" style="text-align:center;">サーバーとつながるまでちょっとまってね</div>
+      </div>
+    </div>
+    <div class="notes">
+      <div class="nt">解消する指摘 / 文言の根拠 / 実装メモ</div>
+      <ul>
+        <li><b>解消</b>: §5.4「接続未確立」。現状は<b>押してから</b>「接続を確認中です。少し待ってからもう一度ためしてね」が出る(<code>App.tsx:670-672</code>)。しかもこの 1 文の中で敬体と常体が混ざっている(§3.2)。</li>
+        <li><span class="mk">1</span> 名前がまだ無い(<code>displayName</code> 未取得)ので、行は<b>形だけ残して中身を伏せる</b>。行ごと消すとレイアウトが飛び跳ねる。</li>
+        <li><span class="mk">2</span> <b>押せないことを事前に示す</b>(原則 3「形で伝える」)。理由の 1 行は<b>無効化されたボタンの下流</b>に置く — 上流に置くと読まれない(原則 1・§3 位置テスト)。</li>
+        <li><b>エラー文言は例外</b>: ガイド §3「短くしすぎてはいけないもの」はエラー文言を挙げ、「何が起きて何をすればいいか」は書くとしている。ここは「まってね」= やることの指示。</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- A-6 -->
+  <div class="cell">
+    <h3>A-6. サインアウト直後 <span class="chip">§5.4 行17 / N-2</span></h3>
+    <div class="frame">
+      <div class="statusbar"><span>9:41</span><span class="icons"><i></i><i></i><i></i></span></div>
+      <div class="body">
+        <div class="acct off">
+          <span class="nm">つなぎ中…</span>
+          <span class="tag">つなぎなおしているところ <span class="mk">1</span></span>
+        </div>
+        <div class="ph" style="height: 70px;"><span>ロゴ(小)</span></div>
+        <div class="btn primary">あそぶ</div>
+        <div class="btn">ルールをていあんする</div>
+        <div class="btn">ルール図鑑</div>
+        <div class="toast">サインアウトしたよ <span class="mk">2</span></div>
+      </div>
+    </div>
+    <div class="notes">
+      <div class="nt">解消する指摘 / 文言の根拠 / 実装メモ</div>
+      <ul>
+        <li><b>解消</b>: J4-3(「ログアウトしました」がメニューに貼り付いて消えない)・§3.2(敬体と常体の混在)。N-2(サインアウトはアカウント画面の操作)・N-4(通知の受け皿)。</li>
+        <li><span class="mk">1</span> <b>遷移先はメニュー</b>(タイトルへ戻さない)。サインアウトは「別の人に代わる」操作なので、タイトルまで戻すと次の人が最初からやり直す印象になる。新しいゲスト名は<b>再接続が完了してから</b>入り、行が「ゲスト00000D / この端末だけ」に変わる(A-1 と同じ状態)。</li>
+        <li><span class="mk">2</span> トーストは <b>3 秒で退場</b>(DS §5-13)。常設テキストにしない。状態(いま誰か)はアカウント行が受け持つ(原則 3)。</li>
+        <li><b>トーストを許す条件</b>(N-4 補足 1)を満たす: 一度きり・取り消しに別操作(再ログイン)が要る・押したボタンごと画面が作り直される。</li>
+        <li><b>実装</b>: <code>Toast</code>。<code>authMessage</code> の裸の <code>&lt;p role="status"&gt;</code> は廃止(廃止D-2)。</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- A-7 -->
+  <div class="cell">
+    <h3>A-7. 対局中(待機画面)= 認証導線なし + 自席のなまえ <span class="chip">§5.4 行16 / §5.6・Q-7</span></h3>
+    <div class="frame">
+      <div class="statusbar"><span>9:41</span><span class="icons"><i></i><i></i><i></i></span></div>
+      <div class="appbar"><span class="back">←</span> 待機中<span class="spacer"></span><span class="action">2 / 4 人</span></div>
+      <div class="body">
+        <div class="box" style="display:flex; flex-direction:column; gap:8px;">
+          <div class="row" style="align-items:center;">
+            <span style="font-size:12px; flex:2;">ゆうた(あなた) <span class="mk">1</span></span>
+            <span class="tag dark">人間</span>
+          </div>
+          <div class="row" style="align-items:center;">
+            <span style="font-size:12px; flex:2;">ゲスト00000C</span>
+            <span class="tag dark">人間</span>
+          </div>
+          <div class="row" style="align-items:center;">
+            <span style="font-size:12px; flex:2; color:var(--g4);">(あき)</span>
+            <span class="tag">開始時にAIが入ります</span>
+          </div>
+          <div class="row" style="align-items:center;">
+            <span style="font-size:12px; flex:2; color:var(--g4);">(あき)</span>
+            <span class="tag">開始時にAIが入ります</span>
+          </div>
+        </div>
+        <div class="ph" style="height:56px;"><span>招待コード・いまのルール(既存のまま)</span></div>
+        <div class="btn primary">開始する</div>
+        <div class="cap" style="text-align:center;"><span class="mk">2</span> (設計注記)アカウント行・認証導線はこの画面に置かない</div>
+      </div>
+    </div>
+    <div class="notes">
+      <div class="nt">解消する指摘 / 文言の根拠 / 実装メモ</div>
+      <ul>
+        <li><b>解消</b>: §5.4「対局中」・J8-1・Q-7。</li>
+        <li><span class="mk">1</span> <b>Q-7 の仮決め</b>: 待機画面の自席だけ「なまえ(あなた)」。他席に他人のなまえが並んでいるので、<b>自分のなまえも相手に見えている</b>ことが対称性から分かる。§5.6 の「必要なのは説得の文ではなく事実の可視化」の実装がこれ。対戦画面・リザルトの 7 か所は「あなた」のまま(視認性優先)。</li>
+        <li><b>ここでは改名させない</b>(Q-6 = B)。対局中の改名は部屋の状態変化を伴う(<code>reducer.ts:962-985</code>)ため、v1 では入れない。なまえを直す動機はここで立ち、実行はメニューのアカウント行で行う。</li>
+        <li><span class="mk">2</span> <b>認証導線を出さない</b>(E15 §2.3)。部屋がプロセス内メモリで、OAuth のフルページ遷移がクライアント状態を壊すため。アカウント行そのものを出さない(状態だけ残して操作を塞ぐ、はしない — 行が押せない状態で残ると「なぜ押せないか」の説明が要る)。構造上、部屋の画面はメニューより先に return されるので自然に満たされる。</li>
+        <li><b>実装</b>: 自席の呼び方は 8 か所に散らさず、view-model を組む時点で 1 か所に寄せる。<code>App.tsx:465</code> と <code>Table.tsx:81</code> は二重置換なので対で扱う。</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- B-1 -->
+  <div class="cell">
+    <h3>B-1. アカウント画面(未登録) <span class="chip">§5.4 行4 / N-2・N-7</span></h3>
+    <div class="frame">
+      <div class="statusbar"><span>9:41</span><span class="icons"><i></i><i></i><i></i></span></div>
+      <div class="appbar"><span class="back">←</span> きろく <span class="mk">1</span></div>
+      <div class="body">
+        <div class="row" style="align-items:center;">
+          <span style="font-size:19px; font-weight:700; flex:1.6;">ゆうた</span>
+          <div class="btn small">なまえをかえる <span class="goto">→ C-1</span></div>
+        </div>
+        <div class="box">
+          <div class="row" style="align-items:center;">
+            <span style="font-size:12.5px; flex:1;">ていあん 3件 <span class="mk">2</span></span>
+            <div class="btn small">見る <span class="goto">→ マイ提案</span></div>
+          </div>
+          <div class="cap" style="margin-top:6px;">イエローカード 0まい</div>
+        </div>
+        <div class="tag">きろくはこの端末だけ</div>
+        <div class="btn primary">Googleでつなぐ <span class="mk">3</span> <span class="goto">→ DLG-1</span></div>
+      </div>
+    </div>
+    <div class="notes">
+      <div class="nt">解消する指摘 / 文言の根拠 / 実装メモ</div>
+      <ul>
+        <li><b>解消</b>: J1-2(入口の分散)・J6-1(切替が到達不能)・J6-2・J8-2(改名手段がない)。N-2・N-7・U-1・U-5。</li>
+        <li><span class="mk">1</span> 画面名は「きろく」。ユーザーが失う/得るものの名前をそのまま画面名にする(§2 の語彙表)。「アカウント」は設計語彙。</li>
+        <li><span class="mk">2</span> <b>ラベルを値に畳む</b>(原則 2): 「提案件数: 3」ではなく「ていあん 3件」。ここに件数を出すのは、Googleでつなぐと<b>何が守られるのか</b>を文ではなく中身で見せるため(原則 3)。</li>
+        <li><span class="mk">3</span> <b>説明文をこの画面に置かない</b>。「Googleとつなぐと…」の解説は、押した<b>あと</b>に出る DLG-1 の中にある(原則 1 の位置テスト、§3 判断 3)。ここで説明すると、ボタンの上流に置いた読まれない文になる。</li>
+        <li><b>Callout は 0 枚</b>(1 画面 1 枚まで、の余裕を残す)。</li>
+        <li><b>件数の取得中・取得失敗</b>: ていあん件数は <code>GET /api/proposals/mine</code>、イエローカードは <code>GET /api/me/yellow-cards</code>(どちらも読み取り系なので匿名でも通る。E15 §2.6)。<b>取得中</b>は数字の位置を「—」にして行の高さを保つ(スピナーは置かない。1 行の数字にローディング表示は過剰)。<b>取得失敗</b>はこの画面のエラーとして扱わず、同じく「—」のままにする — この画面の主役はなまえと認証操作で、件数はその補足にすぎない。<b>件数の取得を待って「Googleでつなぐ」を押せなくしない</b>。</li>
+        <li><b>実装</b>: 新規画面 <code>AccountScreen</code>。<code>AppBar</code> + <code>Button</code> + <code>Tag</code>。認証操作を持つ画面はここだけ。</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- B-2 -->
+  <div class="cell">
+    <h3>B-2. アカウント画面(登録済み) <span class="chip">§5.4 行5 / N-2</span></h3>
+    <div class="frame">
+      <div class="statusbar"><span>9:41</span><span class="icons"><i></i><i></i><i></i></span></div>
+      <div class="appbar"><span class="back">←</span> きろく</div>
+      <div class="body">
+        <div class="row" style="align-items:center;">
+          <span style="font-size:19px; font-weight:700; flex:1.6;">ゆうた</span>
+          <div class="btn small">なまえをかえる <span class="goto">→ C-1</span></div>
+        </div>
+        <div class="box">
+          <div class="row" style="align-items:center;">
+            <span style="font-size:12.5px; flex:1;">ていあん 12件</span>
+            <div class="btn small">見る <span class="goto">→ マイ提案</span></div>
+          </div>
+          <div class="cap" style="margin-top:6px;">イエローカード 1まい</div>
+        </div>
+        <div class="tag dark">Googleとつないである・どの端末でも <span class="mk">1</span></div>
+        <div style="flex:1;"></div>
+        <div class="btn">べつのアカウントにする <span class="mk">2</span> <span class="goto">→ DLG-2</span></div>
+        <div class="btn">サインアウト <span class="mk">3</span> <span class="goto">→ DLG-3</span></div>
+      </div>
+    </div>
+    <div class="notes">
+      <div class="nt">解消する指摘 / 文言の根拠 / 実装メモ</div>
+      <ul>
+        <li><b>解消</b>: <b>J6-1</b>(登録済みユーザーがアカウントを切り替えられない = 切替確認が到達不能コードだった)・J6-2・J1-2。</li>
+        <li><span class="mk">1</span> 登録済みの表示は<b>操作ではない</b>(タップできないタグ)。状態表示と破壊的操作を同じ部品に兼務させない(廃止D-1 の廃止理由そのもの)。</li>
+        <li><span class="mk">2</span> <b>切替とサインアウトを 1 つのボタンに畳まない</b>(改善方向 J6-1)。家族で端末を共有して使い分ける(E15 §2.4 ケース 4 の想定用途)が、「一度サインアウトして入り直す」以外の手段で成立する。</li>
+        <li><span class="mk">3</span> 破壊的操作は<b>画面の最下部</b>に置き、主要な操作(なまえ・ていあん)と距離を取る。1 画面 1 主役(デザインシステム §4)の主役はこの画面では「なまえ」。</li>
+        <li><b>件数の取得中・取得失敗</b>: B-1 と同じ規則(取得元も同じ)。認証操作は件数の取得完了を待たない。</li>
+        <li><b>実装</b>: どちらも押した先は <code>Dialog</code>。<code>window.confirm</code> は使わない(廃止D-3・J6-3)。</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- C-1 -->
+  <div class="cell">
+    <h3>C-1. なまえ入力 <span class="chip">§5.4 行6 / N-7</span></h3>
+    <div class="frame">
+      <div class="statusbar"><span>9:41</span><span class="icons"><i></i><i></i><i></i></span></div>
+      <div class="appbar"><span class="back">←</span> なまえ</div>
+      <div class="body">
+        <div class="field">
+          <div class="counterrow" style="margin-bottom:4px;">
+            <span style="font-size:12px; font-weight:700;">なまえ <span class="mk">1</span></span>
+            <span class="c">3 / 10 <span class="mk">2</span></span>
+          </div>
+          <div class="input filled">ゆうた</div>
+        </div>
+        <div class="btn primary">これにする <span class="mk">3</span></div>
+        <div class="cap" style="text-align:center;">(設計注記)保存できたらアカウント画面へもどる。トーストは出さない <span class="mk">4</span></div>
+      </div>
+    </div>
+    <div class="notes">
+      <div class="nt">解消する指摘 / 文言の根拠 / 実装メモ</div>
+      <ul>
+        <li><b>解消</b>: J8-2(サーバーは実装済みなのに Web に改名手段がない)。N-7。</li>
+        <li><b>入口と戻り先は 1 つ</b>: この画面へ来るのは<b>アカウント画面(B-1 / B-2)の「なまえをかえる」からだけ</b>で、保存しても中断しても<b>アカウント画面へ戻る</b>。DLG-1(確認ダイアログ)の「かえる」は<b>この画面へ遷移しない</b> — ダイアログ内のインライン編集で完結させる(C1)。認証の途中で独立画面へ抜けると、ダイアログが閉じてフローが切れるため。<b>入力欄・カウンタ・検証・エラー文言はダイアログ側と共通</b>にする。</li>
+        <li><b>接続未確立のとき</b>(<code>connection ≠ ready</code>): <code>user:rename</code> は Socket 経由なので送れない。A-5 と同じ規則で、<b>「これにする」を押せない状態にし、理由の 1 行をボタンの下流に出す</b>(「サーバーとつながるまでちょっとまってね」)。入力自体は許可し、値は保持する。</li>
+        <li><span class="mk">1</span> ここだけはラベルを置く。画面に入力欄が 1 つしかなくても、<code>AppBar</code> のタイトルと入力欄の間に何もないと「何を入れる欄か」が形から読めない。ただし説明文(「10文字までで入力してください」)は<b>置かない</b> — カウンタと重複する(原則 2・3、§5.6)。</li>
+        <li><span class="mk">2</span> カウンタは提案フォームと同じ流儀(<code>countCodePoints</code> で「n / 上限」、超過分は入力時に切り詰め)。<b>コードポイント数え</b>である点が重要で、<code>String.length</code> では絵文字で食い違う。</li>
+        <li><span class="mk">3</span> <b>現在値をプリセットして開く</b>(空で開かない)。「変える」操作であることが形で分かり、うっかり空のまま保存する事故も減る(§5.6)。ボタンは「保存」ではなく「これにする」— 常体・ひらがな主体(U-3)。</li>
+        <li><span class="mk">4</span> <b>成功トーストは出さない</b>。なまえは「その場に状態が残る」典型で、アカウント行の表示が変わることが確認そのもの(原則 3)。N-4 補足 1 の例外条件(一度きり・不可逆・戻った先に主体がない)をどれも満たさない。</li>
+        <li><b>実装</b>: <code>Field</code> + <code>Button</code>。送信は <code>user:rename</code>。検証は <code>protocol.ts</code> の 3 条件をそのまま写す(足さない・緩めない。J8-4)。</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- C-2 -->
+  <div class="cell">
+    <h3>C-2. なまえ入力のエラー(3 条件) <span class="chip">§5.4 行7</span></h3>
+    <div class="frame">
+      <div class="statusbar"><span>9:41</span><span class="icons"><i></i><i></i><i></i></span></div>
+      <div class="appbar"><span class="back">←</span> なまえ</div>
+      <div class="body">
+        <div class="statelabel">① trim 後 0 文字(空・スペースだけ)</div>
+        <div class="field">
+          <div class="counterrow" style="margin-bottom:4px;"><span style="font-size:12px; font-weight:700;">なまえ</span><span class="c">0 / 10</span></div>
+          <div class="input bad">&nbsp;</div>
+          <div class="errmsg" style="margin-top:4px;">なまえをいれてね <span class="mk">1</span></div>
+        </div>
+        <div class="btn off primary">これにする</div>
+
+        <div class="statelabel">② 10 コードポイントに到達(11 文字目が入らない状態)</div>
+        <div class="field">
+          <div class="counterrow" style="margin-bottom:4px;"><span style="font-size:12px; font-weight:700;">なまえ</span><span class="c max">10 / 10 <span class="mk">2</span></span></div>
+          <div class="input filled">だいふごうたろうさん</div>
+        </div>
+
+        <div class="statelabel">③ 制御文字(改行・タブなど)</div>
+        <div class="field">
+          <div class="counterrow" style="margin-bottom:4px;"><span style="font-size:12px; font-weight:700;">なまえ</span><span class="c">4 / 10</span></div>
+          <div class="input bad">ゆう↵た</div>
+          <div class="errmsg" style="margin-top:4px;">つかえない文字がはいってるよ <span class="mk">3</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="notes">
+      <div class="nt">解消する指摘 / 文言の根拠 / 実装メモ</div>
+      <ul>
+        <li><b>解消</b>: J8-4(名前の制約がクライアントに存在しない)。3 条件は <code>protocol.ts:206-219</code> と 1 対 1 に対応する。</li>
+        <li><span class="mk">1</span> エラーは<b>入力欄の下流にその場で</b>出す(原則 1 の位置テスト、§3「短くしすぎてはいけないもの」= エラー文言)。ボタンは無効化し、色だけに頼らず枠の太さでも異常を示す(デザインシステム §6「色だけに頼らない」)。</li>
+        <li><span class="mk">2</span> <b>②にエラー文言は無い</b>。提案フォームと同じく入力時に <code>clampCodePoints</code> で切り詰めるので、貼り付けを含めて 11 文字目が入らず、<b>「11 文字以上」という状態自体が発生しない</b>。上の絵はその<b>上限に到達した状態</b>で、<b>カウンタが 10 / 10 で止まること</b>だけが上限の伝達手段になる(原則 3「状態で伝える」)。<code>protocol.ts</code> の 10 コードポイント条件はサーバー側の最後の砦として残るが、UI からは到達しない。</li>
+        <li><span class="mk">3</span> 制御文字(<code>code &lt;= 31</code>・<code>code === 127</code>)。どの文字が悪いかは特定せず、やり直せることだけ伝える。絵文字・全角は<b>通す</b>(サーバーが許しているものを UI で狭めない。J8-4)。</li>
+        <li><b>実装</b>: 検証関数は core 側に置き、提案フォームが <code>validateProposal</code> を共有しているのと同じ流儀にする。</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- C-3 -->
+  <div class="cell">
+    <h3>C-3. なまえの保存中・保存失敗 <span class="chip">§5.4 行8</span></h3>
+    <div class="frame">
+      <div class="statusbar"><span>9:41</span><span class="icons"><i></i><i></i><i></i></span></div>
+      <div class="appbar"><span class="back">←</span> なまえ</div>
+      <div class="body">
+        <div class="statelabel">保存中(<code>user:rename</code> の ack 待ち)</div>
+        <div class="field">
+          <div class="counterrow" style="margin-bottom:4px;"><span style="font-size:12px; font-weight:700;">なまえ</span><span class="c">3 / 10</span></div>
+          <div class="input">ゆうた</div>
+        </div>
+        <div class="btn off primary">ほぞん中… <span class="mk">1</span></div>
+
+        <div class="statelabel">保存失敗(<code>BAD_PAYLOAD</code> / <code>INTERNAL</code> / <code>NOT_IN_ROOM</code> / <code>ROOM_CLOSED</code>)</div>
+        <div class="field">
+          <div class="counterrow" style="margin-bottom:4px;"><span style="font-size:12px; font-weight:700;">なまえ</span><span class="c">3 / 10</span></div>
+          <div class="input filled">ゆうた</div>
+          <div class="errmsg" style="margin-top:4px;">ほぞんできなかった。もういちどためしてね <span class="mk">2</span></div>
+        </div>
+        <div class="btn primary">これにする</div>
+      </div>
+    </div>
+    <div class="notes">
+      <div class="nt">解消する指摘 / 文言の根拠 / 実装メモ</div>
+      <ul>
+        <li><b>解消</b>: §5.4「名前の保存中・保存失敗」。</li>
+        <li><span class="mk">1</span> 処理中はボタンのラベルを変える(提案フォームの「送信中…」と同じ流儀)。入力欄は編集不可にするが<b>値は消さない</b>。</li>
+        <li><span class="mk">2</span> 失敗は<b>4 種類とも同じ 1 文</b>にする。ユーザーの取る行動(もう一度押す)がどれも同じで、原因を分けても判断が変わらないため。<b>入力値は保持</b>し、そのまま再送できるようにする。</li>
+        <li><b>ここはトーストにもモーダルにもしない</b>: 画面に入力欄がある = ガイドと DS が言う「その場のフォームエラー」がそのまま成立する唯一の場所(Q-5 の衝突はここでは起きない)。</li>
+        <li><b>接続未確立(<code>connection ≠ ready</code>)は「保存失敗」ではない</b>: 送る前に分かるので、A-5 と同じ規則で<b>ボタンを押せない状態にして理由を下流に出す</b>(「サーバーとつながるまでちょっとまってね」)。送ったあとに切れた場合だけ、上の保存失敗と同じ 1 文になる。DLG-1 のインライン編集でも同じ規則を使う。</li>
+        <li><b>実装</b>: <code>NOT_IN_ROOM</code> / <code>ROOM_CLOSED</code> は部屋にいるときだけ起きるが、永続化は部屋の外でも走る(<code>socket-gateway.ts:664</code>)ので、メニューからの改名は部屋の状態に関係なく成立する。</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- DLG-1 -->
+  <div class="cell">
+    <h3>DLG-1. 確認ダイアログ「Googleでつなぐ」 <span class="chip">§5.4 行9 / N-3・Q-6</span></h3>
+    <div class="frame">
+      <div class="statusbar"><span>9:41</span><span class="icons"><i></i><i></i><i></i></span></div>
+      <div class="modalbg" style="padding:14px;">
+        <div class="behind">(アカウント画面 B-1 / 提案画面 G-2 / 誘い F-2 のうえにモーダル表示)</div>
+        <div class="modal">
+          <h4>Googleでつなぐ</h4>
+          <p>ほかの端末でも、おなじなまえ・おなじていあんであそべるようになるよ。<span class="mk">1</span></p>
+          <p>Googleのがめんにうつるけど、おわったらここにもどるよ。うけとるのはGoogleのIDだけ。メールもなまえももらわないよ。<span class="mk">2</span></p>
+          <div class="box" style="background:var(--g1);">
+            <div class="cap">このなまえでつなぐよ</div>
+            <div class="row" style="align-items:center; margin-top:4px;">
+              <span style="font-size:15px; font-weight:700; flex:1.4;">ゆうた</span>
+              <div class="btn small">かえる <span class="mk">3</span></div>
+            </div>
+          </div>
+          <div class="btn primary">Googleへすすむ <span class="mk">4</span></div>
+          <div class="btn small">やめる</div>
+        </div>
+        <div class="behind" style="margin-top:10px;">「かえる」を押した状態(ダイアログは閉じない)<span class="mk">3</span></div>
+        <div class="modal">
+          <h4>Googleでつなぐ</h4>
+          <div class="box" style="background:var(--g1);">
+            <div class="counterrow" style="margin-bottom:4px;">
+              <span style="font-size:12px; font-weight:700;">このなまえでつなぐよ</span>
+              <span class="c">3 / 10</span>
+            </div>
+            <div class="input filled">ゆうた</div>
+            <div class="row" style="margin-top:6px;">
+              <div class="btn small">やめる</div>
+              <div class="btn small primary">これにする</div>
+            </div>
+          </div>
+          <div class="btn off primary">Googleへすすむ</div>
+          <div class="cap" style="text-align:center;">(設計注記)編集中はダイアログの「やめる」を出さない <span class="mk">3</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="notes">
+      <div class="nt">解消する指摘 / 文言の根拠 / 実装メモ</div>
+      <ul>
+        <li><b>解消</b>: J3-3(予告なく外部サイトへ全画面遷移する)・J6-3(<code>window.confirm</code>)・J8-3(既定名のまま登録まで進む)。N-3・廃止D-3。</li>
+        <li><span class="mk">1</span> <b>目的</b>を 1 文。「引き継ぎ」という設計語彙を使わず、得られる結果で言う。</li>
+        <li><span class="mk">2</span> <b>取るもの</b>と<b>戻ってくること</b>。AU-D5(<code>sub</code> のみ・スコープは <code>openid</code> だけ)を子どもにも分かる形で明示する。子どもも遊ぶプロダクトで、ラベルから予測できない Google アカウント選択画面へ全画面遷移させないための最小限(J3-3)。</li>
+        <li><span class="mk">3</span> <b>なまえの変更はダイアログの中で完結させる(インライン編集)</b>。C-1(独立画面)へ飛ばすと、<b>ダイアログが閉じて認証フローが切れ</b>、G-2・F-2 から来た人は一度も訪れていないアカウント画面に着地する。N-3 が言う「その場での変更」・§5.4 行6 はこの形で満たす。入力欄・カウンタ・エラーの仕様は C-1 / C-2 と<b>同一</b>(同じ <code>Field</code> と同じ検証を使い回す)。<b>編集中はダイアログの「やめる」を出さない</b> — 「やめる」が 2 つ並ぶと、編集をやめたいだけの人が認証フローごと閉じてしまう。<b>規則: 編集中に有効なのは編集の中の 2 ボタン(やめる / これにする)だけ</b>で、外側の「Googleへすすむ」は無効化、「やめる」は非表示にする(操作を 1 本に保つのは同じ規律)。</li>
+        <li><b>なぜここに置くか(Q-6 = B)</b>: なまえが恒久化されるのはこの瞬間なので、ここでだけ促す(§5.6 の推奨)。ダイアログは<b>ボタンを押したあと</b>に出るので、説明の位置は操作の下流(原則 1 の位置テスト)。既定名(ゲスト000001)のときは、A-1 と同じ控えめスタイルで出す。</li>
+        <li><span class="mk">4</span> 押下で <code>POST /api/auth/begin</code> → <code>location.href</code>。<b>ここが認証実行の唯一の入口</b>で、アカウント画面・提案画面・誘い Callout のどこから来ても同じダイアログ・同じ文言。</li>
+        <li><b>約束が成り立つのは <code>linked</code> のときだけ</b>(C3): <span class="mk">1</span> の「おなじなまえ・おなじていあんであそべる」と「このなまえでつなぐよ」は、<b>いまのきろくに Google を紐付ける</b>ケース(E15 §2.4 ケース1 = <code>linked</code>)の説明である。選んだ Google アカウントが既に別のきろくを持っていた場合(<code>switched</code>)は、なまえも提案もそちらのものに入れ替わり、この約束は外れる。<b>それを是正するのが RES-2 のダイアログ</b>(「この端末でまえにあそんでいたきろくは、もう見られないよ」)である。ここで両方の可能性を書き分けないのは、<code>sub</code> が begin の前に分からず、<b>起きるとは限らない結果の予告</b>になるため(原則 4)。</li>
+        <li><b>予告しない</b>(原則 4): 上と同じ理由で「別のアカウントだった場合はこの端末の記録が見えなくなる」は<b>ここでは言わない</b>。伝えるのは完了後(RES-2 / N-5・J5-2 の改善方向)。</li>
+        <li><b>実装</b>: <code>Dialog</code>。処理中はボタンを「すすんでいるところ…」+ <code>disabled</code>(A-4)。「これにする」は <code>user:rename</code> を送り、<b>ack を待ってからダイアログの表示名を差し替える</b>。ここで改名に失敗したときは C-3 と同じ 1 文をその場に出し、<b>認証フローは中断しない</b>(古いなまえのまま「Googleへすすむ」に進める)。</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- DLG-2 -->
+  <div class="cell">
+    <h3>DLG-2. 確認ダイアログ「べつのアカウントにする」 <span class="chip">§5.4 行10 / N-2・E15 §2.4 ケース4+2</span></h3>
+    <div class="frame">
+      <div class="statusbar"><span>9:41</span><span class="icons"><i></i><i></i><i></i></span></div>
+      <div class="modalbg">
+        <div class="behind">(アカウント画面 B-2 のうえにモーダル表示)</div>
+        <div class="modal">
+          <h4>べつのアカウントにする</h4>
+          <p>この端末は、えらんだGoogleアカウントのきろくにきりかわるよ。<span class="mk">1</span></p>
+          <p>いまの「ゆうた」のきろくは消えないよ。またおなじGoogleでつなげばもどってくるよ。<span class="mk">2</span></p>
+          <div class="btn primary">Googleへすすむ</div>
+          <div class="btn small">やめる</div>
+        </div>
+      </div>
+    </div>
+    <div class="notes">
+      <div class="nt">解消する指摘 / 文言の根拠 / 実装メモ</div>
+      <ul>
+        <li><b>解消</b>: J6-3(<code>window.confirm</code> = ガイド §3 部品テスト違反。OS ダイアログはオリジン表示も書体もアプリの外側になる)・J6-1。廃止D-3。</li>
+        <li><span class="mk">1</span> 現行文言「別のアカウントでログインすると、この端末はそのアカウントに切り替わります」を常体・ひらがな主体に置き換え(U-3、デザインシステム §4 文言 Do)。<b>言っている内容は変えない</b>。</li>
+        <li><span class="mk">2</span> <b>登録済みユーザーは何も失わない</b>ことを 1 文で言う。ここは<b>予告ではなく事実</b>で、この操作をすると必ずそうなる(原則 4 が禁じているのは「起きるとは限らない結果の予告」)。<b>この画面が扱う分岐は 2 つある</b> — 選んだ Google アカウントがまだどのきろくにも結び付いていなければ E15 §2.4 <b>ケース 4</b>(現行行に触れず新規行を作成)、既に別のきろくで登録済みなら <b>ケース 2</b>(その既存行に切り替わる)。<b>どちらでも「いまのきろくは消えず、またつなげば戻る」は成り立つ</b>ので、画面の文言は 1 種類でよい(完了後は RES-2 の S-b に合流する)。</li>
+        <li><b>注意</b>: 上の文は<b>登録済みユーザー専用</b>。未登録ユーザーが DLG-1 から入って switched になった場合は事情が逆(匿名の記録が戻らない = RES-2 の S-a)なので、そちらは完了後に別の文言で伝える。この 2 つを同じ文言にしない。</li>
+        <li><b>実装</b>: <code>Dialog</code>。<code>App.tsx:661-668</code> の到達不能だった確認をここへ移し、入口(B-2)を作ることで初めて到達可能になる。</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- DLG-3 -->
+  <div class="cell">
+    <h3>DLG-3. 確認ダイアログ「サインアウト」 <span class="chip">§5.4 行11 / N-2</span></h3>
+    <div class="frame">
+      <div class="statusbar"><span>9:41</span><span class="icons"><i></i><i></i><i></i></span></div>
+      <div class="modalbg">
+        <div class="behind">(アカウント画面 B-2 のうえにモーダル表示)</div>
+        <div class="modal">
+          <h4>サインアウト</h4>
+          <p>この端末からきろくがはなれて、あたらしいゲストになるよ。<span class="mk">1</span></p>
+          <p>きろくは消えないよ。またGoogleでつなげばもどってくるよ。<span class="mk">2</span></p>
+          <div class="btn primary">サインアウトする</div>
+          <div class="btn small">やめる</div>
+        </div>
+      </div>
+    </div>
+    <div class="notes">
+      <div class="nt">解消する指摘 / 文言の根拠 / 実装メモ</div>
+      <ul>
+        <li><b>解消</b>: J6-2(無確認の 1 タップでログアウトでき、しかもそのボタンが状態表示を兼ねていた)。共有端末で他人に 1 タップでサインアウトさせられる状態を潰す。N-2(サインアウトはアカウント画面が持つ操作の 1 つ)。</li>
+        <li><span class="mk">1</span> 起きることを 1 文。「ログアウトしました」という事後の敬体報告(§3.2)ではなく、事前の常体。</li>
+        <li><span class="mk">2</span> <b>救いを同じ画面に置く</b>(デザインシステム §3.2 のイエローカードと同じ規律。ガイド §3「<code>Dialog</code> — 罰の内容と救いを必ず同じ画面に」)。これがないと、子どもには「消える」と読める。</li>
+        <li><b>実装</b>: <code>Dialog</code>。確定後は localStorage の <code>daifugo.userToken</code> を消して新規匿名として再接続(E15 §2.7)。サーバー側の失効はなし(v1)。</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- RES-1 -->
+  <div class="cell">
+    <h3>RES-1. 完了(linked / already)= トースト <span class="chip">§5.4 行12 / N-4</span></h3>
+    <div class="frame">
+      <div class="statusbar"><span>9:41</span><span class="icons"><i></i><i></i><i></i></span></div>
+      <div class="body">
+        <div class="statelabel">outcome = linked(ケース1: 匿名だった人が登録)</div>
+        <div class="acct">
+          <span class="nm">ゆうた</span>
+          <span class="tag dark">どの端末でも <span class="mk">1</span></span>
+          <span class="chev">›</span>
+        </div>
+        <div class="ph" style="height:60px;"><span>メニュー(以下は既存のまま)</span></div>
+        <div class="toast" style="margin-top:6px;">Googleとつないだよ <span class="mk">2</span></div>
+
+        <div class="statelabel">outcome = already(ケース3: おなじアカウントで再ログイン)</div>
+        <div class="acct">
+          <span class="nm">ゆうた</span>
+          <span class="tag dark">どの端末でも</span>
+          <span class="chev">›</span>
+        </div>
+        <div class="toast" style="margin-top:6px;">もうつないであるよ <span class="mk">3</span></div>
+      </div>
+    </div>
+    <div class="notes">
+      <div class="nt">解消する指摘 / 文言の根拠 / 実装メモ</div>
+      <ul>
+        <li><b>解消</b>: J3-2(成功したことがどこにも出ない経路がある)・J4-2(裸の <code>&lt;p&gt;</code>)・J4-3(消えない)・J5-1(3 outcome が同じ「おかえり!」)。N-4・廃止D-2。</li>
+        <li><span class="mk">1</span> <b>確認の本体はバッジの変化</b>(原則 3)。トーストは「外部サイトを往復して戻った直後、いま何が起きたかを言う主体が画面にいない」ことへの補いで、<b>状態表示の代わりではない</b>(N-4 補足 1)。</li>
+        <li><span class="mk">2</span> トーストを許す 3 条件をすべて満たす: 一度きりで繰り返し確かめられない / 取り消しに別操作が要る / ページごと作り直されて「押したボタン」が残らない。<b>3 秒で退場</b>(DS §5-13)。</li>
+        <li><span class="mk">3</span> <code>already</code> を「おかえり!」と言わない(J5-1)。何も変わっていないので、変わっていないことを言う。</li>
+        <li><b>設置場所はアプリのルート</b>: <code>MenuScreen</code> の中に置くと、部屋が生きている経路で一度も描画されない(J3-2 の直接の原因)。</li>
+        <li><b>実装</b>: <code>Toast</code> + 退場タイマー(新規)。<code>authMessage</code> を <code>MenuScreen</code> へ渡す現行構造は廃止。</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- RES-2 -->
+  <div class="cell">
+    <h3>RES-2. 完了(switched)= ダイアログ 2 種 <span class="chip">§5.4 行12 / N-5・J5-2</span></h3>
+    <div class="frame">
+      <div class="statusbar"><span>9:41</span><span class="icons"><i></i><i></i><i></i></span></div>
+      <div class="modalbg" style="padding:14px 14px;">
+        <div class="behind">S-a: <b>直前が匿名</b>だった端末で switched になった</div>
+        <div class="modal">
+          <h4>おかえり、ゆうた</h4>
+          <p>この端末でまえにあそんでいたきろくは、もう見られないよ。<span class="mk">1</span></p>
+          <div class="btn primary">わかった</div>
+        </div>
+        <div class="behind" style="margin-top:10px;">S-b: <b>直前が登録済み</b>だった端末で switched になった</div>
+        <div class="modal">
+          <h4>べつのアカウントにきりかわったよ</h4>
+          <p>いまは「はると」のきろくであそんでいるよ。<span class="mk">2</span></p>
+          <div class="btn primary">わかった</div>
+        </div>
+      </div>
+    </div>
+    <div class="notes">
+      <div class="nt">解消する指摘 / 文言の根拠 / 実装メモ</div>
+      <ul>
+        <li><b>解消</b>: <b>J5-2</b>(匿名の記録が放棄されることが一切示されない)・J5-1(「おかえり!」が切替にも出る)。N-5。</li>
+        <li><b>分岐の基準は「直前の自分の状態」であって E15 のケース番号ではない</b>(C2): E15 §2.4 の<b>ケース 2 は「<code>sub</code> が登録済み」だけが条件</b>で、そのとき自分が匿名だったか登録済みだったかは問わない。<b>ケース 4 は「<code>sub</code> が未登録 + 自分は別の <code>sub</code> で登録済み → 新規ユーザー行を作成」</b>である。クライアントが begin の前に覚えておけるのは<b>自分が登録済みだったかどうか</b>だけなので、出し分けの軸もそれにする。対応関係は次のとおり。
+          <ul style="margin-left:14px;">
+            <li><b>S-a(直前が匿名)</b> = ケース 2 のうち匿名から入った場合。<b>失うものがある</b>(この端末の匿名の記録)ので、そのことを言う。</li>
+            <li><b>S-b(直前が登録済み)</b> = ケース 4 の全部 + ケース 2 のうち登録済みから別の既存アカウントへ入った場合。<b>失うものはない</b>(前のきろくは残り、またつなげば戻る)ので、どこへ入ったかだけを言う。</li>
+          </ul>
+        </li>
+        <li><b>なぜ成功系なのにダイアログか(Q-8・コントローラー承認済み)</b>: レビュー §5.4 行12 は「成功系 = <code>Toast</code>」だが、<code>switched</code> だけ <code>Dialog</code> に変えている(裁定は §5 の Q-8)。S-a は<b>取り返しのつかない事実</b>(AU-D3: マージなし。直前の匿名セッションへ戻る手段はない)を伴い、3 秒で消えるトーストでは見落とす。S-b は失うものが無いが、<b>誰のきろくに入ったか</b>を取り違えると次の行動が全部ずれるため同じ扱いにし、2 つを 1 つの部品で揃えた。Q-5 でモーダルを採ったのと同じ判断基準(<b>次の理解が必要なものは消さない</b>)。<b>代替案</b>: S-b だけトーストにする(部品の使い分けが増える)。</li>
+        <li><span class="mk">1</span> <b>事前予告ではなく完了後に言う</b>(原則 4)。<code>sub</code> は begin の前に分からないため、ログイン前には「起きるとは限らない結果の予告」にしかならない(J5-2 の改善方向)。DLG-1 の「おなじなまえ・おなじていあんであそべる」という約束が外れるのはこの経路で、<b>この 1 文がその是正である</b>(C3)。</li>
+        <li><span class="mk">2</span> S-b は「おかえり」ではない(J5-1)。誰のきろくに入ったのかを名前で言い切る。</li>
+        <li><b>表示する名前は <code>complete</code> が返す <code>displayName</code> をそのまま使う</b>: クライアント側で組み立てない。<b>ケース 4 では新しいユーザー行が作られる</b>ため、ここに出るのは<b>発番されたばかりの既定名(「ゲスト00000E」など)</b>になりうる。その場合この画面が<b>既定名を目にする最初の瞬間</b>になるので、閉じた先のアカウント行は A-1 と同じ控えめな未設定スタイルで出る(Q-6 = B の範囲内。ここで改名を促す文は足さない)。</li>
+        <li><b>実装</b>: <code>Dialog</code>。閉じるとメニューへ。アカウント行の名前・マイ提案の中身はすでに新しいアカウントのものに入れ替わっている(状態が主、ダイアログは補い)。出し分けは begin 直前の <code>registered</code> をクライアントが保持するだけで足り、<b>サーバー変更は不要</b>。</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- RES-3 -->
+  <div class="cell">
+    <h3>RES-3. 失敗 = ダイアログ(Q-5 の仮決め) <span class="chip">§5.4 行13 / N-4・Q-5</span></h3>
+    <div class="frame">
+      <div class="statusbar"><span>9:41</span><span class="icons"><i></i><i></i><i></i></span></div>
+      <div class="modalbg" style="padding:14px 14px;">
+        <div class="behind">expired / state 不一致 / ott 二重使用・期限切れ(410)</div>
+        <div class="modal">
+          <h4>とちゅうで時間がすぎちゃった</h4>
+          <p>もういちどためせばだいじょうぶだよ。<span class="mk">1</span></p>
+          <div class="btn primary">もういちど <span class="mk">2</span></div>
+          <div class="btn small">とじる</div>
+        </div>
+        <div class="behind" style="margin-top:10px;">503 auth_unavailable(OAuth 未設定)</div>
+        <div class="modal">
+          <h4>いまはつなげないみたい</h4>
+          <p>すこしたってからためしてね。<span class="mk">3</span></p>
+          <div class="btn primary">とじる</div>
+        </div>
+        <div class="behind" style="margin-top:10px;">denied(自分でやめた)</div>
+        <div class="modal" style="background:var(--g2); border-style:dashed;">
+          <p style="text-align:center; color:var(--g5);">何も出さない <span class="mk">4</span></p>
+        </div>
+      </div>
+    </div>
+    <div class="notes">
+      <div class="nt">解消する指摘 / 文言の根拠 / 実装メモ</div>
+      <ul>
+        <li><b>解消</b>: J4-1(失敗すると白い画面に生 JSON が出て戻れない)・J4-4(3 原因に 1 文言)。N-4。</li>
+        <li><b>Q-5 の仮決め = モーダル</b>。理由は冒頭 §5 の表のとおり(DS §5-13 の明文・入力欄がないので「その場のフォームエラー」に落とせない・「もういちど」というボタンが要る)。<b>裁定が逆になったら E15 §2.8 ではなく本書を直す</b>。裁定後は負けた側の文書に読み替えノートを入れる。</li>
+        <li><span class="mk">1</span> ガイド §3「短くしすぎてはいけないもの」= エラー文言。<b>何が起きて何をすればいいか</b>は書く。「期限切れ」はやり直せば直ることを言う(J4-4 の改善方向)。</li>
+        <li><span class="mk">2</span> 「もういちど」は DLG-1 のダイアログを開き直す(いきなり Google へ飛ばさない)。</li>
+        <li><span class="mk">3</span> 503 はユーザーの操作では直らないので「もういちど」を出さない。ボタンの有無で復旧可能性を伝える(原則 3「形で伝える」)。</li>
+        <li><b>begin が 401(トークン無効)のときは画面を出さない</b>(E15 §2.8): セッション再取得は既存フローが持っているので、再取得 → 自動で再試行する。ユーザーの操作は要らず、見せるものもない。再取得しても失敗したときだけ、上の「とちゅうで時間がすぎちゃった」と同じダイアログに合流させる(原因を分けてもユーザーの取る行動が変わらないため)。</li>
+        <li><span class="mk">4</span> <b>denied は失敗として出さない</b>(J4-4)。自分でやめた操作を「うまくいかなかった」と言われるのは、事実として誤りで、かつ責められている感触になる。匿名のまま黙って続行する。</li>
+        <li><b>前提(重要)</b>: このダイアログが表示されるには、認証開始を隠しフォーム POST から <code>POST /api/auth/begin</code> + <code>location.href</code> に差し替える必要がある(廃止D-6)。現行実装のままだと 503・401 はブラウザに生 JSON として出て、アプリに戻ってこない。サーバー変更は不要。</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- F-1 -->
+  <div class="cell">
+    <h3>F-1. セットリザルト(登録導線を廃止) <span class="chip">§5.4 行18 / Q-1=B・廃止D-5</span></h3>
+    <div class="frame">
+      <div class="statusbar"><span>9:41</span><span class="icons"><i></i><i></i><i></i></span></div>
+      <div class="appbar">セットリザルト(全3戦)</div>
+      <div class="body">
+        <div class="ph" style="height:150px;"><span>総合順位・順位の推移(既存のまま)</span></div>
+        <div class="ph" style="height:110px;"><span>おもしろかった? / 発動ルールの評価(既存のまま)</span></div>
+        <div class="btn primary">もう1セットあそぶ</div>
+        <div class="btn small">ホームへ <span class="goto">→ F-2</span></div>
+        <div class="box" style="border-style:dashed; background:var(--g2);">
+          <div class="cap"><span class="mk">1</span> <b>ここに「きろくをのこす」は置かない</b>(削除)。設計注記であり実画面には出ない。</div>
+        </div>
+      </div>
+    </div>
+    <div class="notes">
+      <div class="nt">解消する指摘 / 文言の根拠 / 実装メモ</div>
+      <ul>
+        <li><b>解消</b>: <b>J3-1</b>(リザルトの登録誘導が対局中のフルページ遷移を引き起こす)。廃止D-5。</li>
+        <li><span class="mk">1</span> <b>Q-1 = B</b>。リザルトは部屋の中(<code>room?.phase === 'setResult'</code>)であり、押した瞬間に OAuth へ遷移するとクライアント状態が壊れる。とくに <code>switched</code> になると<b>同席していた対局から黙って消える</b>。E15 §2.3(対局中は導線を出さない)と §2.7(リザルトで誘う)の衝突を、§2.3 側に倒して解消する。</li>
+        <li><b>代替案 A</b>(リザルトで気づかせ、メニューで実行させる)は導線が 2 段になり、「予約」という状態を 1 つ増やす。段が増えたぶんの脱落は推測で実測がない(レビュー §4.4)。登録率を観測できるようになったら再検討する。</li>
+        <li><b>評価送信の CTA は既存のまま</b>(「もう1セットあそぶ」)。評価は押した時点で送信済み(ガイド §2 Do/Don't)。</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- F-2 -->
+  <div class="cell">
+    <h3>F-2. 退室直後のメニュー(誘いは 1 枚だけ) <span class="chip">§5.4 行18 / Q-1=B・Q-2</span></h3>
+    <div class="frame">
+      <div class="statusbar"><span>9:41</span><span class="icons"><i></i><i></i><i></i></span></div>
+      <div class="body">
+        <div class="acct">
+          <span class="nm">ゆうた</span>
+          <span class="tag">この端末だけ</span>
+          <span class="chev">›</span>
+        </div>
+        <div class="ph" style="height: 64px;"><span>ロゴ(小)</span></div>
+        <div class="btn primary">あそぶ</div>
+        <div class="btn">ルールをていあんする</div>
+        <div class="btn">ルール図鑑</div>
+        <div class="row"><div class="btn small">マイ提案</div></div>
+        <div class="callout">
+          <span>きょうのきろく、のこしておく?Googleとつなぐと、ほかの端末でもつづきをあそべるよ。<span class="mk">1</span></span>
+          <div class="btn small">Googleでつなぐ <span class="goto">→ DLG-1</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="notes">
+      <div class="nt">解消する指摘 / 文言の根拠 / 実装メモ</div>
+      <ul>
+        <li><b>解消</b>: J3-1(実行を部屋の外へ出した)・J3-4(生涯 1 回の抑制が体験と逆向き)。</li>
+        <li><span class="mk">1</span> <b>Callout は 1 画面 1 枚</b>(ガイド §3)。メニューには他に Callout がないので成立する。<b>位置は画面の最下部</b> — 主要導線の上流に置かない(原則 1)。遊び終えた直後という、記録が実際に貯まった瞬間にだけ出す。</li>
+        <li><b>Q-2 の仮決め</b>: セットを遊び終えて退室したときに、<b>初回 + 以降 3 セットごと</b>。表示済みフラグは<b>実際に描画された時点</b>で立てる(現状は表示の直前に書かれるため、リザルトを一瞬で抜けても消費される。J3-4)。</li>
+        <li><b>ダイアログにしない</b>: 遊び終えた直後に操作を塞ぐと、次に遊ぶ人の邪魔になる。Callout なら無視できる。</li>
+        <li><b>押した先は DLG-1</b>(実行口は 1 つ)。アカウント画面を経由させない — 動機が最も強い瞬間に画面遷移を挟まない。</li>
+        <li><b>実装</b>: <code>Callout</code>(<code>action</code> つき)。表示条件は「未登録 && セット完了して退室 && 前回表示から 3 セット以上」。<code>AUTH_RESULT_PROMPT_KEY</code> の生涯 1 回フラグは廃止。</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- G-1 -->
+  <div class="cell">
+    <h3>G-1. 提案画面(未登録・枠あき) <span class="chip">§5.4 行19 / U-4・廃止D-4</span></h3>
+    <div class="frame">
+      <div class="statusbar"><span>9:41</span><span class="icons"><i></i><i></i><i></i></span></div>
+      <div class="appbar"><span class="back">←</span> ルールをていあんする</div>
+      <div class="body">
+        <div class="field">
+          <label>ルールの区分</label>
+          <div class="ph" style="height:34px;"><span>ローカル / オリジナル(既存のまま)</span></div>
+        </div>
+        <div class="field">
+          <label>あそんでいた都道府県(にんい)</label>
+          <div class="select"><span>埼玉県</span><span>▼</span></div>
+          <div class="cap">あそんでいた記録としてのこるよ <span class="mk">1</span></div>
+        </div>
+        <div class="field">
+          <div class="counterrow" style="margin-bottom:4px;"><span style="font-size:12px; font-weight:700;">ルール名</span><span class="c">0 / 40</span></div>
+          <div class="input">例: 8切り</div>
+        </div>
+        <div class="field">
+          <label>ルールの内容</label>
+          <div class="textarea">例: 8 を出すと場が流れて、出した人からもう一度はじまる。</div>
+        </div>
+        <div class="btn primary">ていあんを送る</div>
+        <div class="callout">ていあんはAIがたしかめて、わるい命令をまぜるとイエローカードになるよ。<span class="mk">2</span></div>
+      </div>
+    </div>
+    <div class="notes">
+      <div class="nt">解消する指摘 / 文言の根拠 / 実装メモ</div>
+      <ul>
+        <li><b>解消</b>: J7-1(Callout が 2 枚)・J7-2(未登録者への常設予告)・J7-3(トーン不統一)。U-4・廃止D-4。</li>
+        <li><b>常設 Callout を削除</b>(廃止D-4): 「とうろくしなくても 1 つずつ ていあんできるよ。Google とうろくすると…」は、<b>まだ起きていない制限の予告</b>(原則 4)。制限を知る必要が生じるのは枠が埋まった瞬間で、その瞬間には G-2 の専用パネルがある。枠の状態は「送信できる / できない」という結果が語る(原則 3)。</li>
+        <li><span class="mk">1</span> 都道府県の断り書きを<b>都道府県欄の下へ畳んだ</b>(J7-3)。画面末尾で言う必然性がなく、入力欄のすぐそばが正しい位置。デザインシステム §3.3 の非断定表現(「〜のルール」と断定しない)は維持。</li>
+        <li><span class="mk">2</span> 残す 1 枚を<b>1 文</b>にし、画面のほかの文言と同じ<b>常体・ひらがな主体</b>に揃えた(J7-3・U-3)。元は敬体・漢字主体の 3 文。</li>
+        <li><b>分かち書きを詰めた</b>(§3.3・デザインシステム §4 文言 Don't): 「ていあんは 1 つずつ」→「ていあんは1つずつ」。半角スペースでも見た目の効果は分かち書きと同じ。</li>
+        <li><b>未登録でもフォームを出す</b>(2026-07-30 改訂の匿名おためし枠)。E15 §2.7 の「未登録はフォーム非表示」は読み替え済み。</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- G-2 -->
+  <div class="cell">
+    <h3>G-2. 提案画面(未登録・枠うまり) <span class="chip">§5.4 行20 / U-4・J7-4</span></h3>
+    <div class="frame">
+      <div class="statusbar"><span>9:41</span><span class="icons"><i></i><i></i><i></i></span></div>
+      <div class="appbar"><span class="back">←</span> ルールをていあんする</div>
+      <div class="body">
+        <div class="box">
+          <div class="row" style="align-items:center;">
+            <span style="font-size:13px; font-weight:700; flex:1.6;">全員ダンス</span>
+            <span class="tag">審査中</span>
+            <span class="chev" style="color:var(--g5);">›</span>
+          </div>
+          <div class="cap" style="margin-top:4px;"><span class="mk">1</span> (設計注記)行ごとマイ提案への導線</div>
+        </div>
+        <div class="callout">
+          <span>ていあんは1つずつ。けっかが出たら、つぎをていあんできるよ。Googleとつなぐと、いくつでもていあんできるよ。<span class="mk">2</span></span>
+          <div class="btn small">Googleでつなぐ <span class="goto">→ DLG-1</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="notes">
+      <div class="nt">解消する指摘 / 文言の根拠 / 実装メモ</div>
+      <ul>
+        <li><b>解消</b>: J7-4(枠占有パネルにログイン以外の出口がない)・J7-2(同じことを 2 か所で言っていた片方を削除済み)。U-2。</li>
+        <li><span class="mk">1</span> <b>進行中の提案行そのものをマイ提案への導線にする</b>(J7-4 の改善方向)。いま出口は AppBar の戻るボタンと Callout のボタンだけだった。</li>
+        <li><span class="mk">2</span> ここは<b>制限を経験した瞬間</b>なので、制限とその外し方を言ってよい(原則 1 の「要求されたときだけ出す」に相当。予告ではなく現在の説明)。ラベルを §2 の語彙に統一した(「Googleでログイン」「Google とうろく」→「Googleでつなぐ」)。分かち書きの空白を詰めた。</li>
+        <li><b>Callout は 1 枚</b>: AI 確認の 1 文(G-1)はこの分岐では出さない。フォームが無い画面で「ていあんはAIがたしかめて…」を言っても、その提案はもう送れない。</li>
+        <li><b>押した先は DLG-1</b>。アカウント画面を経由させない(§3 の U-1 の読み方)。確認内容・文言は他経路と同一。</li>
+      </ul>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>
