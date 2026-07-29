@@ -1,9 +1,13 @@
 ---
 name: implement-rule
-description: Implement, resume, validate, or fail an approved Daifugo CX-02 rule job in the current Codex App session. Use when a developer asks to implement the next approved rule, resume a prepared job, submit generated rule files, handle CI, record a merge, or release the deployed rule.
+description: Implement, resume, validate, or fail an approved Daifugo CX-02 rule job in the current Codex App session. Use only when the user explicitly invokes `$implement-rule` or explicitly asks to use the `implement-rule` skill. Do not trigger for ordinary implementation, CI, merge, or release requests, even when they resemble this workflow.
 ---
 
 # Implement an approved rule
+
+Before taking any workflow action, confirm that the current user request
+explicitly invoked `$implement-rule` or asked to use the `implement-rule` skill.
+Otherwise, do not use this skill.
 
 Implement the rule in this Codex session. Use the pipeline CLI only for
 deterministic preparation, validation, Git/GitHub publication, and server state
