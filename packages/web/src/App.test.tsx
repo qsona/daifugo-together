@@ -409,6 +409,78 @@ describe('DS-02: フェーズ 1 の主要画面が 1 本の導線でつながる
   });
 });
 
+describe('画面のURLとリロード復帰', () => {
+  afterEach(() => {
+    cleanup();
+    window.history.replaceState({}, '', '/');
+    useScreenStore.setState({ current: 'title' });
+  });
+
+  it('通常画面の遷移にURLを割り当てる', async () => {
+    const user = userEvent.setup();
+    window.history.replaceState({}, '', '/');
+    useScreenStore.setState({ current: 'title' });
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: /はじめる/ }));
+    expect(window.location.pathname).toBe('/menu');
+
+    await user.click(
+      screen.getByRole('button', { name: 'ルールをていあんする' }),
+    );
+    expect(window.location.pathname).toBe('/proposals/new');
+  });
+
+  it('接続確定前の対局URLではタイトルへ戻さず復帰中と表示する', () => {
+    window.history.replaceState({}, '', '/rooms/room-1/game');
+    const connectingState: MultiplayerState = {
+      connection: 'connecting',
+      displayName: null,
+      room: null,
+      roomClosedReason: null,
+      error: null,
+    };
+    const client = {
+      subscribe: () => () => undefined,
+      snapshot: () => connectingState,
+    } as unknown as MultiplayerClient;
+
+    render(<App client={client} />);
+
+    expect(
+      screen.getByRole('heading', { name: '対局に戻っています' }),
+    ).toBeTruthy();
+    expect(screen.queryByRole('img', { name: KEY_VISUAL_NAME })).toBeNull();
+  });
+
+  it('再接続スナップショットから対局画面とURLを復元する', () => {
+    window.history.replaceState({}, '', '/rooms/tutorial-room/game');
+    render(
+      <App client={tutorialHintClient(tutorialHintRoom('community', []))} />,
+    );
+
+    expect(screen.getByRole('region', { name: '卓' })).toBeTruthy();
+    expect(window.location.pathname).toBe('/rooms/tutorial-room/game');
+  });
+
+  it('部屋内のルール画面もURLから復元する', () => {
+    window.history.replaceState({}, '', '/rooms/tutorial-room/rules');
+    render(
+      <App
+        client={tutorialHintClient({
+          ...tutorialHintRoom('community', []),
+          activeRules: [{ ruleId: 'r1', name: '8切り' }],
+        })}
+      />,
+    );
+
+    expect(
+      screen.getByRole('heading', { name: 'この対局のルール' }),
+    ).toBeTruthy();
+    expect(window.location.pathname).toBe('/rooms/tutorial-room/rules');
+  });
+});
+
 describe('RP-01: メニューからルール提案へ進む', () => {
   beforeEach(() => {
     useScreenStore.setState({ current: 'title' });

@@ -15,6 +15,7 @@ import type { GameRankView } from './components/GameRankRows';
 import type { SetRankView } from './components/SetRankRows';
 import type { TableSeat } from './components/Table';
 import { RuleCutIn, type RuleActivation } from './components/RuleCutIn';
+import { EmptyState } from './components/EmptyState';
 import type { SeatFinish } from './screens/GameScreen';
 import type { RuleVote, SetFunRating } from './screens/SetResultScreen';
 import {
@@ -52,6 +53,13 @@ import { SetResultScreen } from './screens/SetResultScreen';
 import { TitleScreen } from './screens/TitleScreen';
 import { WaitingRoomScreen } from './screens/WaitingRoomScreen';
 import { useScreenStore } from './store/screen';
+import {
+  navigate,
+  parseRoomRoute,
+  roomPath,
+  screenFromPathname,
+} from './routing';
+import screenStyles from './screens/screen.module.css';
 import { deriveCardHints } from './game/hints';
 import { FEATURES } from './features';
 import {
@@ -641,6 +649,53 @@ function ConnectedApp({
   >(null);
   const ruleCatalogApi = getBrowserRuleCatalogClient();
   const room = state.room;
+  const routeAtRender =
+    typeof window === 'undefined'
+      ? null
+      : parseRoomRoute(window.location.pathname);
+  const routedRoomOverlay =
+    room && routeAtRender?.roomId === room.roomId
+      ? routeAtRender.view === 'rules'
+        ? 'activeRules'
+        : routeAtRender.view === 'rule-dex'
+          ? 'ruleDex'
+          : null
+      : null;
+  const visibleRoomOverlay = roomOverlay ?? routedRoomOverlay;
+  const desiredRoomPath = room ? roomPath(room, visibleRoomOverlay) : null;
+
+  useEffect(() => {
+    if (desiredRoomPath) {
+      navigate(desiredRoomPath, 'replace');
+      return;
+    }
+    if (
+      state.connection === 'ready' &&
+      parseRoomRoute(window.location.pathname)
+    ) {
+      navigate('/menu', 'replace');
+      useScreenStore.setState({ current: 'menu' });
+    }
+  }, [desiredRoomPath, state.connection]);
+
+  useEffect(() => {
+    const restoreOverlayFromUrl = () => {
+      const route = parseRoomRoute(window.location.pathname);
+      if (!room || !route || route.roomId !== room.roomId) {
+        setRoomOverlay(null);
+        return;
+      }
+      setRoomOverlay(
+        route.view === 'rules'
+          ? 'activeRules'
+          : route.view === 'rule-dex'
+            ? 'ruleDex'
+            : null,
+      );
+    };
+    window.addEventListener('popstate', restoreOverlayFromUrl);
+    return () => window.removeEventListener('popstate', restoreOverlayFromUrl);
+  }, [room]);
   const evaluationSetId =
     room?.phase === 'setResult'
       ? (room.setResult?.setId ?? null)
@@ -938,21 +993,47 @@ function ConnectedApp({
         ? graduationFrom
         : null;
 
-  if (room && roomOverlay === 'activeRules') {
+  if (
+    !room &&
+    state.connection === 'connecting' &&
+    parseRoomRoute(window.location.pathname)
+  ) {
+    return (
+      <div className={screenStyles.screen}>
+        <main className={screenStyles.body}>
+          <EmptyState
+            title="対局に戻っています"
+            description="サーバーに再接続しています。少しだけお待ちください"
+          />
+        </main>
+      </div>
+    );
+  }
+
+  if (room && visibleRoomOverlay === 'activeRules') {
     return show(
       <ActiveRulesScreen
         rules={room.activeRules}
-        onBack={() => setRoomOverlay(null)}
-        onOpenDex={() => setRoomOverlay('ruleDex')}
+        onBack={() => {
+          navigate(roomPath(room), 'replace');
+          setRoomOverlay(null);
+        }}
+        onOpenDex={() => {
+          navigate(roomPath(room, 'ruleDex'));
+          setRoomOverlay('ruleDex');
+        }}
         showDexLink={FEATURES.ruleDex}
       />,
     );
   }
-  if (room && roomOverlay === 'ruleDex') {
+  if (room && visibleRoomOverlay === 'ruleDex') {
     return show(
       <RuleDexScreen
         api={ruleCatalogApi}
-        onBack={() => setRoomOverlay('activeRules')}
+        onBack={() => {
+          navigate(roomPath(room, 'activeRules'), 'replace');
+          setRoomOverlay('activeRules');
+        }}
       />,
     );
   }
@@ -977,7 +1058,10 @@ function ConnectedApp({
         onCopyInvite={() => {
           void navigator.clipboard?.writeText(room.inviteCode);
         }}
-        onViewRules={() => setRoomOverlay('activeRules')}
+        onViewRules={() => {
+          navigate(roomPath(room, 'activeRules'));
+          setRoomOverlay('activeRules');
+        }}
         onStart={() => {
           invoke(client.startRoom());
         }}
@@ -1030,7 +1114,10 @@ function ConnectedApp({
         canPlay={legalSelection}
         canPass={game.field.cards.length > 0}
         turnDeadlineAt={game.turn?.deadlineAt ?? null}
-        onViewRules={() => setRoomOverlay('activeRules')}
+        onViewRules={() => {
+          navigate(roomPath(room, 'activeRules'));
+          setRoomOverlay('activeRules');
+        }}
         onToggleCard={(id) => {
           setSelectedCardIds((ids) =>
             ids.includes(id) ? ids.filter((item) => item !== id) : [...ids, id],
@@ -1273,6 +1360,16 @@ export function App({
   storage?: PlayedBeforeStorage;
   evaluationApi?: EvaluationApi;
 } = {}) {
+  useEffect(() => {
+    const restoreScreenFromUrl = () => {
+      useScreenStore.setState({
+        current: screenFromPathname(window.location.pathname),
+      });
+    };
+    window.addEventListener('popstate', restoreScreenFromUrl);
+    return () => window.removeEventListener('popstate', restoreScreenFromUrl);
+  }, []);
+
   const effectiveClient =
     client === undefined
       ? import.meta.env.MODE === 'test'

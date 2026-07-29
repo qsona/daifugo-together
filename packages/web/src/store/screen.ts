@@ -1,9 +1,10 @@
 import { create } from 'zustand';
 
+import { navigate, screenFromPathname, screenPath } from '../routing';
+
 /**
- * 画面遷移。E12 §4.2 が「ルーティングは本ゲームに不要」としているため
- * ルータは入れず、Zustand の画面 state で切り替える(wireframes.html の 13 フレームに対応)。
- * フェーズ 2 の画面(4・6・7・8・9a・9b)は各機能 Epic が足す。
+ * 画面遷移。表示 state と History API の URL を同時に更新する。
+ * 部屋内の URL はサーバースナップショットに合わせて App 側で同期する。
  */
 export type ScreenId =
   | 'title'
@@ -23,8 +24,12 @@ type ScreenState = {
 };
 
 export const useScreenStore = create<ScreenState>((set) => ({
-  current: 'title',
+  current:
+    typeof window === 'undefined'
+      ? 'title'
+      : screenFromPathname(window.location.pathname),
   go: (screen) => {
+    navigate(screenPath(screen));
     set({ current: screen });
   },
 }));
