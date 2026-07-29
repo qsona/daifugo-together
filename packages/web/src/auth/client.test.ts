@@ -13,13 +13,11 @@ describe('AuthClient', () => {
         },
       ),
     );
-    const client = new AuthClient(
-      'https://game.example.test',
-      { getItem: () => 'current-secret-token' },
-      fetcher,
-    );
+    const client = new AuthClient('https://game.example.test', fetcher);
 
-    await expect(client.begin()).resolves.toBe('https://accounts.example.test');
+    await expect(client.begin('current-secret-token')).resolves.toBe(
+      'https://accounts.example.test',
+    );
     expect(fetcher).toHaveBeenCalledWith(
       'https://game.example.test/api/auth/begin',
       {
@@ -40,11 +38,7 @@ describe('AuthClient', () => {
         { status: 200, headers: { 'content-type': 'application/json' } },
       ),
     );
-    const client = new AuthClient(
-      'https://game.example.test',
-      { getItem: () => null },
-      fetcher,
-    );
+    const client = new AuthClient('https://game.example.test', fetcher);
 
     await expect(client.complete('one-time-code')).resolves.toMatchObject({
       outcome: 'switched',
@@ -60,7 +54,7 @@ describe('AuthClient', () => {
     expect(fetcher.mock.calls[0]?.[0]).not.toContain('one-time-code');
   });
 
-  it('storage取得が拒否されてもbegin画面を壊さない', async () => {
+  it('beginはlocalStorageではなく呼び出し元のlive tokenを使う', async () => {
     const fetcher = vi
       .fn<typeof fetch>()
       .mockResolvedValue(
@@ -69,20 +63,17 @@ describe('AuthClient', () => {
           { status: 200, headers: { 'content-type': 'application/json' } },
         ),
       );
-    const client = new AuthClient(
-      'https://game.example.test',
-      {
-        getItem: () => {
-          throw new Error('storage blocked');
-        },
-      },
-      fetcher,
-    );
+    const client = new AuthClient('https://game.example.test', fetcher);
 
-    await expect(client.begin()).resolves.toBe('https://accounts.example.test');
+    await expect(client.begin('live-socket-token')).resolves.toBe(
+      'https://accounts.example.test',
+    );
     expect(fetcher).toHaveBeenCalledWith(
       'https://game.example.test/api/auth/begin',
-      { method: 'POST', headers: {} },
+      {
+        method: 'POST',
+        headers: { authorization: 'Bearer live-socket-token' },
+      },
     );
   });
 });

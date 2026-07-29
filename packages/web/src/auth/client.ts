@@ -1,7 +1,3 @@
-import { getSafeLocalStorage } from '../browser-storage';
-
-const TOKEN_KEY = 'daifugo.userToken';
-
 export type AuthOutcome = 'linked' | 'switched' | 'already';
 
 export interface AuthCompleteResponse {
@@ -11,35 +7,23 @@ export interface AuthCompleteResponse {
 }
 
 export interface AuthApi {
-  begin(): Promise<string>;
+  begin(userToken: string): Promise<string>;
   complete(ott: string): Promise<AuthCompleteResponse>;
 }
 
 export class AuthClient implements AuthApi {
   readonly #baseUrl: string;
-  readonly #storage: Pick<Storage, 'getItem'>;
   readonly #fetch: typeof fetch;
 
-  constructor(
-    baseUrl: string,
-    storage: Pick<Storage, 'getItem'>,
-    fetcher: typeof fetch = fetch,
-  ) {
+  constructor(baseUrl: string, fetcher: typeof fetch = fetch) {
     this.#baseUrl = baseUrl;
-    this.#storage = storage;
     this.#fetch = fetcher;
   }
 
-  async begin(): Promise<string> {
-    let token: string | null = null;
-    try {
-      token = this.#storage.getItem(TOKEN_KEY);
-    } catch {
-      // Private browsing and storage policies must not break the login screen.
-    }
+  async begin(userToken: string): Promise<string> {
     const response = await this.#fetch(`${this.#baseUrl}/api/auth/begin`, {
       method: 'POST',
-      headers: token ? { authorization: `Bearer ${token}` } : {},
+      headers: { authorization: `Bearer ${userToken}` },
     });
     const body = (await response.json()) as {
       authUrl?: string;
@@ -65,9 +49,6 @@ export class AuthClient implements AuthApi {
 let browserClient: AuthClient | undefined;
 
 export function getBrowserAuthClient(): AuthClient {
-  browserClient ??= new AuthClient(
-    window.location.origin,
-    getSafeLocalStorage(window),
-  );
+  browserClient ??= new AuthClient(window.location.origin);
   return browserClient;
 }

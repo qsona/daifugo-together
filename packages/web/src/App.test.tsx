@@ -1977,4 +1977,69 @@ describe('AU-01: 認証完了のアプリ統合', () => {
     expect(window.location.hash).toBe('');
     expect(screen.getByRole('status').textContent).toBe('おかえり!');
   });
+
+  it('ログイン開始にはstorageではなく現在のsocket session tokenを渡す', async () => {
+    const user = userEvent.setup();
+    useScreenStore.setState({ current: 'menu' });
+    window.history.replaceState(null, '', '/menu');
+    const state: MultiplayerState = {
+      connection: 'ready',
+      registered: false,
+      displayName: 'ゲスト',
+      room: null,
+      roomClosedReason: null,
+      error: null,
+    };
+    const client = {
+      subscribe: () => () => undefined,
+      snapshot: () => state,
+      currentUserToken: () => 'live-socket-token',
+    } as unknown as MultiplayerClient;
+    const auth = {
+      begin: vi.fn(async () => {
+        throw new Error('stop_before_navigation');
+      }),
+      complete: vi.fn(),
+    };
+
+    render(<App client={client} auth={auth} />);
+    await user.click(
+      screen.getByRole('button', { name: '引き継ぎ・ログイン' }),
+    );
+
+    await waitFor(() =>
+      expect(auth.begin).toHaveBeenCalledWith('live-socket-token'),
+    );
+  });
+
+  it('socket session確立前はAPIを呼ばず待機案内を出す', async () => {
+    const user = userEvent.setup();
+    useScreenStore.setState({ current: 'menu' });
+    window.history.replaceState(null, '', '/menu');
+    const state: MultiplayerState = {
+      connection: 'connecting',
+      registered: false,
+      displayName: null,
+      room: null,
+      roomClosedReason: null,
+      error: null,
+    };
+    const client = {
+      subscribe: () => () => undefined,
+      snapshot: () => state,
+      currentUserToken: () => null,
+    } as unknown as MultiplayerClient;
+    const auth = {
+      begin: vi.fn(),
+      complete: vi.fn(),
+    };
+
+    render(<App client={client} auth={auth} />);
+    await user.click(
+      screen.getByRole('button', { name: '引き継ぎ・ログイン' }),
+    );
+
+    expect(auth.begin).not.toHaveBeenCalled();
+    expect(screen.getByRole('status').textContent).toContain('接続を確認中');
+  });
 });

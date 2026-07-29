@@ -30,6 +30,7 @@ export class MultiplayerClient {
   readonly #socket: MultiplayerSocket;
   readonly #storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
   readonly #listeners = new Set<Listener>();
+  #userToken: string | null;
   #state: MultiplayerState = {
     connection: 'connecting',
     displayName: null,
@@ -48,12 +49,14 @@ export class MultiplayerClient {
     ) => MultiplayerSocket = io,
   ) {
     this.#storage = storage;
+    this.#userToken = this.#readToken();
     this.#socket = socketFactory(url, {
-      auth: { userToken: this.#readToken() },
+      auth: { userToken: this.#userToken },
       transports: ['websocket', 'polling'],
       reconnection: true,
     });
     this.#socket.on('session:ready', (session) => {
+      this.#userToken = session.userToken;
       this.#writeToken(session.userToken);
       this.#socket.auth = { userToken: session.userToken };
       this.#state = {
@@ -108,6 +111,8 @@ export class MultiplayerClient {
     return () => this.#listeners.delete(listener);
   };
 
+  currentUserToken = (): string | null => this.#userToken;
+
   async createRoom(mode: RoomMode): Promise<void> {
     await this.#request((ack) =>
       this.#socket.emit('room:create', { mode }, ack),
@@ -156,6 +161,7 @@ export class MultiplayerClient {
   }
 
   switchSession(userToken: string | null): void {
+    this.#userToken = userToken;
     if (userToken === null) {
       this.#removeToken();
     } else {
