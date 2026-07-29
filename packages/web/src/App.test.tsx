@@ -1996,9 +1996,7 @@ describe('AU-01: 認証完了のアプリ統合', () => {
       currentUserToken: () => 'live-socket-token',
     } as unknown as MultiplayerClient;
     const auth = {
-      begin: vi.fn(async () => {
-        throw new Error('stop_before_navigation');
-      }),
+      begin: vi.fn(),
       complete: vi.fn(),
     };
 
