@@ -72,7 +72,7 @@ function close(persistence: SqlitePersistence): void {
   open.splice(open.indexOf(persistence), 1);
 }
 
-function seedMerged(
+function seedPrOpen(
   persistence: SqlitePersistence,
   ruleId = 'r0001-release',
   name = '公開ルール',
@@ -112,15 +112,30 @@ function seedMerged(
   persistence.pipeline.transitionJob(
     job.id,
     'queued',
-    'merged',
+    'pr_open',
     {
       prNumber: 42,
       headSha: 'a'.repeat(40),
-      mergeSha: 'c'.repeat(40),
     },
     1_300,
   );
   return { jobId: job.id, registration };
+}
+
+function seedMerged(
+  persistence: SqlitePersistence,
+  ruleId = 'r0001-release',
+  name = '公開ルール',
+): { jobId: number; registration: CodeRuleRegistration } {
+  const seeded = seedPrOpen(persistence, ruleId, name);
+  persistence.pipeline.transitionJob(
+    seeded.jobId,
+    'pr_open',
+    'merged',
+    { mergeSha: 'c'.repeat(40) },
+    1_400,
+  );
+  return seeded;
 }
 
 function registry(
@@ -137,6 +152,49 @@ function registry(
 }
 
 describe('CX-05 release persistence and provenance', () => {
+  it('起動後にmerge記録されたcodeをrelease status照会で再同期する', () => {
+    const persistence = createPersistence(databasePath());
+    const { jobId, registration } = seedPrOpen(persistence);
+    const service = registry(persistence, [registration]);
+
+    expect(service.synchronizeCodeRegistry()).toMatchObject({
+      registered: [],
+      versions: [],
+      failures: [
+        {
+          ruleId: 'r0001-release',
+          detail:
+            'release lifecycle state does not match: implementing/pr_open',
+        },
+      ],
+    });
+    expect(persistence.rules.get('r0001-release')).toBeNull();
+
+    persistence.pipeline.transitionJob(
+      jobId,
+      'pr_open',
+      'merged',
+      { mergeSha: 'c'.repeat(40) },
+      1_400,
+    );
+
+    expect(service.get('r0001-release')).toMatchObject({
+      status: 'found',
+      rule: {
+        status: 'disabled',
+        disabledReason: 'pending_enable',
+      },
+      versions: [
+        {
+          prNumber: 42,
+          mergeSha: 'c'.repeat(40),
+          bundleHash: 'b'.repeat(64),
+        },
+      ],
+      releaseReady: true,
+    });
+  });
+
   it('pending登録と初回enableを再起動越しに冪等・永続化する', () => {
     const path = databasePath();
     const first = createPersistence(path);

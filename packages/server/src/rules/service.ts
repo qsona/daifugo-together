@@ -388,6 +388,10 @@ export class RuleRegistryService {
   }
 
   get(ruleId: string): RuleControlResult {
+    // A deployment can start before the human-operated merge command records
+    // the PR as merged. Reconcile here as well as at startup so the release
+    // status poll can register code once that durable provenance is available.
+    this.synchronizeCodeRegistry();
     const rule = this.#repository.get(ruleId);
     return rule
       ? {
