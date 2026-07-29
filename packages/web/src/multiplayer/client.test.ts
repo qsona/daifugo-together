@@ -96,6 +96,7 @@ describe('MultiplayerClient', () => {
     socket.trigger('room:state', room(2));
 
     expect(values.get('daifugo.userToken')).toBe('persistent-token-0001');
+    expect(client.currentUserToken()).toBe('persistent-token-0001');
     expect(socket.auth).toEqual({ userToken: 'persistent-token-0001' });
     expect(client.snapshot().room?.v).toBe(3);
     expect(listener).toHaveBeenCalledTimes(1);
