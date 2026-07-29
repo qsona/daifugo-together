@@ -111,16 +111,20 @@ describe('production app server', () => {
     const ott = new URLSearchParams(new URL(location).hash.split('?')[1]).get(
       'ott',
     );
-    const completed = await fetch(`${baseUrl}/api/auth/complete`, {
+    const completed = await fetch(`${baseUrl}/auth/google/complete`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ ott }),
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ ott: ott ?? '' }),
+      redirect: 'manual',
     });
-    expect(completed.status).toBe(200);
-    await expect(completed.json()).resolves.toMatchObject({
-      outcome: 'linked',
-      userToken: session.userToken,
-    });
+    expect(completed.status).toBe(303);
+    expect(completed.headers.get('location')).toBe('/menu#/auth/result');
+    expect(completed.headers.get('location')).not.toContain(session.userToken);
+    expect(completed.headers.get('set-cookie')).toContain(
+      '__Secure-daifugo-auth-result=',
+    );
+    expect(completed.headers.get('set-cookie')).toContain('Path=/menu');
+    expect(completed.headers.get('set-cookie')).toContain('SameSite=Strict');
   });
 
   it('ブラウザのOAuth開始はtokenをURLへ載せずGoogleへredirectする', async () => {
