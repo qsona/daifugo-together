@@ -1,7 +1,7 @@
 # 設計: 匿名おためし提案枠(AU-D4 の緩和)
 
 - 作成日: 2026-07-30
-- 状態: 実装済み(2026-07-30。main 取り込み前)
+- 状態: 実装済み(2026-07-30)
 - 一次情報源: `docs/epics/E15-auth-account.md`(§1.2 AU-D4・§2.6・§2.7)/ `docs/epics/E05-rule-proposal.md`(§2.1・§3.1)/ `docs/epics/E06-injection-yellowcard.md`(§3.3(b) の旧決定)
 - 関連決定: decision-log G-14(提案ログイン必須)を本設計で緩和する
 

@@ -29,7 +29,8 @@
   - `9c15ff7` 設計差分と本記録
   - `93845cc` Prettier整形
   - `6cb1f76` 初回完了レビュー指摘の修正と実HTTP回帰テスト
-  - 最終レビュー記録は本コミット
+  - `664a144` 最終レビュー記録
+  - 最新のローカルmain・リモートmain統合と再検証記録は本コミット
 
 ### ユーザーストーリーの確認
 
@@ -37,7 +38,7 @@
 - `packages/server/src/proposal/proposal.test.ts` の実 `createAppServer` + `ProposalSubmissionService` HTTPテストで、枠占有後も同一内容再送は同じIDの200、不正入力は400、別内容は枠403、停止中は停止403になる順序を確認
 - 同テストで `screening` / `implementing` / `failed + attempt_count=0` の枠占有と、`attempt_count=1` の非占有を確認。`mine()` が同じ判定を `occupiesSlot` として返すことも固定
 - `packages/web/src/screens/ProposalFormScreen.test.tsx` で、未登録・枠空きのフォームと注記、枠埋まり時の進行中提案+状態+ログイン導線、送信競合時の403フォールバック、登録済みでは枠照会を行わないことを確認
-- `CI=true pnpm verify`: format / lint / AI boundary / design lint / typecheck / 全テスト / 全build成功(**100 files / 674 tests成功**)
+- 最新のローカルmainとリモートmainを統合後、`CI=true pnpm verify`: format / lint / AI boundary / design lint / typecheck / 全テスト / 全build成功(**100 files / 676 tests成功**)
 
 ### 独立完了レビュー
 
@@ -59,7 +60,7 @@
 
 | 内容 | 状態 |
 |---|---|
-| 全体のformat / lint / design lint / typecheck / test / build | Important修正後も成功(**100 files / 674 tests**) |
+| 全体のformat / lint / design lint / typecheck / test / build | 最新main統合後も成功(**100 files / 676 tests**) |
 | 375×812で未登録フォームと枠埋まりパネルを実画面確認 | Browser / Chromeともlocalhostをクライアント側で遮断したため未確認。自動UIテストは成功 |
 | 独立GPT-5.6 Sol完了レビュー | 同じレビュアーによる再レビューで `PASS / APPROVED`。Critical / Important / Minorなし |
 
