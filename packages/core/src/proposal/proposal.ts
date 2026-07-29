@@ -76,6 +76,8 @@ export interface ProposalListItem {
   popularity: number | null;
   priorityRank: number | null;
   unread: boolean;
+  /** 匿名おためし枠を占有中か（進行中述語をサーバーで評価した値）。 */
+  occupiesSlot: boolean;
   createdAt: number;
   statusChangedAt: number;
 }

@@ -55,6 +55,62 @@ const validBody = {
 };
 
 describe('ProposalSubmissionService', () => {
+  it('hasInflightは進行中述語で判定し、一覧にも枠占有を含める', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'proposal-inflight-'));
+    directories.push(directory);
+    const path = join(directory, 'db.sqlite');
+    const persistence = new SqlitePersistence(path, {
+      createUserId: () => 'inflight-author',
+      createToken: () => 'proposal-token-inflight',
+    });
+    instances.push(persistence);
+    const session = persistence.sessions.resolve(undefined);
+    persistence.auth.complete(session.userId, `test-${session.userId}`, 1);
+    const service = new ProposalSubmissionService(persistence.proposals, {
+      signals: NOOP_SIGNALS,
+    });
+    const repository = persistence.proposals;
+
+    expect(repository.hasInflight(session.userId)).toBe(false);
+    const submitted = await service.submit({
+      token: session.userToken,
+      ip: 'ip',
+      body: validBody,
+    });
+    if (submitted.status !== 200 || submitted.body.outcome !== 'accepted') {
+      throw new Error('expected accepted');
+    }
+    const proposalId = submitted.body.proposal.id;
+    expect(submitted.body.proposal.occupiesSlot).toBe(true);
+    expect(repository.hasInflight(session.userId)).toBe(true);
+
+    repository.transitionProposal(proposalId, 'screening', 'implementing');
+    expect(repository.hasInflight(session.userId)).toBe(true);
+
+    // C-5 では failed 遷移時に attempt_count=1 となるため、索引に残る
+    // legacy failed+attempt_count=0 の境界だけをDB行で直接再現する。
+    const sqlite = new Database(path);
+    sqlite
+      .prepare(
+        `UPDATE proposals
+         SET status = 'failed',
+             attempt_count = 0,
+             reason_code = 'implementation_failed',
+             reason_text = 'x'
+         WHERE id = ?`,
+      )
+      .run(proposalId);
+    expect(repository.hasInflight(session.userId)).toBe(true);
+    expect(repository.mine(session.userId).items[0]?.occupiesSlot).toBe(true);
+
+    sqlite
+      .prepare('UPDATE proposals SET attempt_count = 1 WHERE id = ?')
+      .run(proposalId);
+    sqlite.close();
+    expect(repository.hasInflight(session.userId)).toBe(false);
+    expect(repository.mine(session.userId).items[0]?.occupiesSlot).toBe(false);
+  });
+
   it('認証→停止→検証→重複→L0〜L2記録の順で処理する', async () => {
     const analyze = vi.fn(() => ({ commit: () => undefined }));
     const { persistence, session, service } = setup({

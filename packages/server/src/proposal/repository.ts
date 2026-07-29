@@ -128,6 +128,10 @@ function toListItem(row: ProposalRow, seenAt = 0): ProposalListItem {
     popularity: null,
     priorityRank: null,
     unread: row.status_changed_at > seenAt,
+    occupiesSlot:
+      row.status === 'screening' ||
+      row.status === 'implementing' ||
+      (row.status === 'failed' && row.attempt_count === 0),
     createdAt: row.created_at,
     statusChangedAt: row.status_changed_at,
   };
@@ -299,6 +303,21 @@ export class ProposalRepository {
       )
       .get(authorId, contentHash) as ProposalRow | undefined;
     return row ? toListItem(row) : null;
+  }
+
+  hasInflight(authorId: string): boolean {
+    const row = this.#sqlite
+      .prepare(
+        `SELECT 1 FROM proposals
+         WHERE author_id = ?
+           AND (
+             status IN ('screening', 'implementing')
+             OR (status = 'failed' AND attempt_count = 0)
+           )
+         LIMIT 1`,
+      )
+      .get(authorId);
+    return row !== undefined;
   }
 
   create(options: CreateStoredProposalOptions): ProposalListItem {

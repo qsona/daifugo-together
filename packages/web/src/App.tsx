@@ -115,6 +115,7 @@ const DEMO_PROPOSAL_API: ProposalApi = {
       popularity: null,
       priorityRank: null,
       unread: true,
+      occupiesSlot: true,
       createdAt: Date.now(),
       statusChangedAt: Date.now(),
     },
