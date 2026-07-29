@@ -393,16 +393,23 @@ table.spec th { background: var(--color-bg-subtle); white-space: nowrap; }
 /* ステッパー(提案ステータス) */
 .c-steps { display: flex; align-items: center; gap: var(--space-1); flex-wrap: wrap; }
 .c-steps .st {
+  display: inline-flex; align-items: center; gap: var(--space-1);
   font-size: var(--font-size-micro); font-weight: var(--font-weight-bold);
-  border: var(--border-control) solid var(--color-border-control);
-  border-radius: var(--radius-pill); padding: 3px 10px;
-  background: var(--color-bg-surface); color: var(--color-text-secondary); white-space: nowrap;
+  border: var(--border-control) solid transparent;
+  border-radius: var(--radius-pill); padding: 3px 10px; white-space: nowrap;
 }
-.c-steps .st.-done { background: var(--color-navy-800); border-color: var(--color-navy-800); color: var(--color-text-on-fill); }
-.c-steps .st.-now { background: var(--color-gold-400); border-color: var(--color-border-strong); color: var(--color-warning-ink); }
-.c-steps .st.-released { background: var(--color-green-700); border-color: var(--color-green-700); color: var(--color-text-on-fill); }
-.c-steps .st.-rejected { background: var(--color-red-600); border-color: var(--color-red-600); color: var(--color-text-on-fill); }
-.c-steps .ln { width: 12px; height: 2px; background: var(--color-navy-300); flex-shrink: 0; }
+.c-steps .st.-done { background: var(--color-bg-surface); border-color: var(--color-border-control); color: var(--color-text-secondary); }
+.c-steps .st.-pending { background: transparent; border-style: dashed; border-color: var(--color-navy-300); color: var(--color-text-secondary); }
+.c-steps .st.-now, .c-steps .st.-released, .c-steps .st.-rejected {
+  border-width: var(--border-bold); border-color: var(--color-border-strong);
+  font-size: var(--font-size-caption); padding: 5px 12px; box-shadow: var(--shadow-hard-s);
+}
+.c-steps .st.-now { background: var(--color-gold-400); color: var(--color-warning-ink); }
+.c-steps .st.-released { background: var(--color-green-700); color: var(--color-text-on-fill); }
+.c-steps .st.-rejected { background: var(--color-red-600); color: var(--color-text-on-fill); }
+.c-steps .st .mk { font-size: var(--font-size-micro); }
+.c-steps .ln { width: 12px; height: 2px; background: var(--color-navy-200); flex-shrink: 0; }
+.c-steps .ln.-passed { background: var(--color-navy-800); }
 .c-reason {
   margin-top: var(--space-2);
   border: var(--border-control) dashed var(--color-red-600);
@@ -1146,19 +1153,19 @@ table.spec th { background: var(--color-bg-subtle); white-space: nowrap; }
     <h3>5-9. 提案ステータスのステッパー</h3>
     <div class="panel" style="display:flex; flex-direction:column; gap:14px;">
       <div>
-        <div class="c-steps"><span class="st -done">審査中</span><span class="ln"></span><span class="st -done">実装中</span><span class="ln"></span><span class="st -released">リリース</span></div>
+        <div class="c-steps"><span class="st -done"><svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 5.5 4 8l4.5-6"/></svg>確認中</span><span class="ln -passed"></span><span class="st -done"><svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 5.5 4 8l4.5-6"/></svg>開発中</span><span class="ln -passed"></span><span class="st -released">あそべる</span></div>
       </div>
       <div>
-        <div class="c-steps"><span class="st -done">審査中</span><span class="ln"></span><span class="st -now">実装中</span><span class="ln"></span><span class="st">リリース</span></div>
+        <div class="c-steps"><span class="st -done"><svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 5.5 4 8l4.5-6"/></svg>確認中</span><span class="ln -passed"></span><span class="st -now"><span class="mk">いま</span>開発中</span><span class="ln"></span><span class="st -pending">あそべる</span></div>
       </div>
       <div>
-        <div class="c-steps"><span class="st -done">審査中</span><span class="ln"></span><span class="st -rejected">却下</span></div>
-        <div class="c-reason">却下理由: ゲームの成立を損なうため実装不可と判断しました。</div>
+        <div class="c-steps"><span class="st -done"><svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 5.5 4 8l4.5-6"/></svg>確認中</span><span class="ln -passed"></span><span class="st -rejected">見送り</span></div>
+        <div class="c-reason">見送りの理由: ゲームの成立を損なうため実装不可と判断しました。</div>
       </div>
       <div>
-        <div class="c-steps"><span class="st -done">審査中</span><span class="ln"></span><span class="st -done">実装中</span><span class="ln"></span><span class="st -rejected">実装失敗</span></div>
+        <div class="c-steps"><span class="st -done"><svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 5.5 4 8l4.5-6"/></svg>確認中</span><span class="ln -passed"></span><span class="st -done"><svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 5.5 4 8l4.5-6"/></svg>開発中</span><span class="ln -passed"></span><span class="st -rejected">開発できず</span></div>
       </div>
-      <div class="note">状態色: 通過済み=紺 / 進行中=金(注意=「いま動いている」)/ リリース=緑(成功)/ 却下・実装失敗=赤。理由ボックスは赤の破線枠で、審判の裁定ではなく実装可否の説明として淡く出す。</div>
+      <div class="note">現在地は状態を問わず「太枠・1段大きい文字・ベタ落ち影」で立てる(進行中=金 / あそべる=緑 / 見送り・開発できず=赤)。通過済みは白地の淡いチップに✓を付けて後退させ、未到達は塗りなしの破線。連結線は通過した区間だけ紺で塗る。色が見えなくても現在地が読めるよう、進行中には「いま」の語を添える。理由ボックスは赤の破線枠で、審判の裁定ではなく実装可否の説明として淡く出す。</div>
     </div>
 
     <h3>5-10. 高評価 / 低評価ボタン</h3>
