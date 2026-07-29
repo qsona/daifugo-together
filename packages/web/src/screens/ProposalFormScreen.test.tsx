@@ -17,7 +17,7 @@ afterEach(() => {
 });
 
 describe('ProposalFormScreen', () => {
-  it('区分と任意の都道府県を選んで提案し、審査中の結果を表示する', async () => {
+  it('区分と任意の都道府県を選んで提案し、確認中の結果を表示する', async () => {
     const user = userEvent.setup();
     const submit = vi.fn<ProposalApi['submit']>().mockResolvedValue({
       outcome: 'accepted',
@@ -57,7 +57,7 @@ describe('ProposalFormScreen', () => {
       name: '8切り',
       body: '8を出すと場が流れる。',
     });
-    expect((await screen.findByRole('status')).textContent).toBe('8切り審査中');
+    expect((await screen.findByRole('status')).textContent).toBe('8切り確認中');
   });
 
   it('オリジナルへ切り替えると都道府県入力を隠す', async () => {
@@ -174,7 +174,7 @@ describe('ProposalFormScreen', () => {
     expect(submit).toHaveBeenCalledOnce();
   });
 
-  it('攻撃らしい文面でも送信時は審査中として受け付ける', async () => {
+  it('攻撃らしい文面でも送信時は確認中として受け付ける', async () => {
     const user = userEvent.setup();
     const submit = vi.fn<ProposalApi['submit']>().mockResolvedValue({
       outcome: 'accepted',
@@ -204,7 +204,7 @@ describe('ProposalFormScreen', () => {
 
     await user.click(screen.getByRole('button', { name: '提案を送信する' }));
 
-    expect((await screen.findByRole('status')).textContent).toContain('審査中');
+    expect((await screen.findByRole('status')).textContent).toContain('確認中');
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 

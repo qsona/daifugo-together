@@ -11,52 +11,76 @@
 }
 
 .step {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
   font-size: var(--font-size-micro);
   font-weight: var(--font-weight-bold);
-  border: var(--border-control) solid var(--color-border-control);
+  border: var(--border-control) solid transparent;
   border-radius: var(--radius-pill);
   padding: 3px 10px;
-  background: var(--color-bg-surface);
-  color: var(--color-text-secondary);
   white-space: nowrap;
 }
 
-/* 通過済み=紺 */
 .done {
-  background: var(--color-navy-800);
-  border-color: var(--color-navy-800);
-  color: var(--color-text-on-fill);
+  background: var(--color-bg-surface);
+  border-color: var(--color-border-control);
+  color: var(--color-text-secondary);
 }
 
-/* 進行中=金(注意=「いま動いている」) */
+.pending {
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--color-navy-300);
+  color: var(--color-text-secondary);
+}
+
+.now,
+.released,
+.rejected {
+  border-width: var(--border-bold);
+  border-color: var(--color-border-strong);
+  font-size: var(--font-size-caption);
+  padding: 5px 12px;
+  box-shadow: var(--shadow-hard-s);
+}
+
 .now {
   background: var(--color-gold-400);
-  border-color: var(--color-border-strong);
   color: var(--color-warning-ink);
 }
 
-/* リリース=緑(成功) */
 .released {
   background: var(--color-green-700);
-  border-color: var(--color-green-700);
   color: var(--color-text-on-fill);
 }
 
-/* 却下・実装失敗=赤 */
 .rejected {
   background: var(--color-red-600);
-  border-color: var(--color-red-600);
   color: var(--color-text-on-fill);
+}
+
+.check,
+.nowLabel {
+  flex-shrink: 0;
+}
+
+.nowLabel {
+  font-size: var(--font-size-micro);
 }
 
 .line {
   width: 12px;
   height: 2px;
-  background: var(--color-navy-300);
+  background: var(--color-navy-200);
   flex-shrink: 0;
 }
 
-/* 審判の裁定ではなく実装可否の説明として淡く出す。 */
+.linePassed {
+  background: var(--color-navy-800);
+}
+
+/* 審判の裁定ではなく開発可否の説明として淡く出す。 */
 .reason {
   margin-top: var(--space-2);
   border: var(--border-control) dashed var(--color-red-600);

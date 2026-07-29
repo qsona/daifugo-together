@@ -277,7 +277,7 @@ export function ProposalFormScreen({
           {accepted && (
             <div className={styles.accepted} role="status">
               <span className={styles.acceptedName}>{accepted.name}</span>
-              <span className={styles.status}>審査中</span>
+              <span className={styles.status}>確認中</span>
             </div>
           )}
           {!accepted && !cardSummary?.suspension && (
@@ -286,7 +286,7 @@ export function ProposalFormScreen({
             </Button>
           )}
           <Callout>
-            提案はAIが審査します。不正な命令はイエローカードの対象です。都道府県は遊んでいた記録として残ります。
+            提案はAIが確認します。不正な命令はイエローカードの対象です。都道府県は遊んでいた記録として残ります。
           </Callout>
         </form>
       </main>

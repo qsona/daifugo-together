@@ -23,20 +23,12 @@
   font-size: var(--font-size-title-s);
 }
 
-.status,
 .unread {
   padding: var(--space-1) var(--space-2);
   border: var(--border-thin) solid var(--color-border-strong);
   border-radius: var(--radius-pill);
   font-size: var(--font-size-micro);
   font-weight: var(--font-weight-bold);
-}
-
-.status {
-  background: var(--color-cream-200);
-}
-
-.unread {
   background: var(--color-action-primary);
   color: var(--color-text-on-fill);
 }

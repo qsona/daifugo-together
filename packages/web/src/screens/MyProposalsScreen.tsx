@@ -16,11 +16,11 @@ import styles from './MyProposalsScreen.module.css';
 import screen from './screen.module.css';
 
 const STATUS_LABELS: Record<ProposalStatus, string> = {
-  screening: '審査中',
-  implementing: '実装中',
-  released: 'リリース',
-  rejected: '却下',
-  failed: '実装失敗',
+  screening: '確認中',
+  implementing: '開発中',
+  released: 'あそべる',
+  rejected: '見送り',
+  failed: '開発できず',
 };
 
 const REASON_LABELS: Record<string, string> = {
@@ -56,24 +56,24 @@ function dateLabel(timestamp: number): string {
 function statusSteps(status: ProposalStatus): ProposalStep[] {
   if (status === 'rejected') {
     return [
-      { label: '審査中', state: 'done' },
-      { label: '却下', state: 'rejected' },
+      { label: STATUS_LABELS.screening, state: 'done' },
+      { label: STATUS_LABELS.rejected, state: 'rejected' },
     ];
   }
   if (status === 'failed') {
     return [
-      { label: '審査中', state: 'done' },
-      { label: '実装中', state: 'done' },
-      { label: '実装失敗', state: 'rejected' },
+      { label: STATUS_LABELS.screening, state: 'done' },
+      { label: STATUS_LABELS.implementing, state: 'done' },
+      { label: STATUS_LABELS.failed, state: 'rejected' },
     ];
   }
   return [
     {
-      label: '審査中',
+      label: STATUS_LABELS.screening,
       state: status === 'screening' ? 'now' : 'done',
     },
     {
-      label: '実装中',
+      label: STATUS_LABELS.implementing,
       state:
         status === 'implementing'
           ? 'now'
@@ -82,7 +82,7 @@ function statusSteps(status: ProposalStatus): ProposalStep[] {
             : 'done',
     },
     {
-      label: 'リリース',
+      label: STATUS_LABELS.released,
       state: status === 'released' ? 'released' : 'pending',
     },
   ];
@@ -155,9 +155,6 @@ export function MyProposalsScreen({
             <article className={styles.card} key={item.id}>
               <div className={styles.heading}>
                 <h2>{item.name}</h2>
-                <span className={styles.status}>
-                  {STATUS_LABELS[item.status]}
-                </span>
                 {item.unread && <span className={styles.unread}>未読</span>}
               </div>
               <p className={styles.kind}>{kindLabel(item)}</p>
@@ -165,8 +162,9 @@ export function MyProposalsScreen({
               <p className={styles.body}>{item.body}</p>
               {reason && <p className={styles.reason}>{reason}</p>}
               <p className={styles.date}>
-                {item.status === 'released' ? 'リリース日' : '更新日'}:{' '}
-                {dateLabel(item.statusChangedAt)}
+                {item.status === 'released'
+                  ? `${dateLabel(item.statusChangedAt)} から ${STATUS_LABELS.released}`
+                  : `${dateLabel(item.statusChangedAt)} 更新`}
               </p>
               {item.status === 'released' && item.releasedRuleId && (
                 <p className={styles.ruleLink}>
