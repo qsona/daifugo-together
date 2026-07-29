@@ -6,6 +6,7 @@
 > - **リトライモデル(C-5 決定)**: E7 内包モデル。`failed → implementing` の遷移辺は削除。`failed` 遷移時に `attempt_count=1` を書いて再提案を解禁(§2.3 の取り決めを確定)。
 > - **`reason_code` の最終セット(C-6 決定)**: 却下系 = `infeasible_technical` / `breaks_game` / **`inappropriate`(新設。E6 遮断もここ)** / `duplicate_rule` / `out_of_scope` / `other`。実装失敗 = **`implementation_failed` の 1 値のみ**(§3.3 の候補 `codex_failed` / `ci_failed` / `retry_exhausted` は廃止。内部区分は E7 の `pipeline_jobs.error_code` に分離し、ユーザーには見せない)。
 > - RP-03 の文言は「反映まで数時間〜数日」の期待値で設計する(E07 §2.1)。
+> - **匿名おためし提案枠(2026-07-30)**: 投稿ゲートの「登録確認」は「匿名枠確認(進行中 1 件まで、403 `anonymous_inflight_limit`)」に置き換わる。順序は認証 → 停止 → 検証 → 重複(冪等返却)→ 枠 → 保存。詳細は `docs/specs/2026-07-30-anonymous-trial-proposal-design.md`。
 
 - 作成日: 2026-07-24
 - 状態: 承認済み(2026-07-27 開発者レビュー。C-2/E-18 の決定により、本文の送信時同期検査などの旧前提は冒頭の改訂反映ノートを正として読み替える)
