@@ -666,20 +666,20 @@ function ConnectedApp({
     ) {
       return;
     }
+    const userToken = client.currentUserToken();
+    if (state.connection !== 'ready' || !userToken) {
+      setAuthMessage('接続を確認中です。少し待ってからもう一度ためしてね');
+      return;
+    }
     setAuthPending(true);
     setAuthMessage(null);
-    void auth
-      .begin()
-      .then((authUrl) => window.location.assign(authUrl))
-      .catch((error: unknown) => {
-        setAuthPending(false);
-        setAuthMessage(
-          error instanceof Error && error.message === 'auth_unavailable'
-            ? 'いまは使えないみたい'
-            : 'うまくいかなかったみたい。もういちどためしてね',
-        );
-      });
-  }, [auth, state.registered]);
+    try {
+      auth.begin(userToken);
+    } catch {
+      setAuthPending(false);
+      setAuthMessage('うまくいかなかったみたい。もういちどためしてね');
+    }
+  }, [auth, client, state.connection, state.registered]);
   const routeAtRender =
     typeof window === 'undefined'
       ? null

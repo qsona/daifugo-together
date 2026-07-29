@@ -1,7 +1,3 @@
-import { getSafeLocalStorage } from '../browser-storage';
-
-const TOKEN_KEY = 'daifugo.userToken';
-
 export type AuthOutcome = 'linked' | 'switched' | 'already';
 
 export interface AuthCompleteResponse {
@@ -11,44 +7,43 @@ export interface AuthCompleteResponse {
 }
 
 export interface AuthApi {
-  begin(): Promise<string>;
+  begin(userToken: string): void;
   complete(ott: string): Promise<AuthCompleteResponse>;
 }
 
 export class AuthClient implements AuthApi {
   readonly #baseUrl: string;
-  readonly #storage: Pick<Storage, 'getItem'>;
   readonly #fetch: typeof fetch;
+  readonly #document: Document;
 
   constructor(
     baseUrl: string,
-    storage: Pick<Storage, 'getItem'>,
     fetcher: typeof fetch = fetch,
+    documentRef: Document = document,
   ) {
     this.#baseUrl = baseUrl;
-    this.#storage = storage;
     this.#fetch = fetcher;
+    this.#document = documentRef;
   }
 
-  async begin(): Promise<string> {
-    let token: string | null = null;
+  begin(userToken: string): void {
+    const form = this.#document.createElement('form');
+    form.method = 'POST';
+    form.action = `${this.#baseUrl}/auth/google/begin`;
+    form.hidden = true;
+
+    const token = this.#document.createElement('input');
+    token.type = 'hidden';
+    token.name = 'userToken';
+    token.value = userToken;
+    form.append(token);
+
+    this.#document.body.append(form);
     try {
-      token = this.#storage.getItem(TOKEN_KEY);
-    } catch {
-      // Private browsing and storage policies must not break the login screen.
+      form.submit();
+    } finally {
+      form.remove();
     }
-    const response = await this.#fetch(`${this.#baseUrl}/api/auth/begin`, {
-      method: 'POST',
-      headers: token ? { authorization: `Bearer ${token}` } : {},
-    });
-    const body = (await response.json()) as {
-      authUrl?: string;
-      error?: string;
-    };
-    if (!response.ok || !body.authUrl) {
-      throw new Error(body.error ?? 'auth_begin_failed');
-    }
-    return body.authUrl;
   }
 
   async complete(ott: string): Promise<AuthCompleteResponse> {
@@ -65,9 +60,6 @@ export class AuthClient implements AuthApi {
 let browserClient: AuthClient | undefined;
 
 export function getBrowserAuthClient(): AuthClient {
-  browserClient ??= new AuthClient(
-    window.location.origin,
-    getSafeLocalStorage(window),
-  );
+  browserClient ??= new AuthClient(window.location.origin);
   return browserClient;
 }
