@@ -26,7 +26,7 @@ export type ProposalSubmissionResult =
       body: { error: 'validation_failed'; fields: ProposalValidationError[] };
     }
   | { status: 401; body: { error: 'unauthorized' } }
-  | { status: 403; body: { error: 'registration_required' } }
+  | { status: 403; body: { error: 'anonymous_inflight_limit' } }
   | {
       status: 403;
       body: { error: 'proposal_suspended'; suspendedUntil: number };
@@ -35,7 +35,7 @@ export type ProposalSubmissionResult =
 export type ProposalAuthorizationResult =
   | { status: 204 }
   | { status: 401; body: { error: 'unauthorized' } }
-  | { status: 403; body: { error: 'registration_required' } }
+  | { status: 403; body: { error: 'anonymous_inflight_limit' } }
   | {
       status: 403;
       body: { error: 'proposal_suspended'; suspendedUntil: number };
@@ -92,8 +92,11 @@ export class ProposalSubmissionService implements ProposalSubmissionPort {
     if (!authorId) {
       return { status: 401, body: { error: 'unauthorized' } };
     }
-    if (!this.#repository.isRegistered(authorId)) {
-      return { status: 403, body: { error: 'registration_required' } };
+    if (
+      !this.#repository.isRegistered(authorId) &&
+      this.#repository.hasInflight(authorId)
+    ) {
+      return { status: 403, body: { error: 'anonymous_inflight_limit' } };
     }
     const suspendedUntil = this.#repository.suspendedUntil(authorId);
     if (suspendedUntil !== null && suspendedUntil > this.#now()) {
@@ -113,8 +116,9 @@ export class ProposalSubmissionService implements ProposalSubmissionPort {
     if (!input.token) return { status: 401, body: { error: 'unauthorized' } };
     const authorId = this.#repository.authorIdForToken(input.token);
     if (!authorId) return { status: 401, body: { error: 'unauthorized' } };
-    if (!this.#repository.isRegistered(authorId))
-      return { status: 403, body: { error: 'registration_required' } };
+    const slotOccupied =
+      !this.#repository.isRegistered(authorId) &&
+      this.#repository.hasInflight(authorId);
     const now = this.#now();
     const suspendedUntil = this.#repository.suspendedUntil(authorId);
     if (suspendedUntil !== null && suspendedUntil > now) {
@@ -137,6 +141,9 @@ export class ProposalSubmissionService implements ProposalSubmissionPort {
         status: 200,
         body: { outcome: 'accepted', proposal: duplicate },
       };
+    }
+    if (slotOccupied) {
+      return { status: 403, body: { error: 'anonymous_inflight_limit' } };
     }
     const signals = this.#signals.analyze(validated.value, authorId);
     try {

@@ -113,10 +113,11 @@ describe('ProposalSubmissionService', () => {
 
   it('認証→停止→検証→重複→L0〜L2記録の順で処理する', async () => {
     const analyze = vi.fn(() => ({ commit: () => undefined }));
+    let proposalSequence = 0;
     const { persistence, session, service } = setup({
       signals: { analyze },
       now: () => 1_000,
-      createId: () => 'ORDERED00000000000000000000',
+      createId: () => `ORDERED-${String(++proposalSequence)}`,
     });
 
     await expect(
@@ -132,9 +133,9 @@ describe('ProposalSubmissionService', () => {
         ip: 'ip',
         body: validBody,
       }),
-    ).resolves.toEqual({
-      status: 403,
-      body: { error: 'registration_required' },
+    ).resolves.toMatchObject({
+      status: 200,
+      body: { outcome: 'accepted' },
     });
     await expect(
       service.submit({
@@ -143,7 +144,7 @@ describe('ProposalSubmissionService', () => {
         body: { ...validBody, body: '' },
       }),
     ).resolves.toMatchObject({ status: 400 });
-    expect(analyze).not.toHaveBeenCalled();
+    expect(analyze).toHaveBeenCalledOnce();
 
     await expect(
       service.submit({
@@ -155,7 +156,7 @@ describe('ProposalSubmissionService', () => {
       status: 200,
       body: {
         outcome: 'accepted',
-        proposal: { id: 'ORDERED00000000000000000000' },
+        proposal: { id: 'ORDERED-2' },
       },
     });
     await service.submit({
@@ -163,7 +164,108 @@ describe('ProposalSubmissionService', () => {
       ip: 'ip',
       body: validBody,
     });
-    expect(analyze).toHaveBeenCalledOnce();
+    expect(analyze).toHaveBeenCalledTimes(2);
+  });
+
+  it('匿名は進行中1件まで提案でき、終端確定後に再び提案できる', async () => {
+    const { persistence, service } = setup();
+    const anonymous = persistence.sessions.resolve(undefined);
+
+    const first = await service.submit({
+      token: anonymous.userToken,
+      ip: 'ip',
+      body: validBody,
+    });
+    expect(first).toMatchObject({
+      status: 200,
+      body: { outcome: 'accepted' },
+    });
+
+    const second = await service.submit({
+      token: anonymous.userToken,
+      ip: 'ip',
+      body: { ...validBody, name: '11バック', body: 'Jで強さが逆になる。' },
+    });
+    expect(second).toEqual({
+      status: 403,
+      body: { error: 'anonymous_inflight_limit' },
+    });
+
+    if (first.status !== 200 || first.body.outcome !== 'accepted') {
+      throw new Error('expected accepted');
+    }
+    persistence.proposals.transitionProposal(
+      first.body.proposal.id,
+      'screening',
+      'rejected',
+      { reasonCode: 'out_of_scope', reasonText: 'x' },
+    );
+    const third = await service.submit({
+      token: anonymous.userToken,
+      ip: 'ip',
+      body: { ...validBody, name: '11バック', body: 'Jで強さが逆になる。' },
+    });
+    expect(third).toMatchObject({
+      status: 200,
+      body: { outcome: 'accepted' },
+    });
+  });
+
+  it('登録済みは進行中が複数あっても提案できる', async () => {
+    const { session, service } = setup();
+    const first = await service.submit({
+      token: session.userToken,
+      ip: 'ip',
+      body: validBody,
+    });
+    expect(first).toMatchObject({ status: 200 });
+    const second = await service.submit({
+      token: session.userToken,
+      ip: 'ip',
+      body: { ...validBody, name: '11バック', body: 'Jで強さが逆になる。' },
+    });
+    expect(second).toMatchObject({
+      status: 200,
+      body: { outcome: 'accepted' },
+    });
+  });
+
+  it('匿名の進行中同一内容の再送は枠拒否ではなく既存を返す', async () => {
+    const { persistence, service } = setup();
+    const anonymous = persistence.sessions.resolve(undefined);
+    const first = await service.submit({
+      token: anonymous.userToken,
+      ip: 'ip',
+      body: validBody,
+    });
+    const retry = await service.submit({
+      token: anonymous.userToken,
+      ip: 'ip',
+      body: validBody,
+    });
+    expect(retry.status).toBe(200);
+    if (first.status !== 200 || retry.status !== 200) {
+      throw new Error('expected 200');
+    }
+    if (first.body.outcome !== 'accepted' || retry.body.outcome !== 'accepted') {
+      throw new Error('expected accepted');
+    }
+    expect(retry.body.proposal.id).toBe(first.body.proposal.id);
+  });
+
+  it('authorizeも匿名枠で判定する', async () => {
+    const { persistence, service } = setup();
+    const anonymous = persistence.sessions.resolve(undefined);
+    expect(service.authorize(anonymous.userToken)).toEqual({ status: 204 });
+    await service.submit({
+      token: anonymous.userToken,
+      ip: 'ip',
+      body: validBody,
+    });
+    expect(service.authorize(anonymous.userToken)).toEqual({
+      status: 403,
+      body: { error: 'anonymous_inflight_limit' },
+    });
   });
 
   it('攻撃シグナルがあっても送信時は遮断せず審査中として保存する', async () => {
@@ -310,6 +412,36 @@ describe('ProposalSubmissionService', () => {
 });
 
 describe('proposal persistence constraints', () => {
+  it('匿名で枠が空いていても停止中ならproposal_suspendedで拒否される', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'proposal-anon-suspended-'));
+    directories.push(directory);
+    const path = join(directory, 'db.sqlite');
+    const persistence = new SqlitePersistence(path, {
+      createUserId: () => 'anon-suspended-author',
+      createToken: () => 'proposal-token-anon-suspd',
+    });
+    instances.push(persistence);
+    const session = persistence.sessions.resolve(undefined);
+    const sqlite = new Database(path);
+    sqlite
+      .prepare(
+        'UPDATE users SET proposal_suspended_until = ? WHERE user_id = ?',
+      )
+      .run(20_000, session.userId);
+    sqlite.close();
+    const service = new ProposalSubmissionService(persistence.proposals, {
+      now: () => 10_000,
+      signals: NOOP_SIGNALS,
+    });
+
+    await expect(
+      service.submit({ token: session.userToken, ip: 'ip', body: validBody }),
+    ).resolves.toEqual({
+      status: 403,
+      body: { error: 'proposal_suspended', suspendedUntil: 20_000 },
+    });
+  });
+
   it('停止期限列がある場合は検証やシグナル計算より先に403を返す', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'proposal-suspended-'));
     directories.push(directory);

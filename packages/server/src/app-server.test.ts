@@ -134,7 +134,7 @@ describe('production app server', () => {
           token === 'anonymous-token'
             ? {
                 status: 403 as const,
-                body: { error: 'registration_required' as const },
+                body: { error: 'anonymous_inflight_limit' as const },
               }
             : {
                 status: 401 as const,
@@ -175,7 +175,7 @@ describe('production app server', () => {
     });
     expect(unregistered.status).toBe(403);
     await expect(unregistered.json()).resolves.toEqual({
-      error: 'registration_required',
+      error: 'anonymous_inflight_limit',
     });
     expect(submit).not.toHaveBeenCalled();
   });
