@@ -94,6 +94,7 @@ async function createHarness(
         userId: string;
         userToken: string;
         displayName: string;
+        registered: boolean;
       };
     }
   >(http);

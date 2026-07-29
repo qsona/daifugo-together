@@ -13,6 +13,7 @@ kill_timeout = "300s"
   PORT = "8080"
   DATABASE_PATH = "/data/daifugo.sqlite"
   WEB_DIST_DIR = "/app/packages/web/dist"
+  PUBLIC_ORIGIN = "https://daifugo-together.fly.dev"
 
 # RoomStateはプロセス内、SQLiteは単一volume上にあるため、水平スケールしない。
 [http_service]

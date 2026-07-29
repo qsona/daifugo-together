@@ -34,11 +34,14 @@ import type {
 import type { RoomAction, RoomState, RoomTransition } from './room/types.js';
 import { ProposalRepository } from './proposal/repository.js';
 import { RuleRepository } from './rules/repository.js';
+import { AuthRepository } from './auth/repository.js';
 
 const users = sqliteTable('users', {
   userId: text('user_id').primaryKey(),
   userToken: text('user_token').notNull().unique(),
   displayName: text('display_name').notNull(),
+  googleSub: text('google_sub'),
+  registeredAt: integer('registered_at'),
   proposalsSeenAt: integer('proposals_seen_at'),
   createdAt: integer('created_at').notNull(),
 });
@@ -102,6 +105,7 @@ export class SqliteSessionStore implements SessionStore {
           userId: existing.userId,
           userToken: existing.userToken,
           displayName: existing.displayName,
+          registered: existing.googleSub !== null,
         };
       }
     }
@@ -110,12 +114,18 @@ export class SqliteSessionStore implements SessionStore {
         userId: this.#createUserId(),
         userToken: this.#createToken(),
         displayName: this.#createDisplayName(++this.#sequence),
+        registered: false,
       };
       if (session.userToken.length < 16) continue;
       try {
         this.#db
           .insert(users)
-          .values({ ...session, createdAt: Date.now() })
+          .values({
+            userId: session.userId,
+            userToken: session.userToken,
+            displayName: session.displayName,
+            createdAt: Date.now(),
+          })
           .run();
         return session;
       } catch (error) {
@@ -183,6 +193,7 @@ export class SqlitePersistence implements RoomPersistencePort {
   readonly #db: DrizzleDatabase;
   readonly sessions: SqliteSessionStore;
   readonly proposals: ProposalRepository;
+  readonly auth: AuthRepository;
   readonly injection: InjectionRepository;
   readonly operations: OperationsRepository;
   readonly evaluations: EvaluationRepository;
@@ -199,6 +210,8 @@ export class SqlitePersistence implements RoomPersistencePort {
         user_id TEXT PRIMARY KEY,
         user_token TEXT NOT NULL UNIQUE,
         display_name TEXT NOT NULL,
+        google_sub TEXT,
+        registered_at INTEGER,
         proposals_seen_at INTEGER,
         created_at INTEGER NOT NULL
       );
@@ -261,6 +274,16 @@ export class SqlitePersistence implements RoomPersistencePort {
         'ALTER TABLE users ADD COLUMN proposals_seen_at INTEGER',
       );
     }
+    if (!userColumns.some(({ name }) => name === 'google_sub')) {
+      this.#sqlite.exec('ALTER TABLE users ADD COLUMN google_sub TEXT');
+    }
+    if (!userColumns.some(({ name }) => name === 'registered_at')) {
+      this.#sqlite.exec('ALTER TABLE users ADD COLUMN registered_at INTEGER');
+    }
+    this.#sqlite.exec(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_sub
+        ON users(google_sub) WHERE google_sub IS NOT NULL;
+    `);
     const setResultColumns = this.#sqlite
       .prepare("PRAGMA table_info('set_results')")
       .all() as Array<{ name: string }>;
@@ -305,6 +328,7 @@ export class SqlitePersistence implements RoomPersistencePort {
         ON proposals(proposal_number);
     `);
     this.sessions = new SqliteSessionStore(this.#db, sessionOptions);
+    this.auth = new AuthRepository(this.#sqlite, this.sessions);
     this.proposals = new ProposalRepository(this.#sqlite);
     this.injection = new InjectionRepository(this.#sqlite);
     this.pipeline = new PipelineRepository(

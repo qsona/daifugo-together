@@ -1,10 +1,12 @@
 # E15: 引き継ぎ登録・ログイン(Google 紐付け)
 
 - 作成日: 2026-07-28
-- 状態: 提案(方式・主要決定は 2026-07-28 に開発者承認済み。詳細レビュー待ち)
+- 状態: 実装済み(独立完了レビュー GO。実 Google 受入確認待ち)
 - 一次情報源: `docs/epics/E12-tech-stack.md`(§4.9) / `docs/epics/E05-rule-proposal.md`(§3.1(b)) / `docs/epics/E06-injection-yellowcard.md`(§3.3(b)・§5.3) / `docs/epics/E03-multiplayer.md`(§匿名トークン) / 開発者との仕様検討セッション(2026-07-28)
 
 > **注意(実装済みコードとの関係)**: E05・E06・E12 の該当機能は本書の作成時点で**実装済み**である。本書は新規機能(Google 紐付け)の設計と、**実装済みコード・既存設計書への差分**(§4)を分けて書く。実装エージェントは §4 を作業リストとして使うこと。
+>
+> **2026-07-28 改訂**: §2.10 の「認可コードを URL クエリに載せない」を満たすため、Google callback を GET から `response_mode=form_post` の POST へ変更した。あわせて、OAuth を開始したブラウザを state に結び付ける HttpOnly nonce Cookie を追加した。
 
 ---
 
@@ -79,8 +81,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_sub ON users(google_sub) WHER
 
 | エンドポイント | 役割 |
 |---|---|
-| `POST /api/auth/begin` | Bearer(現端末のトークン)必須。`state`・PKCE verifier・現ユーザー ID をプロセス内ストア(TTL 10 分・単回)に保存し、`{ authUrl }` を返す。クライアントは `location.href = authUrl` で遷移 |
-| `GET /auth/google/callback` | Google からの戻り。`state` 照合 → code 交換 → ID トークン検証(`iss`/`aud`/署名/期限。openid-client の標準検証)→ `sub` で分岐(§2.4)→ 結果を ott ストア(TTL 60 秒・単回)に置き、`/#/auth/complete?ott=...` へリダイレクト(フラグメントなのでサーバーログに残らない) |
+| `POST /api/auth/begin` | Bearer(現端末のトークン)必須。`state`・PKCE verifier・現ユーザー ID・フロー nonce をプロセス内ストア(TTL 10 分・単回)に保存する。nonce は `__Host-daifugo-auth-flow` Cookie にも設定し、`{ authUrl }` を返す。クライアントは `location.href = authUrl` で遷移 |
+| `POST /auth/google/callback` | Google から `response_mode=form_post` で戻る。`state` とフロー nonce Cookie の照合 → code 交換 → ID トークン検証(`iss`/`aud`/署名/期限。openid-client の標準検証)→ `sub` で分岐(§2.4)→ 結果を ott ストア(TTL 60 秒・単回)に置き、`/#/auth/complete?ott=...` へリダイレクトする。Cookie は成功・失敗とも削除する |
 | `POST /api/auth/complete` | body の `ott` を引き換え、`{ outcome, userToken, displayName }` を返す。クライアントは localStorage を差し替えて Socket.IO を張り直す |
 
 - state ストア・ott ストアはプロセス内 Map で足りる(E12: 単一 Node プロセス)。再起動で消えるのは許容(やり直せばよい)。
@@ -149,12 +151,13 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_sub ON users(google_sub) WHER
 | `PUBLIC_ORIGIN` | コールバック URL の組み立てに使う(例 `https://daifugo-together.fly.dev`)。既存に同等設定があればそれを使う |
 
 - 未設定なら認証機能だけ無効(§2.8)。開発は FakeAuthProvider(§2.11)で進められるため、実クレデンシャルなしで全ストーリーが完了できる。
-- **開発者タスク**(実装エージェントの権限外。早めに依頼): Google Cloud Console でのクライアント作成、リダイレクト URI 登録(`http://localhost:<dev port>/auth/google/callback` と本番)、`fly secrets set`。
+- **開発者タスク**: [E15 Google OAuth 受入 runbook](../runbooks/E15-google-oauth.md)に従い、Google Auth Platform で Web client を作成し、リダイレクト URI (`http://localhost:3000/auth/google/callback` と `https://daifugo-together.fly.dev/auth/google/callback`)を登録して Fly secrets を設定する。
 
 ### 2.10 セキュリティ
 
-- CSRF: `state`(単回・TTL 10 分)。コード横取り: PKCE S256。ID トークン検証は openid-client の標準(署名・`iss`・`aud`・期限)。
-- `user_token`・認可コードを URL クエリに載せない(begin は POST、完了はフラグメント + 単回 ott)。
+- CSRF: `state`(単回・TTL 10 分)に加え、開始ブラウザだけが持つフロー nonce Cookie を照合する。Cookie は `HttpOnly; Secure; SameSite=None; Path=/` とし、callback の成功・失敗時に削除する。
+- コード横取り: PKCE S256。ID トークン検証は openid-client の標準(署名・`iss`・`aud`・期限)。
+- `user_token`・認可コードを URL クエリに載せない(begin は POST、Google callback は `form_post`、完了はフラグメント + 単回 ott)。
 - リダイレクト先は固定(`/#/auth/complete`)。open redirect なし。
 - 認証エンドポイントのレート制限は初期は設けない(Google 側の摩擦と state 単回性で足りる想定。悪用が見えたら §5)。
 
@@ -213,7 +216,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_sub ON users(google_sub) WHER
 | # | 対象 | 現状 | 変更 |
 |---|---|---|---|
 | 差分-1 | `packages/server` スキーマ(`persistence.ts`) | `users` に `google_sub` なし | §2.2 の 2 列 + 部分ユニークインデックスを既存の起動時マイグレーション方式で追加 |
-| 差分-2 | `packages/server` HTTP API(`app-server.ts`) | 認証エンドポイントなし | `POST /api/auth/begin`・`GET /auth/google/callback`・`POST /api/auth/complete` を追加(§2.3)。ログアウトはサーバー変更不要 |
+| 差分-2 | `packages/server` HTTP API(`app-server.ts`) | 認証エンドポイントなし | `POST /api/auth/begin`・`POST /auth/google/callback` (`response_mode=form_post`)・`POST /api/auth/complete` を追加(§2.3)。ログアウトはサーバー変更不要 |
 | 差分-3 | 投稿 API のゲート | 認証 → 停止確認 → …(E-18 反映済み) | 認証の直後に**登録確認(403 `registration_required`)**を挿入(§2.6)。読み取り系 API は変更なし |
 | 差分-4 | `packages/web` 提案画面 | 誰でもフォーム表示 | 未登録分岐(説明 + ログイン導線)。403 フォールバック(§2.7) |
 | 差分-5 | `packages/web` メニュー・リザルト | 認証 UI なし | 「引き継ぎ・ログイン」常設(対局中非表示)、リザルト後導線、ログアウト、完了ハンドラ(§2.7) |
@@ -255,6 +258,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_sub ON users(google_sub) WHER
 
 | # | 内容 | 期限 |
 |---|---|---|
-| AU-T1 | Google Cloud Console で OAuth クライアント作成・リダイレクト URI 登録(dev/本番)・`fly secrets set` | AU-01 の実 Google 通し確認まで(開発は Fake で先行可) |
+| AU-T1 | [E15 Google OAuth 受入 runbook](../runbooks/E15-google-oauth.md)に従い、Google Auth Platform の Web client・リダイレクト URI・Fly secrets を設定して実 Google を通す | 本番公開前 |
 | AU-T2 | リザルト後導線の表示頻度(初回のみ / N セットごと)の裁定 | AU-03 プロセス 1 の仮定を方向性レビューで裁定 |
 | AU-T3 | 文言の最終確認(UI 文言ガイドとの整合) | AU-03 完了レビュー |

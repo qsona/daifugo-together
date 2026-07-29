@@ -26,12 +26,23 @@ export type ProposalSubmissionResult =
       body: { error: 'validation_failed'; fields: ProposalValidationError[] };
     }
   | { status: 401; body: { error: 'unauthorized' } }
+  | { status: 403; body: { error: 'registration_required' } }
+  | {
+      status: 403;
+      body: { error: 'proposal_suspended'; suspendedUntil: number };
+    };
+
+export type ProposalAuthorizationResult =
+  | { status: 204 }
+  | { status: 401; body: { error: 'unauthorized' } }
+  | { status: 403; body: { error: 'registration_required' } }
   | {
       status: 403;
       body: { error: 'proposal_suspended'; suspendedUntil: number };
     };
 
 export interface ProposalSubmissionPort {
+  authorize(token: string | null): ProposalAuthorizationResult;
   submit(input: {
     token: string | null;
     ip: string;
@@ -73,18 +84,37 @@ export class ProposalSubmissionService implements ProposalSubmissionPort {
     this.#createId = options.createId ?? createUlid;
   }
 
+  authorize(token: string | null): ProposalAuthorizationResult {
+    if (!token) {
+      return { status: 401, body: { error: 'unauthorized' } };
+    }
+    const authorId = this.#repository.authorIdForToken(token);
+    if (!authorId) {
+      return { status: 401, body: { error: 'unauthorized' } };
+    }
+    if (!this.#repository.isRegistered(authorId)) {
+      return { status: 403, body: { error: 'registration_required' } };
+    }
+    const suspendedUntil = this.#repository.suspendedUntil(authorId);
+    if (suspendedUntil !== null && suspendedUntil > this.#now()) {
+      return {
+        status: 403,
+        body: { error: 'proposal_suspended', suspendedUntil },
+      };
+    }
+    return { status: 204 };
+  }
+
   async submit(input: {
     token: string | null;
     ip: string;
     body: unknown;
   }): Promise<ProposalSubmissionResult> {
-    if (!input.token) {
-      return { status: 401, body: { error: 'unauthorized' } };
-    }
+    if (!input.token) return { status: 401, body: { error: 'unauthorized' } };
     const authorId = this.#repository.authorIdForToken(input.token);
-    if (!authorId) {
-      return { status: 401, body: { error: 'unauthorized' } };
-    }
+    if (!authorId) return { status: 401, body: { error: 'unauthorized' } };
+    if (!this.#repository.isRegistered(authorId))
+      return { status: 403, body: { error: 'registration_required' } };
     const now = this.#now();
     const suspendedUntil = this.#repository.suspendedUntil(authorId);
     if (suspendedUntil !== null && suspendedUntil > now) {

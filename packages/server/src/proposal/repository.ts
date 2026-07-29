@@ -214,6 +214,13 @@ export class ProposalRepository {
     return row?.user_id ?? null;
   }
 
+  isRegistered(authorId: string): boolean {
+    const row = this.#sqlite
+      .prepare('SELECT google_sub FROM users WHERE user_id = ?')
+      .get(authorId) as { google_sub: string | null } | undefined;
+    return row?.google_sub !== null && row?.google_sub !== undefined;
+  }
+
   mine(authorId: string): MyProposalsResponse {
     const seenAt =
       (

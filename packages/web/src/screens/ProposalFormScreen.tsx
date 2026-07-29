@@ -37,9 +37,13 @@ function clampCodePoints(value: string, maximum: number): string {
 export function ProposalFormScreen({
   api,
   onBack,
+  registered = true,
+  onLogin,
 }: {
   api: ProposalApi;
   onBack: () => void;
+  registered?: boolean;
+  onLogin?: () => void;
 }) {
   const [kind, setKind] = useState<'local' | 'original'>('local');
   const [prefectureCode, setPrefectureCode] = useState('');
@@ -54,6 +58,7 @@ export function ProposalFormScreen({
   const [showCard, setShowCard] = useState(false);
   const [animateSuspension, setAnimateSuspension] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [registrationRequired, setRegistrationRequired] = useState(!registered);
   const shownCardIds = useRef(new Set<number>());
   const previousCardSummary = useRef<YellowCardSummary | null>(null);
 
@@ -155,6 +160,9 @@ export function ProposalFormScreen({
       setAccepted(response.proposal);
     } catch (error) {
       if (error instanceof ProposalApiError) {
+        if (error.status === 403 && error.code === 'registration_required') {
+          setRegistrationRequired(true);
+        }
         setErrors(error.fields);
         setMessage(error.message);
       } else {
@@ -164,6 +172,27 @@ export function ProposalFormScreen({
       setSubmitting(false);
     }
   };
+
+  if (registrationRequired) {
+    return (
+      <div className={screen.screen}>
+        <AppBar title="ルールをていあんする" onBack={onBack} />
+        <main className={screen.body}>
+          <Callout
+            action={
+              onLogin ? (
+                <Button size="small" onClick={onLogin}>
+                  Googleでログイン
+                </Button>
+              ) : undefined
+            }
+          >
+            提案するには引き継ぎ登録が必要です
+          </Callout>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className={screen.screen}>

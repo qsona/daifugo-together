@@ -8,12 +8,17 @@ import { io as createClient } from 'socket.io-client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createAppServer, type AppServer } from './app-server.js';
+import { FakeAuthProvider } from './auth/provider.js';
+import { AuthService } from './auth/service.js';
+import { SqlitePersistence } from './persistence.js';
 
 const apps: AppServer[] = [];
 const directories: string[] = [];
+const persistenceInstances: SqlitePersistence[] = [];
 
 afterEach(async () => {
   await Promise.all(apps.splice(0).map((app) => app.close()));
+  for (const persistence of persistenceInstances.splice(0)) persistence.close();
   for (const directory of directories.splice(0)) {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -45,6 +50,136 @@ function fetchText(url: string): Promise<{
 }
 
 describe('production app server', () => {
+  it('OAuth開始・callback・ott引換を同一originで提供する', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'daifugo-web-dist-'));
+    directories.push(directory);
+    const persistence = new SqlitePersistence(':memory:', {
+      createUserId: () => 'auth-user',
+      createToken: () => 'auth-user-token-valid',
+    });
+    persistenceInstances.push(persistence);
+    const session = persistence.sessions.resolve(undefined);
+    const provider = new FakeAuthProvider();
+    provider.setSubject('google-code', 'google-sub');
+    let value = 0;
+    const app = createAppServer({
+      webDistDir: directory,
+      auth: new AuthService(persistence.auth, {
+        provider,
+        publicOrigin: 'http://127.0.0.1',
+        createValue: () => `${String(++value)}-${'x'.repeat(64)}`,
+      }),
+    });
+    apps.push(app);
+    const port = await app.listen(0, '127.0.0.1');
+    const baseUrl = `http://127.0.0.1:${String(port)}`;
+
+    const begun = await fetch(`${baseUrl}/api/auth/begin`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${session.userToken}` },
+    });
+    expect(begun.status).toBe(200);
+    const flowCookie = begun.headers.get('set-cookie');
+    expect(flowCookie).toContain('__Host-daifugo-auth-flow=');
+    expect(flowCookie).toContain('HttpOnly');
+    expect(flowCookie).toContain('Secure');
+    expect(flowCookie).toContain('SameSite=None');
+    const { authUrl } = (await begun.json()) as { authUrl: string };
+    expect(new URL(authUrl).searchParams.get('response_mode')).toBe(
+      'form_post',
+    );
+    const state = new URL(authUrl).searchParams.get('state');
+    const callbackUrl = `${baseUrl}/auth/google/callback`;
+    expect(callbackUrl).not.toContain('code=');
+    const callback = await fetch(callbackUrl, {
+      method: 'POST',
+      headers: {
+        cookie: flowCookie?.split(';')[0] ?? '',
+        'content-type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        code: 'google-code',
+        state: state ?? '',
+      }),
+      redirect: 'manual',
+    });
+    expect(callback.status).toBe(302);
+    expect(callback.headers.get('set-cookie')).toContain('Max-Age=0');
+    const location = callback.headers.get('location') ?? '';
+    expect(location).not.toContain('google-code');
+    expect(location).not.toContain(session.userToken);
+    const ott = new URLSearchParams(new URL(location).hash.split('?')[1]).get(
+      'ott',
+    );
+    const completed = await fetch(`${baseUrl}/api/auth/complete`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ott }),
+    });
+    expect(completed.status).toBe(200);
+    await expect(completed.json()).resolves.toMatchObject({
+      outcome: 'linked',
+      userToken: session.userToken,
+    });
+  });
+
+  it('提案POSTはbody解析より認証・登録判定を先に行う', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'daifugo-web-dist-'));
+    directories.push(directory);
+    const submit = vi.fn();
+    const app = createAppServer({
+      webDistDir: directory,
+      proposals: {
+        authorize: (token) =>
+          token === 'anonymous-token'
+            ? {
+                status: 403 as const,
+                body: { error: 'registration_required' as const },
+              }
+            : {
+                status: 401 as const,
+                body: { error: 'unauthorized' as const },
+              },
+        submit,
+        mine: async () => ({
+          status: 401 as const,
+          body: { error: 'unauthorized' as const },
+        }),
+        seen: async () => ({
+          status: 401 as const,
+          body: { error: 'unauthorized' as const },
+        }),
+      },
+    });
+    apps.push(app);
+    const port = await app.listen(0, '127.0.0.1');
+    const baseUrl = `http://127.0.0.1:${String(port)}`;
+
+    const unauthorized = await fetch(`${baseUrl}/api/proposals`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{',
+    });
+    expect(unauthorized.status).toBe(401);
+    await expect(unauthorized.json()).resolves.toEqual({
+      error: 'unauthorized',
+    });
+
+    const unregistered = await fetch(`${baseUrl}/api/proposals`, {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer anonymous-token',
+        'content-type': 'application/json',
+      },
+      body: '{',
+    });
+    expect(unregistered.status).toBe(403);
+    await expect(unregistered.json()).resolves.toEqual({
+      error: 'registration_required',
+    });
+    expect(submit).not.toHaveBeenCalled();
+  });
+
   it('SPA fallbackを配信し、同じoriginでSocket.IO sessionを確立する', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'daifugo-web-dist-'));
     directories.push(directory);
@@ -201,6 +336,7 @@ describe('production app server', () => {
             userId: 'suspended-user',
             userToken: 'valid-token',
             displayName: '停止中プレイヤー',
+            registered: false,
           }),
           rename: () => true,
         },

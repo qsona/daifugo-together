@@ -31,12 +31,14 @@ function setup(
     createId?: (now: number) => string;
   } = {},
 ) {
+  let userSequence = 0;
   const persistence = new SqlitePersistence(':memory:', {
-    createUserId: () => 'author',
-    createToken: () => 'proposal-token-valid',
+    createUserId: () => `author-${String(++userSequence)}`,
+    createToken: () => `proposal-token-${String(userSequence)}`.padEnd(20, 'x'),
   });
   instances.push(persistence);
   const session = persistence.sessions.resolve(undefined);
+  persistence.auth.complete(session.userId, `test-${session.userId}`, 1);
   const service = new ProposalSubmissionService(persistence.proposals, {
     signals: options.signals ?? NOOP_SIGNALS,
     ...(options.now ? { now: options.now } : {}),
@@ -55,7 +57,7 @@ const validBody = {
 describe('ProposalSubmissionService', () => {
   it('認証→停止→検証→重複→L0〜L2記録の順で処理する', async () => {
     const analyze = vi.fn(() => ({ commit: () => undefined }));
-    const { session, service } = setup({
+    const { persistence, session, service } = setup({
       signals: { analyze },
       now: () => 1_000,
       createId: () => 'ORDERED00000000000000000000',
@@ -67,6 +69,17 @@ describe('ProposalSubmissionService', () => {
     await expect(
       service.submit({ token: 'unknown-token', ip: 'ip', body: validBody }),
     ).resolves.toMatchObject({ status: 401 });
+    const anonymous = persistence.sessions.resolve(undefined);
+    await expect(
+      service.submit({
+        token: anonymous.userToken,
+        ip: 'ip',
+        body: validBody,
+      }),
+    ).resolves.toEqual({
+      status: 403,
+      body: { error: 'registration_required' },
+    });
     await expect(
       service.submit({
         token: session.userToken,
@@ -193,6 +206,8 @@ describe('ProposalSubmissionService', () => {
     instances.push(persistence);
     const firstAuthor = persistence.sessions.resolve(undefined);
     const secondAuthor = persistence.sessions.resolve(undefined);
+    persistence.auth.complete(firstAuthor.userId, 'test-first-author', 1);
+    persistence.auth.complete(secondAuthor.userId, 'test-second-author', 1);
     const service = new ProposalSubmissionService(persistence.proposals, {
       signals: NOOP_SIGNALS,
       createId: () => `AUTHOR-${String(++proposalSequence)}`,
@@ -249,6 +264,7 @@ describe('proposal persistence constraints', () => {
     });
     instances.push(persistence);
     const session = persistence.sessions.resolve(undefined);
+    persistence.auth.complete(session.userId, `test-${session.userId}`, 1);
     const sqlite = new Database(path);
     sqlite
       .prepare(
@@ -282,6 +298,7 @@ describe('proposal persistence constraints', () => {
     const persistence = new SqlitePersistence(path);
     instances.push(persistence);
     const session = persistence.sessions.resolve(undefined);
+    persistence.auth.complete(session.userId, `test-${session.userId}`, 1);
     const sqlite = new Database(path);
     expect(() =>
       sqlite

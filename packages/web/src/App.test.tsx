@@ -435,6 +435,7 @@ describe('画面のURLとリロード復帰', () => {
     window.history.replaceState({}, '', '/rooms/room-1/game');
     const connectingState: MultiplayerState = {
       connection: 'connecting',
+      registered: false,
       displayName: null,
       room: null,
       roomClosedReason: null,
@@ -612,6 +613,7 @@ function tutorialHintClient(
 ): MultiplayerClient {
   const state: MultiplayerState = {
     connection: 'ready',
+    registered: false,
     displayName: 'ホスト',
     room,
     roomClosedReason: null,
@@ -631,6 +633,7 @@ function observableTutorialClient(
 } {
   let state: MultiplayerState = {
     connection: 'ready',
+    registered: false,
     displayName: 'ホスト',
     room: initialRoom,
     roomClosedReason: null,
@@ -1405,6 +1408,7 @@ describe('TU-04: みんなのルールへの卒業導線', () => {
     const room = tutorialSetResultRoom('basic');
     const state: MultiplayerState = {
       connection: 'ready',
+      registered: false,
       displayName: 'ホスト',
       room,
       roomClosedReason: null,
@@ -1435,6 +1439,7 @@ describe('TU-04: みんなのルールへの卒業導線', () => {
     const room = tutorialSetResultRoom('community');
     const state: MultiplayerState = {
       connection: 'ready',
+      registered: false,
       displayName: 'ホスト',
       room,
       roomClosedReason: null,
@@ -1472,6 +1477,7 @@ describe('TU-04: みんなのルールへの卒業導線', () => {
     const room = tutorialSetResultRoom('basic');
     const state: MultiplayerState = {
       connection: 'ready',
+      registered: false,
       displayName: 'ホスト',
       room,
       roomClosedReason: null,
@@ -1550,6 +1556,7 @@ describe('TU-04: みんなのルールへの卒業導線', () => {
     const room = tutorialSetResultRoom('basic');
     const state: MultiplayerState = {
       connection: 'ready',
+      registered: false,
       displayName: 'ホスト',
       room,
       roomClosedReason: null,
@@ -1582,6 +1589,7 @@ describe('TU-04: みんなのルールへの卒業導線', () => {
     const room = tutorialSetResultRoom('basic');
     const state: MultiplayerState = {
       connection: 'ready',
+      registered: false,
       displayName: 'ホスト',
       room,
       roomClosedReason: null,
@@ -1623,6 +1631,7 @@ describe('TU-04: みんなのルールへの卒業導線', () => {
     const user = userEvent.setup();
     let state: MultiplayerState = {
       connection: 'ready',
+      registered: false,
       displayName: 'ホスト',
       room: tutorialSetResultRoom('basic'),
       roomClosedReason: null,
@@ -1681,6 +1690,7 @@ describe('TU-04: みんなのルールへの卒業導線', () => {
     const room = tutorialSetResultRoom('basic');
     const state: MultiplayerState = {
       connection: 'ready',
+      registered: false,
       displayName: 'ホスト',
       room,
       roomClosedReason: null,
@@ -1789,6 +1799,7 @@ describe('TU-01: 既プレイ端末の記録', () => {
     } satisfies import('@daifugo/core').PlayerRoomView;
     const state: MultiplayerState = {
       connection: 'ready',
+      registered: false,
       displayName: 'ホスト',
       room,
       roomClosedReason: null,
@@ -1922,5 +1933,48 @@ describe('セット最終戦のリザルト', () => {
 
     expect(screen.getByText('セットリザルト')).toBeTruthy();
     expect(screen.queryByText(/おわり/)).toBeNull();
+  });
+});
+
+describe('AU-01: 認証完了のアプリ統合', () => {
+  afterEach(() => {
+    cleanup();
+    window.history.replaceState(null, '', '/');
+  });
+
+  it('hashのottを引き換え、socket sessionを切り替えてURLから消す', async () => {
+    useScreenStore.setState({ current: 'title' });
+    window.history.replaceState(null, '', '/menu#/auth/complete?ott=one-time');
+    const state: MultiplayerState = {
+      connection: 'ready',
+      registered: false,
+      displayName: 'ゲスト',
+      room: null,
+      roomClosedReason: null,
+      error: null,
+    };
+    const switchSession = vi.fn();
+    const client = {
+      subscribe: () => () => undefined,
+      snapshot: () => state,
+      switchSession,
+    } as unknown as MultiplayerClient;
+    const auth = {
+      begin: vi.fn(),
+      complete: vi.fn(async () => ({
+        outcome: 'switched' as const,
+        userToken: 'restored-token',
+        displayName: 'ゲスト1',
+      })),
+    };
+
+    render(<App client={client} auth={auth} />);
+
+    await waitFor(() => expect(auth.complete).toHaveBeenCalledWith('one-time'));
+    await waitFor(() =>
+      expect(switchSession).toHaveBeenCalledWith('restored-token'),
+    );
+    expect(window.location.hash).toBe('');
+    expect(screen.getByRole('status').textContent).toBe('おかえり!');
   });
 });

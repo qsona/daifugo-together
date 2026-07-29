@@ -78,6 +78,7 @@ describe('proposal vertical slice', () => {
     );
     persistenceInstances.push(persistence);
     const session = persistence.sessions.resolve(undefined);
+    persistence.auth.complete(session.userId, `test-${session.userId}`, 1);
     const app = createAppServer({
       webDistDir: directory,
       proposals: new ProposalSubmissionService(persistence.proposals, {
@@ -146,6 +147,8 @@ describe('proposal vertical slice', () => {
     persistenceInstances.push(persistence);
     const mine = persistence.sessions.resolve(undefined);
     const other = persistence.sessions.resolve(undefined);
+    persistence.auth.complete(mine.userId, 'test-mine', 1);
+    persistence.auth.complete(other.userId, 'test-other', 1);
     let now = 1_000;
     const proposalIds = [
       '00000000Z8AAAAAAAAAAAAAA01',
@@ -322,6 +325,7 @@ describe('proposal vertical slice', () => {
     );
     persistenceInstances.push(persistence);
     const session = persistence.sessions.resolve(undefined);
+    persistence.auth.complete(session.userId, `test-${session.userId}`, 1);
     const app = createAppServer({
       webDistDir: directory,
       proposals: new ProposalSubmissionService(persistence.proposals, {
@@ -387,6 +391,7 @@ describe('proposal vertical slice', () => {
     });
     persistenceInstances.push(persistence);
     const session = persistence.sessions.resolve(undefined);
+    persistence.auth.complete(session.userId, `test-${session.userId}`, 1);
     const service = new ProposalSubmissionService(persistence.proposals, {
       signals: NOOP_SIGNALS,
       now: () => 2_000,
@@ -432,6 +437,7 @@ describe('proposal vertical slice', () => {
     });
     persistenceInstances.push(persistence);
     const session = persistence.sessions.resolve(undefined);
+    persistence.auth.complete(session.userId, `test-${session.userId}`, 1);
     const service = new ProposalSubmissionService(persistence.proposals, {
       signals: NOOP_SIGNALS,
       now: () => 3_000,
@@ -526,6 +532,7 @@ describe('proposal vertical slice', () => {
     });
     persistenceInstances.push(persistence);
     const session = persistence.sessions.resolve(undefined);
+    persistence.auth.complete(session.userId, `test-${session.userId}`, 1);
     const ids = ['00000003X0AAAAAAAAAAAAAAAA', '00000003X1AAAAAAAAAAAAAAAA'];
     const service = new ProposalSubmissionService(persistence.proposals, {
       signals: NOOP_SIGNALS,
@@ -603,6 +610,7 @@ describe('proposal vertical slice', () => {
     });
     persistenceInstances.push(persistence);
     const session = persistence.sessions.resolve(undefined);
+    persistence.auth.complete(session.userId, `test-${session.userId}`, 1);
     const ids = [
       '00000004W0AAAAAAAAAAAAAAAA',
       '00000004W1AAAAAAAAAAAAAAAA',

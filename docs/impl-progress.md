@@ -1513,3 +1513,36 @@ TS-02 から継続で未解決のもの:
 
 - 同じ独立 GPT-5.6 Sol がOP-04 Importantを **CLOSED** と確認し、最終判定は **PASS / APPROVED / GO**。Critical / Important / Minorはすべてなし
 - D-1 / D-2 / D-3の正式値承認とB-4の保持期間決定は運用上の人間判断として残るが、設計初期値、変更経路、記録・復旧手順があるためPhase 3実装の完了を妨げない
+
+---
+
+## E15 引き継ぎ登録・ログイン
+
+### AU-01 / AU-02 / AU-03
+
+- 状態: **実装・全体検証・独立レビュー完了**
+- AU-01: Google OAuthのbegin → callback → 一回限りのtoken引換を実装した。匿名行への紐付け、既存アカウントへの切替、本人再ログイン、state・nonce・期限・単回性を自動テストで固定した
+- AU-02: 提案POSTは401 → 未登録403 `registration_required` → 停止403 → 入力検証の順で判定する。未登録時は提案フォームを隠し、Googleログイン導線を表示する
+- AU-03: OAuth完了後はブラウザのtokenを差し替えてSocket.IOを再接続する。ログアウト時はtokenを破棄して新しい匿名sessionへ切り替える。メニューに常設導線、初回セットリザルトに控えめな登録導線を置いた
+
+#### セキュリティと可用性
+
+- begin時の暗号学的乱数nonceを`__Host-daifugo-auth-flow` Cookieとstateレコードへ保存し、callbackで単回消費して照合する。不一致ブラウザではGoogle codeを交換せず、Cookieは成功・失敗とも削除する
+- Google認可は`response_mode=form_post`、callbackはフォームPOSTとし、認可コードをURLへ載せない。Cookieは`HttpOnly; Secure; SameSite=None; Path=/`
+- callback後のブラウザURLにはGoogle codeや`user_token`を残さず、一回限り・60秒のottだけをhash経由でアプリへ渡す
+- Google設定なし・discovery失敗では他機能を停止せず、認証APIだけ503へ閉じる
+- `window.localStorage`のプロパティ取得と各操作が例外を投げても、Multiplayer/Auth/Proposalクライアントは利用を継続する
+
+#### 設計判断とレビュー
+
+- 初回セットリザルトの登録導線はブラウザごとに一度だけ表示し、以後は`daifugo.authResultPromptShown`で抑制する
+- OAuth完了後はメニューへ戻し、結果を`role=status`で表示する
+- 独立方向性レビューは **GO_WITH_FIXES**。開始ブラウザとの結び付け、認可コードのquery露出、提案画面の表示文言依存を修正した
+- 初回の独立完了レビューはlocalStorage getter例外をImportantとして **NO-GO**。共通safe storageアダプターを追加後、再レビューは **GO（Critical / Importantなし）**
+
+#### 検証
+
+- `CI=true pnpm verify`: 成功（Prettier / ESLint / AI boundary / design lint / TypeScript / build / Vitest）
+- 375×812でメニュー、未登録提案、basic対局中の導線と横スクロールなしを確認した
+- 実Google通し、実セット完走後の登録導線、最終文言は本番デプロイ後の受け入れ確認で完了させる
+- E15 §2.3はPOST `form_post`へ改訂し、`PUBLIC_ORIGIN`の本番設定と[E15 Google OAuth 受入 runbook](runbooks/E15-google-oauth.md)を追加した
