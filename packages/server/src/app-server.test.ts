@@ -123,6 +123,44 @@ describe('production app server', () => {
     });
   });
 
+  it('ブラウザのOAuth開始はtokenをURLへ載せずGoogleへredirectする', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'daifugo-web-dist-'));
+    directories.push(directory);
+    const persistence = new SqlitePersistence(':memory:', {
+      createUserId: () => 'browser-auth-user',
+      createToken: () => 'browser-auth-token-valid',
+    });
+    persistenceInstances.push(persistence);
+    const session = persistence.sessions.resolve(undefined);
+    const app = createAppServer({
+      webDistDir: directory,
+      auth: new AuthService(persistence.auth, {
+        provider: new FakeAuthProvider(),
+        publicOrigin: 'http://127.0.0.1',
+        createValue: () => `browser-${'x'.repeat(64)}`,
+      }),
+    });
+    apps.push(app);
+    const port = await app.listen(0, '127.0.0.1');
+    const baseUrl = `http://127.0.0.1:${String(port)}`;
+
+    const begun = await fetch(`${baseUrl}/auth/google/begin`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ userToken: session.userToken }),
+      redirect: 'manual',
+    });
+
+    expect(begun.status).toBe(303);
+    expect(begun.headers.get('location')).toContain(
+      'https://accounts.example.test',
+    );
+    expect(begun.headers.get('location')).not.toContain(session.userToken);
+    expect(begun.headers.get('set-cookie')).toContain(
+      '__Host-daifugo-auth-flow=',
+    );
+  });
+
   it('提案POSTはbody解析より認証・登録判定を先に行う', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'daifugo-web-dist-'));
     directories.push(directory);

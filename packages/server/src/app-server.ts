@@ -244,10 +244,13 @@ export function createAppServer(options: AppServerOptions): AppServer {
     response: ServerResponse,
   ): Promise<boolean> => {
     const url = new URL(request.url ?? '/', 'http://localhost');
-    const isBegin = url.pathname === '/api/auth/begin';
+    const isApiBegin = url.pathname === '/api/auth/begin';
+    const isBrowserBegin = url.pathname === '/auth/google/begin';
     const isCallback = url.pathname === '/auth/google/callback';
     const isComplete = url.pathname === '/api/auth/complete';
-    if (!isBegin && !isCallback && !isComplete) return false;
+    if (!isApiBegin && !isBrowserBegin && !isCallback && !isComplete) {
+      return false;
+    }
     const allowedMethod = 'POST';
     if (request.method !== allowedMethod) {
       response.setHeader('allow', allowedMethod);
@@ -258,13 +261,23 @@ export function createAppServer(options: AppServerOptions): AppServer {
       writeJson(response, 503, { error: 'auth_unavailable' });
       return true;
     }
-    if (isBegin) {
-      const result = await options.auth.begin(bearerToken(request));
+    if (isApiBegin || isBrowserBegin) {
+      const token = isBrowserBegin
+        ? (await readFormBody(request)).get('userToken')
+        : bearerToken(request);
+      const result = await options.auth.begin(token);
       if (result.status === 200) {
         response.setHeader(
           'set-cookie',
           `${AUTH_FLOW_COOKIE}=${encodeURIComponent(result.flowNonce)}; Max-Age=600; ${AUTH_FLOW_COOKIE_ATTRIBUTES}`,
         );
+      }
+      if (isBrowserBegin && result.status === 200) {
+        response.statusCode = 303;
+        response.setHeader('location', result.body.authUrl);
+        response.setHeader('cache-control', 'no-store');
+        response.end();
+        return true;
       }
       writeJson(response, result.status, result.body);
       return true;
