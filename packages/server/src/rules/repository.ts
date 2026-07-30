@@ -330,6 +330,22 @@ export class RuleRepository {
     return row ? storedRule(row) : null;
   }
 
+  updateMetadata(input: {
+    ruleId: string;
+    name: string;
+    description: string;
+    now: number;
+  }): StoredRule {
+    this.#sqlite
+      .prepare(
+        `UPDATE rules
+         SET name = ?, description = ?, updated_at = ?
+         WHERE id = ?`,
+      )
+      .run(input.name, input.description, input.now, input.ruleId);
+    return this.get(input.ruleId)!;
+  }
+
   activeIds(): ReadonlySet<string> {
     return new Set(this.active().map(({ id }) => id));
   }

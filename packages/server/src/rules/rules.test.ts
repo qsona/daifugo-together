@@ -1097,12 +1097,13 @@ describe('CX-05 rule release', () => {
     });
     expect(stale.availableRules()).toEqual([]);
 
-    // rule-versions.json 由来の version 繰り上げつきなら新バージョンとして登録される。
+    // rule-versions.json 由来の version 繰り上げつきなら、
+    // 表示メタデータも含めて新バージョンとして登録される。
     const bumped = new RuleRegistryService(
       persistence.rules,
       [
         {
-          ...codeRule('r0001-a', 'ルールA'),
+          ...codeRule('r0001-a', '短いルール名'),
           bundleHash: 'd'.repeat(64),
           version: 2,
         },
@@ -1126,6 +1127,11 @@ describe('CX-05 rule release', () => {
     expect(bumped.availableRules().map(({ ruleId }) => ruleId)).toEqual([
       'r0001-a',
     ]);
+    expect(persistence.rules.get('r0001-a')).toMatchObject({
+      name: '短いルール名',
+      description: '短いルール名の説明',
+      updatedAt: 4_000,
+    });
     expect(
       persistence.rules
         .versions('r0001-a')
