@@ -126,6 +126,37 @@ describe('2あがり禁止', () => {
     );
   });
 
+  it('ジョーカーが禁止ランクを代用しても反則あがりにしない', () => {
+    const normalPlay: Play = {
+      kind: 'sequence',
+      cards: [card('K'), card('A'), { kind: 'joker', id: 'joker-0', index: 0 }],
+      count: 3,
+      repRank: '2',
+    };
+    const revolutionPlay: Play = {
+      kind: 'sequence',
+      cards: [{ kind: 'joker', id: 'joker-0', index: 0 }, card('4'), card('5')],
+      count: 3,
+      repRank: '5',
+    };
+    const hook = rule.hooks.afterPlay;
+    if (!hook) {
+      throw new Error('afterPlay hook is required');
+    }
+
+    expect(hook(context({ played: normalPlay }), normalPlay)).toEqual([]);
+    expect(
+      hook(
+        context({
+          played: revolutionPlay,
+          revolution: true,
+          rankingInverted: true,
+        }),
+        revolutionPlay,
+      ),
+    ).toEqual([]);
+  });
+
   it('禁止対象を途中で出しても手札が残っていれば発動しない', () => {
     expect(effects(['2'], { finished: false })).toEqual([]);
     expect(

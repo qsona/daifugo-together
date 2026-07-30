@@ -226,6 +226,27 @@ describe('革命', () => {
     });
   });
 
+  it('革命中にジョーカーが3を代用して上がっても反則あがりにしない', () => {
+    const played: Play = {
+      kind: 'sequence',
+      cards: [
+        { kind: 'joker', id: 'joker-0', index: 0 },
+        natural('4', 'spade'),
+        natural('5', 'spade'),
+      ],
+      count: 3,
+      repRank: '5',
+    };
+
+    expect(
+      afterPlay(played, {
+        active: true,
+        strength: REVOLUTION_STRENGTH,
+        finished: true,
+      }),
+    ).toEqual([]);
+  });
+
   it('革命中でも最後の手が2だけなら反則あがりにしない', () => {
     expect(
       afterPlay(

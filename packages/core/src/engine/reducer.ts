@@ -428,25 +428,25 @@ function removeCards(hand: readonly Card[], selected: readonly Card[]): Card[] {
 }
 
 /**
- * 解釈の決定順: 実効 StrengthOrder 上で最弱の repRank を先頭に、
- * 同順位は kind 優先順 (single < set < sequence)、次いでカード ID 列の
- * 辞書順で並べる。生成順に依存しない決定的な順序。
+ * 解釈の決定順: kind 優先順 (single < set < sequence) を先に適用し、
+ * 同じ kind では実効 StrengthOrder 上で最強の repRank を先頭にする。
+ * 最後はカード ID 列の辞書順で、生成順に依存しない決定的な順序にする。
  */
-function sortMatchesWeakestFirst(
+function sortMatchesPreferredFirst(
   matches: readonly PlayCandidateMatch[],
   strength: StrengthOrder,
 ): PlayCandidateMatch[] {
   return [...matches].sort((left, right) => {
-    const byStrength =
-      rankPosition(left.play.repRank, strength) -
-      rankPosition(right.play.repRank, strength);
-    if (byStrength !== 0) {
-      return byStrength;
-    }
     const byKind =
       PLAY_KIND_ORDER[left.play.kind] - PLAY_KIND_ORDER[right.play.kind];
     if (byKind !== 0) {
       return byKind;
+    }
+    const byStrength =
+      rankPosition(right.play.repRank, strength) -
+      rankPosition(left.play.repRank, strength);
+    if (byStrength !== 0) {
+      return byStrength;
     }
     const leftIds = left.play.cards.map((card) => card.id).join(',');
     const rightIds = right.play.cards.map((card) => card.id).join(',');
@@ -493,7 +493,7 @@ function reducePlay(
     ) {
       return reject(state, action.player, 'TOO_WEAK');
     }
-    const ordered = sortMatchesWeakestFirst(
+    const ordered = sortMatchesPreferredFirst(
       matched.matches,
       evaluated.strength,
     );
@@ -505,7 +505,7 @@ function reducePlay(
       finalLegality?.legal === false ? finalLegality.reasonKey : undefined,
     );
   }
-  const interpretedPlay = sortMatchesWeakestFirst(
+  const interpretedPlay = sortMatchesPreferredFirst(
     legalMatches,
     evaluated.strength,
   )[0]!.play;

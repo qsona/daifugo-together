@@ -67,10 +67,10 @@ export interface RuleChainEntry {
 - クライアントは従来どおり **CardId 列のみ**を送る (E01 §合意済み)。`GameAction.play.kind` (既存の予約フィールド) を任意で受け付け、protocol の `game:play` スキーマにも optional `kind` を追加する。
 - reducer は選択カード集合と一致する候補 (生成器の出力) を全て集め:
   1. `kind` 指定があればその kind に絞る。
-  2. 合法な解釈 (failsafe 発動時は failsafe 後の最終合法集合で判定する) があればそのうち **最弱**を採用する (プレイヤー有利の最小コミット)。「最弱」は `evaluateCandidates` が算出した **実効 StrengthOrder** (modifyStrength 適用後) 上の repRank 位置で比較する ('joker' は +∞)。
-  3. 同順位のタイブレークは決定的に行う: kind の優先順 single < set < sequence、次いでカード ID 列の辞書順。リプレイ安定性のため生成順に依存しない。
+  2. 合法な解釈 (failsafe 発動時は failsafe 後の最終合法集合で判定する) が複数の kind にまたがる場合は、kind の優先順 single < set < sequence で選ぶ。これにより、set と sequence の両方になるカード集合は set として扱う。
+  3. 同じ kind に複数の合法解釈があれば、そのうち **最強**を採用する。「最強」は `evaluateCandidates` が算出した **実効 StrengthOrder** (modifyStrength 適用後) 上の repRank 位置で比較する ('joker' は +∞)。同順位はカード ID 列の辞書順にして、リプレイ安定性のため生成順に依存させない。
   4. 合法な解釈がなければ従来どおり reject する。拒否コードの出し分け (CARD_NOT_IN_HAND / INVALID_PLAY_SHAPE / TOO_WEAK / FORBIDDEN_BY_RULE) は現行 reducer と同じ規則を維持する。
-- 既知の制約 (受容): repRank ヒントはワイヤに載せないため、同一カード集合で複数解釈が合法なとき、プレイヤーは最弱解釈より強い解釈を意図的に選べない (kind でのみ絞れる)。必要になれば action への repRank ヒント追加を将来検討する。AI (MCTS) が選んだ解釈もサーバでは同規則で再解釈される。
+- 既知の制約 (受容): repRank ヒントはワイヤに載せないため、同一 kind・同一カード集合で複数解釈が合法なとき、プレイヤーは最強解釈より弱い解釈を意図的に選べない。`kind` ヒントを送れば set / sequence は選べるが、未指定時は set を優先する。必要になれば action への repRank ヒント追加を将来検討する。AI (MCTS) が選んだ解釈もサーバでは同規則で再解釈される。
 - `interpretPlay` の「枚数 > 4 で reject」は撤廃し、生成器と同じシェイプ判定に委譲する。protocol の `cards` 上限 (`max(4)`) は 14 に緩和する (手札上限)。engineFeatures 未宣言の部屋では 5 枚以上はエンジンの INVALID_PLAY_SHAPE として reject される (従来は zod の BAD_PAYLOAD。応答経路のみの差で実害なし)。
 
 ### 変更ファイル一覧 (core)
