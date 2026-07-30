@@ -130,10 +130,23 @@ function validateMeta(meta, directory) {
     'prefecture',
     'contractVersion',
     'messages',
+    'engineFeatures',
   ]);
   for (const key of Object.keys(meta)) {
     if (!allowedKeys.has(key)) {
       violations.push(`meta.json: 未知のproperty ${key} は許可されません。`);
+    }
+  }
+  if (meta.engineFeatures !== undefined) {
+    const knownFeatures = new Set(['sequence', 'jokers']);
+    if (
+      !Array.isArray(meta.engineFeatures) ||
+      meta.engineFeatures.some((value) => !knownFeatures.has(value)) ||
+      new Set(meta.engineFeatures).size !== meta.engineFeatures.length
+    ) {
+      violations.push(
+        'meta.json: engineFeatures は sequence / jokers の重複なし配列が必要です。',
+      );
     }
   }
   if (typeof meta.name === 'string' && meta.name.length > 40) {

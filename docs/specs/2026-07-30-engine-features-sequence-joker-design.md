@@ -133,7 +133,8 @@ export interface RuleChainEntry {
 
 ## 4.5 後方互換性の担保
 
-- **既存ルールソース**: Card のユニオン化により `play.cards.some((c) => c.rank === '8')` (r0001-eight-cut) は型エラーになるため、`c.kind === 'natural'` の narrowing を入れる修正を本変更に含める。**挙動は不変** (ジョーカーは 8 とみなさない = ジョーカーが 8 を代用しても 8切りは発動しない。これを r0001 の仕様として固定しテストで明示する)。rule.ts 変更により bundleHash が変わるため、server のルール再登録 (rule_versions) が正しく新バージョンを作ること、既存リプレイが bundleHash 警告つきで再生できることを統合検証 (T6) で確認する。
+- **既存ルールソース**: Card のユニオン化により `play.cards.some((c) => c.rank === '8')` (r0001-eight-cut) は型エラーになるため、`c.kind === 'natural'` の narrowing を入れる修正を本変更に含める。**挙動は不変** (ジョーカーは 8 とみなさない = ジョーカーが 8 を代用しても 8切りは発動しない。これを r0001 の仕様として固定しテストで明示する)。
+- **エンジン都合の rule.ts 変更とバージョン繰り上げ**: rule.ts の変更は bundleHash を変えるため、そのままでは起動時同期が provenance 不一致で失敗しルールがチェーンから脱落する。`packages/rules/rule-versions.json` にルール ID → バージョン (>= 2) を宣言すると、レジストリ生成がそのバージョンで登録し、server の synchronizeCodeRegistry が新バージョン行 (is_current) を作成する。今回 r0001-eight-cut を v2 に繰り上げる。以後エンジン移行で既存ルールの rule.ts を触るたびに、このファイルで該当ルールを繰り上げる。
 - **旧リプレイ**: 旧 ReplayInit の entry に engineFeatures はない → `engineFeaturesOf` が [] を返し 52 枚デッキ・従来生成器のみ、で完全に従来挙動。これをリプレイ後方互換テストで固定する。
 - **engineFeatures 未宣言のチェーン**: デッキ 52 枚、生成器は single/set のみ、interpretPlay 相当の解釈も一意 → 全既存テストが無変更で通ることを担保とする。
 

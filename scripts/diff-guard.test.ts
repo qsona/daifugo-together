@@ -56,7 +56,7 @@ function meta(ruleId = directory) {
   )}\n`;
 }
 
-function createRepository() {
+function createRepository(metaContent = meta()) {
   const cwd = mkdtempSync(join(tmpdir(), 'rule-diff-'));
   repositories.push(cwd);
   git(cwd, 'init', '--quiet');
@@ -64,7 +64,7 @@ function createRepository() {
   git(cwd, 'config', 'user.name', 'Test User');
   write(cwd, 'README.md', '# test\n');
   const base = commit(cwd, 'initial');
-  write(cwd, `packages/rules/${directory}/meta.json`, meta());
+  write(cwd, `packages/rules/${directory}/meta.json`, metaContent);
   write(cwd, `packages/rules/${directory}/SPEC.json`, '{"specVersion":1}\n');
   const scaffoldSha = commit(cwd, 'scaffold');
   write(cwd, `packages/rules/${directory}/rule.ts`, 'export {};\n');
@@ -134,6 +134,49 @@ describe('diff guard', () => {
     repository.head = commit(repository.cwd, `red team: ${fixture.name}`);
 
     expect(check(repository).violations).not.toHaveLength(0);
+  });
+
+  it('meta.jsonの既知engineFeaturesを許可する', () => {
+    const metaContent = `${JSON.stringify(
+      {
+        ruleId: directory,
+        name: '階段',
+        description: '同スート連番3枚以上',
+        kind: 'local',
+        proposalId: 'proposal-1',
+        contractVersion: 1,
+        messages: {},
+        engineFeatures: ['sequence', 'jokers'],
+      },
+      null,
+      2,
+    )}\n`;
+    const repository = createRepository(metaContent);
+    expect(check(repository)).toMatchObject({
+      mode: 'pipeline',
+      directory,
+      violations: [],
+    });
+  });
+
+  it('meta.jsonの未知engineFeaturesを拒否する', () => {
+    const metaContent = `${JSON.stringify(
+      {
+        ruleId: directory,
+        name: '階段',
+        description: '同スート連番3枚以上',
+        kind: 'local',
+        proposalId: 'proposal-1',
+        contractVersion: 1,
+        messages: {},
+        engineFeatures: ['staircase'],
+      },
+      null,
+      2,
+    )}\n`;
+    const repository = createRepository(metaContent);
+    const result = check(repository);
+    expect(result.violations.join('\n')).toContain('engineFeatures');
   });
 
   it('複数ルールdirectoryを拒否する', () => {

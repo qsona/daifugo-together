@@ -1031,4 +1031,108 @@ describe('CX-05 rule release', () => {
     });
     expect(onReleased).toHaveBeenCalledTimes(1);
   });
+
+  it('エンジン都合のrule.ts変更はversion繰り上げで再登録でき、繰り上げなしは失敗する', () => {
+    const { persistence } = setup();
+    const session = persistence.sessions.resolve('rule-author-token-0001');
+    const normalized = {
+      kind: 'original' as const,
+      prefectureCode: null,
+      name: 'ルールA',
+      body: 'ルールAの提案本文',
+    };
+    persistence.proposals.create({
+      authorId: session.userId,
+      proposal: normalized,
+      contentHash: proposalContentHash(normalized),
+      now: 1_000,
+      id: 'proposal-r0001-a',
+      commitSignals: () => undefined,
+    });
+    persistence.proposals.transitionProposal(
+      'proposal-r0001-a',
+      'screening',
+      'implementing',
+      {},
+      1_100,
+    );
+    const job = persistence.pipeline.createQueuedJob(
+      'proposal-r0001-a',
+      'a',
+      'prompt-v1',
+      1_200,
+    );
+    persistence.pipeline.transitionJob(
+      job.id,
+      'queued',
+      'merged',
+      { prNumber: 42, headSha: 'a'.repeat(40), mergeSha: 'c'.repeat(40) },
+      1_300,
+    );
+    const first = new RuleRegistryService(
+      persistence.rules,
+      [codeRule('r0001-a', 'ルールA')],
+      {
+        now: () => 2_000,
+        proposals: persistence.proposals,
+        pipeline: persistence.pipeline,
+      },
+    );
+    expect(first.synchronizeCodeRegistry().failures).toEqual([]);
+    expect(first.enable('r0001-a')).toMatchObject({ status: 'updated' });
+
+    // 繰り上げなしで bundleHash だけ変わった新デプロイは provenance 不一致で失敗する。
+    const stale = new RuleRegistryService(
+      persistence.rules,
+      [{ ...codeRule('r0001-a', 'ルールA'), bundleHash: 'e'.repeat(64) }],
+      {
+        now: () => 3_000,
+        proposals: persistence.proposals,
+        pipeline: persistence.pipeline,
+      },
+    );
+    expect(stale.synchronizeCodeRegistry().failures).toContainEqual({
+      ruleId: 'r0001-a',
+      detail: 'rule version provenance does not match deployed code',
+    });
+    expect(stale.availableRules()).toEqual([]);
+
+    // rule-versions.json 由来の version 繰り上げつきなら新バージョンとして登録される。
+    const bumped = new RuleRegistryService(
+      persistence.rules,
+      [
+        {
+          ...codeRule('r0001-a', 'ルールA'),
+          bundleHash: 'd'.repeat(64),
+          version: 2,
+        },
+      ],
+      {
+        now: () => 4_000,
+        proposals: persistence.proposals,
+        pipeline: persistence.pipeline,
+      },
+    );
+    const sync = bumped.synchronizeCodeRegistry();
+    expect(sync.failures).toEqual([]);
+    expect(sync.versions).toMatchObject([
+      {
+        ruleId: 'r0001-a',
+        version: 2,
+        bundleHash: 'd'.repeat(64),
+        isCurrent: true,
+      },
+    ]);
+    expect(bumped.availableRules().map(({ ruleId }) => ruleId)).toEqual([
+      'r0001-a',
+    ]);
+    expect(
+      persistence.rules
+        .versions('r0001-a')
+        .map(({ version, isCurrent }) => ({ version, isCurrent })),
+    ).toEqual([
+      { version: 2, isCurrent: true },
+      { version: 1, isCurrent: false },
+    ]);
+  });
 });

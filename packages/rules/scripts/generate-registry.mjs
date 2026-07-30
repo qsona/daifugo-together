@@ -1,4 +1,4 @@
-import { mkdir, readdir, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -20,9 +20,31 @@ const imports = directories.map(
   (directory, index) =>
     `import { rule as rule${String(index)} } from '../${directory}/rule.js';`,
 );
+// rule-versions.json: エンジン側の事情で rule.ts を変更した (bundleHash が変わる) 場合に
+// 該当ルールの version を繰り上げるための宣言。未記載のルールは version 1。
+const versionOverrides = JSON.parse(
+  await readFile(join(packageRoot, 'rule-versions.json'), 'utf8').catch(
+    () => '{}',
+  ),
+);
+if (
+  typeof versionOverrides !== 'object' ||
+  versionOverrides === null ||
+  Array.isArray(versionOverrides) ||
+  Object.entries(versionOverrides).some(
+    ([ruleId, version]) =>
+      !ruleDirectory.test(ruleId) ||
+      !Number.isSafeInteger(version) ||
+      version < 2,
+  )
+) {
+  throw new Error(
+    'rule-versions.json must map rule directory names to integer versions >= 2',
+  );
+}
 const registrations = directories.map(
   (directory, index) =>
-    `  { module: rule${String(index)}, moduleUrl: new URL('../${directory}/rule.js', import.meta.url).href, slug: '${directory.replace(/^r\d{4,}-/u, '')}', version: 1 },`,
+    `  { module: rule${String(index)}, moduleUrl: new URL('../${directory}/rule.js', import.meta.url).href, slug: '${directory.replace(/^r\d{4,}-/u, '')}', version: ${String(versionOverrides[directory] ?? 1)} },`,
 );
 const source = `${imports.join('\n')}
 

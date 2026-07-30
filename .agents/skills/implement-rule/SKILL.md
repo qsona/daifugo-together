@@ -99,7 +99,11 @@ only when source or workspace dependencies changed since the last build.
      shape recognition, wildcard substitution, and strength comparison all
      happen inside the engine. Never re-implement any of that in `rule.ts`
      (no sequence-shape checks, no joker-substitution logic, no deck
-     changes). The rule's hooks only add the behavior specific to this rule
+     changes). The engine reads the code-side `rule.meta`, so `rule.ts` must
+     replicate `meta.json` exactly, `engineFeatures` included — the
+     simulation gate rejects any mismatch between the two, and a rule whose
+     code-side meta omits the declaration would load with the feature
+     silently off. The rule's hooks only add the behavior specific to this rule
      (for example a foul finish via `forceRank` + `'lowest'`). Note that in
      hook arguments a `Card` is a discriminated union: narrow with
      `card.kind === 'natural'` before reading `suit`/`rank`; jokers have
