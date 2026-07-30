@@ -46,7 +46,7 @@
 - 修正したMinor: 一覧・詳細モーダルのAndroid戻る相当の `popstate` 統合テストを追加
 - 維持したImportant候補: disabledの契約競合。上記「置いた仮定・競合時の裁定」のとおり発注書 Task 1・G-17を優先
 - 再レビュー判定: 要件適合 `PASS` / 品質 `APPROVED`。Critical / Importantなし。残った「後続プレイ検出renderの1フレームだけflush classが付き得る」Minorも、描画時点でflushを無効化して反映
-- `CI=true pnpm verify`: format / lint / AI boundary / design lint / typecheck / 全テスト / 全build成功（**120 files / 860 tests成功**）
+- 最新 `origin/main` 統合後の `CI=true pnpm verify`: format / lint / AI boundary / design lint / typecheck / 全テスト / 全build成功（**120 files / 861 tests成功**）
 - 375×812のテストモード実画面で、卓・席・手札トレイが横スクロールなく収まり、自分の手番表示と札の可読性を確認
 
 ### 詰まっている点
