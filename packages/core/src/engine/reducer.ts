@@ -516,9 +516,6 @@ function reducePlay(
     player: action.player,
     play: interpretedPlay,
   };
-  const authoritativeInfluenced = evaluated.failsafeActivated
-    ? []
-    : evaluated.influenced;
   let nextState: GameState = {
     ...evaluated.state,
     public: {
@@ -528,12 +525,7 @@ function reducePlay(
         passedSinceLastPlay: [],
       },
       discard: [...evaluated.state.public.discard, ...priorFieldCards],
-      firedRules: [
-        ...new Set([
-          ...evaluated.state.public.firedRules,
-          ...authoritativeInfluenced,
-        ]),
-      ],
+      firedRules: evaluated.state.public.firedRules,
       turnCount: evaluated.state.public.turnCount + 1,
     },
     players: {
@@ -571,30 +563,7 @@ function reducePlay(
     evaluated.strength,
   );
   nextState = effects.state;
-  const afterPlayFired = new Map(
-    effects.events.flatMap((event) =>
-      event.type === 'ruleFired' ? [[event.ruleId, event] as const] : [],
-    ),
-  );
-  for (const ruleId of authoritativeInfluenced) {
-    if (!afterPlayFired.has(ruleId)) {
-      afterPlayFired.set(ruleId, {
-        type: 'ruleFired',
-        ruleId,
-        messageKey: null,
-      });
-    }
-  }
-  events.push(
-    ...[...afterPlayFired.values()].sort(
-      (left, right) =>
-        (config.ruleChain.find((entry) => entry.ruleId === left.ruleId)
-          ?.position ?? Number.MAX_SAFE_INTEGER) -
-        (config.ruleChain.find((entry) => entry.ruleId === right.ruleId)
-          ?.position ?? Number.MAX_SAFE_INTEGER),
-    ),
-    ...effects.events.filter((event) => event.type !== 'ruleFired'),
-  );
+  events.push(...effects.events);
 
   if (nextState.public.turnCount > TURN_LIMIT) {
     const finished = finishForTurnLimit(

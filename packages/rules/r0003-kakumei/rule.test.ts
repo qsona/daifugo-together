@@ -143,23 +143,9 @@ function modifyStrength(
 }
 
 describe('革命', () => {
-  it('ゲーム開始時に通常状態へ初期化し、通常の強さ順を保つ', () => {
-    const hook = rule.hooks.onGameStart;
-    if (!hook) {
-      throw new Error('onGameStart hook is required');
-    }
-
-    expect(hook(context())).toEqual([
-      {
-        type: 'setMemory',
-        scope: 'game',
-        key: 'active',
-        value: false,
-      },
-    ]);
-    expect(modifyStrength({ active: false }).ranking).toEqual(
-      BASE_STRENGTH_ORDER.ranking,
-    );
+  it('ゲーム開始時は初期化イベントを出さず通常の強さ順を保つ', () => {
+    expect(rule.hooks.onGameStart).toBeUndefined();
+    expect(modifyStrength({}).ranking).toEqual(BASE_STRENGTH_ORDER.ranking);
   });
 
   it('同一ランクの4枚組で革命になり、3が最強、2が最弱になる', () => {

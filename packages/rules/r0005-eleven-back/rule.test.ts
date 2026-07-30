@@ -109,6 +109,7 @@ describe('イレブンバック', () => {
         scope: 'game',
         key: 'active',
         value: false,
+        silent: true,
       },
     ]);
 
@@ -175,6 +176,17 @@ describe('イレブンバック', () => {
       type: 'setMemory',
       key: 'active',
       value: false,
+      silent: true,
     });
+  });
+
+  it('発動中にもう一度Jを出した場合もその瞬間だけ発動を通知する', () => {
+    expect(
+      rule.hooks?.afterPlay?.(contextWith(true), playWith(naturalCard('J'))),
+    ).toEqual([{ type: 'announce', messageKey: 'activated' }]);
+  });
+
+  it('未発動のまま場が流れた場合は解除処理も通知もしない', () => {
+    expect(rule.hooks?.afterFieldClear?.(contextWith(false))).toEqual([]);
   });
 });

@@ -53,6 +53,7 @@ export const rule: RuleModule = {
               scope: 'set',
               key: PREVIOUS_WINNER_KEY,
               value: winner.player,
+              silent: true,
             },
           ]
         : [];

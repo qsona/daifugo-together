@@ -73,6 +73,8 @@ export const rule: RuleModule = {
 
 KV はルール・スコープごとに分離し、最大 32 キー、1 値 1KB、名前空間合計 16KB です。超過した書込みは棄却します。1 ルールが 1 フックで返せる Effect は最大 8 件です。
 
+適用された Effect は原則として `ruleFired` になり、クライアントで発動カットインとして表示されます。発動そのものではない初期化・解除・次ゲーム用の記録には、`setMemory` の `silent: true` を指定してください。`modifyLegality` と `modifyStrength` は判定の変換であり、それだけでは `ruleFired` になりません。
+
 `afterPlay`、`afterFieldClear`、`onGameStart`、`onGameEnd` の
 `context.game.strength` は、同じ状態に `modifyStrength` チェーンを適用した
 実効 StrengthOrder です。特に `afterPlay` では、そのプレイを出す直前の

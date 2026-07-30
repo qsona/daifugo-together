@@ -79,6 +79,7 @@ describe('都落ち', () => {
         scope: 'set',
         key: 'previousWinner',
         value: 'p2',
+        silent: true,
       },
     ]);
   });

@@ -579,11 +579,12 @@ function effectPayloadValid(effect: unknown): effect is Effect {
         );
       case 'setMemory':
         return (
-          hasExactKeys(effect, ['type', 'scope', 'key', 'value']) &&
+          hasExactKeys(effect, ['type', 'scope', 'key', 'value'], ['silent']) &&
           (effect.scope === 'game' || effect.scope === 'set') &&
           typeof effect.key === 'string' &&
           effect.key.length > 0 &&
-          isJsonValue(effect.value)
+          isJsonValue(effect.value) &&
+          (effect.silent === undefined || typeof effect.silent === 'boolean')
         );
       case 'announce':
         return (
@@ -965,8 +966,10 @@ export function executeEffectHook(
     const nonAnnounce = ruleEntries.filter(
       (entry) => entry.effect.type !== 'announce',
     );
-    const realized = nonAnnounce.some((entry) =>
-      ['adopted', 'deduped'].includes(entry.resolution.status),
+    const realized = nonAnnounce.some(
+      (entry) =>
+        ['adopted', 'deduped'].includes(entry.resolution.status) &&
+        !(entry.effect.type === 'setMemory' && entry.effect.silent === true),
     );
     if (nonAnnounce.length > 0 && !realized) {
       for (const entry of ruleEntries) {
@@ -991,7 +994,8 @@ export function executeEffectHook(
     const realized = ruleEntries.some(
       (entry) =>
         entry.effect.type !== 'announce' &&
-        ['adopted', 'deduped'].includes(entry.resolution.status),
+        ['adopted', 'deduped'].includes(entry.resolution.status) &&
+        !(entry.effect.type === 'setMemory' && entry.effect.silent === true),
     );
     if (!announcement && !realized) continue;
     events.push({
@@ -1012,7 +1016,8 @@ export function executeEffectHook(
   for (const entry of batch.entries) {
     if (
       entry.effect.type !== 'announce' &&
-      ['adopted', 'deduped'].includes(entry.resolution.status)
+      ['adopted', 'deduped'].includes(entry.resolution.status) &&
+      !(entry.effect.type === 'setMemory' && entry.effect.silent === true)
     ) {
       firedRules.add(entry.ruleId);
     }

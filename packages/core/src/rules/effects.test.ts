@@ -90,6 +90,48 @@ function oneCardState(ruleChain: RuleChainEntry[]): {
 }
 
 describe('GE-04 effect pipeline and lifecycle hooks', () => {
+  it('silentな内部メモリ更新は状態だけを変えてruleFiredを出さない', () => {
+    const silentEntry = entry('r-silent-memory');
+    const silentRule: RuleModule = {
+      meta: {
+        ruleId: silentEntry.ruleId,
+        name: '内部状態',
+        description: '表示しない内部メモリ更新のfixture',
+        kind: 'original',
+        proposalId: 'fixture',
+        contractVersion: 1,
+        messages: {},
+      },
+      hooks: {
+        onGameStart: () => [
+          {
+            type: 'setMemory',
+            scope: 'game',
+            key: 'initialized',
+            value: true,
+            silent: true,
+          },
+        ],
+      },
+    };
+    const config: GameConfig = {
+      gameIndex: 0,
+      seats,
+      gameSeed: 'silent-memory',
+      ruleChain: [silentEntry],
+    };
+
+    const started = startGame(config, runtime(silentRule));
+
+    expect(started.state.private.memory[silentEntry.ruleId]?.initialized).toBe(
+      true,
+    );
+    expect(started.events.some((event) => event.type === 'ruleFired')).toBe(
+      false,
+    );
+    expect(started.state.public.firedRules).not.toContain(silentEntry.ruleId);
+  });
+
   it('onGameStartでもmodifyStrength適用済みの実効順序を渡す', () => {
     const reverseEntry = entry('r-always-reverse');
     const observerEntry = {
@@ -333,7 +375,7 @@ describe('GE-04 effect pipeline and lifecycle hooks', () => {
     });
   });
 
-  it('変換とafterPlay Effectを同じ発火ボレーで重複排除し優先度順に並べる', () => {
+  it('合法性・強さの変換だけでは発火せずafterPlay Effectだけを通知する', () => {
     const effectEntry = entry('r0095-effect-first');
     const transformEntry = {
       ...entry('r0096-transform-second'),
@@ -412,10 +454,11 @@ describe('GE-04 effect pipeline and lifecycle hooks', () => {
       transition.events
         .filter((event) => event.type === 'ruleFired')
         .map((event) => [event.ruleId, event.messageKey]),
-    ).toEqual([
-      [effectEntry.ruleId, 'fired'],
-      [transformEntry.ruleId, null],
-    ]);
+    ).toEqual([[effectEntry.ruleId, 'fired']]);
+    expect(transition.state.public.firedRules).toContain(effectEntry.ruleId);
+    expect(transition.state.public.firedRules).not.toContain(
+      transformEntry.ruleId,
+    );
   });
 
   it('leadNoLegalMove failsafeで破棄した変換は発火にも集計にも含めない', () => {

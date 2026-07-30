@@ -1,12 +1,18 @@
 import { createServer, type Server as HttpServer } from 'node:http';
 
-import { createDeck, enumerateLegalPlays } from '@daifugo/core';
+import {
+  createDeck,
+  createInProcessRuleChainPort,
+  enumerateLegalPlays,
+  type RuleChainEntry,
+  type RuleModule,
+} from '@daifugo/core';
 import { Server } from 'socket.io';
 import {
   io as createClient,
   type Socket as ClientSocket,
 } from 'socket.io-client';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type {
   Ack,
@@ -78,7 +84,7 @@ async function createHarness(
   gatewayOptions: Partial<
     Pick<
       RoomSocketGatewayOptions,
-      'rooms' | 'decideTurn' | 'timers' | 'joinRateLimit'
+      'rooms' | 'decideTurn' | 'timers' | 'joinRateLimit' | 'rulePortForSet'
     >
   > = {},
 ): Promise<Harness> {
@@ -191,6 +197,76 @@ afterEach(async () => {
 });
 
 describe('Socket.IO room gateway', () => {
+  it('クライアント用の合法手計算にも対局ごとのrule portを使う', async () => {
+    const entry: RuleChainEntry = {
+      ruleId: 'r-view-strength',
+      name: '表示強度',
+      position: 0,
+      priority: {
+        score: 0,
+        activatedAt: 0,
+        ruleId: 'r-view-strength',
+      },
+      bundleHash: 'fixture',
+      contractVersion: 1,
+    };
+    const module: RuleModule = {
+      meta: {
+        ruleId: entry.ruleId,
+        name: entry.name,
+        description: '表示用合法手にも実効強さを適用するfixture',
+        kind: 'original',
+        proposalId: 'fixture',
+        contractVersion: 1,
+        messages: {},
+      },
+      hooks: {
+        modifyStrength: (_context, base) => ({
+          ranking: [...base.ranking].reverse(),
+        }),
+      },
+    };
+    const port = createInProcessRuleChainPort([module]);
+    const gatewayPortForSet = vi.fn(() => port);
+    const rooms = new RoomManager({
+      now: () => 10_000,
+      availableRules: () => [entry],
+      randomIndex: () => 0,
+      reducer: {
+        random: () => 0.999_999,
+        rulePortForSet: () => port,
+      },
+    });
+    const harness = await createHarness({
+      rooms,
+      rulePortForSet: gatewayPortForSet,
+    });
+    const owner = await connect(harness);
+    const created = await emitAck<
+      'room:create',
+      { roomId: string; inviteCode: string }
+    >(owner.client, 'room:create', { mode: 'community' });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+
+    const startedState = once<PlayerRoomView>((resolve) =>
+      owner.client.once('room:state', (view) => {
+        if (view.phase === 'playing') resolve(view);
+      }),
+    );
+    await emitAck<'room:start', Record<string, never>>(
+      owner.client,
+      'room:start',
+      {},
+    );
+    const view = await startedState;
+
+    expect(view.game?.legalMoves).not.toBeNull();
+    expect(gatewayPortForSet).toHaveBeenCalledWith(
+      rooms.get(created.value.roomId)?.engine?.setId,
+    );
+  });
+
   it('きほんの1人部屋の初戦は探索済みseedでseat 0に教材配牌を届ける', async () => {
     const harness = await createHarness();
     const owner = await connect(harness);

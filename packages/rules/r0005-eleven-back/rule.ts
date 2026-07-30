@@ -23,13 +23,17 @@ export const rule: RuleModule = {
         ranking: [...base.ranking].reverse(),
       };
     },
-    afterPlay(_context, play) {
+    afterPlay(context, play) {
       const containsJack = play.cards.some(
         (card) => card.kind === 'natural' && card.rank === 'J',
       );
 
       if (!containsJack) {
         return [];
+      }
+
+      if (context.memory.game[ACTIVE_MEMORY_KEY] === true) {
+        return [{ type: 'announce', messageKey: 'activated' }];
       }
 
       return [
@@ -41,13 +45,17 @@ export const rule: RuleModule = {
         },
       ];
     },
-    afterFieldClear() {
+    afterFieldClear(context) {
+      if (context.memory.game[ACTIVE_MEMORY_KEY] !== true) {
+        return [];
+      }
       return [
         {
           type: 'setMemory',
           scope: 'game',
           key: ACTIVE_MEMORY_KEY,
           value: false,
+          silent: true,
         },
       ];
     },

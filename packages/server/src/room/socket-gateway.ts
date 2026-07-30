@@ -166,9 +166,13 @@ export function attachRoomSocketGateway(
   const joinRateLimiter = new FixedWindowRateLimiter(
     options.joinRateLimit ?? { maxAttempts: 10, windowMs: 60_000 },
   );
-  const ruleViewOptions = options.rulePort
-    ? { rulePort: options.rulePort }
-    : {};
+  const ruleViewOptions = (state: RoomState) => {
+    const setId = state.engine?.setId;
+    const rulePort =
+      (setId === undefined ? undefined : options.rulePortForSet?.(setId)) ??
+      options.rulePort;
+    return rulePort ? { rulePort } : {};
+  };
 
   const report = (error: unknown): void => {
     try {
@@ -191,7 +195,7 @@ export function attachRoomSocketGateway(
       try {
         target.emit(
           'room:state',
-          viewFor(state, member.memberId, ruleViewOptions),
+          viewFor(state, member.memberId, ruleViewOptions(state)),
         );
       } catch (error) {
         report(error);
@@ -382,7 +386,7 @@ export function attachRoomSocketGateway(
       room: membership
         ? viewFor(membership.room, membership.member.memberId, {
             reconnect: true,
-            ...ruleViewOptions,
+            ...ruleViewOptions(membership.room),
           })
         : null,
     });
@@ -630,7 +634,7 @@ export function attachRoomSocketGateway(
           'room:state',
           viewFor(current.room, current.member.memberId, {
             reconnect: true,
-            ...ruleViewOptions,
+            ...ruleViewOptions(current.room),
           }),
         );
         safeAck(ack, { ok: true, value: {} });

@@ -35,17 +35,6 @@ export const rule: RuleModule = {
     messages: {},
   },
   hooks: {
-    onGameStart() {
-      return [
-        {
-          type: 'setMemory',
-          scope: 'game',
-          key: REVOLUTION_MEMORY_KEY,
-          value: false,
-        },
-      ];
-    },
-
     modifyStrength(context, base) {
       if (context.memory.game[REVOLUTION_MEMORY_KEY] !== true) {
         return base;

@@ -194,6 +194,11 @@ export type Effect =
       scope: MemoryScope;
       key: string;
       value: JsonValue;
+      /**
+       * Internal bookkeeping that must not be presented as a rule activation.
+       * Omitted/false keeps the existing automatic ruleFired behavior.
+       */
+      silent?: boolean;
     }
   | {
       type: 'announce';
