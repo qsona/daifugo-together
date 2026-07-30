@@ -106,7 +106,8 @@ only when source or workspace dependencies changed since the last build.
      better slots); do not re-implement that arbitration inside the rule.
    - Do not simulate shared state with rule-local memory. Memory is isolated
      per rule, so state that other rules would need to read or compose with
-     (for example a revolution flag) cannot live there. If `SPEC.json`
+     (for example a revolution flag or a rank-comparison exception) cannot
+     live there. If `SPEC.json`
      requires a shared concept, an Effect, a hook, or an engine feature that
      the current contract vocabulary cannot express, do not work around it
      inside `rule.ts` and do not run `implement:fail`. Extending the engine
@@ -184,6 +185,8 @@ Ground rules:
 2. **Prefer the smallest sufficient vocabulary**, in this order:
    - Derive the shared signal from what the engine already computes instead
      of inventing new state. Example: revolution is `modifyStrength` output;
+     a field-specific direct rank exception is
+     `StrengthOrder.comparisonOverrides`;
      dependent rules should read the effective strength (or an inversion
      signal) from `RuleContext`, not a cross-rule flag. Known gap to close
      first if relevant: effect hooks (`afterPlay` etc.) currently receive the

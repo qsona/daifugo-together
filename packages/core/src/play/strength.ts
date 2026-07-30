@@ -7,6 +7,16 @@ export interface StrengthOrder {
    * 省略時は false。一時的な強さ反転はこの値を変更しない。
    */
   revolution?: boolean;
+  /**
+   * 通常の ranking では表せない、特定の2ランク間だけの強弱例外。
+   * 配列の後ろにある指定を優先する。
+   */
+  comparisonOverrides?: StrengthComparisonOverride[];
+}
+
+export interface StrengthComparisonOverride {
+  stronger: PlayRank;
+  weaker: PlayRank;
 }
 
 export const BASE_STRENGTH_ORDER: StrengthOrder = {
@@ -26,5 +36,19 @@ export function compareRanks(
   right: PlayRank,
   order: StrengthOrder,
 ): number {
+  for (
+    let index = (order.comparisonOverrides?.length ?? 0) - 1;
+    index >= 0;
+    index -= 1
+  ) {
+    const override = order.comparisonOverrides?.[index];
+    if (!override) continue;
+    if (left === override.stronger && right === override.weaker) {
+      return 1;
+    }
+    if (left === override.weaker && right === override.stronger) {
+      return -1;
+    }
+  }
   return rankPosition(left, order) - rankPosition(right, order);
 }

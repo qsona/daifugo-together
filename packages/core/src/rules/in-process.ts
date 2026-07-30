@@ -160,6 +160,15 @@ export function createInProcessRuleChainPort(
         if (next.revolution === undefined && result.revolution !== undefined) {
           next = { ...next, revolution: result.revolution };
         }
+        if (
+          next.comparisonOverrides === undefined &&
+          result.comparisonOverrides !== undefined
+        ) {
+          next = {
+            ...next,
+            comparisonOverrides: result.comparisonOverrides,
+          };
+        }
         if (changed(result, next)) {
           influenced.add(entry.ruleId);
         }

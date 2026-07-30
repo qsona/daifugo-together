@@ -1,6 +1,10 @@
 import { CARD_RANKS, type CardRank } from '../cards/card.js';
 import type { Play } from '../play/play.js';
-import type { StrengthOrder } from '../play/strength.js';
+import type {
+  PlayRank,
+  StrengthComparisonOverride,
+  StrengthOrder,
+} from '../play/strength.js';
 import type { EffectHook, RuleChainPort } from './chain.js';
 import type {
   Legality,
@@ -51,11 +55,18 @@ export function cloneValidStrengthOrder(value: unknown): StrengthOrder | null {
     const cloned: unknown = structuredClone(value);
     if (
       !isPlainRecord(cloned) ||
-      !hasExactKeys(cloned, ['ranking'], ['revolution']) ||
+      !hasExactKeys(
+        cloned,
+        ['ranking'],
+        ['revolution', 'comparisonOverrides'],
+      ) ||
       !Array.isArray(cloned.ranking) ||
       cloned.ranking.length !== CARD_RANKS.length ||
       (cloned.revolution !== undefined &&
-        typeof cloned.revolution !== 'boolean')
+        typeof cloned.revolution !== 'boolean') ||
+      (cloned.comparisonOverrides !== undefined &&
+        (!Array.isArray(cloned.comparisonOverrides) ||
+          cloned.comparisonOverrides.length > 32))
     ) {
       return null;
     }
@@ -70,11 +81,36 @@ export function cloneValidStrengthOrder(value: unknown): StrengthOrder | null {
     ) {
       return null;
     }
+    const isPlayRank = (rank: unknown): rank is PlayRank =>
+      rank === 'joker' ||
+      (typeof rank === 'string' &&
+        CARD_RANKS.includes(rank as (typeof CARD_RANKS)[number]));
+    const comparisonOverrides = cloned.comparisonOverrides;
+    if (
+      comparisonOverrides !== undefined &&
+      !comparisonOverrides.every(
+        (override): override is StrengthComparisonOverride =>
+          isPlainRecord(override) &&
+          hasExactKeys(override, ['stronger', 'weaker']) &&
+          isPlayRank(override.stronger) &&
+          isPlayRank(override.weaker) &&
+          override.stronger !== override.weaker,
+      )
+    ) {
+      return null;
+    }
     return {
       ranking: [...ranking],
       ...(cloned.revolution === undefined
         ? {}
         : { revolution: cloned.revolution }),
+      ...(comparisonOverrides === undefined
+        ? {}
+        : {
+            comparisonOverrides: comparisonOverrides.map((override) => ({
+              ...override,
+            })),
+          }),
     };
   } catch {
     return null;
@@ -115,16 +151,26 @@ export function safeModifyStrength(
       return { result: base, influenced: [] };
     }
     const result = cloneValidStrengthOrder(returned.result);
-    const composed =
-      result && result.revolution === undefined && base.revolution !== undefined
-        ? { ...result, revolution: base.revolution }
-        : result;
-    return composed
-      ? {
-          result: composed,
-          influenced: validInfluenced(returned.influenced, entries),
-        }
-      : { result: base, influenced: [] };
+    if (!result) {
+      return { result: base, influenced: [] };
+    }
+    let composed: StrengthOrder = result;
+    if (composed.revolution === undefined && base.revolution !== undefined) {
+      composed = { ...composed, revolution: base.revolution };
+    }
+    if (
+      composed.comparisonOverrides === undefined &&
+      base.comparisonOverrides !== undefined
+    ) {
+      composed = {
+        ...composed,
+        comparisonOverrides: base.comparisonOverrides,
+      };
+    }
+    return {
+      result: composed,
+      influenced: validInfluenced(returned.influenced, entries),
+    };
   } catch {
     return { result: base, influenced: [] };
   }
