@@ -1,0 +1,10 @@
+{
+  "ruleId": "r0002-kaidan",
+  "name": "階段",
+  "description": "同じスートでランクが連続する3枚以上を階段として出せる。場の階段には、同じ枚数で、構成カード中の最強ランクがより強い階段だけを出せる。通常時は高いランク、革命中は低いランクを強いものとして比較する。",
+  "kind": "local",
+  "proposalId": "01KYQNNS0QARBJJRB8M5TJ4TT3",
+  "contractVersion": 1,
+  "engineFeatures": ["sequence"],
+  "messages": {}
+}
