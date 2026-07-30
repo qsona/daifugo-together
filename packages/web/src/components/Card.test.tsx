@@ -70,6 +70,16 @@ describe('ジョーカーの描画', () => {
     expect(card.textContent).toBe('JOKER');
   });
 
+  it('KV と同じ星を左端の帯と面の 2 か所に描く(重なっても帯の星で識別できる)', () => {
+    render(<Card card={{ id: 'JK0', rank: 'JOKER' }} />);
+    const card = screen.getByRole('img', { name: 'ジョーカー' });
+    expect(card.querySelectorAll('svg').length).toBe(2);
+    // 星は装飾なので、読み上げには出さない。
+    for (const svg of card.querySelectorAll('svg')) {
+      expect(svg.getAttribute('aria-hidden')).toBe('true');
+    }
+  });
+
   it('label 指定で 2 枚のジョーカーを読み上げ名で区別できる', () => {
     const onToggle = vi.fn();
     render(

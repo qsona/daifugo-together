@@ -39,15 +39,91 @@
   font-size: var(--font-size-caption);
 }
 
-/*
- * ジョーカーはスート記号を持たないので、左端の帯に JOKER を 1 文字ずつ
- * 縦に積む。色は紺のモノトーン(.black)で、既存の札と同じ造形に馴染ませる。
- */
+/* ============================================================
+   ジョーカー
+   造形は KV 2A の中央札(金の星 + 赤い JOKER)をそのまま持ち込む。
+   文字は重なると潰れるので、左端の帯は星だけにして、
+   面が見えているときだけ星と JOKER の組を大きく描く。
+   ============================================================ */
+
+/* 左端の帯。重なった札で見えるのはここ数 px なので星 1 つに絞る。 */
 .jokerIndex {
+  top: 4px;
+  left: 3px;
+}
+
+.jokerIndexStar {
+  display: block;
+  width: 13px;
+  height: 13px;
+  fill: var(--color-gold-400);
+  stroke: var(--color-border-strong);
+  /* viewBox 116 単位を 13px に落とすので、輪郭が約 1px になる太さを指定する。 */
+  stroke-width: 9;
+}
+
+/* 面の構図。星を面の中央に、JOKER を右端に置く。 */
+.jokerFace {
+  position: absolute;
+  inset: 0;
+  /* 右端の JOKER のぶんだけ中央をずらし、星と文字が重ならないようにする。 */
+  padding-right: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 星の後ろの淡い円。1 枚だけ質感を足して「特別な札」に見せる。 */
+.jokerFace::before {
+  content: '';
+  position: absolute;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--color-cream-200);
+}
+
+.jokerFaceStar {
+  position: relative;
+  width: 27px;
+  height: 27px;
+  fill: var(--color-gold-400);
+  stroke: var(--color-border-strong);
+  stroke-width: 5;
+}
+
+/*
+ * 赤い JOKER。KV と同じく字間を空ける。
+ * 縦組みにするのは、札の幅(52px)に横組みで収まらないから。
+ * 横組みだと折り返すか字間が潰れるうえ、重ねた札では左端で切れて
+ * 「JO」だけが見える。縦組みなら札の高さに余裕をもって収まり、
+ * 重なって隠れるときも左端の帯には出てこない(帯は星だけ)。
+ */
+.jokerWord {
+  position: absolute;
+  top: 50%;
+  right: 3px;
+  transform: translateY(-50%);
   writing-mode: vertical-rl;
-  text-orientation: upright;
-  font-size: var(--font-size-caption);
+  color: var(--color-red-500);
+  font-size: var(--font-size-micro);
   letter-spacing: 1px;
+  line-height: 1;
+}
+
+/* 場札は一回り小さい。星と円も同じ比率で詰める。 */
+.small .jokerFace {
+  padding-right: 11px;
+}
+
+.small .jokerFace::before {
+  width: 29px;
+  height: 29px;
+}
+
+.small .jokerFaceStar {
+  width: 21px;
+  height: 21px;
 }
 
 /* ♥♦ は KV のブランド赤、♠♣ は共通アウトラインの紺。 */

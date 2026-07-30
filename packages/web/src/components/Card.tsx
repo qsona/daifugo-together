@@ -7,7 +7,7 @@ export type Suit = 'spade' | 'heart' | 'diamond' | 'club';
 /** 1 枚の札が表示する内容だけを持つ view-model(エンジンの Card 型は写さない)。 */
 export type CardView = {
   id: string;
-  /** ジョーカーは suit を持たない(モノトーンで rank だけを描く)。 */
+  /** ジョーカーは suit を持たない(KV と同じ金の星 + 赤い JOKER で描く)。 */
   suit?: Suit;
   /** 表示上のランク文字列(A・2・…・K、ジョーカーは JOKER)。強さの順序はエンジン側の関心。 */
   rank: string;
@@ -31,6 +31,26 @@ const suitName: Record<Suit, string> = {
   diamond: 'ダイヤ',
   club: 'クラブ',
 };
+
+/**
+ * ジョーカーの星。KV 2A(タイトル画面)のジョーカー札と同じ多角形をそのまま使う。
+ * 金地・紺の輪郭・角の丸い継ぎ目まで揃えて、タイトルと盤面で同じ札に見えるようにする。
+ */
+const JOKER_STAR_POINTS =
+  '0,-92 13,-52 55,-52 21,-27 34,14 0,-11 -34,14 -21,-27 -55,-52 -13,-52';
+
+function JokerStar({ className }: { className: string | undefined }) {
+  return (
+    <svg
+      className={className}
+      viewBox="-58 -95 116 112"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <polygon points={JOKER_STAR_POINTS} strokeLinejoin="round" />
+    </svg>
+  );
+}
 
 type CardProps = {
   card: CardView;
@@ -73,13 +93,30 @@ export function Card({
       <span className={styles.suit}>{suitGlyph[card.suit]}</span>
     </span>
   ) : (
-    // ジョーカーはスート記号がないぶん、同じ左端の帯に JOKER を縦に積む。
+    /*
+     * ジョーカーの左端の帯は星 1 つだけにする。文字を縦に積むと帯の幅
+     * (重ねた札で 15px 前後)で潰れて読めなくなるが、記号なら潰れない。
+     */
     <span className={cx(styles.index, styles.jokerIndex)} aria-hidden="true">
-      {card.rank}
+      <JokerStar className={styles.jokerIndexStar} />
     </span>
   );
 
-  const face = index;
+  /*
+   * 面が見えているジョーカーは KV と同じ構図(大きな金の星 + 赤い JOKER)で描く。
+   * 重なって隠れても左端の星だけで識別できるので、ここは読みやすさ優先で大きく取る。
+   */
+  const face = card.suit ? (
+    index
+  ) : (
+    <>
+      {index}
+      <span className={styles.jokerFace} aria-hidden="true">
+        <JokerStar className={styles.jokerFaceStar} />
+        <span className={styles.jokerWord}>{card.rank}</span>
+      </span>
+    </>
+  );
 
   if (!onToggle) {
     return (
