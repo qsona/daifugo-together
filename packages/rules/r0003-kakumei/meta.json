@@ -1,0 +1,9 @@
+{
+  "ruleId": "r0003-kakumei",
+  "name": "革命",
+  "description": "同一ランクのカードを4枚以上まとめて出すたびに革命状態を切り替える。革命中はジョーカーを除くカードの強さを逆転し、革命中に3を含む最後の手で上がったプレイヤーを最低順位にする。",
+  "kind": "local",
+  "proposalId": "01KYQNNS1K2PMF5DBBKAR0W729",
+  "contractVersion": 1,
+  "messages": {}
+}
