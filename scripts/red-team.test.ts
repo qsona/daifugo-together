@@ -72,13 +72,13 @@ describe('CX-03 red-team suite', () => {
     expect(result.signal).toBe('SIGKILL');
   });
 
-  it('実workflowのsimulation jobにも10分timeoutとquality依存がある', async () => {
+  it('実workflowのsimulation jobにも20分timeoutとquality依存がある', async () => {
     const workflow = await readFile(
       '.github/workflows/rule-pr-checks.yml',
       'utf8',
     );
     expect(workflow).toMatch(
-      /simulation:\n\s+needs: quality\n\s+runs-on:[\s\S]*?timeout-minutes: 10/u,
+      /simulation:\n\s+needs: quality\n\s+runs-on:[\s\S]*?timeout-minutes: 20/u,
     );
   });
 });
