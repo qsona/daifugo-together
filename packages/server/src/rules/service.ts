@@ -290,7 +290,7 @@ export class RuleRegistryService {
               !createdRule &&
               (rule.name !== meta.name || rule.description !== meta.description)
             ) {
-              rule = this.#repository.updateMetadata({
+              this.#repository.updateMetadata({
                 ruleId,
                 name: meta.name,
                 description: meta.description,
