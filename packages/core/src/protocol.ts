@@ -198,7 +198,8 @@ export const clientPayloadSchemas = {
   'game:play': z
     .object({
       turnSeq: turnSeqSchema,
-      cards: z.array(z.string().min(1)).min(1).max(4),
+      cards: z.array(z.string().min(1)).min(1).max(14),
+      kind: z.enum(['single', 'set', 'sequence']).optional(),
     })
     .strict(),
   'game:pass': z.object({ turnSeq: turnSeqSchema }).strict(),

@@ -1,4 +1,4 @@
-import type { Card, Play, RoomGameEvent } from '@daifugo/core';
+import type { Card, CardRank, Play, RoomGameEvent } from '@daifugo/core';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -8,11 +8,11 @@ import {
   type GuideState,
 } from './guide';
 
-function card(id: string, rank: Card['rank']): Card {
+function card(id: string, rank: CardRank): Card & { kind: 'natural' } {
   return { kind: 'natural', id, suit: 'spade', rank };
 }
 
-function play(...cards: Card[]): Play {
+function play(...cards: (Card & { kind: 'natural' })[]): Play {
   return {
     kind: cards.length === 1 ? 'single' : 'set',
     cards,
@@ -118,6 +118,34 @@ describe('TU-03: reduceGuide', () => {
 
     const next = step(first.state, snapshot('room:2', { legalMoves: [pair] }));
     expect(next.cue).toBe('pairAvailable');
+  });
+
+  it('階段だけの複数枚合法手ではpairAvailableを出さず、setが混ざれば出す', () => {
+    const sequence: Play = {
+      kind: 'sequence',
+      cards: [card('S03', '3'), card('S04', '4'), card('S05', '5')],
+      count: 3,
+      repRank: '5',
+    };
+    const first = step(
+      createGuideState(),
+      snapshot('room:1', { legalMoves: [sequence] }),
+    );
+    expect(first.cue).toBe('firstTurn');
+
+    // 「おなじ数字は 2 枚 いっしょに出せるよ」は階段には当てはまらない。
+    const sequenceOnly = step(
+      first.state,
+      snapshot('room:2', { legalMoves: [sequence] }),
+    );
+    expect(sequenceOnly.cue).toBeNull();
+
+    const pair = play(card('S08', '8'), card('H08', '8'));
+    const withPair = step(
+      sequenceOnly.state,
+      snapshot('room:3', { legalMoves: [sequence, pair] }),
+    );
+    expect(withPair.cue).toBe('pairAvailable');
   });
 
   it('2戦目ではガイドを返さない', () => {

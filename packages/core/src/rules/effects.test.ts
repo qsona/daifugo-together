@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createDeck } from '../cards/card.js';
+import { createDeck, type NaturalCard } from '../cards/card.js';
 import { reduceGame } from '../engine/reducer.js';
 import { startGame } from '../game/start-game.js';
 import type { GameConfig, GameState } from '../game/types.js';
@@ -40,7 +40,9 @@ function oneCardState(ruleChain: RuleChainEntry[]): {
 } {
   const deck = createDeck();
   const cards = ['3', '4', '5', '6'].map((rank) => {
-    const card = deck.find((candidate) => candidate.rank === rank);
+    const card = deck.find(
+      (candidate) => candidate.kind === 'natural' && candidate.rank === rank,
+    );
     if (!card) {
       throw new Error(`Missing ${rank}`);
     }
@@ -161,7 +163,10 @@ describe('GE-04 effect pipeline and lifecycle hooks', () => {
       },
     };
     const fixture = oneCardState([effectEntry, transformEntry]);
-    const fieldCard = createDeck().find((card) => card.rank === '10')!;
+    const fieldCard = createDeck().find(
+      (card): card is NaturalCard =>
+        card.kind === 'natural' && card.rank === '10',
+    )!;
     const state: GameState = {
       ...fixture.state,
       public: {
@@ -984,7 +989,10 @@ describe('GE-04 effect pipeline and lifecycle hooks', () => {
     const source = seats.find((candidate) => candidate !== player);
     const moved = source
       ? started.players[source]?.hand.find(
-          (candidate) => candidate.rank !== played?.rank,
+          (candidate) =>
+            candidate.kind === 'natural' &&
+            played?.kind === 'natural' &&
+            candidate.rank !== played.rank,
         )
       : undefined;
     if (!player || !played || !source || !moved) {
@@ -1206,7 +1214,7 @@ describe('GE-04 effect pipeline and lifecycle hooks', () => {
     const privateCard = Object.values(started.players).find(
       (candidate) => candidate.id !== player,
     )?.hand[0];
-    if (!player || !card || !privateCard) {
+    if (!player || !card || !privateCard || privateCard.kind !== 'natural') {
       throw new Error('Expected opening play');
     }
     const stateWithPriorDisclosure: GameState = {
@@ -1254,7 +1262,9 @@ describe('GE-04 effect pipeline and lifecycle hooks', () => {
 
   it('同一Effectバッチで手札へ戻したカードIDをannounceしない', () => {
     const ruleEntry = entry('r0112-rehidden-announce');
-    const hiddenCard = createDeck().find((card) => card.rank === '7');
+    const hiddenCard = createDeck().find(
+      (card) => card.kind === 'natural' && card.rank === '7',
+    );
     if (!hiddenCard) {
       throw new Error('Expected a hidden card');
     }
@@ -1648,7 +1658,7 @@ describe('GE-04 effect pipeline and lifecycle hooks', () => {
     const started = startGame(config, isolatedRuntime);
     const player = started.state.public.turn;
     const card = player ? started.state.players[player]?.hand[0] : undefined;
-    if (!player || !card) {
+    if (!player || !card || card.kind !== 'natural') {
       throw new Error('Expected opening play');
     }
     const original = { id: card.id, rank: card.rank };

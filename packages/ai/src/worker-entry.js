@@ -58,8 +58,13 @@ function sortWeakFirst(plays, strength) {
   );
 }
 
-function knownCardZones(view) {
-  const deck = new Map(core.createDeck().map((card) => [card.id, card]));
+function knownCardZones(view, engineFeatures) {
+  // ジョーカー等の機能宣言つき部屋ではデッキが 52 枚ではない。ruleChain 由来の
+  // 機能集合で同じデッキを再構成しないと、保存則チェックが常に破れて
+  // 全手番が heuristic フォールバックに落ちる。
+  const deck = new Map(
+    core.createDeck(engineFeatures).map((card) => [card.id, card]),
+  );
   const zones = new Map();
   const clearKnownField = () => {
     for (const [cardId, zone] of zones) {
@@ -110,9 +115,9 @@ function knownCardZones(view) {
   return { deck, zones };
 }
 
-function determinize(view, seed, iteration) {
+function determinize(view, seed, iteration, engineFeatures) {
   const rng = core.seedRng(`${seed}:world:${iteration}`);
-  const { deck, zones } = knownCardZones(view);
+  const { deck, zones } = knownCardZones(view, engineFeatures);
   const unknown = [...deck.values()].filter((card) => !zones.has(card.id));
   const shuffled = shuffle(unknown, rng);
   let offset = 0;
@@ -487,7 +492,8 @@ async function search(payload, onProgress) {
       setMemory: structuredClone(payload.ruleContext?.setMemory ?? {}),
     },
   });
-  const sample = determinize(payload.view, payload.seed, -1);
+  const engineFeatures = core.engineFeaturesOf(ruleChain);
+  const sample = determinize(payload.view, payload.seed, -1, engineFeatures);
   sample.private.memory = structuredClone(
     payload.ruleContext?.gameMemory ?? {},
   );
@@ -529,7 +535,12 @@ async function search(payload, onProgress) {
       Math.max(1, completed),
       payload.config.ucbC,
     );
-    const world = determinize(payload.view, payload.seed, completed);
+    const world = determinize(
+      payload.view,
+      payload.seed,
+      completed,
+      engineFeatures,
+    );
     world.private.memory = structuredClone(
       payload.ruleContext?.gameMemory ?? {},
     );

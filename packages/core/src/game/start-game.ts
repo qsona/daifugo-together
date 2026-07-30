@@ -14,6 +14,7 @@ import type {
   PublicGameEvent,
 } from './types.js';
 import { noRuleRuntime, type RuleRuntime } from '../rules/chain.js';
+import { engineFeaturesOf } from '../rules/contract.js';
 import { executeEffectHook } from '../engine/effects.js';
 import { activePlayers, finishGame } from '../engine/standing.js';
 
@@ -158,7 +159,10 @@ export function startGame(
   runtime: RuleRuntime = noRuleRuntime(),
 ): GameTransition {
   validateConfig(config);
-  const shuffled = shuffle(createDeck(), seedRng(config.gameSeed));
+  const shuffled = shuffle(
+    createDeck(engineFeaturesOf(config.ruleChain)),
+    seedRng(config.gameSeed),
+  );
   const start = randomInt(shuffled.rng, config.seats.length);
   const hands = deal(shuffled.cards, config.seats, start.value);
   const firstPlayer = config.seats.find((seat) =>

@@ -7,9 +7,15 @@ export type Suit = 'spade' | 'heart' | 'diamond' | 'club';
 /** 1 枚の札が表示する内容だけを持つ view-model(エンジンの Card 型は写さない)。 */
 export type CardView = {
   id: string;
-  suit: Suit;
-  /** 表示上のランク文字列(A・2・…・K)。強さの順序はエンジン側の関心。 */
+  /** ジョーカーは suit を持たない(モノトーンで rank だけを描く)。 */
+  suit?: Suit;
+  /** 表示上のランク文字列(A・2・…・K、ジョーカーは JOKER)。強さの順序はエンジン側の関心。 */
   rank: string;
+  /**
+   * 読み上げ用の札名。省略時は suit+rank(suit なしは「ジョーカー」)。
+   * ジョーカー 2 枚を支援技術で区別するために使う(例:「ジョーカー1」)。
+   */
+  label?: string;
 };
 
 const suitGlyph: Record<Suit, string> = {
@@ -44,7 +50,9 @@ export function Card({
   onDimmedTap,
 }: CardProps) {
   const isRed = card.suit === 'heart' || card.suit === 'diamond';
-  const label = `${suitName[card.suit]}の${card.rank}`;
+  const label =
+    card.label ??
+    (card.suit ? `${suitName[card.suit]}の${card.rank}` : 'ジョーカー');
   const className = cx(
     styles.card,
     isRed ? styles.red : styles.black,
@@ -59,10 +67,15 @@ export function Card({
    * 各札の見えている部分は左端の細い帯だけになる。そこに情報を集めておけば
    * 扇状に重なっていても全部の札が読める(カードゲーム UI の定石)。
    */
-  const index = (
+  const index = card.suit ? (
     <span className={styles.index} aria-hidden="true">
       <span className={styles.rank}>{card.rank}</span>
       <span className={styles.suit}>{suitGlyph[card.suit]}</span>
+    </span>
+  ) : (
+    // ジョーカーはスート記号がないぶん、同じ左端の帯に JOKER を縦に積む。
+    <span className={cx(styles.index, styles.jokerIndex)} aria-hidden="true">
+      {card.rank}
     </span>
   );
 

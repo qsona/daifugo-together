@@ -71,8 +71,11 @@ export function resolveCardSelector(
       return selector.cardIds.filter((cardId) => availableIds.has(cardId));
     }
     case 'byRank':
+      // ジョーカーは byRank で選択できない (既存の selector 語彙のまま)。
       return available
-        .filter((card) => card.rank === selector.rank)
+        .filter(
+          (card) => card.kind === 'natural' && card.rank === selector.rank,
+        )
         .map((card) => card.id);
     case 'all':
       return available.map((card) => card.id);
@@ -144,10 +147,16 @@ function appendToZone(
       if (!current || cards.length === 0) {
         return state;
       }
-      const combined = [...current.play.cards, ...cards];
-      if (combined.some((card) => card.rank !== combined[0]?.rank)) {
+      if (
+        current.play.kind === 'sequence' ||
+        cards.some(
+          (card) =>
+            card.kind !== 'natural' || card.rank !== current.play.repRank,
+        )
+      ) {
         return state;
       }
+      const combined = sortCards([...current.play.cards, ...cards]);
       return {
         ...state,
         public: {
@@ -159,9 +168,9 @@ function appendToZone(
               play: {
                 ...current.play,
                 kind: combined.length === 1 ? 'single' : 'set',
-                cards: sortCards(combined),
+                cards: combined,
                 count: combined.length,
-                repRank: combined[0]!.rank,
+                repRank: current.play.repRank,
               },
             },
           },
@@ -217,6 +226,14 @@ function takeFromZone(
         return { state, cards: [] };
       }
       const remaining = removeCardIds(current.play.cards, selectedIds);
+      // sequence の場からの部分取り出しは形が壊れるため no-op にする
+      // (appendToZone / applyMoveCards の sequence ガードと対称)。
+      if (current.play.kind === 'sequence' && remaining.length > 0) {
+        return { state, cards: [] };
+      }
+      const remainingNatural = remaining.find(
+        (card) => card.kind === 'natural',
+      );
       return {
         state: {
           ...state,
@@ -238,7 +255,7 @@ function takeFromZone(
                         kind: remaining.length === 1 ? 'single' : 'set',
                         cards: remaining,
                         count: remaining.length,
-                        repRank: remaining[0]!.rank,
+                        repRank: remainingNatural?.rank ?? 'joker',
                       },
                     },
                   },
@@ -303,9 +320,23 @@ function applyMoveCards(
   if (
     effect.to.kind === 'field' &&
     state.public.field.current &&
-    selected.some(
-      (card) => card.rank !== state.public.field.current?.play.repRank,
-    )
+    (state.public.field.current.play.kind === 'sequence' ||
+      selected.some(
+        (card) =>
+          card.kind !== 'natural' ||
+          card.rank !== state.public.field.current?.play.repRank,
+      ))
+  ) {
+    return {
+      state,
+      events: [],
+      detail: { applied: false, reason: 'incompatible-field-cards' },
+    };
+  }
+  if (
+    effect.from.kind === 'field' &&
+    state.public.field.current?.play.kind === 'sequence' &&
+    selected.length < state.public.field.current.play.cards.length
   ) {
     return {
       state,

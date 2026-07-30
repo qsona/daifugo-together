@@ -15,6 +15,23 @@ import type { StrengthOrder } from '../play/strength.js';
 
 export const ENGINE_CONTRACT_VERSION = 1;
 
+/** エンジンのネイティブ機能のうち、ルールが宣言で有効化できるもの。 */
+export type EngineFeature = 'sequence' | 'jokers';
+
+export const ENGINE_FEATURES: readonly EngineFeature[] = ['sequence', 'jokers'];
+
+/**
+ * ルールチェーン全体で有効なエンジン機能の和集合を返す。
+ * 返り値の順序は ENGINE_FEATURES の宣言順で決定的。
+ */
+export function engineFeaturesOf(
+  ruleChain: readonly Pick<RuleChainEntry, 'engineFeatures'>[],
+): EngineFeature[] {
+  return ENGINE_FEATURES.filter((feature) =>
+    ruleChain.some((entry) => entry.engineFeatures?.includes(feature)),
+  );
+}
+
 export interface PriorityKey {
   score: number;
   activatedAt: number;
@@ -28,6 +45,8 @@ export interface RuleChainEntry {
   priority: PriorityKey;
   bundleHash: string;
   contractVersion: number;
+  /** meta.engineFeatures から転記される。省略時は []。 */
+  engineFeatures?: readonly EngineFeature[];
 }
 
 export interface RuleMeta {
@@ -39,6 +58,8 @@ export interface RuleMeta {
   proposalId: string;
   contractVersion: number;
   messages: Record<string, string>;
+  /** このルールが要求するエンジン機能。省略時は []。 */
+  engineFeatures?: readonly EngineFeature[];
 }
 
 export interface RuleModule {

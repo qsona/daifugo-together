@@ -26,6 +26,7 @@ function formatSpec(spec: RuleSpecification): string {
     `  要約: ${spec.summary}`,
     `  hooks: ${list(spec.hooks)}`,
     `  effects: ${list(spec.effects)}`,
+    `  engineFeatures: ${list(spec.engineFeatures ?? [])}`,
     `  テスト観点: ${list(spec.testPoints)}`,
     `  備考: ${spec.notes || 'なし'}`,
   ].join('\n');

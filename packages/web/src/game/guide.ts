@@ -73,7 +73,7 @@ export function reduceGuide(
       ? (['firstTurn'] as const)
       : []),
     ...(input.legalMoves?.length === 0 ? (['noLegalMove'] as const) : []),
-    ...(input.legalMoves?.some((move) => move.count >= 2)
+    ...(input.legalMoves?.some((move) => move.kind === 'set' && move.count >= 2)
       ? (['pairAvailable'] as const)
       : []),
     ...(input.fieldCardCount > 0 ? (['followTurn'] as const) : []),

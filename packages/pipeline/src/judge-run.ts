@@ -10,6 +10,7 @@ import {
   type PipelineMutationResult,
 } from '@daifugo/server';
 import { CodexCxJudge } from './app-server-judge.js';
+import { CX01_PROMPT_VERSION } from './judge-prompt.js';
 import { runCxJudgementBatch } from './cx-batch.js';
 import { selectPipelineWork } from './queue-selection.js';
 
@@ -148,6 +149,8 @@ const attempts = positiveIntegerOption(
 );
 const reasoningEffort = effort();
 const listUrl = new URL('/admin/pipeline/screening', baseUrl);
+// プロンプト版を上げたとき、旧版の未確定AI判定を再判定対象に含めてもらう。
+listUrl.searchParams.set('promptVersion', CX01_PROMPT_VERSION);
 const listed = pendingItems(await requestJson(listUrl, token));
 const selected = selectPipelineWork(listed, limit);
 const items = selected.actionable;

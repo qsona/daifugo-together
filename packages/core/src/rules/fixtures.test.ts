@@ -68,11 +68,15 @@ const suitBind: RuleModule = {
   meta: meta('r-fixture-suit-bind', 'スート縛り'),
   hooks: {
     modifyLegality: (context, play, base) => {
-      const fieldSuit = context.game.field.current?.play.cards[0]?.suit;
+      const fieldFirst = context.game.field.current?.play.cards[0];
+      const fieldSuit =
+        fieldFirst?.kind === 'natural' ? fieldFirst.suit : undefined;
       if (
         base.legal &&
         fieldSuit &&
-        play.cards.some((card) => card.suit !== fieldSuit)
+        play.cards.some(
+          (card) => card.kind === 'natural' && card.suit !== fieldSuit,
+        )
       ) {
         return { legal: false, reasonKey: 'fixture.suit-bind' };
       }

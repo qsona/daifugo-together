@@ -159,6 +159,45 @@ describe('CX-04 rule registry', () => {
     expect(onAvailabilityChanged).toHaveBeenCalledTimes(2);
   });
 
+  it('meta.engineFeaturesをチェーンentryへ転記し、未知の宣言は登録もチェーン投入も拒否する', () => {
+    const { persistence, register } = setup();
+    register({ id: 'r0001-seq', slug: 'seq', name: '階段' });
+    register({ id: 'r0002-plain', slug: 'plain', name: '通常' });
+    register({ id: 'r0003-bad', slug: 'bad', name: '未知機能' });
+    const service = new RuleRegistryService(
+      persistence.rules,
+      [
+        codeRule('r0001-seq', '階段', {
+          engineFeatures: ['sequence', 'jokers'],
+        }),
+        codeRule('r0002-plain', '通常'),
+        codeRule('r0003-bad', '未知機能', {
+          engineFeatures: ['staircase'] as unknown as NonNullable<
+            RuleModule['meta']['engineFeatures']
+          >,
+        }),
+      ],
+      { now: () => 2_000 },
+    );
+
+    // 登録同期: 未知の engineFeatures はコード登録の失敗として報告される。
+    const sync = service.synchronizeCodeRegistry();
+    expect(sync.failures).toContainEqual({
+      ruleId: 'r0003-bad',
+      detail: 'unknown engine features: staircase',
+    });
+
+    // チェーン構築: meta の宣言が entry へ転記され、未宣言は省略、
+    // 未知宣言のルールはチェーンに載らない。
+    const entries = service.availableRules();
+    expect(entries.map(({ ruleId }) => ruleId)).toEqual([
+      'r0001-seq',
+      'r0002-plain',
+    ]);
+    expect(entries[0]!.engineFeatures).toEqual(['sequence', 'jokers']);
+    expect(entries[1]!.engineFeatures).toBeUndefined();
+  });
+
   it('部屋作成後のdisableも最初のセット開始時に再読込し、進行中セットは固定する', () => {
     const { persistence, register } = setup();
     register({ id: 'r0001-a', slug: 'a', name: 'ルールA' });

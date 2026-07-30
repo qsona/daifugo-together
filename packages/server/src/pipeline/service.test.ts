@@ -480,7 +480,7 @@ describe('CX-01 judgement and VERDICT_CONFIRMATION', () => {
     );
   });
 
-  it('同じrun IDは冪等、別run IDの再判定は追記して最新を有効にする', async () => {
+  it('同じrun ID・同じプロンプト版は冪等、新版の再判定は追記して最新を有効にする', async () => {
     const { persistence, proposal, local, pipeline } = await setup();
     local.record(proposal.id, {
       verdict: 'clean',
@@ -495,6 +495,15 @@ describe('CX-01 judgement and VERDICT_CONFIRMATION', () => {
       status: 'already_recorded',
       judgement: first.status === 'recorded' ? { id: first.judgement.id } : {},
     });
+    expect(
+      pipeline.recordAi(proposal.id, {
+        ...aiApprove(),
+        runId: 'run-same-version-retry',
+      }),
+    ).toMatchObject({
+      status: 'already_recorded',
+      judgement: first.status === 'recorded' ? { id: first.judgement.id } : {},
+    });
 
     const second = pipeline.recordAi(proposal.id, {
       verdict: 'reject',
@@ -506,7 +515,7 @@ describe('CX-01 judgement and VERDICT_CONFIRMATION', () => {
       scaffoldMeta: null,
       confidence: 0.9,
       model: 'gpt-5.6-sol',
-      promptVersion: 'cx01-v1',
+      promptVersion: 'cx01-v2',
       latencyMs: 9,
       runId: 'run-re-evaluation',
     });
@@ -518,6 +527,176 @@ describe('CX-01 judgement and VERDICT_CONFIRMATION', () => {
       verdict: 'reject',
       runId: 'run-re-evaluation',
     });
+  });
+
+  it('SPECのengineFeaturesを既知集合で検証し、省略時は空配列にする', async () => {
+    const { proposal, local, pipeline, submissions } = await setup();
+    const secondResult = await submissions.submit({
+      token: 'pipeline-token-0001',
+      ip: '127.0.0.1',
+      body: {
+        kind: 'original',
+        name: '階段',
+        body: '同じスートの連続する3枚以上を出せる。',
+      },
+    });
+    if (secondResult.status !== 200) throw new Error('second submit failed');
+    const second = secondResult.body.proposal;
+    for (const item of [proposal, second]) {
+      local.record(item.id, {
+        verdict: 'clean',
+        reason: '通常の提案',
+        evidence: null,
+        model: 'gpt-5.6-sol',
+        latencyMs: 5,
+      });
+    }
+
+    expect(
+      pipeline.recordAi(proposal.id, {
+        ...aiApprove(),
+        spec: { ...spec(), engineFeatures: ['staircase'] },
+      }),
+    ).toEqual({ status: 'invalid', error: 'invalid_judgement' });
+
+    const omitted = pipeline.recordAi(proposal.id, aiApprove());
+    expect(omitted).toMatchObject({
+      status: 'recorded',
+      judgement: { spec: { engineFeatures: [] } },
+    });
+
+    const declared = pipeline.recordAi(second.id, {
+      ...aiApprove(),
+      spec: { ...spec('階段'), engineFeatures: ['sequence', 'jokers'] },
+    });
+    expect(declared).toMatchObject({
+      status: 'recorded',
+      judgement: { spec: { engineFeatures: ['sequence', 'jokers'] } },
+    });
+    if (declared.status !== 'recorded') return;
+    expect(
+      pipeline.approveSpec(second.id, {
+        judgementId: declared.judgement.id,
+        actor: 'developer',
+        spec: { ...spec('階段'), engineFeatures: ['sequence'] },
+        scaffoldMeta: { ...scaffoldMeta(), slug: 'kaidan' },
+      }),
+    ).toMatchObject({
+      status: 'confirmed',
+      judgement: { spec: { engineFeatures: ['sequence'] } },
+    });
+  });
+
+  it('プロンプト版指定時は旧版の未確定AI判定を再判定対象に含める', async () => {
+    const { persistence, proposal, local, pipeline } = await setup();
+    local.record(proposal.id, {
+      verdict: 'clean',
+      reason: '通常の提案',
+      evidence: null,
+      model: 'gpt-5.6-sol',
+      latencyMs: 5,
+    });
+    const old = pipeline.recordAi(proposal.id, {
+      verdict: 'reject',
+      rejectCategory: 'contract',
+      rejectSubtype: 'A3',
+      reasonForUser: '新しい手の種類が必要なため実装できません。',
+      reasonInternal: 'Sequence play kind was not available in cx01-v2.',
+      spec: null,
+      scaffoldMeta: null,
+      confidence: 0.9,
+      model: 'gpt-5.6-sol',
+      promptVersion: 'cx01-v2',
+      latencyMs: 8,
+      runId: 'run-old-version',
+    });
+    if (old.status !== 'recorded') return;
+
+    expect(pipeline.pending()).toEqual([]);
+    expect(pipeline.pending(100, 'cx01-v2')).toEqual([]);
+    expect(pipeline.pending(100, 'cx01-v4')).toMatchObject([
+      { proposal: { id: proposal.id } },
+    ]);
+    expect(persistence.pipeline.pendingConfirmations()).toMatchObject([
+      { source: 'cx01', judgement: { id: old.judgement.id } },
+    ]);
+
+    const renewed = pipeline.recordAi(proposal.id, {
+      ...aiApprove(),
+      promptVersion: 'cx01-v4',
+      runId: 'run-new-version',
+    });
+    expect(renewed).toMatchObject({
+      status: 'recorded',
+      judgement: { verdict: 'approve', promptVersion: 'cx01-v4' },
+    });
+    if (renewed.status !== 'recorded') return;
+    expect(pipeline.pending(100, 'cx01-v4')).toEqual([]);
+
+    expect(
+      pipeline.confirmCxRejection(proposal.id, {
+        judgementId: old.judgement.id,
+        actor: 'developer',
+      }),
+    ).toEqual({ status: 'conflict', error: 'stale_or_nonreject_judgement' });
+
+    const approved = pipeline.approveSpec(proposal.id, {
+      judgementId: renewed.judgement.id,
+      actor: 'developer',
+      spec: spec(),
+      scaffoldMeta: scaffoldMeta(),
+    });
+    expect(approved).toMatchObject({ status: 'confirmed' });
+    expect(pipeline.pending(100, 'cx01-v5')).toEqual([]);
+  });
+
+  it('確定済みの旧版判定とNULL版判定の再判定対象を正しく分ける', async () => {
+    const { persistence, proposal, local, pipeline } = await setup();
+    local.record(proposal.id, {
+      verdict: 'clean',
+      reason: '通常の提案',
+      evidence: null,
+      model: 'gpt-5.6-sol',
+      latencyMs: 5,
+    });
+    // promptVersion NULL の AI 判定は常に「≠ current」として再判定対象になる。
+    persistence.pipeline.insertJudgement(proposal.id, {
+      verdict: 'reject',
+      rejectCategory: 'contract',
+      rejectSubtype: 'A3',
+      reasonForUser: '実装できません。',
+      reasonInternal: 'Legacy judgement without prompt version.',
+      spec: null,
+      scaffoldMeta: null,
+      confidence: 0.8,
+      decidedBy: 'ai',
+      model: 'gpt-5.6-sol',
+      promptVersion: null,
+      latencyMs: 7,
+      sourceCheckId: null,
+      sourceJudgementId: null,
+      runId: 'run-null-version',
+      actor: null,
+      createdAt: 10,
+    });
+    expect(pipeline.pending()).toEqual([]);
+    expect(pipeline.pending(100, 'cx01-v4')).toMatchObject([
+      { proposal: { id: proposal.id } },
+    ]);
+
+    // 開発者が旧判定をそのまま confirm すると proposal は rejected へ遷移し、
+    // 以後どのプロンプト版でも再判定対象にならない。
+    const judgementId = persistence.pipeline.latestAiJudgement(proposal.id)!.id;
+    expect(
+      pipeline.confirmCxRejection(proposal.id, {
+        judgementId,
+        actor: 'developer',
+      }),
+    ).toMatchObject({ status: 'confirmed' });
+    expect(persistence.proposals.findById(proposal.id)?.status).toBe(
+      'rejected',
+    );
+    expect(pipeline.pending(100, 'cx01-v4')).toEqual([]);
   });
 
   it('SPEC承認の途中失敗時にjudgement・job・statusを全てrollbackする', async () => {

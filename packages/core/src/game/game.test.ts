@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { DIAMOND_THREE_ID, compareCards } from '../cards/card.js';
+import {
+  DIAMOND_THREE_ID,
+  compareCards,
+  type NaturalCard,
+} from '../cards/card.js';
 import { reduceGame } from '../engine/reducer.js';
 import { samePlay } from '../play/play.js';
 import {
@@ -273,7 +277,12 @@ describe('GE-02 play, pass, and rejection', () => {
     if (!other || !hand) {
       throw new Error('Expected players and a hand');
     }
-    const differentRanks = hand.find((card) => card.rank !== hand[0]?.rank);
+    const differentRanks = hand.find(
+      (card) =>
+        card.kind === 'natural' &&
+        hand[0]?.kind === 'natural' &&
+        card.rank !== hand[0].rank,
+    );
     if (!differentRanks || !hand[0]) {
       throw new Error('Expected cards with different ranks');
     }
@@ -321,11 +330,15 @@ describe('GE-02 play, pass, and rejection', () => {
   it('場より弱い手とルールが禁止した手を区別して拒否する', () => {
     const game = started('too-weak');
     const twoOwner = seats.find((seat) =>
-      game.state.players[seat]?.hand.some((card) => card.rank === '2'),
+      game.state.players[seat]?.hand.some(
+        (card) => card.kind === 'natural' && card.rank === '2',
+      ),
     );
     const target = seats.find((seat) => seat !== twoOwner);
     const two = twoOwner
-      ? game.state.players[twoOwner]?.hand.find((card) => card.rank === '2')
+      ? game.state.players[twoOwner]?.hand.find(
+          (card) => card.kind === 'natural' && card.rank === '2',
+        )
       : undefined;
     const targetCard = target
       ? [...(game.state.players[target]?.hand ?? [])].sort(compareCards)[0]
@@ -380,10 +393,15 @@ describe('GE-02 play, pass, and rejection', () => {
     const lowOwner = seats.find(
       (seat) =>
         seat !== target &&
-        game.state.players[seat]?.hand.some((card) => card.rank === '3'),
+        game.state.players[seat]?.hand.some(
+          (card) => card.kind === 'natural' && card.rank === '3',
+        ),
     );
     const lowCard = lowOwner
-      ? game.state.players[lowOwner]?.hand.find((card) => card.rank === '3')
+      ? game.state.players[lowOwner]?.hand.find(
+          (card): card is NaturalCard =>
+            card.kind === 'natural' && card.rank === '3',
+        )
       : undefined;
     if (!strongestTargetCard || !lowOwner || !lowCard) {
       throw new Error('Expected a legal play for rule rejection');

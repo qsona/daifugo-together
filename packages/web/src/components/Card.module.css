@@ -39,6 +39,17 @@
   font-size: var(--font-size-caption);
 }
 
+/*
+ * ジョーカーはスート記号を持たないので、左端の帯に JOKER を 1 文字ずつ
+ * 縦に積む。色は紺のモノトーン(.black)で、既存の札と同じ造形に馴染ませる。
+ */
+.jokerIndex {
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  font-size: var(--font-size-caption);
+  letter-spacing: 1px;
+}
+
 /* ♥♦ は KV のブランド赤、♠♣ は共通アウトラインの紺。 */
 .red {
   color: var(--color-red-500);

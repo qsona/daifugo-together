@@ -3,7 +3,6 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import type { QueuedImplementation } from '@daifugo/server';
-import type { RuleMeta } from '@daifugo/core';
 
 export interface ScaffoldResult {
   directory: string;
@@ -53,7 +52,9 @@ export async function createRuleScaffold(
   return scaffold;
 }
 
-function ruleMetadata(item: QueuedImplementation): RuleMeta {
+// meta.json の内容。core の RuleMeta 型には依存せず、SPEC からの転記として構成する。
+function ruleMetadata(item: QueuedImplementation) {
+  const engineFeatures = item.spec.engineFeatures ?? [];
   return {
     ruleId: item.job.ruleId,
     name: item.spec.name,
@@ -64,6 +65,7 @@ function ruleMetadata(item: QueuedImplementation): RuleMeta {
       : { prefecture: item.proposal.prefecture }),
     proposalId: item.proposal.id,
     contractVersion: 1,
+    ...(engineFeatures.length === 0 ? {} : { engineFeatures }),
     messages: item.scaffoldMeta.messages,
   };
 }

@@ -59,3 +59,32 @@ describe('TU-02: 出せないカードの拒否フィードバック', () => {
     expect(card.getAttribute('aria-pressed')).toBe('false');
   });
 });
+
+describe('ジョーカーの描画', () => {
+  afterEach(cleanup);
+
+  it('スート記号なしで JOKER 表記だけを描き、既定の読み上げ名は「ジョーカー」', () => {
+    render(<Card card={{ id: 'JK0', rank: 'JOKER' }} />);
+    const card = screen.getByRole('img', { name: 'ジョーカー' });
+    // スートのグリフ(♠♥♦♣)を含まない。
+    expect(card.textContent).toBe('JOKER');
+  });
+
+  it('label 指定で 2 枚のジョーカーを読み上げ名で区別できる', () => {
+    const onToggle = vi.fn();
+    render(
+      <>
+        <Card
+          card={{ id: 'JK0', rank: 'JOKER', label: 'ジョーカー1' }}
+          onToggle={onToggle}
+        />
+        <Card
+          card={{ id: 'JK1', rank: 'JOKER', label: 'ジョーカー2' }}
+          onToggle={onToggle}
+        />
+      </>,
+    );
+    expect(screen.getByRole('button', { name: 'ジョーカー1' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'ジョーカー2' })).toBeTruthy();
+  });
+});

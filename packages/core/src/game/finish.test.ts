@@ -16,7 +16,9 @@ function oneCardState(): { config: GameConfig; state: GameState } {
     ruleChain: [],
   };
   const byRank = ['3', '4', '5', '6'].map((rank) => {
-    const card = cards.find((candidate) => candidate.rank === rank);
+    const card = cards.find(
+      (candidate) => candidate.kind === 'natural' && candidate.rank === rank,
+    );
     if (!card) {
       throw new Error(`Missing card rank: ${rank}`);
     }

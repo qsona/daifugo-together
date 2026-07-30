@@ -366,11 +366,16 @@ function cards(
     ? never
     : NonNullable<PlayerRoomView['game']>['yourHand'],
 ): CardView[] {
-  return cards.map((card) => ({
-    id: card.id,
-    suit: card.suit,
-    rank: card.rank,
-  }));
+  return cards.map((card) =>
+    card.kind === 'joker'
+      ? {
+          id: card.id,
+          rank: 'JOKER',
+          // 2 枚のジョーカーを支援技術で区別できるようにする。
+          label: `ジョーカー${String(card.index + 1)}`,
+        }
+      : { id: card.id, suit: card.suit, rank: card.rank },
+  );
 }
 
 function waitingMembers(room: PlayerRoomView): MemberListView[] {

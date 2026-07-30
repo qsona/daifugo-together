@@ -508,7 +508,8 @@ export function createAppServer(options: AppServerOptions): AppServer {
     request: IncomingMessage,
     response: ServerResponse,
   ): Promise<boolean> => {
-    const pathname = new URL(request.url ?? '/', 'http://localhost').pathname;
+    const requestUrl = new URL(request.url ?? '/', 'http://localhost');
+    const pathname = requestUrl.pathname;
     const isListing = pathname === '/admin/pipeline/screening';
     const isNextJob = pathname === '/admin/pipeline/next';
     const checkMatch = /^\/admin\/proposals\/([^/]+)\/check$/u.exec(pathname);
@@ -567,7 +568,12 @@ export function createAppServer(options: AppServerOptions): AppServer {
           stage: 'e6' as const,
           ...item,
         })),
-        ...(options.adminPipeline?.service.pending() ?? []).map((item) => ({
+        ...(
+          options.adminPipeline?.service.pending(
+            undefined,
+            requestUrl.searchParams.get('promptVersion') ?? undefined,
+          ) ?? []
+        ).map((item) => ({
           stage: 'cx01' as const,
           ...item,
         })),

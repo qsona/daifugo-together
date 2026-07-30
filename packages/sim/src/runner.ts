@@ -31,7 +31,9 @@ export interface SimulationRun {
   };
 }
 
-function entries(modules: readonly RuleModule[]): RuleChainEntry[] {
+export function ruleChainEntries(
+  modules: readonly RuleModule[],
+): RuleChainEntry[] {
   return modules.map((module, index) => ({
     ruleId: module.meta.ruleId,
     name: module.meta.name,
@@ -43,6 +45,11 @@ function entries(modules: readonly RuleModule[]): RuleChainEntry[] {
     },
     bundleHash: `ci-${module.meta.ruleId}`,
     contractVersion: module.meta.contractVersion,
+    // meta の宣言を entry へ転記する(engineFeaturesOf が参照する)。
+    // 未宣言は省略し、既存の entry 形を変えない。
+    ...((module.meta.engineFeatures?.length ?? 0) > 0
+      ? { engineFeatures: [...module.meta.engineFeatures!] }
+      : {}),
   }));
 }
 
@@ -69,7 +76,7 @@ export function runRuleSimulations(options: {
         games: options.games,
         gamesPerSet: 1,
         seed: `cx03:${configuration.name}:${String(seed)}`,
-        ruleChain: entries(configuration.modules),
+        ruleChain: ruleChainEntries(configuration.modules),
         port: createInProcessRuleChainPort(configuration.modules, {
           onIssue: (issue) => executionIssues.push(issue),
         }),
@@ -118,7 +125,7 @@ export async function runAiRuleSimulations(options: {
   for (const configuration of configurations) {
     for (let seed = 0; seed < options.seeds; seed += 1) {
       const executionIssues: RuleExecutionIssue[] = [];
-      const ruleChain = entries(
+      const ruleChain = ruleChainEntries(
         configuration.bundles.map((bundle) => bundle.module),
       ).map((entry) => {
         const bundle = configuration.bundles.find(

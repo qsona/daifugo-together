@@ -10,8 +10,14 @@ import type {
   PublicGameEvent,
 } from '../game/types.js';
 import { evaluateCandidates, generateCandidates } from '../play/candidates.js';
-import { interpretPlay, samePlay } from '../play/play.js';
+import {
+  matchPlayCandidates,
+  PLAY_KIND_ORDER,
+  type PlayCandidateMatch,
+} from '../play/play.js';
+import { rankPosition, type StrengthOrder } from '../play/strength.js';
 import { noRuleRuntime, type RuleRuntime } from '../rules/chain.js';
+import { engineFeaturesOf } from '../rules/contract.js';
 import { executeEffectHook } from './effects.js';
 import {
   activePlayers,
@@ -421,6 +427,33 @@ function removeCards(hand: readonly Card[], selected: readonly Card[]): Card[] {
   return hand.filter((card) => !selectedIds.has(card.id));
 }
 
+/**
+ * 解釈の決定順: 実効 StrengthOrder 上で最弱の repRank を先頭に、
+ * 同順位は kind 優先順 (single < set < sequence)、次いでカード ID 列の
+ * 辞書順で並べる。生成順に依存しない決定的な順序。
+ */
+function sortMatchesWeakestFirst(
+  matches: readonly PlayCandidateMatch[],
+  strength: StrengthOrder,
+): PlayCandidateMatch[] {
+  return [...matches].sort((left, right) => {
+    const byStrength =
+      rankPosition(left.play.repRank, strength) -
+      rankPosition(right.play.repRank, strength);
+    if (byStrength !== 0) {
+      return byStrength;
+    }
+    const byKind =
+      PLAY_KIND_ORDER[left.play.kind] - PLAY_KIND_ORDER[right.play.kind];
+    if (byKind !== 0) {
+      return byKind;
+    }
+    const leftIds = left.play.cards.map((card) => card.id).join(',');
+    const rightIds = right.play.cards.map((card) => card.id).join(',');
+    return leftIds.localeCompare(rightIds);
+  });
+}
+
 function reducePlay(
   config: GameConfig,
   state: GameState,
@@ -431,32 +464,40 @@ function reducePlay(
   if (!player) {
     return reject(state, action.player, 'CARD_NOT_IN_HAND');
   }
-  const interpreted = interpretPlay(player.hand, action.cards);
-  if (!interpreted.ok) {
-    return reject(state, action.player, interpreted.code);
-  }
-
   const baseFieldExists = state.public.field.current !== undefined;
-  const candidates = generateCandidates(player.hand);
-  const selectedIndex = candidates.findIndex((candidate) =>
-    samePlay(candidate, interpreted.play),
+  const candidates = generateCandidates(
+    player.hand,
+    engineFeaturesOf(config.ruleChain),
   );
-  if (selectedIndex < 0) {
-    return reject(state, action.player, 'INVALID_PLAY_SHAPE');
+  const matched = matchPlayCandidates(
+    player.hand,
+    action.cards,
+    candidates,
+    action.kind,
+  );
+  if (!matched.ok) {
+    return reject(state, action.player, matched.code);
   }
   const evaluated = evaluateCandidates(config, state, candidates, runtime, {
     authoritative: true,
   });
-  if (
-    !evaluated.plays.some((candidate) => samePlay(candidate, interpreted.play))
-  ) {
+  const legalMatches = matched.matches.filter(
+    (match) => evaluated.results[match.index]?.legal === true,
+  );
+  if (legalMatches.length === 0) {
     if (
-      evaluated.baseResults[selectedIndex]?.legal === false &&
-      baseFieldExists
+      baseFieldExists &&
+      matched.matches.every(
+        (match) => evaluated.baseResults[match.index]?.legal === false,
+      )
     ) {
       return reject(state, action.player, 'TOO_WEAK');
     }
-    const finalLegality = evaluated.results[selectedIndex];
+    const ordered = sortMatchesWeakestFirst(
+      matched.matches,
+      evaluated.strength,
+    );
+    const finalLegality = evaluated.results[ordered[0]!.index];
     return reject(
       state,
       action.player,
@@ -464,12 +505,16 @@ function reducePlay(
       finalLegality?.legal === false ? finalLegality.reasonKey : undefined,
     );
   }
+  const interpretedPlay = sortMatchesWeakestFirst(
+    legalMatches,
+    evaluated.strength,
+  )[0]!.play;
 
   const priorFieldCards = state.public.field.current?.play.cards ?? [];
   const playedEvent: PublicGameEvent = {
     type: 'played',
     player: action.player,
-    play: interpreted.play,
+    play: interpretedPlay,
   };
   const authoritativeInfluenced = evaluated.failsafeActivated
     ? []
@@ -479,7 +524,7 @@ function reducePlay(
     public: {
       ...evaluated.state.public,
       field: {
-        current: { play: interpreted.play, by: action.player },
+        current: { play: interpretedPlay, by: action.player },
         passedSinceLastPlay: [],
       },
       discard: [...evaluated.state.public.discard, ...priorFieldCards],
@@ -495,7 +540,7 @@ function reducePlay(
       ...evaluated.state.players,
       [action.player]: {
         ...player,
-        hand: removeCards(player.hand, interpreted.play.cards),
+        hand: removeCards(player.hand, interpretedPlay.cards),
       },
     },
   };
@@ -522,7 +567,7 @@ function reducePlay(
     nextState,
     runtime,
     'afterPlay',
-    interpreted.play,
+    interpretedPlay,
   );
   nextState = effects.state;
   const afterPlayFired = new Map(

@@ -727,6 +727,9 @@ describe('AI-02 rule following', () => {
       throw new Error('Expected two hidden opponents');
     }
     const movedCard = started.players[sourcePlayer]!.hand[0]!;
+    if (movedCard.kind !== 'natural') {
+      throw new Error('Expected a natural card in a 52-card deck');
+    }
     const baseView = buildPlayerSnapshot(
       config,
       started,

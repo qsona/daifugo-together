@@ -76,4 +76,32 @@ describe('shared client payload schemas', () => {
       }),
     ).toEqual({ displayName: 'たろう' });
   });
+
+  it('game:play は最大14枚と optional kind を受け付ける', () => {
+    const cards = Array.from({ length: 14 }, (_, index) => `C${index}`);
+    expect(
+      clientPayloadSchemas['game:play'].safeParse({ turnSeq: 0, cards })
+        .success,
+    ).toBe(true);
+    expect(
+      clientPayloadSchemas['game:play'].safeParse({
+        turnSeq: 0,
+        cards: [...cards, 'C14'],
+      }).success,
+    ).toBe(false);
+    expect(
+      clientPayloadSchemas['game:play'].safeParse({
+        turnSeq: 0,
+        cards: ['S07'],
+        kind: 'sequence',
+      }).success,
+    ).toBe(true);
+    expect(
+      clientPayloadSchemas['game:play'].safeParse({
+        turnSeq: 0,
+        cards: ['S07'],
+        kind: 'unknown',
+      }).success,
+    ).toBe(false);
+  });
 });

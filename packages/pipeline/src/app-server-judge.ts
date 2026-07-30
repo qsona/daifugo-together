@@ -80,6 +80,7 @@ const CX01_OUTPUT_SCHEMA = {
             'summary',
             'hooks',
             'effects',
+            'engineFeatures',
             'testPoints',
             'notes',
           ],
@@ -116,6 +117,14 @@ const CX01_OUTPUT_SCHEMA = {
                   'setMemory',
                   'announce',
                 ],
+              },
+            },
+            engineFeatures: {
+              type: 'array',
+              maxItems: 2,
+              items: {
+                type: 'string',
+                enum: ['sequence', 'jokers'],
               },
             },
             testPoints: {

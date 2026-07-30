@@ -1,10 +1,12 @@
 import {
   createInProcessRuleChainPort,
   ENGINE_CONTRACT_VERSION,
+  ENGINE_FEATURES,
   sortRuleChain,
   type RuleChainEntry,
   type RuleChainPort,
   type RuleExecutionIssue,
+  type RuleMeta,
   type RuleModule,
 } from '@daifugo/core';
 import type { AiRuleBundleRef } from '@daifugo/ai';
@@ -105,6 +107,21 @@ function disabledReason(value: unknown): ManualDisabledReason | null {
     : null;
 }
 
+/**
+ * meta.engineFeatures はデッキ構成や候補生成そのものを変えるため、
+ * 未知の値を持つコードは登録もチェーン投入も拒否する(既知集合のみ許可)。
+ * 宣言なしは [] と同義で常に合法(従来ルールの後方互換)。
+ */
+function engineFeaturesIssue(meta: RuleMeta): string | null {
+  const declared = (meta.engineFeatures ?? []) as readonly string[];
+  const unknown = declared.filter(
+    (feature) => !(ENGINE_FEATURES as readonly string[]).includes(feature),
+  );
+  return unknown.length > 0
+    ? `unknown engine features: ${unknown.join(', ')}`
+    : null;
+}
+
 function registryIssue(
   rule: StoredRule,
   registrations: readonly CodeRuleRegistration[],
@@ -115,6 +132,8 @@ function registryIssue(
   if (meta.contractVersion !== ENGINE_CONTRACT_VERSION) {
     return `unsupported contract version: ${String(meta.contractVersion)}`;
   }
+  const featureIssue = engineFeaturesIssue(meta);
+  if (featureIssue) return featureIssue;
   if (
     meta.ruleId !== rule.id ||
     meta.name !== rule.name ||
@@ -214,6 +233,11 @@ export class RuleRegistryService {
       }
       const registration = registrations[0]!;
       const meta = registration.module.meta;
+      const featureIssue = engineFeaturesIssue(meta);
+      if (featureIssue) {
+        failures.push({ ruleId, detail: featureIssue });
+        continue;
+      }
       const source = this.#releaseSource(meta.proposalId);
       const sourceIssue = this.#releaseSourceIssue(registration, source);
       if (sourceIssue) {
@@ -325,6 +349,7 @@ export class RuleRegistryService {
         continue;
       }
       const registration = registrations[0]!;
+      const engineFeatures = registration.module.meta.engineFeatures ?? [];
       entries.push({
         ruleId: rule.id,
         name: rule.name,
@@ -336,6 +361,11 @@ export class RuleRegistryService {
         },
         bundleHash: registration.bundleHash,
         contractVersion: registration.module.meta.contractVersion,
+        // meta の宣言をチェーン entry へ転記する(engineFeaturesOf が参照する)。
+        // 未宣言は省略し、既存の entry 形と JSON 表現を変えない。
+        ...(engineFeatures.length > 0
+          ? { engineFeatures: [...engineFeatures] }
+          : {}),
       });
     }
     return sortRuleChain(entries);

@@ -1,13 +1,13 @@
-import type { Card, Play } from '@daifugo/core';
+import type { Card, CardRank, Play } from '@daifugo/core';
 import { describe, expect, it } from 'vitest';
 
 import { deriveCardHints } from './hints';
 
-function card(id: string, rank: Card['rank']): Card {
+function card(id: string, rank: CardRank): Card & { kind: 'natural' } {
   return { kind: 'natural', id, suit: 'spade', rank };
 }
 
-function play(...cards: Card[]): Play {
+function play(...cards: (Card & { kind: 'natural' })[]): Play {
   return {
     kind: cards.length === 1 ? 'single' : 'set',
     cards,

@@ -35,6 +35,7 @@ function cxItem(
               summary: '革命状態を反転する。',
               hooks: ['onRevolution'],
               effects: ['setRevolution'],
+              engineFeatures: ['sequence'],
               testPoints: ['通常状態へ戻る'],
               notes: '',
               source: {
@@ -97,6 +98,7 @@ describe('interactive confirmation review', () => {
     expect(output).toContain('AI判定: APPROVE');
     expect(output).toContain('確信度: 94%');
     expect(output).toContain('hooks: onRevolution');
+    expect(output).toContain('engineFeatures: sequence');
     expect(output).toContain('slug: counter-revolution');
   });
 

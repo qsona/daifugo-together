@@ -30,7 +30,9 @@ function startedSet(gamesPerSet = 3) {
 function nearFinishGame(order: PlayerId[]): GameState {
   const deck = createDeck();
   const cards = ['3', '4', '5', '6'].map((rank) => {
-    const card = deck.find((candidate) => candidate.rank === rank);
+    const card = deck.find(
+      (candidate) => candidate.kind === 'natural' && candidate.rank === rank,
+    );
     if (!card) {
       throw new Error(`Missing rank: ${rank}`);
     }

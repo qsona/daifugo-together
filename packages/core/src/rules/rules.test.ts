@@ -65,10 +65,14 @@ function stateWithEight(config: GameConfig): {
 } {
   const state = startGame(config).state;
   const player = config.seats.find((id) =>
-    state.players[id]?.hand.some((card) => card.rank === '8'),
+    state.players[id]?.hand.some(
+      (card) => card.kind === 'natural' && card.rank === '8',
+    ),
   );
   const card = player
-    ? state.players[player]?.hand.find((candidate) => candidate.rank === '8')
+    ? state.players[player]?.hand.find(
+        (candidate) => candidate.kind === 'natural' && candidate.rank === '8',
+      )
     : undefined;
   if (!player || !card) {
     throw new Error('Expected an eight');

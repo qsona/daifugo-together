@@ -1,3 +1,5 @@
+import type { EngineFeature } from '../rules/contract.js';
+
 export const SUITS = ['spade', 'heart', 'diamond', 'club'] as const;
 export type Suit = (typeof SUITS)[number];
 
@@ -19,12 +21,20 @@ export const CARD_RANKS = [
 export type CardRank = (typeof CARD_RANKS)[number];
 export type CardId = string;
 
-export interface Card {
+export interface NaturalCard {
   kind: 'natural';
   id: CardId;
   suit: Suit;
   rank: CardRank;
 }
+
+export interface JokerCard {
+  kind: 'joker';
+  id: CardId;
+  index: 0 | 1;
+}
+
+export type Card = NaturalCard | JokerCard;
 
 const SUIT_CODES: Record<Suit, string> = {
   spade: 'S',
@@ -51,8 +61,14 @@ const RANK_CODES: Record<CardRank, string> = {
 
 export const DIAMOND_THREE_ID = 'D03';
 
-export function createDeck(): Card[] {
-  return SUITS.flatMap((suit) =>
+export const JOKER_IDS = ['JK0', 'JK1'] as const;
+
+export function isJoker(card: Card): card is JokerCard {
+  return card.kind === 'joker';
+}
+
+export function createDeck(features: readonly EngineFeature[] = []): Card[] {
+  const deck: Card[] = SUITS.flatMap((suit) =>
     CARD_RANKS.map((rank) => ({
       kind: 'natural' as const,
       id: `${SUIT_CODES[suit]}${RANK_CODES[rank]}`,
@@ -60,9 +76,22 @@ export function createDeck(): Card[] {
       rank,
     })),
   );
+  if (features.includes('jokers')) {
+    deck.push(
+      { kind: 'joker', id: JOKER_IDS[0], index: 0 },
+      { kind: 'joker', id: JOKER_IDS[1], index: 1 },
+    );
+  }
+  return deck;
 }
 
 export function compareCards(left: Card, right: Card): number {
+  if (left.kind === 'joker' || right.kind === 'joker') {
+    if (left.kind === 'joker' && right.kind === 'joker') {
+      return left.index - right.index;
+    }
+    return left.kind === 'joker' ? 1 : -1;
+  }
   const rankDifference =
     CARD_RANKS.indexOf(left.rank) - CARD_RANKS.indexOf(right.rank);
   return rankDifference === 0

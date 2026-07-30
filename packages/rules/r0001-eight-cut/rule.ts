@@ -13,7 +13,10 @@ export const rule: RuleModule = {
   },
   hooks: {
     afterPlay(context, play) {
-      if (!play.cards.some((card) => card.rank === '8')) {
+      // 自然カードの8のみを見る: ジョーカーが8を代用しても8切りは発動しない。
+      if (
+        !play.cards.some((card) => card.kind === 'natural' && card.rank === '8')
+      ) {
         return [];
       }
 

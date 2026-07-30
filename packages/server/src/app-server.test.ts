@@ -499,6 +499,7 @@ describe('production app server', () => {
     const recordAi = vi.fn(() => ({ status: 'not_found' as const }));
     const approveSpec = vi.fn(() => ({ status: 'not_found' as const }));
     const nextJob = vi.fn(() => null);
+    const pendingCx = vi.fn(() => []);
     const updateJob = vi.fn(() => ({
       status: 'updated' as const,
       job: {
@@ -553,7 +554,7 @@ describe('production app server', () => {
       adminPipeline: {
         token: 'admin-token',
         service: {
-          pending: () => [],
+          pending: pendingCx,
           pendingConfirmations: () => [],
           recordAi,
           confirmE6Rejection: () => ({ status: 'not_found' }),
@@ -590,6 +591,15 @@ describe('production app server', () => {
     });
     expect(pending.status).toBe(200);
     await expect(pending.json()).resolves.toEqual({ items: [] });
+    expect(pendingCx).toHaveBeenLastCalledWith(undefined, undefined);
+
+    const rejudge = await fetch(
+      `${baseUrl}/admin/pipeline/screening?promptVersion=cx01-v4`,
+      { headers: { authorization: 'Bearer admin-token' } },
+    );
+    expect(rejudge.status).toBe(200);
+    await expect(rejudge.json()).resolves.toEqual({ items: [] });
+    expect(pendingCx).toHaveBeenLastCalledWith(undefined, 'cx01-v4');
 
     const checked = await fetch(`${baseUrl}/admin/proposals/proposal-1/check`, {
       method: 'POST',

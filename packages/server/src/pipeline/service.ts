@@ -51,6 +51,8 @@ const EFFECTS_BY_HOOK: Readonly<Record<string, ReadonlySet<string>>> = {
   ]),
   onGameEnd: new Set(['setMemory', 'announce']),
 };
+// core の EngineFeature と同じ語彙。core 側の実装とは独立に検証する。
+const ENGINE_FEATURES = new Set(['sequence', 'jokers']);
 const REJECT_SUBTYPES = new Set([
   'A1',
   'A2',
@@ -178,6 +180,15 @@ function parseSpec(value: unknown): Omit<RuleSpecification, 'source'> | null {
   const summary = nonempty(input.summary, 1_000);
   const hooks = stringList(input.hooks, HOOKS, HOOKS.size, 32);
   const effects = stringList(input.effects, EFFECTS, EFFECTS.size, 32);
+  const engineFeatures =
+    input.engineFeatures === undefined
+      ? []
+      : stringList(
+          input.engineFeatures,
+          ENGINE_FEATURES,
+          ENGINE_FEATURES.size,
+          32,
+        );
   const testPoints = stringList(input.testPoints, null, 20, 300);
   const notes =
     typeof input.notes === 'string' && input.notes.length <= 1_000
@@ -191,6 +202,7 @@ function parseSpec(value: unknown): Omit<RuleSpecification, 'source'> | null {
     !summary ||
     !hooks ||
     !effects ||
+    !engineFeatures ||
     effects.some((effect) => !allowedEffects.has(effect)) ||
     !testPoints ||
     testPoints.length === 0 ||
@@ -204,6 +216,7 @@ function parseSpec(value: unknown): Omit<RuleSpecification, 'source'> | null {
     summary,
     hooks,
     effects,
+    engineFeatures,
     testPoints,
     notes,
   };
@@ -357,8 +370,8 @@ export class PipelineJudgementService {
     this.#now = now;
   }
 
-  pending(limit = 100) {
-    return this.#pipeline.pendingCx(limit);
+  pending(limit = 100, currentPromptVersion?: string) {
+    return this.#pipeline.pendingCx(limit, currentPromptVersion);
   }
 
   pendingConfirmations(limit = 100) {
@@ -381,6 +394,12 @@ export class PipelineJudgementService {
     const existing = this.#pipeline.aiJudgementForRun(proposalId, runId);
     if (existing) {
       return { status: 'already_recorded', judgement: existing };
+    }
+    // 同一プロンプト版での再判定は挿入しない (旧版判定があるだけなら新規挿入し、
+    // それが latest になる)。
+    const latest = this.#pipeline.latestAiJudgement(proposalId);
+    if (latest && latest.promptVersion === parsed.promptVersion) {
+      return { status: 'already_recorded', judgement: latest };
     }
     const spec =
       parsed.spec === null

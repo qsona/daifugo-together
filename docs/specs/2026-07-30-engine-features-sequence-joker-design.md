@@ -62,7 +62,7 @@ export interface RuleChainEntry {
 
 ### プレイ解釈の刷新 (interpretPlay → 候補照合)
 
-ワイルドカード・階段導入で「カード集合 → Play」が一意でなくなる (例: 7♠7♥JK は 7 の 3 枚組にも 6-7-8 階段にもなりうる。4-5-JK の JK は 3 か 6)。
+ワイルドカード・階段導入で「カード集合 → Play」が一意でなくなる (例: 7♠+JK0+JK1 は 7 の 3 枚組にも 5♠-6♠-7♠ 相当の階段にもなりうる。4♠-5♠-JK の JK は 3 か 6)。なお同一スート規範により 7♠7♥JK のようなスート混在の集合は階段にはなり得ない (set のみ)。
 
 - クライアントは従来どおり **CardId 列のみ**を送る (E01 §合意済み)。`GameAction.play.kind` (既存の予約フィールド) を任意で受け付け、protocol の `game:play` スキーマにも optional `kind` を追加する。
 - reducer は選択カード集合と一致する候補 (生成器の出力) を全て集め:
@@ -102,7 +102,7 @@ export interface RuleChainEntry {
 - `RuleSpecification` に `engineFeatures: EngineFeature[]` (省略時 []) を追加。
 - server `parseSpec` (pipeline/service.ts): 既知集合 {'sequence','jokers'} で検証。
 - scaffold (pipeline/scaffold.ts): meta.json に `engineFeatures` を転記。
-- rules 登録 (server/rules/service.ts): meta の engineFeatures を検証・保存し、チェーン構築で entry へ転記。rules テーブルへの永続化は meta JSON 内に含める形とし、専用カラムのマイグレーションは行わない (保存形式は実装時に既存の meta 保存方式に合わせる)。
+- rules 登録 (server/rules/service.ts): meta の engineFeatures を検証 (既知集合外は登録 fail-closed) し、チェーン構築 (availableRules) で RuleChainEntry へ転記。DB への永続化は不要 — rules テーブルは meta を保存しておらず、meta はデプロイ済みコード (code registry) が唯一の保存場所であるため。リプレイは record_json 内の ruleChain に engineFeatures ごと保存され round-trip する。
 
 ### 再判定機構
 

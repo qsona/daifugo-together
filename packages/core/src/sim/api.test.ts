@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import type { NaturalCard } from '../cards/card.js';
 import { startGame } from '../game/start-game.js';
 import type { GameState, Standing } from '../game/types.js';
 import { samePlay } from '../play/play.js';
@@ -74,8 +75,9 @@ describe('E1 SimulationApi', () => {
             fallback.cards.includes(card.id),
           ),
           count: fallback.cards.length,
-          repRank: state.players[player]!.hand.find((card) =>
-            fallback.cards.includes(card.id),
+          repRank: state.players[player]!.hand.find(
+            (card): card is NaturalCard =>
+              card.kind === 'natural' && fallback.cards.includes(card.id),
           )!.rank,
         }),
       ),
@@ -196,7 +198,11 @@ describe('E1 SimulationApi', () => {
     const state = startGame(ruleConfig, runtime(module)).state;
     const player = seats.find((id) => {
       const hand = state.players[id]!.hand;
-      return new Set(hand.map((card) => card.rank)).size < hand.length;
+      return (
+        new Set(
+          hand.map((card) => (card.kind === 'natural' ? card.rank : card.id)),
+        ).size < hand.length
+      );
     });
     if (!player) {
       throw new Error('Expected a player with a pair');

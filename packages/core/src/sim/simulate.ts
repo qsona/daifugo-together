@@ -6,7 +6,8 @@ import {
   type RuleChainPort,
   type RuleRuntime,
 } from '../rules/chain.js';
-import type { RuleChainEntry } from '../rules/contract.js';
+import { engineFeaturesOf, type RuleChainEntry } from '../rules/contract.js';
+import { createDeck } from '../cards/card.js';
 import { enumerateLegalPlays } from '../play/candidates.js';
 import type { Play } from '../play/play.js';
 import { randomInt, seedRng, type RngState } from '../rng/rng.js';
@@ -93,10 +94,11 @@ function invariantProblems(state: SetState): string[] {
     ...game.public.discard,
     ...game.private.excluded,
   ];
+  const deckSize = createDeck(engineFeaturesOf(state.ruleChain)).length;
   const problems: string[] = [];
   if (
-    cards.length !== 52 ||
-    new Set(cards.map((card) => card.id)).size !== 52
+    cards.length !== deckSize ||
+    new Set(cards.map((card) => card.id)).size !== deckSize
   ) {
     problems.push('card-conservation');
   }

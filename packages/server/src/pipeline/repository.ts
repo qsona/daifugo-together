@@ -34,6 +34,8 @@ export interface RuleSpecification {
   summary: string;
   hooks: string[];
   effects: string[];
+  /** ルールが要求するエンジン機能。既存の保存済みSPECには存在しない (= [])。 */
+  engineFeatures?: string[];
   testPoints: string[];
   notes: string;
   source: {
@@ -344,19 +346,23 @@ export class PipelineRepository {
     return this.#sqlite.transaction(operation)();
   }
 
-  pendingCx(limit = 100): PendingCxJudgement[] {
+  pendingCx(limit = 100, currentPromptVersion?: string): PendingCxJudgement[] {
     const existingRules = this.existingRules();
     return this.#proposals
       .screeningForJudgment()
       .flatMap((proposal) => {
         const signals = this.#injection.signalsForProposal(proposal.id);
         const check = this.#injection.checkForProposal(proposal.id);
-        if (
-          !signals ||
-          !check ||
-          check.finalVerdict !== 'pass' ||
-          this.latestAiJudgement(proposal.id)
-        ) {
+        if (!signals || !check || check.finalVerdict !== 'pass') return [];
+        const latest = this.latestAiJudgement(proposal.id);
+        // currentPromptVersion 指定時は、未確定 (developer confirmation なし) かつ
+        // 旧プロンプト版 (NULL は常に ≠ current) の判定を再判定対象に含める。
+        const staleUnconfirmed =
+          latest !== null &&
+          currentPromptVersion !== undefined &&
+          latest.promptVersion !== currentPromptVersion &&
+          this.developerConfirmation(proposal.id, latest.id, null) === null;
+        if (latest !== null && !staleUnconfirmed) {
           return [];
         }
         return [

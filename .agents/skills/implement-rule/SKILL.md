@@ -91,6 +91,20 @@ only when source or workspace dependencies changed since the last build.
      contract vocabulary cannot express, then wait for the developer to
      decide whether to run `implement:fail` or extend the engine vocabulary
      first. Do not run `implement:fail` yourself at this stage.
+   - Engine features are declarations, not code. If `SPEC.json` lists
+     `engineFeatures` (for example `sequence` for the staircase hand type, or
+     `jokers` for two jokers with wildcard substitution and single-card
+     supremacy), the scaffolded `meta.json` already carries them and the
+     engine implements the mechanics natively: candidate generation,
+     shape recognition, wildcard substitution, and strength comparison all
+     happen inside the engine. Never re-implement any of that in `rule.ts`
+     (no sequence-shape checks, no joker-substitution logic, no deck
+     changes). The rule's hooks only add the behavior specific to this rule
+     (for example a foul finish via `forceRank` + `'lowest'`). Note that in
+     hook arguments a `Card` is a discriminated union: narrow with
+     `card.kind === 'natural'` before reading `suit`/`rank`; jokers have
+     `kind: 'joker'` and no suit or rank, and a play's `repRank` may be
+     `'joker'`.
 5. Create or edit exactly:
    - `rule.ts`
    - `rule.test.ts`

@@ -186,7 +186,9 @@ export function createSimulationApi(
         return { type: 'pass', player };
       }
       const ranking = effectiveStrength(position).ranking;
-      const rankIndex = new Map(ranking.map((rank, index) => [rank, index]));
+      const rankIndex = new Map<string, number>(
+        ranking.map((rank, index) => [rank, index]),
+      );
       const fallback = enumerateLegalPlays(
         config,
         state,

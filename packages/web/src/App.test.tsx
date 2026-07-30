@@ -482,6 +482,41 @@ describe('画面のURLとリロード復帰', () => {
   });
 });
 
+describe('ジョーカーの手札表示', () => {
+  afterEach(() => {
+    cleanup();
+    window.history.replaceState({}, '', '/');
+    useScreenStore.setState({ current: 'title' });
+  });
+
+  it('kind=jokerの札をsuitなしのJOKER札へ変換し、2枚を読み上げ名で区別する', () => {
+    window.history.replaceState({}, '', '/rooms/tutorial-room/game');
+    const room = tutorialHintRoom('community', null);
+    render(
+      <App
+        client={tutorialHintClient({
+          ...room,
+          game: {
+            ...room.game!,
+            yourHand: [
+              { kind: 'natural', id: 'S03', suit: 'spade', rank: '3' },
+              { kind: 'joker', id: 'JK0', index: 0 },
+              { kind: 'joker', id: 'JK1', index: 1 },
+            ],
+          },
+        })}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'スペードの3' })).toBeTruthy();
+    const jokerOne = screen.getByRole('button', { name: 'ジョーカー1' });
+    const jokerTwo = screen.getByRole('button', { name: 'ジョーカー2' });
+    // スート記号(♠♥♦♣)を持たず JOKER 表記だけを描く。
+    expect(jokerOne.textContent).toBe('JOKER');
+    expect(jokerTwo.textContent).toBe('JOKER');
+  });
+});
+
 describe('RP-01: メニューからルール提案へ進む', () => {
   beforeEach(() => {
     useScreenStore.setState({ current: 'title' });

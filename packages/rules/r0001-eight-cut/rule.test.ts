@@ -1,21 +1,22 @@
 import {
   BASE_STRENGTH_ORDER,
-  type Card,
   type CardRank,
+  type NaturalCard,
   type Play,
   type PlayerId,
   type RuleContext,
   type RuleModule,
+  type Suit,
 } from '@daifugo/core';
 import { describe, expect, it, vi } from 'vitest';
 
 const { rule } = (await vi.importActual('./rule.js')) as { rule: RuleModule };
 
-function card(id: string, rank: CardRank, suit: Card['suit']): Card {
+function card(id: string, rank: CardRank, suit: Suit): NaturalCard {
   return { kind: 'natural', id, rank, suit };
 }
 
-function play(cards: Card[]): Play {
+function play(cards: NaturalCard[]): Play {
   const first = cards[0];
   if (!first) throw new Error('play requires at least one card');
   return {
@@ -29,7 +30,7 @@ function play(cards: Card[]): Play {
 function context(input: {
   actor?: PlayerId;
   played: Play;
-  remaining?: Card[];
+  remaining?: NaturalCard[];
 }): RuleContext {
   const actor = input.actor ?? 'p1';
   const remaining = input.remaining ?? [];
@@ -78,6 +79,26 @@ describe('8切り', () => {
     );
 
     expect(result).toEqual([{ type: 'clearField' }]);
+  });
+
+  it('ジョーカーが8を代用しても発動しない (自然カードの8のみが対象)', () => {
+    const played: Play = {
+      kind: 'sequence',
+      cards: [
+        card('S07', '7', 'spade'),
+        { kind: 'joker', id: 'JK0', index: 0 },
+        card('S09', '9', 'spade'),
+      ],
+      count: 3,
+      repRank: '9',
+    };
+
+    expect(
+      rule.hooks.afterPlay?.(
+        context({ played, remaining: [card('H10', '10', 'heart')] }),
+        played,
+      ),
+    ).toEqual([]);
   });
 
   it('8を含まない手では何も起こさない', () => {

@@ -220,6 +220,26 @@ export const CX_JUDGE_CORPUS: readonly CxJudgeCorpusCase[] = [
     },
   },
   {
+    id: 'P09',
+    name: '階段',
+    body: '同じマークで数字が連続する3枚以上をまとめて出せる。',
+    expected: {
+      verdict: 'approve',
+      rejectCategory: null,
+      rejectSubtype: null,
+    },
+  },
+  {
+    id: 'P10',
+    name: 'ジョーカー',
+    body: 'ジョーカーを2枚入れる。1枚なら最強で、他のカードの代わりにも使える。',
+    expected: {
+      verdict: 'approve',
+      rejectCategory: null,
+      rejectSubtype: null,
+    },
+  },
+  {
     id: 'N01',
     name: 'たまに全公開',
     body: '誰かがAを出したら、しばらくの間だけ全員の手札を公開する。',
@@ -233,6 +253,16 @@ export const CX_JUDGE_CORPUS: readonly CxJudgeCorpusCase[] = [
     id: 'N02',
     name: '無限かもしれない交換',
     body: '4を出すたびに捨て札を何枚か手札へ戻す。戻す枚数は状況に合わせる。',
+    expected: {
+      verdict: 'needs_review',
+      rejectCategory: null,
+      rejectSubtype: null,
+    },
+  },
+  {
+    id: 'N03',
+    name: 'フラッシュ出し',
+    body: '同じマークならバラバラの数字でも5枚まとめて出せる。',
     expected: {
       verdict: 'needs_review',
       rejectCategory: null,
