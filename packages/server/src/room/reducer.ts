@@ -1,4 +1,5 @@
 import {
+  orderPlayCards,
   reduceSet,
   startSetTransition,
   type EngineEvent,
@@ -297,7 +298,11 @@ function publicEngineEvents(
       case 'played': {
         const seat = seatOf(members, event.player);
         if (seat !== null) {
-          output.push({ t: 'played', seat, cards: event.play.cards });
+          output.push({
+            t: 'played',
+            seat,
+            cards: orderPlayCards(event.play),
+          });
         }
         break;
       }

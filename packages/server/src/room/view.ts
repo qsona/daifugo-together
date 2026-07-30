@@ -1,6 +1,7 @@
 import {
   buildPlayerSnapshot,
   NO_RULE_CHAIN_PORT,
+  orderPlayCards,
   POINTS_BY_STANDING,
   sortCards,
   type GameResult,
@@ -77,7 +78,7 @@ function historyView(
       return {
         t: 'played',
         seat: requiredSeat(seats, event.player),
-        cards: sortCards(event.play.cards),
+        cards: orderPlayCards(event.play),
         kind: event.play.kind,
       };
     case 'passed':
@@ -215,7 +216,7 @@ function gameView(
           }
         : null,
     field: {
-      cards: current ? sortCards(current.play.cards) : [],
+      cards: current ? orderPlayCards(current.play) : [],
       playedBySeat: current ? requiredSeat(seats, current.by) : null,
       passedSeats: game.public.field.passedSinceLastPlay.map((player) =>
         requiredSeat(seats, player),

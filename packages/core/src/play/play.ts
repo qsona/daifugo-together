@@ -1,4 +1,4 @@
-import type { Card, CardId } from '../cards/card.js';
+import { sortCards, type Card, type CardId } from '../cards/card.js';
 import type { PlayRank } from './strength.js';
 
 export type PlayKind = 'single' | 'set' | 'sequence';
@@ -22,6 +22,19 @@ export interface PlayCandidateMatch {
   index: number;
   /** 候補のジョーカーを選択された実カードへ差し替えた Play。 */
   play: Play;
+}
+
+/**
+ * プレイの意味に沿った表示順でカードを返す。
+ *
+ * 一般的なカード順では Joker は最強札として末尾になるが、sequence の
+ * `cards` は候補生成・解釈時に階段の論理的な位置へ並べられている。その
+ * 順序を表示でも保持することで、例えば 4・6・7・Joker の選択を
+ * 4・Joker・6・7 と描画できる。手札やゲーム判定で使う `sortCards` の
+ * 意味は変更しない。
+ */
+export function orderPlayCards(play: Play): Card[] {
+  return play.kind === 'sequence' ? [...play.cards] : sortCards(play.cards);
 }
 
 export type PlayCandidateMatchResult =

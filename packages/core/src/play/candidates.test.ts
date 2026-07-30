@@ -235,6 +235,22 @@ describe('joker candidate generation', () => {
     expect(jokersOnly).toHaveLength(0);
   });
 
+  it('sequence の中間を代用するJokerを論理位置に並べる', () => {
+    const found = sequences(
+      generateCandidates(
+        [nat('spade', '4'), nat('spade', '6'), nat('spade', '7'), joker(0)],
+        ['sequence', 'jokers'],
+      ),
+    ).find((play) => play.count === 4 && play.repRank === '7');
+
+    expect(found?.cards.map((card) => card.id)).toEqual([
+      'S04',
+      'JK0',
+      'S06',
+      'S07',
+    ]);
+  });
+
   it('自然カードを持つ位置もジョーカーで代用した候補を併存列挙する', () => {
     const hand = [
       nat('spade', '3'),
