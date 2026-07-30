@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 
 import type { QueuedImplementation } from '@daifugo/server';
@@ -97,7 +98,15 @@ async function repositories() {
   await git(seed, 'remote', 'add', 'origin', remote);
   await git(seed, 'push', '-u', 'origin', 'main');
   await git(root, 'clone', '--branch', 'main', remote, first);
-  await git(root, 'clone', '--branch', 'main', remote, recovered);
+  await git(
+    root,
+    'clone',
+    '--depth=1',
+    '--branch',
+    'main',
+    pathToFileURL(remote).href,
+    recovered,
+  );
   for (const path of [first, recovered]) {
     await git(path, 'config', 'user.name', 'Pipeline Test');
     await git(path, 'config', 'user.email', 'pipeline@example.test');
@@ -224,7 +233,7 @@ describe('GitImplementationPublisher', () => {
       git(
         recovered,
         'show',
-        `origin/${published.branch}:packages/rules/r0001-yagiri/rule.ts`,
+        `${published.branch}:packages/rules/r0001-yagiri/rule.ts`,
       ),
     ).resolves.toMatchObject({
       stdout: 'export const rule = { hooks: {} };\n',

@@ -113,11 +113,7 @@ export class GitImplementationPublisher implements ScaffoldPublisher {
       const expectedMeta = await readFile(input.scaffold.metaPath, 'utf8');
       const expectedSpec = await readFile(input.scaffold.specPath, 'utf8');
       await rm(input.scaffold.directory, { recursive: true, force: true });
-      await this.#git(
-        ['fetch', '--depth=2', 'origin', `refs/heads/${branch}`],
-        [0],
-        3,
-      );
+      await this.#git(['fetch', 'origin', `refs/heads/${branch}`], [0], 3);
       await this.#git(['checkout', '-B', branch, 'FETCH_HEAD']);
       const headSha = (await this.#git(['rev-parse', 'HEAD'])).stdout.trim();
       const scaffoldSha = input.item.job.scaffoldSha ?? headSha;
