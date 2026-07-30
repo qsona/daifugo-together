@@ -1665,6 +1665,32 @@ describe('TU-04: みんなのルールへの卒業導線', () => {
     await waitFor(() => expect(calls).toEqual(['leave', 'create:community']));
   });
 
+  it('セットリザルトからホームへ戻ると確認なしで退室する', async () => {
+    const user = userEvent.setup();
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    const room = tutorialSetResultRoom('community');
+    const state: MultiplayerState = {
+      connection: 'ready',
+      registered: false,
+      displayName: 'ホスト',
+      room,
+      roomClosedReason: null,
+      error: null,
+    };
+    const leaveRoom = vi.fn(async () => undefined);
+    const client = {
+      subscribe: () => () => undefined,
+      snapshot: () => state,
+      leaveRoom,
+    } as unknown as MultiplayerClient;
+
+    render(<App client={client} />);
+    await user.click(screen.getByRole('button', { name: 'ホームへ' }));
+
+    await waitFor(() => expect(leaveRoom).toHaveBeenCalledOnce());
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
   it('communityのセットリザルトには卒業導線を出さない', () => {
     const room = tutorialSetResultRoom('community');
     const state: MultiplayerState = {

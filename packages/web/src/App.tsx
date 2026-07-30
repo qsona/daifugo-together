@@ -1367,7 +1367,6 @@ function ConnectedApp({
             }
           : {})}
         onHome={() => {
-          if (!window.confirm('部屋から出ますか?')) return;
           invoke(
             client.leaveRoom().then(() => {
               go('menu');
