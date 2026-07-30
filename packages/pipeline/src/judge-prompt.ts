@@ -1,6 +1,6 @@
 import type { PendingCxJudgement } from '@daifugo/server';
 
-export const CX01_PROMPT_VERSION = 'cx01-v2';
+export const CX01_PROMPT_VERSION = 'cx01-v3';
 
 const CONTRACT = `
 契約 v1 のフック:
@@ -10,6 +10,7 @@ const CONTRACT = `
 
 Effect 語彙:
 - clearField, skipTurns, reverseTurnOrder, forceRank, moveCards, setMemory, announce
+- forceRank の rank は 1〜4 の順位または 'lowest'（最下位）。反則あがり系は 'lowest' を使う
 
 hook別のEffect許可:
 - afterPlay: 全Effect

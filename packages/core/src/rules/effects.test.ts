@@ -596,6 +596,135 @@ describe('GE-04 effect pipeline and lifecycle hooks', () => {
     expect(transition.state.players.p3?.standing).toBe(3);
   });
 
+  it("forceRankのrank:'lowest'は4人ゲームで最下位(4位)に解決される", () => {
+    const ruleEntry = entry('r0106-force-rank-lowest');
+    const module: RuleModule = {
+      meta: {
+        ruleId: ruleEntry.ruleId,
+        name: ruleEntry.name,
+        description: 'force rank lowest',
+        kind: 'original',
+        proposalId: 'fixture',
+        contractVersion: 1,
+        messages: {},
+      },
+      hooks: {
+        afterPlay: () => [{ type: 'forceRank', player: 'p2', rank: 'lowest' }],
+      },
+    };
+    const config: GameConfig = {
+      gameIndex: 0,
+      seats,
+      gameSeed: 'force-rank-lowest',
+      ruleChain: [ruleEntry],
+    };
+    const started = startGame(config).state;
+    const player = started.public.turn;
+    const card = player ? started.players[player]?.hand[0] : undefined;
+    if (!player || !card) {
+      throw new Error('Expected opening play');
+    }
+    const transition = reduceGame(
+      config,
+      started,
+      { type: 'play', player, cards: [card.id] },
+      runtime(module),
+    );
+
+    expect(transition.state.players.p2).toMatchObject({
+      status: 'retired',
+      standing: 4,
+    });
+  });
+
+  it("別々のフック発火で順に'lowest'対象になった場合、先着がより低い順位になる", () => {
+    const ruleEntry = entry('r0107-force-rank-lowest-sequential');
+    const module: RuleModule = {
+      meta: {
+        ruleId: ruleEntry.ruleId,
+        name: ruleEntry.name,
+        description: 'force rank lowest across separate hook firings',
+        kind: 'original',
+        proposalId: 'fixture',
+        contractVersion: 1,
+        messages: {},
+      },
+      hooks: {
+        onGameStart: () => [
+          { type: 'forceRank', player: 'p2', rank: 'lowest' },
+        ],
+        afterPlay: () => [{ type: 'forceRank', player: 'p3', rank: 'lowest' }],
+      },
+    };
+    const config: GameConfig = {
+      gameIndex: 0,
+      seats,
+      gameSeed: 'force-rank-lowest-sequential',
+      ruleChain: [ruleEntry],
+    };
+    const started = startGame(config, runtime(module)).state;
+    // onGameStart のフック発火で p2 が先に最下位(4位)へ解決される。
+    expect(started.players.p2?.standing).toBe(4);
+
+    const player = started.public.turn;
+    const card = player ? started.players[player]?.hand[0] : undefined;
+    if (!player || !card) {
+      throw new Error('Expected opening play');
+    }
+    const transition = reduceGame(
+      config,
+      started,
+      { type: 'play', player, cards: [card.id] },
+      runtime(module),
+    );
+
+    // afterPlay のフック発火で p3 は後着のため、4位が埋まっており近傍の3位になる。
+    expect(transition.state.players.p3?.standing).toBe(3);
+  });
+
+  it("forceRankのrankペイロード検証: 'lowest'は受理し、'foo'や5は棄却する", () => {
+    const ruleEntry = entry('r0108-force-rank-payload-validation');
+    const module: RuleModule = {
+      meta: {
+        ruleId: ruleEntry.ruleId,
+        name: ruleEntry.name,
+        description: 'force rank payload validation',
+        kind: 'original',
+        proposalId: 'fixture',
+        contractVersion: 1,
+        messages: {},
+      },
+      hooks: {
+        onGameStart: () =>
+          [
+            { type: 'forceRank', player: 'p2', rank: 'lowest' },
+            { type: 'forceRank', player: 'p3', rank: 'foo' },
+            { type: 'forceRank', player: 'p4', rank: 5 },
+          ] as never,
+      },
+    };
+    const config: GameConfig = {
+      gameIndex: 0,
+      seats,
+      gameSeed: 'force-rank-payload-validation',
+      ruleChain: [ruleEntry],
+    };
+
+    const started = startGame(config, runtime(module));
+
+    expect(started.state.players.p2?.standing).toBe(4);
+    expect(
+      started.events.filter(
+        (event) =>
+          event.type === 'effectRejected' &&
+          event.detail &&
+          typeof event.detail === 'object' &&
+          !Array.isArray(event.detail) &&
+          event.detail.reason === 'invalid-payload',
+      ),
+    ).toHaveLength(2);
+  });
+
   it('skipTurnsをパスとして消化し、全員分なら場を流してリードへ戻す', () => {
     const ruleEntry = entry('r0105-skip-pass');
     const module: RuleModule = {

@@ -24,7 +24,7 @@ export const rule: RuleModule = {
       )?.hand.length;
 
       if (player !== undefined && remainingCards === 0) {
-        effects.push({ type: 'forceRank', player, rank: 4 });
+        effects.push({ type: 'forceRank', player, rank: 'lowest' });
       }
       return effects;
     },

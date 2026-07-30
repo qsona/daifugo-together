@@ -595,7 +595,7 @@ export interface CandidateGenerator {
 #### 順位スロットの一般規則
 
 - 順位は 1〜4 の**スロット**。あがり(手札 0)による確定は「未使用スロットの最上位(最小番号)」を取る。
-- **`forceRank { player, rank }`** は指定スロットの強制取得。適用手順:
+- **`forceRank { player, rank }`** は指定スロットの強制取得。`rank` は 1〜4 の具体スロットに加え `'lowest'` を取れる。`'lowest'` は適用時にプレイヤー数(4 人戦なら 4)へ解決され、以降は具体スロット指定と同じ規則(使用中なら近傍再割当)に従う。反則あがり系(「〜であがったら最下位」)のルールは具体番号でなく `'lowest'` を用いることを推奨する。同一バッチで複数の反則あがりが `'lowest'` を指定した場合、先に適用された方(§2.5.4 の適用順で優先度が高い側)がより低い順位を得る(近傍再割当規則からの帰結であり、エンジンがテストで保証する)。適用手順:
   1. 対象が `active` の場合: `status = "retired"` とし、手札の残カードを**すべて `excluded` ゾーンへ移す**(内容は公開しない。捨て札 `discard` は「公開の場に出たカード」の集積であり、未公開の手札を混ぜると情報が漏れるため別ゾーンとする)。`playerRetired` イベント(枚数のみ公開)。
   2. 対象が `finished` / `retired`(既に順位を持つ)場合: 旧スロットを解放してから新スロットを取得する(付け替え)。既確定の他プレイヤーの順位は動かさない。解放されたスロットは以後のあがりで再利用される。
   3. **指定スロットが使用中**の場合: **近傍未使用スロットへの再割当**を行う — 下位方向(番号の大きい側)で最も近い未使用スロットを優先し、下位に空きがなければ上位方向で最も近い未使用スロットへ。この再割当は `effectApplied` イベントに記録する(例: 2 つのルールが同一バッチで**別人**を 4 位指定 → 競合キー `rank:{player}` が異なるため両方 `adopted`。高優先側の適用が先(§2.5.4 の適用順)なので高優先側の対象が 4 位、もう 1 件の対象は下位に空きがなく上位方向で最も近い 3 位へ再割当)。
@@ -1062,7 +1062,7 @@ export type Effect =
   | { type: "clearField" }
   | { type: "skipTurns"; player: PlayerId; count: number }
   | { type: "reverseTurnOrder" }
-  | { type: "forceRank"; player: PlayerId; rank: Standing }
+  | { type: "forceRank"; player: PlayerId; rank: Standing | "lowest" }
   | { type: "moveCards"; from: Zone; to: Zone; cards: CardSelector }
   | { type: "setMemory"; scope: MemoryScope; key: string; value: JsonValue }
   | { type: "announce"; messageKey: string; params?: Record<string, string> };

@@ -91,7 +91,7 @@ describe('8切り', () => {
 
     expect(rule.hooks.afterPlay?.(context({ played }), played)).toEqual([
       { type: 'clearField' },
-      { type: 'forceRank', player: 'p1', rank: 4 },
+      { type: 'forceRank', player: 'p1', rank: 'lowest' },
     ]);
   });
 
@@ -123,8 +123,8 @@ describe('8切り', () => {
     );
 
     expect([first?.[1], second?.[1]]).toEqual([
-      { type: 'forceRank', player: 'p1', rank: 4 },
-      { type: 'forceRank', player: 'p2', rank: 4 },
+      { type: 'forceRank', player: 'p1', rank: 'lowest' },
+      { type: 'forceRank', player: 'p2', rank: 'lowest' },
     ]);
   });
 });

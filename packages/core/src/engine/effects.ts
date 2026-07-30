@@ -11,6 +11,7 @@ import type {
   JsonValue,
   PublicGameEvent,
   RuleMemory,
+  Standing,
 } from '../game/types.js';
 import {
   resolveEffectBatch,
@@ -532,10 +533,11 @@ function effectPayloadValid(effect: unknown): effect is Effect {
         return (
           hasExactKeys(effect, ['type', 'player', 'rank']) &&
           typeof effect.player === 'string' &&
-          typeof effect.rank === 'number' &&
-          Number.isInteger(effect.rank) &&
-          effect.rank >= 1 &&
-          effect.rank <= 4
+          (effect.rank === 'lowest' ||
+            (typeof effect.rank === 'number' &&
+              Number.isInteger(effect.rank) &&
+              effect.rank >= 1 &&
+              effect.rank <= 4))
         );
       case 'moveCards':
         return (
@@ -751,10 +753,14 @@ export function executeEffectHook(
         };
         break;
       case 'forceRank': {
+        const resolvedRank =
+          entry.effect.rank === 'lowest'
+            ? (config.seats.length as Standing)
+            : entry.effect.rank;
         const result = forceStanding(
           nextState,
           entry.effect.player,
-          entry.effect.rank,
+          resolvedRank,
         );
         nextState = result.state;
         events.push(...result.events);

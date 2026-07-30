@@ -69,14 +69,36 @@ only when source or workspace dependencies changed since the last build.
    points.
 3. Inspect whether `rule.ts` or `rule.test.ts` already exist. On resume,
    preserve valid work and continue from it.
-4. Create or edit exactly:
+4. Before writing code, check for hidden shared abstractions:
+   - Identify any concept in `SPEC.json` that is shared across rules rather
+     than specific to this rule (for example: foul finish, revolution state,
+     suit binds). Do not treat such a concept as if it belonged only to this
+     rule.
+   - Prefer intent-level Effect payloads over hard-coded values. A foul
+     finish means "lowest standing", so express it with `forceRank` and
+     `rank: 'lowest'`, never a hard-coded numeric rank, and never derive one
+     from the player count. The engine resolves `'lowest'` and guarantees
+     ordering when multiple forced standings collide (the earlier-applied one
+     keeps the worst (bottom) standing, and later ones are pushed toward
+     better slots); do not re-implement that arbitration inside the rule.
+   - Do not simulate shared state with rule-local memory. Memory is isolated
+     per rule, so state that other rules would need to read or compose with
+     (for example a revolution flag) cannot live there. If `SPEC.json`
+     requires a shared concept that the contract vocabulary cannot express,
+     stop, do not work around it, and report it to the developer the same way
+     a content failure is reported (see "Handle CI, failure, merge, and
+     release"): present your trusted diagnosis of which shared concept the
+     contract vocabulary cannot express, then wait for the developer to
+     decide whether to run `implement:fail` or extend the engine vocabulary
+     first. Do not run `implement:fail` yourself at this stage.
+5. Create or edit exactly:
    - `rule.ts`
    - `rule.test.ts`
-5. Use `apply_patch` for edits. Do not edit `meta.json`, `SPEC.json`, Git
+6. Use `apply_patch` for edits. Do not edit `meta.json`, `SPEC.json`, Git
    history, configuration, lockfiles, other packages, or other rules.
-6. During implementation, do not use Web search, connectors, external network
+7. During implementation, do not use Web search, connectors, external network
    access, subagents, or unrelated repository files.
-7. Run from the returned workspace:
+8. Run from the returned workspace:
 
 ```sh
 pnpm exec prettier --write \
@@ -86,7 +108,7 @@ pnpm --filter @daifugo/core build
 pnpm --filter @daifugo/rules typecheck
 ```
 
-8. Run from the returned workspace, using the exact scaffold-relative test
+9. Run from the returned workspace, using the exact scaffold-relative test
    path:
 
 ```sh

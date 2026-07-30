@@ -157,7 +157,7 @@ export type Effect =
   | { type: 'clearField' }
   | { type: 'skipTurns'; player: PlayerId; count: number }
   | { type: 'reverseTurnOrder' }
-  | { type: 'forceRank'; player: PlayerId; rank: Standing }
+  | { type: 'forceRank'; player: PlayerId; rank: Standing | 'lowest' }
   | {
       type: 'moveCards';
       from: Zone;
