@@ -1,0 +1,9 @@
+{
+  "ruleId": "r0007-spade-3-gaeshi",
+  "name": "スペ3返し",
+  "description": "場に単体で出された1枚のジョーカーに対して、スペードの3を単体で出せるようにし、その場合だけジョーカーより強く扱う。成立後は場を流し、スペードの3を出したプレイヤーが次の場を開始する。",
+  "kind": "local",
+  "proposalId": "01KYQNNS3GCP8MYKAW9TJGC0EM",
+  "contractVersion": 1,
+  "messages": {}
+}
