@@ -147,7 +147,7 @@ sequenceDiagram
 - **LLM は従量課金 API を使わない**(C-2): 判定は **codex app-server** 経由で subscription のモデル(GPT 5.6 Luna / Sol。評価セット §4-5 の一致率で選定)を呼ぶ。**判定の会話にはツールを一切与えない**(テキスト入力 → 構造化テキスト出力のみ)。敵対的でありうる提案文をエージェントセッションに混ぜないための構造的な安全策で、乗っ取られても被害は「誤判定」までに縮退する(§3.1)。サーバー側には LLM クライアントも API キーも置かない。
 - **受理不受理は非同期**(E-18): サーバーは送信時に形式検証・正規化・保存・L0〜L2 シグナル記録だけを同期で行い、遮断・却下・イエローカード発行はすべてローカル判定ツールの処理後に非同期で確定する。攻撃者が送信時応答から判定境界を探るオラクル攻撃が構造的に成立しなくなる副次効果があり、送信レート制限の廃止(C-3)とも整合する。
 - **実装 skill を開発マシンに置く理由**: 開発者が subscription 認証済みの Codex App 通常セッションで skill を起動し、そのセッション自身が実装する。子 `codex exec` や別CLI認証を必要とせず、実行中の判断・差分・テスト結果を開発者が同じ対話で確認できる。
-- **ツールとサーバーの通信**: サーバーが admin API(HTTPS + Bearer トークン)を提供し、両ドライバはこれ経由で読み書きする(SQLite の単一ライタをサーバープロセスに限定する方針は維持)。主なエンドポイント: `GET /admin/pipeline/screening`(未判定提案の払い出し。sanitized 本文 + L0〜L2 シグナル)/ `POST /admin/proposals/{id}/check`(L3 + 決定表の結果記録)/ `POST /admin/proposals/{id}/judge`(判定記録と、カード・却下・approve の開発者確定)/ `POST /admin/proposals/{id}/approve-spec`(SPEC 承認 → queued)/ `GET /admin/pipeline/next`(次の queued ジョブの払い出し)/ `POST /admin/pipeline/jobs/{id}/update` / `POST /admin/pipeline/jobs/{id}/fail` / `POST /admin/rules/{id}/enable | disable`。
+- **ツールとサーバーの通信**: サーバーが admin API(HTTPS + Bearer トークン)を提供し、両ドライバはこれ経由で読み書きする(SQLite の単一ライタをサーバープロセスに限定する方針は維持)。主なエンドポイント: `GET /admin/pipeline/screening`(未判定提案の払い出し。sanitized 本文 + L0〜L2 シグナル)/ `POST /admin/proposals/{id}/check`(L3 + 決定表の結果記録)/ `POST /admin/proposals/{id}/judge`(判定記録と、カード・却下・approve の開発者確定)/ `POST /admin/proposals/{id}/approve-spec`(SPEC 承認 → queued)/ `POST /admin/proposals/{id}/amend-spec`(レビュー前の承認 SPEC 改訂。元の承認へ紐づく developer judgement を追記し、attempt 1 の `implementing` / `pr_open` だけ許可)/ `GET /admin/pipeline/next`(次の queued ジョブの払い出し)/ `POST /admin/pipeline/jobs/{id}/update` / `POST /admin/pipeline/jobs/{id}/fail` / `POST /admin/rules/{id}/enable | disable`。
 - **E6 G2 の実装点**: `GET /admin/pipeline/next` のハンドラは払い出し前に、当該提案に `finalVerdict='pass'` の検査記録(E6 `proposal_checks`)が存在することを再確認し、なければ払い出さず開発者アラートを出す。応答には確認済みの `passedCheckId` を含め、skill はこれを欠くジョブを処理しない(検査と実装が別セッションになっても、この突合で「未検査の提案が codex に届く」事故を塞ぐ)。
 - **将来の拡張点**: もし全自動化(付録 A)を再検討する場合も、段の実装(ライブラリ)は共通のまま、常駐ドライバを追加する形で移行できる。
 
@@ -381,7 +381,7 @@ CREATE TABLE judgements (
 -- 同一提案に複数行可(再判定・人手確定)。最新行が有効。
 ```
 
-- API: `GET /admin/pipeline/screening` / `POST /admin/proposals/{id}/check` / `POST /admin/proposals/{id}/judge` / `POST /admin/proposals/{id}/approve-spec`(§2.3)。
+- API: `GET /admin/pipeline/screening` / `POST /admin/proposals/{id}/check` / `POST /admin/proposals/{id}/judge` / `POST /admin/proposals/{id}/approve-spec` / `POST /admin/proposals/{id}/amend-spec`(§2.3)。
 - 判断 AI の実装方式(C-2 決定): **codex app-server 経由の subscription モデル(GPT 5.6 Luna / Sol)**。従量課金 API は使わない。判定の会話にはツールを与えず、テキスト入力 → 構造化テキスト出力のみ。モデルの最終選定は評価セット(§4-5)の一致率で行う。決定的設定(temperature 0 相当)が指定できない場合は、出力バリデータ + 評価セットでのばらつき計測で代替する。E6 L3 も同じツール・同じ呼び出し経路を使う(判定プロンプトは別)。
 
 **プロンプト設計**(`prompts/judge.md`、バージョン管理):

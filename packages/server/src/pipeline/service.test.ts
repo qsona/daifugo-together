@@ -206,6 +206,86 @@ describe('CX-01 judgement and VERDICT_CONFIRMATION', () => {
     });
   });
 
+  it('レビュー前のattempt 1だけ、承認SPECを監査可能なdeveloper judgementとして改訂する', async () => {
+    const { persistence, proposal, local, pipeline } = await setup();
+    local.record(proposal.id, {
+      verdict: 'clean',
+      reason: '通常の提案',
+      evidence: null,
+      model: 'gpt-5.6-sol',
+      latencyMs: 5,
+    });
+    const recorded = pipeline.recordAi(proposal.id, aiApprove());
+    if (recorded.status !== 'recorded') throw new Error('AI judgement missing');
+    const approved = pipeline.approveSpec(proposal.id, {
+      judgementId: recorded.judgement.id,
+      actor: 'developer@example.test',
+      spec: spec(),
+      scaffoldMeta: scaffoldMeta(),
+    });
+    if (approved.status !== 'confirmed' || approved.jobId === undefined) {
+      throw new Error('approved job missing');
+    }
+    const jobId = approved.jobId;
+    persistence.pipeline.transitionJob(
+      jobId,
+      'queued',
+      'implementing',
+      {
+        branch: 'rule/r0001-yagiri',
+        scaffoldSha: 'a'.repeat(40),
+        promptVersion: 'cx02-v4',
+      },
+      2_000,
+    );
+    persistence.pipeline.transitionJob(
+      jobId,
+      'implementing',
+      'pr_open',
+      { prNumber: 16, headSha: 'b'.repeat(40) },
+      2_001,
+    );
+    const amendedSpec = {
+      ...spec(),
+      summary: 'JOKERとの相互作用を含む改訂済み説明。',
+      testPoints: [...spec().testPoints, 'JOKERでも縛りを満たせる'],
+    };
+
+    const amended = pipeline.amendSpec(proposal.id, {
+      jobId,
+      judgementId: approved.judgement.id,
+      actor: 'developer@example.test',
+      spec: amendedSpec,
+      scaffoldMeta: scaffoldMeta(),
+    });
+
+    expect(amended).toMatchObject({
+      status: 'confirmed',
+      jobId,
+      judgement: {
+        decidedBy: 'developer',
+        sourceJudgementId: approved.judgement.id,
+        spec: {
+          summary: amendedSpec.summary,
+          source: { body: proposal.body },
+        },
+      },
+    });
+    expect(persistence.pipeline.implementation(jobId)?.spec).toMatchObject({
+      summary: amendedSpec.summary,
+      testPoints: expect.arrayContaining(['JOKERでも縛りを満たせる']),
+    });
+    expect(
+      pipeline.amendSpec(proposal.id, {
+        jobId,
+        judgementId: approved.judgement.id,
+        actor: 'developer@example.test',
+        spec: amendedSpec,
+        scaffoldMeta: scaffoldMeta(),
+      }),
+    ).toMatchObject({ status: 'already_confirmed', jobId });
+  });
+
   it('AI却下は開発者が対象judgementを確定するまで状態を変えない', async () => {
     const { persistence, proposal, local, pipeline } = await setup();
     local.record(proposal.id, {

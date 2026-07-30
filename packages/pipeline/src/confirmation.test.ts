@@ -65,6 +65,28 @@ describe('developer verdict confirmation command', () => {
     });
   });
 
+  it('レビュー前のSPEC改訂をjobと承認judgementに固定して送る', () => {
+    const command = parseConfirmationCommand({
+      action: 'amend_spec',
+      proposalId: 'proposal-3',
+      jobId: 6,
+      judgementId: 12,
+      actor: 'developer',
+      spec: { specVersion: 1, name: '縛り' },
+      scaffoldMeta: { slug: 'shibari', messages: {} },
+    });
+    expect(confirmationRequest(command!)).toEqual({
+      path: '/admin/proposals/proposal-3/amend-spec',
+      body: {
+        jobId: 6,
+        judgementId: 12,
+        actor: 'developer',
+        spec: { specVersion: 1, name: '縛り' },
+        scaffoldMeta: { slug: 'shibari', messages: {} },
+      },
+    });
+  });
+
   it('対象IDやactorが欠けた入力を拒否する', () => {
     expect(
       parseConfirmationCommand({

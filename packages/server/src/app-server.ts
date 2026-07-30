@@ -75,6 +75,7 @@ export interface AppServerOptions {
       | 'confirmE6Rejection'
       | 'confirmCxRejection'
       | 'approveSpec'
+      | 'amendSpec'
     >;
     jobs: Pick<
       PipelineJobService,
@@ -516,6 +517,9 @@ export function createAppServer(options: AppServerOptions): AppServer {
     const judgeMatch = /^\/admin\/proposals\/([^/]+)\/judge$/u.exec(pathname);
     const approveSpecMatch =
       /^\/admin\/proposals\/([^/]+)\/approve-spec$/u.exec(pathname);
+    const amendSpecMatch = /^\/admin\/proposals\/([^/]+)\/amend-spec$/u.exec(
+      pathname,
+    );
     const jobUpdateMatch =
       /^\/admin\/pipeline\/jobs\/([1-9]\d*)\/update$/u.exec(pathname);
     const jobFailMatch = /^\/admin\/pipeline\/jobs\/([1-9]\d*)\/fail$/u.exec(
@@ -531,6 +535,7 @@ export function createAppServer(options: AppServerOptions): AppServer {
       !checkMatch &&
       !judgeMatch &&
       !approveSpecMatch &&
+      !amendSpecMatch &&
       !jobUpdateMatch &&
       !jobFailMatch &&
       !jobRetryMatch &&
@@ -542,6 +547,7 @@ export function createAppServer(options: AppServerOptions): AppServer {
       ? options.adminScreening
       : judgeMatch ||
           approveSpecMatch ||
+          amendSpecMatch ||
           isNextJob ||
           jobUpdateMatch ||
           jobFailMatch ||
@@ -651,7 +657,8 @@ export function createAppServer(options: AppServerOptions): AppServer {
       return true;
     }
     const proposalId = decodeURIComponent(
-      (checkMatch ?? judgeMatch ?? approveSpecMatch)?.[1] ?? '',
+      (checkMatch ?? judgeMatch ?? approveSpecMatch ?? amendSpecMatch)?.[1] ??
+        '',
     );
     let result;
     if (jobUpdateMatch) {
@@ -670,6 +677,8 @@ export function createAppServer(options: AppServerOptions): AppServer {
       result = options.adminScreening!.service.record(proposalId, body);
     } else if (approveSpecMatch) {
       result = options.adminPipeline!.service.approveSpec(proposalId, body);
+    } else if (amendSpecMatch) {
+      result = options.adminPipeline!.service.amendSpec(proposalId, body);
     } else {
       const value =
         typeof body === 'object' && body !== null && !Array.isArray(body)

@@ -692,4 +692,97 @@ export class PipelineJudgementService {
       return { status: 'confirmed', judgement, jobId: job.id };
     });
   }
+
+  amendSpec(proposalId: string, input: unknown): PipelineMutationResult {
+    const value = object(input);
+    const jobId = value?.jobId;
+    const judgementId = value?.judgementId;
+    const confirmedBy = actor(value?.actor);
+    const approvedSpec = parseSpec(value?.spec);
+    const approvedScaffoldMeta = parseScaffoldMeta(value?.scaffoldMeta);
+    if (
+      !Number.isSafeInteger(jobId) ||
+      !Number.isSafeInteger(judgementId) ||
+      !confirmedBy ||
+      !approvedSpec ||
+      !approvedScaffoldMeta ||
+      !visibleTextSafe({
+        name: approvedSpec.name,
+        summary: approvedSpec.summary,
+        messages: approvedScaffoldMeta.messages,
+      })
+    ) {
+      return { status: 'invalid', error: 'invalid_spec_amendment' };
+    }
+    return this.#pipeline.transaction(() => {
+      const proposal = this.#proposals.findById(proposalId);
+      const item = this.#pipeline.implementation(jobId as number);
+      const source = this.#pipeline.judgement(judgementId as number);
+      if (
+        !proposal ||
+        !item ||
+        !source ||
+        item.proposal.id !== proposalId ||
+        source.proposalId !== proposalId
+      ) {
+        return { status: 'not_found' };
+      }
+      const existing = this.#pipeline.developerConfirmation(
+        proposalId,
+        source.id,
+        null,
+      );
+      if (existing) {
+        return {
+          status: 'already_confirmed',
+          judgement: existing,
+          jobId: item.job.id,
+        };
+      }
+      if (
+        proposal.status !== 'implementing' ||
+        item.approvedJudgementId !== source.id ||
+        source.verdict !== 'approve' ||
+        source.decidedBy !== 'developer' ||
+        (item.job.phase !== 'implementing' && item.job.phase !== 'pr_open') ||
+        item.job.attempt !== 1 ||
+        approvedScaffoldMeta.slug !== item.job.slug
+      ) {
+        return { status: 'conflict', error: 'stale_or_unamendable_spec' };
+      }
+      const spec: RuleSpecification = {
+        ...approvedSpec,
+        source: {
+          kind: proposal.kind,
+          title: proposal.name,
+          body: proposal.body,
+        },
+      };
+      const judgement = this.#pipeline.insertJudgement(proposalId, {
+        verdict: 'approve',
+        rejectCategory: null,
+        rejectSubtype: null,
+        reasonForUser: null,
+        reasonInternal:
+          'Developer amended the approved SPEC before rule review.',
+        spec,
+        scaffoldMeta: approvedScaffoldMeta,
+        confidence: null,
+        decidedBy: 'developer',
+        model: null,
+        promptVersion: source.promptVersion,
+        latencyMs: null,
+        sourceCheckId: null,
+        sourceJudgementId: source.id,
+        runId: null,
+        actor: confirmedBy,
+        createdAt: this.#now(),
+      });
+      return {
+        status: 'confirmed',
+        judgement,
+        jobId: item.job.id,
+      };
+    });
+  }
 }

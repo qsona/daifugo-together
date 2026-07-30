@@ -23,6 +23,15 @@ export type ConfirmationCommand =
       actor: string;
       spec: JsonObject;
       scaffoldMeta: JsonObject;
+    }
+  | {
+      action: 'amend_spec';
+      proposalId: string;
+      jobId: number;
+      judgementId: number;
+      actor: string;
+      spec: JsonObject;
+      scaffoldMeta: JsonObject;
     };
 
 export interface AdminMutationRequest {
@@ -93,6 +102,23 @@ export function parseConfirmationCommand(
       scaffoldMeta,
     };
   }
+  if (
+    input.action === 'amend_spec' &&
+    positiveId(input.jobId) &&
+    positiveId(input.judgementId) &&
+    spec &&
+    scaffoldMeta
+  ) {
+    return {
+      action: input.action,
+      proposalId: input.proposalId,
+      jobId: input.jobId,
+      judgementId: input.judgementId,
+      actor: input.actor,
+      spec,
+      scaffoldMeta,
+    };
+  }
   return null;
 }
 
@@ -100,6 +126,18 @@ export function confirmationRequest(
   command: ConfirmationCommand,
 ): AdminMutationRequest {
   const proposalId = encodeURIComponent(command.proposalId);
+  if (command.action === 'amend_spec') {
+    return {
+      path: `/admin/proposals/${proposalId}/amend-spec`,
+      body: {
+        jobId: command.jobId,
+        judgementId: command.judgementId,
+        actor: command.actor,
+        spec: command.spec,
+        scaffoldMeta: command.scaffoldMeta,
+      },
+    };
+  }
   if (command.action === 'approve_spec') {
     return {
       path: `/admin/proposals/${proposalId}/approve-spec`,

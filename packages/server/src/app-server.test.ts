@@ -498,6 +498,7 @@ describe('production app server', () => {
     }));
     const recordAi = vi.fn(() => ({ status: 'not_found' as const }));
     const approveSpec = vi.fn(() => ({ status: 'not_found' as const }));
+    const amendSpec = vi.fn(() => ({ status: 'not_found' as const }));
     const nextJob = vi.fn(() => null);
     const pendingCx = vi.fn(() => []);
     const updateJob = vi.fn(() => ({
@@ -560,6 +561,7 @@ describe('production app server', () => {
           confirmE6Rejection: () => ({ status: 'not_found' }),
           confirmCxRejection: () => ({ status: 'not_found' }),
           approveSpec,
+          amendSpec,
         },
         jobs: {
           next: nextJob,
@@ -654,6 +656,30 @@ describe('production app server', () => {
     expect(approved.status).toBe(404);
     expect(approveSpec).toHaveBeenCalledWith('proposal-1', {
       judgementId: 1,
+      actor: 'developer',
+      spec: {},
+    });
+
+    const amended = await fetch(
+      `${baseUrl}/admin/proposals/proposal-1/amend-spec`,
+      {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer admin-token',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          jobId: 6,
+          judgementId: 2,
+          actor: 'developer',
+          spec: {},
+        }),
+      },
+    );
+    expect(amended.status).toBe(404);
+    expect(amendSpec).toHaveBeenCalledWith('proposal-1', {
+      jobId: 6,
+      judgementId: 2,
       actor: 'developer',
       spec: {},
     });

@@ -59,6 +59,13 @@ pnpm --filter @daifugo/pipeline implement:retry -- JOB_ID
 
 Distinguish two reasons for running it; they are counted differently:
 
+- **Pre-review SPEC amendment** — if the developer changes an approved rule
+  specification before release, record the full replacement SPEC and unchanged
+  scaffold slug through `POST /admin/proposals/{id}/amend-spec`, then run
+  `implement:retry`. The server keeps the old approval and the replacement as a
+  chained developer judgement, and permits this only for attempt 1 in
+  `implementing` / `pr_open`. Treat the rebuild as administrative, not as an
+  implementation failure. Never edit an existing scaffold in place.
 - **Administrative rebuild** — nothing failed; the prepared attempt is merely
   based on a `main` that predates a required engine-vocabulary change. Run
   `implement:retry` directly, without asking for authorization, and report it
