@@ -87,6 +87,10 @@ export interface Standings {
  * - `onGameStart`: after dealing and before the first turn.
  * - `onGameEnd`: after every standing is assigned and before `gameEnded`.
  *
+ * Effect hooks receive the effective `context.game.strength` after the
+ * `modifyStrength` chain. `afterPlay` receives the exact order used to
+ * validate the just-applied play, so it represents the pre-play rule state.
+ *
  * All rules in one effect batch observe the same detached, deeply frozen view.
  * A module must return Effects instead of mutating this context.
  */
