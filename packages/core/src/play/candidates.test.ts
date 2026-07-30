@@ -449,3 +449,71 @@ describe('sequence legality against the field', () => {
     ]);
   });
 });
+
+describe('comparison override legality against the field', () => {
+  it('指定した3だけがジョーカーより強くなり、他ランクには波及しない', () => {
+    const overrideEntry: RuleChainEntry = {
+      ruleId: 'r-test-comparison-override',
+      name: '比較例外',
+      position: 0,
+      priority: {
+        score: 0,
+        activatedAt: 0,
+        ruleId: 'r-test-comparison-override',
+      },
+      bundleHash: 'fixture',
+      contractVersion: 1,
+      engineFeatures: ['jokers'],
+    };
+    const override: RuleModule = {
+      meta: {
+        ruleId: overrideEntry.ruleId,
+        name: overrideEntry.name,
+        description: '3をジョーカーより強くする',
+        kind: 'original',
+        proposalId: 'fixture',
+        contractVersion: 1,
+        messages: {},
+        engineFeatures: ['jokers'],
+      },
+      hooks: {
+        modifyStrength: (_context, base) => ({
+          ...base,
+          comparisonOverrides: [
+            ...(base.comparisonOverrides ?? []),
+            { stronger: '3', weaker: 'joker' },
+          ],
+        }),
+      },
+    };
+    const runtime: RuleRuntime = {
+      port: createInProcessRuleChainPort([override]),
+      setHistory: [],
+      setMemory: {},
+    };
+    const field = play('single', [joker(0)], 'joker');
+    const three = play('single', [nat('spade', '3')], '3');
+    const four = play('single', [nat('spade', '4')], '4');
+    const state = stateWithField([...three.cards, ...four.cards], {
+      play: field,
+      by: 'p2',
+    });
+
+    const evaluated = evaluateCandidates(
+      {
+        gameIndex: 0,
+        seats,
+        gameSeed: 'comparison-override',
+        ruleChain: [overrideEntry],
+      },
+      state,
+      [three, four],
+      runtime,
+    );
+
+    expect(evaluated.results).toEqual([
+      { legal: true },
+      { legal: false, reasonKey: 'TOO_WEAK' },
+    ]);
+  });
+});
