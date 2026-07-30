@@ -118,10 +118,13 @@ export type Card =
 /** 弱い順のランク列。基本ルールでは ["3","4",...,"A","2"]。革命系ルールが反転させる */
 export interface StrengthOrder {
   ranking: CardRank[];        // 弱 → 強
+  revolution?: boolean;      // 永続的な革命状態。省略時 false
 }
 // 2026-07-30 改訂: 予約していた jokerSingleTop は採用しない。単騎ジョーカー最強は
 // compareRanks が 'joker' を +∞ として扱うエンジン固定の規則とし(safe-port の
-// StrengthOrder 検証を変えないため)、例外(スペ3返し等)は modifyLegality で表現する。
+// revolution を省略した transform は直前値を維持する。一時的な強さ反転は
+// ranking だけを反転し、革命系 transform は ranking と revolution を反転する。
+// 例外(スペ3返し等)は modifyLegality で表現する。
 
 // ---------- プレイ ----------
 export type PlayKind = "single" | "set" | "sequence";
@@ -391,9 +394,10 @@ E12 §4.6(2) の要請に基づく確定表。この表は契約ドキュメン�
 Effect を返す 4 フックの `ctx.game.strength` は、同じ状態に
 `modifyStrength` チェーンを適用した実効 `StrengthOrder` とする。
 `afterPlay` には、そのプレイの合法性判定で実際に使った
-「プレイ直前」の実効順序を渡す。これにより、革命状態そのものを
-ルール間共有 KV にせず、他ルールは合成済みの強さ順から革命相当の
-共有シグナルを読める。
+「プレイ直前」の実効順序を渡す。`StrengthOrder.revolution` は永続的な
+革命状態の合成シグナルで、ランキングが同じ反転状態でもイレブンバック等の
+一時反転とは区別する。これにより、革命状態をルール間共有 KV にせず、
+他ルールは合成済みの強さ順から意味のある共有シグナルを読める。
 
 #### 2.5.3 Effect の競合解決(E09 §2.4 の実装)
 

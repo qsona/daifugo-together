@@ -1,6 +1,6 @@
 import type { PendingCxJudgement } from '@daifugo/server';
 
-export const CX01_PROMPT_VERSION = 'cx01-v4';
+export const CX01_PROMPT_VERSION = 'cx01-v5';
 
 const CONTRACT = `
 契約 v1 のフック:
@@ -17,6 +17,8 @@ hook別のEffect許可:
 - afterFieldClear / onGameStart: clearField以外
 - onGameEnd: setMemory(set scopeのみ) / announce
 - modifyLegality / modifyStrength: Effectなし（戻り値の変換だけ）
+- 実効 StrengthOrder の revolution は永続的な革命状態を表す。革命系ルールは
+  ランキングとこの値を反転し、一時的な強さ反転はランキングだけを反転する
 
 engineFeatures 宣言（ルールが有効化できるエンジン機能）:
 - sequence: 階段（同スートで連続する3枚以上の手型）

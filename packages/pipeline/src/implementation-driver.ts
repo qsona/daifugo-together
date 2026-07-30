@@ -118,7 +118,7 @@ async function recordOpened(
     }
 > {
   const opened = await jobs.update(item.job.id, {
-    from: 'implementing',
+    from: item.job.phase,
     to: 'pr_open',
     prNumber: pullRequest.prNumber,
     headSha: pullRequest.headSha,
@@ -173,7 +173,13 @@ export async function prepareImplementation(options: {
             item.job.promptVersion !== null &&
             SUPPORTED_PROMPT_VERSIONS.has(item.job.promptVersion)
           ? ({ status: 'updated', job: item.job } as const)
-          : ({ status: 'conflict', error: 'resume_state_mismatch' } as const);
+          : item.job.phase === 'pr_open' &&
+              item.job.branch === published.branch &&
+              item.job.scaffoldSha === published.scaffoldSha &&
+              item.job.promptVersion !== null &&
+              SUPPORTED_PROMPT_VERSIONS.has(item.job.promptVersion)
+            ? ({ status: 'updated', job: item.job } as const)
+            : ({ status: 'conflict', error: 'resume_state_mismatch' } as const);
   if (claimed.status !== 'updated') {
     return {
       status: 'claim_failed',
@@ -200,7 +206,7 @@ export async function submitPreparedImplementation(options: {
 }): Promise<SubmitImplementationResult> {
   const { item } = options;
   if (
-    item.job.phase !== 'implementing' ||
+    (item.job.phase !== 'implementing' && item.job.phase !== 'pr_open') ||
     item.job.branch === null ||
     item.job.scaffoldSha === null ||
     item.job.promptVersion === null ||

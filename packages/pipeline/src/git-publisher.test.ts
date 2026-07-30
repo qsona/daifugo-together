@@ -230,6 +230,37 @@ describe('GitImplementationPublisher', () => {
       stdout: 'export const rule = { hooks: {} };\n',
     });
 
+    await writeFile(
+      join(recoveredScaffold.directory, 'rule.ts'),
+      'export const rule = { hooks: { afterPlay: () => [] } };\n',
+    );
+    const corrected = await new GitImplementationPublisher({
+      repoRoot: recovered,
+      process: processPort,
+    }).publishImplementation({
+      item: {
+        ...item,
+        job: {
+          ...item.job,
+          phase: 'pr_open',
+          branch: published.branch,
+          scaffoldSha: published.scaffoldSha,
+          promptVersion: 'cx02-v4',
+          prNumber: 42,
+          headSha: pullRequest.headSha,
+        },
+      },
+      scaffold: recoveredScaffold,
+      ...published,
+    });
+    expect(corrected.prNumber).toBe(42);
+    expect(corrected.headSha).not.toBe(pullRequest.headSha);
+    await expect(
+      git(recovered, 'log', '-1', '--pretty=%s'),
+    ).resolves.toMatchObject({
+      stdout: 'fix(rules): update r0001-yagiri\n',
+    });
+
     await writeFile(join(recovered, 'outside.txt'), 'unexpected\n');
     await expect(
       recoveredPublisher.inspect({

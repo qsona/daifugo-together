@@ -157,6 +157,9 @@ export function createInProcessRuleChainPort(
           });
           continue;
         }
+        if (next.revolution === undefined && result.revolution !== undefined) {
+          next = { ...next, revolution: result.revolution };
+        }
         if (changed(result, next)) {
           influenced.add(entry.ruleId);
         }

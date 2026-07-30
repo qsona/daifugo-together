@@ -152,7 +152,10 @@ describe('GE-04 effect pipeline and lifecycle hooks', () => {
   it('afterPlayへプレイ直前の実効StrengthOrderを全ルール共通で渡す', () => {
     const revolutionEntry = entry('r-revolution');
     const observerEntry = { ...entry('r-strength-observer'), position: 1 };
-    let observedStrength: string[] = [];
+    let observedStrength: {
+      ranking: string[];
+      revolution: boolean | undefined;
+    } = { ranking: [], revolution: undefined };
     const revolution: RuleModule = {
       meta: {
         ruleId: revolutionEntry.ruleId,
@@ -174,7 +177,10 @@ describe('GE-04 effect pipeline and lifecycle hooks', () => {
         ],
         modifyStrength: (context, base) =>
           context.memory.game.active === true
-            ? { ranking: [...base.ranking].reverse() }
+            ? {
+                ranking: [...base.ranking].reverse(),
+                revolution: !base.revolution,
+              }
             : base,
       },
     };
@@ -190,7 +196,10 @@ describe('GE-04 effect pipeline and lifecycle hooks', () => {
       },
       hooks: {
         afterPlay: (context) => {
-          observedStrength = [...context.game.strength.ranking];
+          observedStrength = {
+            ranking: [...context.game.strength.ranking],
+            revolution: context.game.strength.revolution,
+          };
           return [];
         },
       },
@@ -222,9 +231,70 @@ describe('GE-04 effect pipeline and lifecycle hooks', () => {
     );
 
     expect(transition.rejections).toEqual([]);
-    expect(observedStrength).toEqual(
-      [...BASE_STRENGTH_ORDER.ranking].reverse(),
-    );
+    expect(observedStrength).toEqual({
+      ranking: [...BASE_STRENGTH_ORDER.ranking].reverse(),
+      revolution: true,
+    });
+  });
+
+  it('一時的な強さ反転は革命シグナルを変更しない', () => {
+    const temporaryEntry = entry('r-temporary-reverse');
+    const observerEntry = { ...entry('r-revolution-observer'), position: 1 };
+    let observed:
+      { ranking: string[]; revolution: boolean | undefined } | undefined;
+    const temporary: RuleModule = {
+      meta: {
+        ruleId: temporaryEntry.ruleId,
+        name: '一時反転',
+        description: 'ランキングだけを反転するfixture',
+        kind: 'original',
+        proposalId: 'fixture',
+        contractVersion: 1,
+        messages: {},
+      },
+      hooks: {
+        modifyStrength: (_context, base) => ({
+          ranking: [...base.ranking].reverse(),
+        }),
+      },
+    };
+    const observer: RuleModule = {
+      meta: {
+        ruleId: observerEntry.ruleId,
+        name: '革命シグナルobserver',
+        description: '一時反転と革命を区別するfixture',
+        kind: 'original',
+        proposalId: 'fixture',
+        contractVersion: 1,
+        messages: {},
+      },
+      hooks: {
+        onGameStart: (context) => {
+          observed = {
+            ranking: [...context.game.strength.ranking],
+            revolution: context.game.strength.revolution,
+          };
+          return [];
+        },
+      },
+    };
+    const config: GameConfig = {
+      gameIndex: 0,
+      seats,
+      gameSeed: 'temporary-strength-signal',
+      ruleChain: [temporaryEntry, observerEntry],
+    };
+
+    startGame(config, {
+      port: createInProcessRuleChainPort([temporary, observer]),
+      setHistory: [],
+      setMemory: {},
+    });
+
+    expect(observed).toEqual({
+      ranking: [...BASE_STRENGTH_ORDER.ranking].reverse(),
+      revolution: undefined,
+    });
   });
 
   it('announceなしで採用されたEffectもルール名fallback用の発動eventを出す', () => {

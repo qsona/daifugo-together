@@ -352,4 +352,72 @@ describe('CX-02 interactive-session implementation', () => {
     });
     expect(publishImplementation).not.toHaveBeenCalled();
   });
+
+  it('pr_openを同じattemptで再開し既存PRのhead SHAを更新する', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'pipeline-workspace-'));
+    directories.push(workspace);
+    const item = queued();
+    item.job = {
+      ...item.job,
+      phase: 'pr_open',
+      branch: 'rule/r0001-yagiri',
+      scaffoldSha: 'a'.repeat(40),
+      promptVersion: 'cx02-v4',
+      prNumber: 42,
+      headSha: 'b'.repeat(40),
+    };
+    const jobPort = jobs(item);
+    const rulesRoot = join(workspace, 'packages/rules');
+    const prepared = await prepareImplementation({
+      item,
+      jobs: jobPort,
+      publisher: {
+        publish: async () => ({
+          branch: 'rule/r0001-yagiri',
+          scaffoldSha: 'a'.repeat(40),
+        }),
+        recoverImplementation: async () => null,
+        inspect: async () => [],
+        publishImplementation: async () => {
+          throw new Error('not submitted');
+        },
+      },
+      rulesRoot,
+    });
+    expect(prepared).toMatchObject({
+      status: 'prepared',
+      job: { phase: 'pr_open', attempt: 1, prNumber: 42 },
+    });
+    if (prepared.status !== 'prepared') return;
+    await writeGenerated(prepared.scaffold.directory);
+
+    const result = await submitPreparedImplementation({
+      item: { ...item, job: jobPort.current() },
+      jobs: jobPort,
+      publisher: {
+        publish: async () => {
+          throw new Error('already prepared');
+        },
+        inspect: async () => [],
+        recoverImplementation: async () => null,
+        publishImplementation: async () => ({
+          prNumber: 42,
+          headSha: 'c'.repeat(40),
+        }),
+      },
+      verifier: { verify: async () => [] },
+      workspace,
+      rulesRoot,
+    });
+
+    expect(result).toMatchObject({
+      status: 'ready',
+      job: {
+        phase: 'pr_open',
+        attempt: 1,
+        prNumber: 42,
+        headSha: 'c'.repeat(40),
+      },
+    });
+  });
 });

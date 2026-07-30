@@ -7,6 +7,7 @@ const TRANSITIONS = new Set([
   'queued:implementing',
   'implementing:implementing',
   'implementing:pr_open',
+  'pr_open:pr_open',
   'pr_open:merged',
   'merged:merged',
   'merged:done',
@@ -134,10 +135,17 @@ export class PipelineJobService {
           current.promptVersion === null)) ||
       (from === 'implementing' && to !== 'implementing' && to !== 'pr_open') ||
       (from === 'pr_open' &&
-        (to !== 'merged' ||
-          mergeSha === undefined ||
-          current.headSha === null ||
-          current.prNumber === null)) ||
+        ((to === 'pr_open' &&
+          (headSha === undefined ||
+            prNumber !== current.prNumber ||
+            current.prNumber === null ||
+            current.scaffoldSha === null ||
+            current.promptVersion === null)) ||
+          (to === 'merged' &&
+            (mergeSha === undefined ||
+              current.headSha === null ||
+              current.prNumber === null)) ||
+          (to !== 'pr_open' && to !== 'merged'))) ||
       (mergeBackfill &&
         (mergeSha === undefined ||
           current.mergeSha !== null ||

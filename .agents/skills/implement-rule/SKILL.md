@@ -43,6 +43,12 @@ For an existing `implementing` job, run:
 pnpm --filter @daifugo/pipeline implement:resume -- JOB_ID
 ```
 
+For an existing `pr_open` job that needs a review-driven or
+vocabulary-driven correction, use the same resume command. The recovered
+workspace may update only `rule.ts` / `rule.test.ts`; submission appends a
+validated commit to the same PR and updates the recorded head SHA without
+consuming a new attempt.
+
 `implement:retry` rebuilds the branch, scaffold, and workspace from current
 `main` (the pipeline allows this once per job — attempt 2 is the last one the
 tooling can create):
@@ -243,7 +249,9 @@ test. It then commits the two files, pushes without force, opens or recovers one
 PR, records `pr_open`, and removes the prepared workspace.
 
 If the result is `inspect_failed`, report every violation, keep the workspace,
-fix only the two allowed files, and resubmit. If submission is interrupted,
+fix only the two allowed files, and resubmit. For a resumed `pr_open`
+correction, submission appends one validated correction commit to the existing
+PR and atomically updates the recorded head SHA. If submission is interrupted,
 rerun the same submit command; it must recover the existing generated commit or
 PR. Do not consume attempt 2 for a transport interruption.
 

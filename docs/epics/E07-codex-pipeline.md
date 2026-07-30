@@ -156,13 +156,13 @@ sequenceDiagram
 - `pipeline_jobs` テーブル(§3.2(c))が実装ジョブを追跡する。`proposal_id` に UNIQUE 制約(1 提案 1 ジョブ)。取り出しは `created_at` 昇順(OP-01 の「明示された順序」)。
 - phase は単純化した単方向遷移のみ: `queued → implementing → pr_open → merged → done(=released)`、任意の点から `→ failed`。
 - **リース・フェンシング・ハートビートは持たない**。駆動者は開発者 1 人・直列実行が前提で、同時に 2 つの実装セッションを走らせない運用とする(skill は起動時に `implementing`/`pr_open` の先行ジョブがあれば警告する)。
-- **中断からの回復**: skill のセッションが途中で死んだら、`implement:resume` で同じ attempt の決定的ブランチを新しい workspace に回復する。生成ファイルまたは生成 commit があれば検収して継続し、`implement:submit` は既存 PR を回復して二重作成を防ぐ。内容起因で開発者が明示した再試行だけ `-a2` を使う。
+- **中断・PR指摘からの回復**: skill のセッションが途中で死んだ場合や、開いたPRへ許可2ファイルだけの修正が必要になった場合は、`implement:resume` で同じ attempt の決定的ブランチを新しい workspace に回復する。`implement:submit` は検収済みの追補コミットを同じPRへ積み、記録済み head SHA を同phase CASで更新する。scaffoldから作り直す内容起因の再試行だけ `-a2` を使う。
 - **旧試行のブランチは再利用しない**: 再試行の前に、旧試行の PR をコメント付きで close し、リモートの旧ブランチを削除してから作り直す(`rule/**` のルールセットは force-push を拒否・ブランチ削除を許可 §2.5)。
 - ルール ID は `r{proposalId 4 桁 0 埋め}`(桁あふれ時は自然に 5 桁へ)。提案 ID 由来なので採番衝突が構造的に起きない。
 
 #### 失敗分類とリトライ方針(C-5 決定を反映)
 
-**`proposals.failed` は終端**であり、リトライはすべて `implementing` の内側(`pipeline_jobs.attempt`)で行う(E7 内包モデル。§5.3-1)。同じ workspace 内の修正や中断resumeは同一attemptの継続であり、内容起因で新しいscaffoldからやり直す場合だけ開発者判断で attempt 2 を使う。
+**`proposals.failed` は終端**であり、リトライはすべて `implementing` の内側(`pipeline_jobs.attempt`)で行う(E7 内包モデル。§5.3-1)。同じ workspace 内の修正、中断resume、`pr_open` の同一PR追補は同一attemptの継続であり、内容起因で新しいscaffoldからやり直す場合だけ開発者判断で attempt 2 を使う。
 
 | 分類 | 例 | 挙動 |
 |---|---|---|

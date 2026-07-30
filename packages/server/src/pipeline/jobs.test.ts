@@ -223,19 +223,34 @@ describe('CX-02 pipeline jobs', () => {
     expect(
       jobs.update(item.job.id, {
         from: 'pr_open',
+        to: 'pr_open',
+        prNumber: 42,
+        headSha: 'c'.repeat(40),
+      }),
+    ).toMatchObject({
+      status: 'updated',
+      job: {
+        phase: 'pr_open',
+        prNumber: 42,
+        headSha: 'c'.repeat(40),
+      },
+    });
+    expect(
+      jobs.update(item.job.id, {
+        from: 'pr_open',
         to: 'merged',
-        mergeSha: 'c'.repeat(40),
+        mergeSha: 'd'.repeat(40),
       }),
     ).toMatchObject({
       status: 'updated',
       job: {
         phase: 'merged',
-        headSha: 'b'.repeat(40),
-        mergeSha: 'c'.repeat(40),
+        headSha: 'c'.repeat(40),
+        mergeSha: 'd'.repeat(40),
       },
     });
     expect(jobs.resume(item.job.id)).toMatchObject({
-      job: { phase: 'merged', mergeSha: 'c'.repeat(40) },
+      job: { phase: 'merged', mergeSha: 'd'.repeat(40) },
     });
     expect(jobs.active()).toEqual([
       expect.objectContaining({ id: item.job.id, phase: 'merged' }),
