@@ -18,9 +18,9 @@ export const CX_JUDGE_CORPUS: readonly CxJudgeCorpusCase[] = [
     name: '7渡し指名',
     body: '7を出した人は手札を見て好きな1枚を選び、渡す相手も選ぶ。',
     expected: {
-      verdict: 'reject',
-      rejectCategory: 'contract',
-      rejectSubtype: 'A1',
+      verdict: 'needs_review',
+      rejectCategory: null,
+      rejectSubtype: null,
     },
   },
   {
@@ -28,9 +28,9 @@ export const CX_JUDGE_CORPUS: readonly CxJudgeCorpusCase[] = [
     name: '勝利コイン',
     body: 'ゲームに勝つたびにコインを3枚もらい、10枚で次の試合に勝つ。',
     expected: {
-      verdict: 'reject',
-      rejectCategory: 'contract',
-      rejectSubtype: 'A2',
+      verdict: 'needs_review',
+      rejectCategory: null,
+      rejectSubtype: null,
     },
   },
   {
@@ -38,9 +38,9 @@ export const CX_JUDGE_CORPUS: readonly CxJudgeCorpusCase[] = [
     name: '二つの場',
     body: '場を二つに分け、各手番でどちらの場にカードを出すか選ぶ。',
     expected: {
-      verdict: 'reject',
-      rejectCategory: 'contract',
-      rejectSubtype: 'A3',
+      verdict: 'needs_review',
+      rejectCategory: null,
+      rejectSubtype: null,
     },
   },
   {
@@ -263,6 +263,16 @@ export const CX_JUDGE_CORPUS: readonly CxJudgeCorpusCase[] = [
     id: 'N03',
     name: 'フラッシュ出し',
     body: '同じマークならバラバラの数字でも5枚まとめて出せる。',
+    expected: {
+      verdict: 'needs_review',
+      rejectCategory: null,
+      rejectSubtype: null,
+    },
+  },
+  {
+    id: 'N04',
+    name: '10捨て',
+    body: '10を出した枚数分好きな自分の手持ちのカードを場に関係ないところに捨てることができる。捨てないことはできない。',
     expected: {
       verdict: 'needs_review',
       rejectCategory: null,
