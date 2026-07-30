@@ -1,4 +1,8 @@
-import type { PlayerRoomView } from '@daifugo/core';
+import {
+  TITLE_BY_STANDING,
+  type PlayerRoomView,
+  type Standing,
+} from '@daifugo/core';
 
 import type { CardView } from '../components/Card';
 import type { TableSeat } from '../components/Table';
@@ -158,6 +162,14 @@ export function tableSeats(
     const seat = ((room.you.seatId! + offset) % 4) as 0 | 1 | 2 | 3;
     const member = bySeat.get(seat);
     const finish = finished.get(seat);
+    // playerFinished is emitted before afterPlay rules run. A rule such as
+    // forbidden-finish can therefore replace the initially assigned rank;
+    // the member snapshot is the authoritative value for the table display.
+    const finishedRank = member?.finishedRank ?? finish?.rank ?? null;
+    const finishedTitle =
+      member?.finishedRank !== null && member?.finishedRank !== undefined
+        ? TITLE_BY_STANDING[member.finishedRank as Standing]
+        : finish?.title;
     const status = member?.isAI
       ? game.turn?.seat === seat
         ? '考え中…'
@@ -179,8 +191,8 @@ export function tableSeats(
       kind: member?.isAI ? 'ai' : 'human',
       ...(status ? { status } : {}),
       // 履歴に playerFinished が無くても、スナップショットの順位だけは拾う。
-      finishedRank: finish?.rank ?? member?.finishedRank ?? null,
-      ...(finish ? { finishedTitle: finish.title } : {}),
+      finishedRank,
+      ...(finishedTitle ? { finishedTitle } : {}),
       plays: plays.get(seat) ?? [],
     };
   });

@@ -103,6 +103,19 @@ describe('tableSeats', () => {
     const seats = tableSeats(room, { heldPlayedHistoryIndex: 0 });
     expect(seats[0]!.plays.at(-1)?.map((card) => card.id)).toEqual(['S08']);
   });
+
+  it('禁止あがりで順位が修正された場合は確定順位と称号を表示する', () => {
+    const room = roomAfterEightCut();
+    room.members[0]!.finishedRank = 4;
+    room.game!.history = [
+      { t: 'playerFinished', seat: 0, rank: 1, title: '大富豪' },
+    ];
+
+    expect(tableSeats(room)[0]).toMatchObject({
+      finishedRank: 4,
+      finishedTitle: '大貧民',
+    });
+  });
 });
 
 describe('finalPlay', () => {
