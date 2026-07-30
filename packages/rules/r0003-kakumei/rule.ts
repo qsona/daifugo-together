@@ -1,18 +1,26 @@
 import {
-  BASE_STRENGTH_ORDER,
   type DeepReadonly,
   type RuleModule,
   type StrengthOrder,
 } from '@daifugo/core';
 
 const REVOLUTION_MEMORY_KEY = 'active';
-const REVERSED_BASE_RANKING = [...BASE_STRENGTH_ORDER.ranking].reverse();
 
 function isRevolutionStrength(order: DeepReadonly<StrengthOrder>): boolean {
   return (
-    order.ranking.length === REVERSED_BASE_RANKING.length &&
-    order.ranking.every((rank, index) => rank === REVERSED_BASE_RANKING[index])
+    (
+      order as DeepReadonly<StrengthOrder> & {
+        readonly revolution?: boolean;
+      }
+    ).revolution === true
   );
+}
+
+function reverseForRevolution(base: DeepReadonly<StrengthOrder>) {
+  return {
+    ranking: [...base.ranking].reverse(),
+    revolution: !isRevolutionStrength(base),
+  };
 }
 
 export const rule: RuleModule = {
@@ -42,7 +50,7 @@ export const rule: RuleModule = {
       if (context.memory.game[REVOLUTION_MEMORY_KEY] !== true) {
         return base;
       }
-      return { ranking: [...base.ranking].reverse() };
+      return reverseForRevolution(base);
     },
 
     afterPlay(context, play) {

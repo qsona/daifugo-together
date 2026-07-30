@@ -15,11 +15,14 @@ const { rule } = (await vi.importActual('./rule.js')) as { rule: RuleModule };
 
 const PLAYER = 'p1';
 const SUITS: Suit[] = ['spade', 'heart', 'diamond', 'club'];
-const NORMAL_STRENGTH: StrengthOrder = {
+type TestStrength = StrengthOrder & { revolution?: boolean };
+const NORMAL_STRENGTH: TestStrength = {
   ranking: [...BASE_STRENGTH_ORDER.ranking],
+  revolution: false,
 };
-const REVOLUTION_STRENGTH: StrengthOrder = {
+const REVOLUTION_STRENGTH: TestStrength = {
   ranking: [...BASE_STRENGTH_ORDER.ranking].reverse(),
+  revolution: true,
 };
 
 function natural(rank: CardRank, suit: Suit, suffix = ''): Card {
@@ -69,7 +72,7 @@ function context({
   fieldPresent = true,
 }: {
   active?: boolean;
-  strength?: StrengthOrder;
+  strength?: TestStrength;
   play?: Play;
   finished?: boolean;
   fieldPresent?: boolean;
@@ -122,13 +125,20 @@ function afterPlay(play: Play, options: Parameters<typeof context>[0] = {}) {
 
 function modifyStrength(
   options: Parameters<typeof context>[0],
-): Readonly<StrengthOrder> {
+): Readonly<TestStrength> {
   const hook = rule.hooks.modifyStrength;
   if (!hook) {
     throw new Error('modifyStrength hook is required');
   }
+  const strength = hook(
+    context(options),
+    NORMAL_STRENGTH,
+  ) as Readonly<TestStrength>;
   return {
-    ranking: [...hook(context(options), NORMAL_STRENGTH).ranking],
+    ranking: [...strength.ranking],
+    ...(strength.revolution === undefined
+      ? {}
+      : { revolution: strength.revolution }),
   };
 }
 
@@ -163,6 +173,7 @@ describe('革命', () => {
     });
 
     const strength = modifyStrength({ active: true });
+    expect(strength.revolution).toBe(true);
     expect(rankPosition('3', strength)).toBe(strength.ranking.length - 1);
     expect(rankPosition('2', strength)).toBe(0);
   });
@@ -245,6 +256,27 @@ describe('革命', () => {
       player: PLAYER,
       rank: 'lowest',
     });
+  });
+
+  it('ランキングだけが一時反転していても革命中とは扱わない', () => {
+    expect(
+      afterPlay(
+        {
+          kind: 'single',
+          cards: [natural('3', 'spade')],
+          count: 1,
+          repRank: '3',
+        },
+        {
+          active: false,
+          strength: {
+            ranking: [...BASE_STRENGTH_ORDER.ranking].reverse(),
+            revolution: false,
+          },
+          finished: true,
+        },
+      ),
+    ).toEqual([]);
   });
 
   it('通常状態から革命を起こす最後の3では反則あがりにしない', () => {
