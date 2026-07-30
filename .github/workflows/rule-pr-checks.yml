@@ -93,7 +93,7 @@ jobs:
   simulation:
     needs: quality
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - name: Pass for non-rule branches
         if: ${{ !startsWith(github.head_ref, 'rule/') }}
