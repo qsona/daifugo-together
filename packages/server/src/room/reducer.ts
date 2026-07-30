@@ -545,7 +545,9 @@ function deadlineAtForTurn(
 ): number | null {
   if (
     engine.phase.name !== 'gameInProgress' ||
-    engine.currentGame?.public.phase !== 'awaitingPlay'
+    !['awaitingPlay', 'awaitingChoice'].includes(
+      engine.currentGame?.public.phase ?? '',
+    )
   ) {
     return null;
   }
@@ -1006,7 +1008,10 @@ function rename(
 
 function gameAction(
   state: RoomState,
-  action: Extract<RoomAction, { type: 'play' | 'pass' | 'autoAct' }>,
+  action: Extract<
+    RoomAction,
+    { type: 'play' | 'ruleInput' | 'pass' | 'autoAct' }
+  >,
   options: RoomReducerOptions,
 ): RoomTransition {
   if (state.phase !== 'playing' || !state.engine) {
@@ -1022,12 +1027,27 @@ function gameAction(
   if (action.turnSeq !== state.turnSeq) {
     return rejected(state, 'STALE_TURN');
   }
+  const pending = state.engine.currentGame?.private.pendingChoice;
   const setAction: Parameters<typeof reduceSet>[1] =
-    action.type === 'play'
-      ? { type: 'play', player: actor.memberId, cards: action.cards }
-      : action.type === 'autoAct' && action.cards !== null
-        ? { type: 'play', player: actor.memberId, cards: action.cards }
-        : { type: 'pass', player: actor.memberId };
+    action.type === 'ruleInput'
+      ? {
+          type: 'ruleInput',
+          player: actor.memberId,
+          choiceId: action.choiceId,
+          cardIds: action.cardIds,
+        }
+      : action.type === 'autoAct' && pending
+        ? {
+            type: 'ruleInput',
+            player: actor.memberId,
+            choiceId: pending.choiceId,
+            cardIds: action.cards ?? [],
+          }
+        : action.type === 'play'
+          ? { type: 'play', player: actor.memberId, cards: action.cards }
+          : action.type === 'autoAct' && action.cards !== null
+            ? { type: 'play', player: actor.memberId, cards: action.cards }
+            : { type: 'pass', player: actor.memberId };
   const transition = reduceSet(
     state.engine,
     setAction,
@@ -1262,6 +1282,7 @@ export function reduceRoom(
     case 'expireRoom':
       return expireRoom(state, action);
     case 'play':
+    case 'ruleInput':
     case 'pass':
     case 'autoAct':
       return gameAction(state, action, options);

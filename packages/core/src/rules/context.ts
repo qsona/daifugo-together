@@ -14,6 +14,7 @@ import type {
   RuleContext,
   RuleHooks,
 } from './contract.js';
+import { ENGINE_CONTRACT_VERSION } from './contract.js';
 
 export type RuleInvocationHook = keyof RuleHooks;
 
@@ -122,6 +123,12 @@ export function buildRuleContext(
   const game = buildGameView(config, state, strength);
   const setHistory = detachedFrozen(runtime.setHistory);
   const contexts = new Map<RuleId, RuleContext>();
+  const contractVersionByRule = new Map(
+    config.ruleChain.map((entry) => [
+      entry.ruleId,
+      entry.contractVersion === 2 ? (2 as const) : (1 as const),
+    ]),
+  );
 
   const factory: RuleContextFactory = {
     forRule(ruleId) {
@@ -135,7 +142,8 @@ export function buildRuleContext(
         }`,
       );
       const context: RuleContext = Object.freeze({
-        contractVersion: 1 as const,
+        contractVersion:
+          contractVersionByRule.get(ruleId) ?? ENGINE_CONTRACT_VERSION,
         game,
         setHistory,
         memory: Object.freeze({

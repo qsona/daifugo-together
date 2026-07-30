@@ -36,7 +36,9 @@ export const rule: RuleModule = {
 `rule.test.ts` 内に置きます。fixtureは固定値だけを使い、発動・非発動・
 境界/複数枚と `SPEC.json.testPoints` を検証します。
 
-契約 v1 では、プレイヤーへの追加入力、パス起点のフックには対応しません。
+契約 v1 はプレイヤーへの追加入力とパス起点のフックに対応しません。
+契約 v2 は `afterPlay` のカード選択だけを `requestChoice` で追加します。
+パス起点のフック、自由入力、宣言には引き続き対応しません。
 
 ## engineFeatures (エンジン機能の宣言)
 
@@ -51,14 +53,14 @@ export const rule: RuleModule = {
 
 ## フック
 
-| フック            | 発火点                                 | 戻り値                     |
-| ----------------- | -------------------------------------- | -------------------------- |
-| `modifyLegality`  | プレイ検証・合法手列挙                 | 合法性の変換。状態変更なし |
-| `modifyStrength`  | 強さ比較の直前                         | 強さ順の変換。状態変更なし |
-| `afterPlay`       | プレイ適用とあがり確定の後             | Effect                     |
-| `afterFieldClear` | 自然条件または Effect で場が流れた直後 | Effect                     |
-| `onGameStart`     | 配札後、最初の手番前                   | Effect                     |
-| `onGameEnd`       | 全順位確定後、`gameEnded` イベントの前 | Effect                     |
+| フック            | 発火点                                 | 戻り値                                     |
+| ----------------- | -------------------------------------- | ------------------------------------------ |
+| `modifyLegality`  | プレイ検証・合法手列挙                 | 合法性の変換。状態変更なし                 |
+| `modifyStrength`  | 強さ比較の直前                         | 強さ順の変換。状態変更なし                 |
+| `afterPlay`       | プレイ適用とあがり確定の後             | Effect。v2 は選択応答を第3引数で受け取れる |
+| `afterFieldClear` | 自然条件または Effect で場が流れた直後 | Effect                                     |
+| `onGameStart`     | 配札後、最初の手番前                   | Effect                                     |
+| `onGameEnd`       | 全順位確定後、`gameEnded` イベントの前 | Effect                                     |
 
 ## Effect の許可範囲
 
@@ -67,6 +69,7 @@ export const rule: RuleModule = {
 | Effect                                                       | `afterPlay` | `afterFieldClear` | `onGameStart` | `onGameEnd` |
 | ------------------------------------------------------------ | ----------- | ----------------- | ------------- | ----------- |
 | `clearField`                                                 | ○           | ×                 | ×             | ×           |
+| `requestChoice` (contract v2)                                | ○           | ×                 | ×             | ×           |
 | `skipTurns` / `reverseTurnOrder` / `forceRank` / `moveCards` | ○           | ○                 | ○             | ×           |
 | `setMemory`                                                  | ○           | ○                 | ○             | set のみ    |
 | `announce`                                                   | ○           | ○                 | ○             | ○           |
@@ -94,11 +97,25 @@ KV はルール・スコープごとに分離し、最大 32 キー、1 値 1KB�
 
 `forceRank` の `rank` は `1`〜`4` または `'lowest'` を受け付けます。`'lowest'` は適用時にプレイヤー数(最下位順位)へ解決されます。反則あがりのように「最下位」を意図する場合は `'lowest'` を使い、数値を直書きしないでください。複数のプレイヤーが `forceRank` で同じ順位(例: `'lowest'`)を指定された場合、先に適用された対象がその順位を確保し、後の対象は近傍の空きスロットへ再割当されます(先に反則した方がより低い順位になる、エンジンが保証する挙動です)。
 
+## contract v2 のカード選択
+
+`requestChoice` は `afterPlay` から、そのプレイヤー自身の残り手札を
+選択肢として、正確な枚数の選択を要求します。要求するルールは
+`meta.contractVersion: 2` とし、最初の呼び出しでは `requestChoice` だけを
+返してください。入力待ち中は次の手番へ進みません。
+
+応答後、同じ `afterPlay(context, play, input)` が再び呼ばれます。
+`input.kind === 'cards'` と `input.choiceId` を確認し、
+`input.cardIds` を `moveCards` の `specific` selector に渡して通常の Effect
+として適用します。1回の `afterPlay` で要求できる choice は1件だけで、
+応答処理から別の choice を要求することはできません。
+
 ## 競合キー
 
 | Effect             | 競合単位                                            |
 | ------------------ | --------------------------------------------------- |
 | `clearField`       | `field`                                             |
+| `requestChoice`    | `choice`                                            |
 | `skipTurns`        | `turn:{player}`                                     |
 | `reverseTurnOrder` | `turnOrder`                                         |
 | `forceRank`        | `rank:{player}`                                     |

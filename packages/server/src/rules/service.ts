@@ -1,7 +1,7 @@
 import {
   createInProcessRuleChainPort,
-  ENGINE_CONTRACT_VERSION,
   ENGINE_FEATURES,
+  SUPPORTED_CONTRACT_VERSIONS,
   sortRuleChain,
   type RuleChainEntry,
   type RuleChainPort,
@@ -129,7 +129,7 @@ function registryIdentityIssue(
   if (registrations.length === 0) return 'code module is missing';
   if (registrations.length > 1) return 'duplicate code modules';
   const meta = registrations[0]!.module.meta;
-  if (meta.contractVersion !== ENGINE_CONTRACT_VERSION) {
+  if (!SUPPORTED_CONTRACT_VERSIONS.includes(meta.contractVersion)) {
     return `unsupported contract version: ${String(meta.contractVersion)}`;
   }
   const featureIssue = engineFeaturesIssue(meta);
@@ -690,8 +690,8 @@ export class RuleRegistryService {
           inner.modifyLegality(active(entries), context, plays, base),
         modifyStrength: (entries, context, base) =>
           inner.modifyStrength(active(entries), context, base),
-        collectEffects: (hook, entries, context, argument) =>
-          inner.collectEffects(hook, active(entries), context, argument),
+        collectEffects: (hook, entries, context, argument, input) =>
+          inner.collectEffects(hook, active(entries), context, argument, input),
       };
       runtime = { port, disabled };
       this.#ports.set(setId, runtime);

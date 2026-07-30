@@ -18,7 +18,7 @@ import {
 import { rankPosition, type StrengthOrder } from '../play/strength.js';
 import { noRuleRuntime, type RuleRuntime } from '../rules/chain.js';
 import { engineFeaturesOf } from '../rules/contract.js';
-import { executeEffectHook } from './effects.js';
+import { executeEffectHook, type EffectHookResult } from './effects.js';
 import {
   activePlayers,
   finishGame,
@@ -454,6 +454,120 @@ function sortMatchesPreferredFirst(
   });
 }
 
+function completeAfterPlay(
+  config: GameConfig,
+  initialState: GameState,
+  player: PlayerId,
+  initialEvents: EngineEvent[],
+  effects: EffectHookResult,
+  runtime: RuleRuntime,
+): GameTransition {
+  const events = [...initialEvents];
+  const nextState = effects.state;
+  if (nextState.public.turnCount > TURN_LIMIT) {
+    const finished = finishForTurnLimit(
+      config,
+      appendEvents(nextState, events),
+      {
+        ...runtime,
+        setMemory: effects.setMemory,
+      },
+    );
+    return {
+      state: finished.state,
+      events: [...events, ...finished.events],
+      rejections: [],
+      setMemory: finished.setMemory,
+    };
+  }
+
+  if (activePlayers(config, nextState).length <= 1) {
+    const finished = finishWithHook(config, appendEvents(nextState, events), {
+      ...runtime,
+      setMemory: effects.setMemory,
+    });
+    events.push(...finished.events);
+    return {
+      state: appendEvents(finished.state, finished.events),
+      events,
+      rejections: [],
+      setMemory: finished.setMemory,
+    };
+  }
+
+  if (effects.clearRequested) {
+    const cleared = clearFieldWithHook(
+      config,
+      appendEvents(nextState, events),
+      {
+        ...runtime,
+        setMemory: effects.setMemory,
+      },
+      'rule',
+    );
+    if (activePlayers(config, cleared.state).length <= 1) {
+      const finished = finishWithHook(config, cleared.state, {
+        ...runtime,
+        setMemory: cleared.setMemory,
+      });
+      const finalEvents = [...events, ...cleared.events, ...finished.events];
+      return {
+        state: appendEvents(finished.state, finished.events),
+        events: finalEvents,
+        rejections: [],
+        setMemory: finished.setMemory,
+      };
+    }
+    return {
+      state: cleared.state,
+      events: [...events, ...cleared.events],
+      rejections: [],
+      setMemory: cleared.setMemory,
+    };
+  }
+
+  const advanced = advanceTurn(
+    config,
+    appendEvents(nextState, events),
+    player,
+    {
+      ...runtime,
+      setMemory: effects.setMemory,
+    },
+  );
+  events.push(...advanced.events);
+  if (advanced.state.public.turnCount > TURN_LIMIT) {
+    const finished = finishForTurnLimit(config, advanced.state, {
+      ...runtime,
+      setMemory: advanced.setMemory,
+    });
+    return {
+      state: finished.state,
+      events: [...events, ...finished.events],
+      rejections: [],
+      setMemory: finished.setMemory,
+    };
+  }
+  if (activePlayers(config, advanced.state).length <= 1) {
+    const finished = finishWithHook(config, advanced.state, {
+      ...runtime,
+      setMemory: advanced.setMemory,
+    });
+    return {
+      state: appendEvents(finished.state, finished.events),
+      events: [...events, ...finished.events],
+      rejections: [],
+      setMemory: finished.setMemory,
+    };
+  }
+  return {
+    state: advanced.state,
+    events,
+    rejections: [],
+    setMemory: advanced.setMemory,
+  };
+}
+
 function reducePlay(
   config: GameConfig,
   state: GameState,
@@ -554,6 +668,42 @@ function reducePlay(
     events.push(finished.event);
   }
 
+  if (config.ruleChain.some((entry) => entry.contractVersion === 2)) {
+    const preview = executeEffectHook(
+      config,
+      nextState,
+      runtime,
+      'afterPlay',
+      interpretedPlay,
+      evaluated.strength,
+      { previewChoice: true },
+    );
+    if (preview.choiceRequest) {
+      const request = preview.choiceRequest;
+      const withEvents = appendEvents(nextState, events);
+      return {
+        state: {
+          ...withEvents,
+          public: {
+            ...withEvents.public,
+            phase: 'awaitingChoice',
+          },
+          private: {
+            ...withEvents.private,
+            pendingChoice: {
+              ...request,
+              play: interpretedPlay,
+              strength: evaluated.strength,
+            },
+          },
+        },
+        events,
+        rejections: [],
+        setMemory: runtime.setMemory,
+      };
+    }
+  }
+
   const effects = executeEffectHook(
     config,
     nextState,
@@ -564,109 +714,80 @@ function reducePlay(
   );
   nextState = effects.state;
   events.push(...effects.events);
-
-  if (nextState.public.turnCount > TURN_LIMIT) {
-    const finished = finishForTurnLimit(
-      config,
-      appendEvents(nextState, events),
-      {
-        ...runtime,
-        setMemory: effects.setMemory,
-      },
-    );
-    return {
-      state: finished.state,
-      events: [...events, ...finished.events],
-      rejections: [],
-      setMemory: finished.setMemory,
-    };
-  }
-
-  if (activePlayers(config, nextState).length <= 1) {
-    const finished = finishWithHook(config, appendEvents(nextState, events), {
-      ...runtime,
-      setMemory: effects.setMemory,
-    });
-    events.push(...finished.events);
-    return {
-      state: appendEvents(finished.state, finished.events),
-      events,
-      rejections: [],
-      setMemory: finished.setMemory,
-    };
-  }
-
-  if (effects.clearRequested) {
-    const cleared = clearFieldWithHook(
-      config,
-      appendEvents(nextState, events),
-      {
-        ...runtime,
-        setMemory: effects.setMemory,
-      },
-      'rule',
-    );
-    if (activePlayers(config, cleared.state).length <= 1) {
-      const finished = finishWithHook(config, cleared.state, {
-        ...runtime,
-        setMemory: cleared.setMemory,
-      });
-      const finalEvents = [...events, ...cleared.events, ...finished.events];
-      return {
-        state: appendEvents(finished.state, finished.events),
-        events: finalEvents,
-        rejections: [],
-        setMemory: finished.setMemory,
-      };
-    }
-    return {
-      state: cleared.state,
-      events: [...events, ...cleared.events],
-      rejections: [],
-      setMemory: cleared.setMemory,
-    };
-  }
-
-  const advanced = advanceTurn(
+  return completeAfterPlay(
     config,
-    appendEvents(nextState, events),
+    nextState,
     action.player,
+    events,
+    effects,
+    runtime,
+  );
+}
+
+function reduceRuleInput(
+  config: GameConfig,
+  state: GameState,
+  action: Extract<GameAction, { type: 'ruleInput' }>,
+  runtime: RuleRuntime,
+): GameTransition {
+  const pending = state.private.pendingChoice;
+  if (
+    state.public.phase !== 'awaitingChoice' ||
+    !pending ||
+    pending.player !== action.player ||
+    pending.choiceId !== action.choiceId
+  ) {
+    return reject(state, action.player, 'NO_PENDING_CHOICE');
+  }
+  const unique = new Set(action.cardIds);
+  const options = new Set(pending.optionCardIds);
+  if (
+    action.cardIds.length !== pending.count ||
+    unique.size !== action.cardIds.length ||
+    action.cardIds.some((cardId) => !options.has(cardId))
+  ) {
+    return reject(state, action.player, 'INVALID_RULE_CHOICE');
+  }
+  const privateState = {
+    excluded: state.private.excluded,
+    memory: state.private.memory,
+    rng: state.private.rng,
+    hookCalls: state.private.hookCalls,
+  };
+  const resumedState: GameState = {
+    ...state,
+    public: {
+      ...state.public,
+      phase: 'awaitingPlay',
+    },
+    private: privateState,
+  };
+  const effects = executeEffectHook(
+    config,
+    resumedState,
+    runtime,
+    'afterPlay',
+    pending.play,
+    pending.strength,
     {
-      ...runtime,
-      setMemory: effects.setMemory,
+      input: {
+        ruleId: pending.ruleId,
+        value: {
+          kind: 'cards',
+          choiceId: pending.choiceId,
+          cardIds: [...action.cardIds],
+        },
+      },
     },
   );
-  events.push(...advanced.events);
-  if (advanced.state.public.turnCount > TURN_LIMIT) {
-    const finished = finishForTurnLimit(config, advanced.state, {
-      ...runtime,
-      setMemory: advanced.setMemory,
-    });
-    return {
-      state: finished.state,
-      events: [...events, ...finished.events],
-      rejections: [],
-      setMemory: finished.setMemory,
-    };
-  }
-  if (activePlayers(config, advanced.state).length <= 1) {
-    const finished = finishWithHook(config, advanced.state, {
-      ...runtime,
-      setMemory: advanced.setMemory,
-    });
-    return {
-      state: appendEvents(finished.state, finished.events),
-      events: [...events, ...finished.events],
-      rejections: [],
-      setMemory: finished.setMemory,
-    };
-  }
-  return {
-    state: advanced.state,
-    events,
-    rejections: [],
-    setMemory: advanced.setMemory,
-  };
+  return completeAfterPlay(
+    config,
+    effects.state,
+    action.player,
+    effects.events,
+    effects,
+    runtime,
+  );
 }
 
 export function reduceGame(
@@ -675,6 +796,9 @@ export function reduceGame(
   action: GameAction,
   runtime: RuleRuntime = noRuleRuntime(),
 ): GameTransition {
+  if (action.type === 'ruleInput') {
+    return reduceRuleInput(config, state, action, runtime);
+  }
   if (
     state.public.phase !== 'awaitingPlay' ||
     state.public.turn !== action.player

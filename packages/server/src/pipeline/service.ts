@@ -22,6 +22,7 @@ const HOOKS = new Set([
 ]);
 const EFFECTS = new Set([
   'clearField',
+  'requestChoice',
   'skipTurns',
   'reverseTurnOrder',
   'forceRank',
@@ -232,7 +233,15 @@ function parseScaffoldMeta(value: unknown): RuleScaffoldMeta | null {
       ? input.slug
       : null;
   const parsedMessages = messages(input.messages);
-  return slug && parsedMessages ? { slug, messages: parsedMessages } : null;
+  const contractVersion =
+    input.contractVersion === undefined
+      ? 1
+      : input.contractVersion === 1 || input.contractVersion === 2
+        ? input.contractVersion
+        : null;
+  return slug && parsedMessages && contractVersion
+    ? { slug, contractVersion, messages: parsedMessages }
+    : null;
 }
 
 export function parseAiJudgement(value: unknown): AiJudgementResult | null {

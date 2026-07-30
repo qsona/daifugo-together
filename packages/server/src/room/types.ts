@@ -140,6 +140,14 @@ export type RoomAction =
       cards: CardId[];
       now: number;
     }
+  | {
+      type: 'ruleInput';
+      memberId: string;
+      turnSeq: number;
+      choiceId: string;
+      cardIds: CardId[];
+      now: number;
+    }
   | { type: 'pass'; memberId: string; turnSeq: number; now: number }
   | {
       type: 'autoAct';

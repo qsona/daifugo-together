@@ -47,6 +47,8 @@ export interface RuleSpecification {
 
 export interface RuleScaffoldMeta {
   slug: string;
+  /** Omitted by stored pre-v2 judgements and treated as contract v1. */
+  contractVersion?: 1 | 2;
   messages: Record<string, string>;
 }
 

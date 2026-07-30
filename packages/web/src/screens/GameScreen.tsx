@@ -56,6 +56,8 @@ type GameScreenProps = {
   isMyTurn: boolean;
   canPlay?: boolean;
   canPass?: boolean;
+  playLabel?: string;
+  actionPrompt?: string | null;
   turnDeadlineAt?: number | null;
   onViewRules: () => void;
   onOpenActivation: (ruleId: string) => void;
@@ -89,6 +91,8 @@ export function GameScreen({
   isMyTurn,
   canPlay,
   canPass = true,
+  playLabel = 'えらんだカードを出す',
+  actionPrompt = null,
   turnDeadlineAt,
   onViewRules,
   onOpenActivation,
@@ -134,6 +138,9 @@ export function GameScreen({
           {...(onDimmedCardTap ? { onDimmedCardTap } : {})}
           actions={
             <>
+              {actionPrompt && (
+                <span className={styles.choicePrompt}>{actionPrompt}</span>
+              )}
               <Button disabled={!isMyTurn || !canPass} onClick={onPass}>
                 パス
               </Button>
@@ -142,7 +149,7 @@ export function GameScreen({
                 disabled={!isMyTurn || !(canPlay ?? selectedCardIds.length > 0)}
                 onClick={onPlay}
               >
-                えらんだカードを出す
+                {playLabel}
               </Button>
             </>
           }

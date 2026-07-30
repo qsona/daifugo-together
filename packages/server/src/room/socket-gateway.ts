@@ -43,7 +43,7 @@ import {
 } from './timers.js';
 import type { RoomTimerOptions } from './timers.js';
 import { setSeedForRoomStart } from './tutorial.js';
-import type { RoomState, RoomTransition } from './types.js';
+import type { RoomReducerOptions, RoomState, RoomTransition } from './types.js';
 import { viewFor } from './view.js';
 
 export type RoomSocketServer = Server<
@@ -68,6 +68,7 @@ export interface RoomSocketGatewayOptions {
   ai?: AiPlayer;
   rulePort?: RuleChainPort;
   rulePortForSet?: (setId: string) => RuleChainPort;
+  resolveRuleMessage?: RoomReducerOptions['resolveRuleMessage'];
   effectiveRuleChainForSet?: (
     setId: string,
     entries: readonly RuleChainEntry[],
@@ -171,7 +172,12 @@ export function attachRoomSocketGateway(
     const rulePort =
       (setId === undefined ? undefined : options.rulePortForSet?.(setId)) ??
       options.rulePort;
-    return rulePort ? { rulePort } : {};
+    return {
+      ...(rulePort ? { rulePort } : {}),
+      ...(options.resolveRuleMessage
+        ? { resolveRuleMessage: options.resolveRuleMessage }
+        : {}),
+    };
   };
 
   const report = (error: unknown): void => {
@@ -262,6 +268,13 @@ export function attachRoomSocketGateway(
           setHistory: engine.results,
           setMemory: engine.setMemory,
         };
+        const pending = game.private.pendingChoice;
+        if (
+          game.public.phase === 'awaitingChoice' &&
+          pending?.player === memberId
+        ) {
+          return [...pending.optionCardIds].sort().slice(0, pending.count);
+        }
         const effectiveRules = () =>
           options.effectiveRuleChainForSet?.(engine.setId, engine.ruleChain) ??
           engine.ruleChain;
@@ -575,6 +588,39 @@ export function attachRoomSocketGateway(
           memberId: current.member.memberId,
           turnSeq: parsed.data.turnSeq,
           cards: [...parsed.data.cards],
+          now: now(),
+        });
+        const error = roomFailure(transition);
+        if (error) {
+          safeAck(ack, error);
+          return;
+        }
+        publishTransition(current.room, transition!);
+        safeAck(ack, { ok: true, value: {} });
+      } catch (error) {
+        handleUnexpected(error, ack);
+      }
+    });
+
+    socket.on('game:ruleInput', (payload, ack) => {
+      try {
+        const parsed =
+          clientPayloadSchemas['game:ruleInput'].safeParse(payload);
+        if (!parsed.success) {
+          safeAck(ack, failure('BAD_PAYLOAD'));
+          return;
+        }
+        const current = rooms.findByUser(session.userId);
+        if (!current) {
+          safeAck(ack, failure('NOT_IN_ROOM'));
+          return;
+        }
+        const transition = rooms.apply(current.room.roomId, {
+          type: 'ruleInput',
+          memberId: current.member.memberId,
+          turnSeq: parsed.data.turnSeq,
+          choiceId: parsed.data.choiceId,
+          cardIds: [...parsed.data.cardIds],
           now: now(),
         });
         const error = roomFailure(transition);

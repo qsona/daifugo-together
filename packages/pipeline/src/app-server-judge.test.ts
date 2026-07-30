@@ -71,7 +71,7 @@ function approveOutput(
       testPoints: ['8で発動する', '8以外では発動しない'],
       notes: '',
     },
-    scaffoldMeta: { slug: 'yagiri', messages },
+    scaffoldMeta: { slug: 'yagiri', contractVersion: 1, messages },
     confidence: 0.95,
   };
 }

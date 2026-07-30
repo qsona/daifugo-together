@@ -95,6 +95,46 @@ describe('T1: あがりの認知', () => {
   });
 });
 
+describe('contract v2 choice UI', () => {
+  afterEach(cleanup);
+
+  it('入力待ちでは選択枚数を案内し、パスを無効にして捨てる操作を表示する', () => {
+    render(
+      <GameScreen
+        gameLabel="第1戦"
+        activeRuleCount={1}
+        seats={DEMO_SEATS}
+        leadSeatName={null}
+        activations={[]}
+        onCutInDone={() => undefined}
+        lastActivation={null}
+        hand={DEMO_HAND}
+        selectedCardIds={[]}
+        isMyTurn
+        canPlay={false}
+        canPass={false}
+        playLabel="えらんだ2枚を捨てる"
+        actionPrompt="10捨て: カードを2枚選んでください"
+        onViewRules={() => undefined}
+        onOpenActivation={() => undefined}
+        onToggleCard={() => undefined}
+        onPlay={() => undefined}
+        onPass={() => undefined}
+      />,
+    );
+
+    expect(screen.getByText('10捨て: カードを2枚選んでください')).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: 'パス' }).hasAttribute('disabled'),
+    ).toBe(true);
+    expect(
+      screen
+        .getByRole('button', { name: 'えらんだ2枚を捨てる' })
+        .hasAttribute('disabled'),
+    ).toBe(true);
+  });
+});
+
 describe('DS-04: 自分の手番が手札トレイで分かる', () => {
   afterEach(() => {
     cleanup();

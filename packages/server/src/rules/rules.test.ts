@@ -331,7 +331,9 @@ describe('CX-04 rule registry', () => {
       [
         codeRule('r0001-a', 'ルールA'),
         codeRule('r0001-a', 'ルールA'),
-        codeRule('r0002-b', 'ルールB', { contractVersion: 2 }),
+        codeRule('r0002-b', 'ルールB', {
+          contractVersion: 3 as never,
+        }),
         codeRule('r0003-c', '別名'),
       ],
       { now: () => 2_000, onLoadFailure },

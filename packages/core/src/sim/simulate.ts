@@ -193,6 +193,17 @@ export function* createSimulationRun(
       let action: SetAction;
       if (state.phase.name !== 'gameInProgress' || !state.currentGame) {
         action = { type: 'advance' };
+      } else if (state.currentGame.public.phase === 'awaitingChoice') {
+        const pending = state.currentGame.private.pendingChoice;
+        if (!pending) {
+          throw new Error('Simulation choice phase has no pending choice');
+        }
+        action = {
+          type: 'ruleInput',
+          player: pending.player,
+          choiceId: pending.choiceId,
+          cardIds: [...pending.optionCardIds].sort().slice(0, pending.count),
+        };
       } else {
         const player = state.currentGame.public.turn;
         if (!player) {

@@ -172,6 +172,7 @@ function gameView(
   memberId: string,
   seats: ReadonlyMap<string, SeatId>,
   rulePort: RuleChainPort,
+  resolveRuleMessage?: (ruleId: string, messageKey: string) => string | null,
 ): GameView | null {
   const engine = state.engine;
   const game = engine?.currentGame;
@@ -223,7 +224,9 @@ function gameView(
       ),
     },
     turn:
-      game.public.phase === 'awaitingPlay' && game.public.turn
+      (game.public.phase === 'awaitingPlay' ||
+        game.public.phase === 'awaitingChoice') &&
+      game.public.turn
         ? {
             seat: requiredSeat(seats, game.public.turn),
             turnSeq: state.turnSeq,
@@ -234,6 +237,23 @@ function gameView(
     previousResults: engine.results.map((result) => resultView(result, seats)),
     yourHand: sortCards(game.players[memberId]?.hand ?? []),
     legalMoves: playerSnapshot.legalMoves,
+    pendingChoice: game.private.pendingChoice
+      ? {
+          ruleId: game.private.pendingChoice.ruleId,
+          choiceId: game.private.pendingChoice.choiceId,
+          message:
+            resolveRuleMessage?.(
+              game.private.pendingChoice.ruleId,
+              game.private.pendingChoice.messageKey,
+            ) ?? null,
+          seat: requiredSeat(seats, game.private.pendingChoice.player),
+          count: game.private.pendingChoice.count,
+          cards:
+            game.private.pendingChoice.player === memberId
+              ? (playerSnapshot.pendingChoice?.cards ?? [])
+              : null,
+        }
+      : null,
   };
 }
 
@@ -294,7 +314,11 @@ function setResultView(
 export function viewFor(
   state: RoomState,
   memberId: string,
-  options: { reconnect?: boolean; rulePort?: RuleChainPort } = {},
+  options: {
+    reconnect?: boolean;
+    rulePort?: RuleChainPort;
+    resolveRuleMessage?: (ruleId: string, messageKey: string) => string | null;
+  } = {},
 ): PlayerRoomView {
   if (state.phase === 'closed') {
     throw new Error('Cannot create a view for a closed room');
@@ -327,6 +351,7 @@ export function viewFor(
       memberId,
       seats,
       options.rulePort ?? NO_RULE_CHAIN_PORT,
+      options.resolveRuleMessage,
     ),
     setResult: setResultView(state, seats),
     events: options.reconnect ? [] : structuredClone(state.lastEvents),

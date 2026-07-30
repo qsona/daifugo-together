@@ -29,6 +29,7 @@ import {
 import type {
   CardSelector,
   Effect,
+  RuleInput,
   Standings,
   Zone,
 } from '../rules/contract.js';
@@ -45,6 +46,14 @@ export interface EffectHookResult {
   setMemory: RuleMemory;
   events: EngineEvent[];
   clearRequested: boolean;
+  choiceRequest?: {
+    ruleId: string;
+    player: string;
+    choiceId: string;
+    messageKey: string;
+    optionCardIds: CardId[];
+    count: number;
+  };
 }
 
 function cardsInZone(state: GameState, zone: Zone): readonly Card[] {
@@ -103,6 +112,9 @@ function effectAllowed(hook: EffectHook, effect: Effect): boolean {
     return effect.type === 'setMemory' && effect.scope === 'set';
   }
   if (effect.type === 'clearField') {
+    return hook === 'afterPlay';
+  }
+  if (effect.type === 'requestChoice') {
     return hook === 'afterPlay';
   }
   return true;
@@ -552,6 +564,34 @@ function effectPayloadValid(effect: unknown): effect is Effect {
       case 'clearField':
       case 'reverseTurnOrder':
         return hasExactKeys(effect, ['type']);
+      case 'requestChoice':
+        return (
+          hasExactKeys(effect, [
+            'type',
+            'player',
+            'choiceId',
+            'from',
+            'cards',
+            'count',
+            'messageKey',
+          ]) &&
+          typeof effect.player === 'string' &&
+          typeof effect.choiceId === 'string' &&
+          /^[a-z][a-z0-9_]{0,63}$/u.test(effect.choiceId) &&
+          isRecord(effect.from) &&
+          effect.from.kind === 'hand' &&
+          effect.from.player === effect.player &&
+          zoneValid(effect.from) &&
+          selectorValid(effect.cards) &&
+          isRecord(effect.cards) &&
+          effect.cards.kind !== 'random' &&
+          typeof effect.count === 'number' &&
+          Number.isInteger(effect.count) &&
+          effect.count >= 1 &&
+          effect.count <= 14 &&
+          typeof effect.messageKey === 'string' &&
+          /^[a-z][a-z0-9_.-]{0,63}$/u.test(effect.messageKey)
+        );
       case 'skipTurns':
         return (
           hasExactKeys(effect, ['type', 'player', 'count']) &&
@@ -610,7 +650,14 @@ const INVALID_EFFECT_EVENT_PAYLOAD: Effect = {
 };
 
 type InvalidEffectReason =
-  'effect-limit' | 'invalid-payload' | 'hook-not-allowed';
+  | 'effect-limit'
+  | 'invalid-payload'
+  | 'hook-not-allowed'
+  | 'contract-version'
+  | 'choice-request-must-be-alone'
+  | 'choice-player-not-actor'
+  | 'unexpected-choice-request'
+  | 'insufficient-choice-options';
 
 interface InvalidEffectEmission {
   emission: EffectEmission;
@@ -653,6 +700,10 @@ export function executeEffectHook(
   hook: EffectHook,
   argument?: Play | Standings,
   strength?: StrengthOrder,
+  options: {
+    previewChoice?: boolean;
+    input?: { ruleId: string; value: RuleInput };
+  } = {},
 ): EffectHookResult {
   if (config.ruleChain.length === 0) {
     return {
@@ -664,7 +715,12 @@ export function executeEffectHook(
   }
   const effectiveStrength =
     strength ?? effectiveStrengthForHook(config, state, runtime);
-  const invocation = prepareRuleInvocation(state, config.ruleChain, hook, true);
+  const invocation = prepareRuleInvocation(
+    state,
+    config.ruleChain,
+    hook,
+    options.previewChoice !== true,
+  );
   const context = buildRuleContext(
     config,
     invocation.state,
@@ -678,6 +734,9 @@ export function executeEffectHook(
   const positionByRule = new Map(
     config.ruleChain.map((entry) => [entry.ruleId, entry.position]),
   );
+  const contractVersionByRule = new Map(
+    config.ruleChain.map((entry) => [entry.ruleId, entry.contractVersion]),
+  );
   const invalid: InvalidEffectEmission[] = [];
   const emissions: EffectEmission[] = [];
   const effectCountByRule = new Map<string, number>();
@@ -687,6 +746,7 @@ export function executeEffectHook(
     config.ruleChain,
     context,
     argument,
+    options.input,
   );
   if (Array.isArray(collected)) {
     for (const collectedEntry of collected) {
@@ -715,7 +775,8 @@ export function executeEffectHook(
         });
         continue;
       }
-      collectedEntry.effects.forEach((candidate) => {
+      const collectedEffects = collectedEntry.effects;
+      collectedEffects.forEach((candidate) => {
         const effectIndex = effectCountByRule.get(ruleId) ?? 0;
         effectCountByRule.set(ruleId, effectIndex + 1);
         const valid = effectPayloadValid(candidate);
@@ -725,7 +786,8 @@ export function executeEffectHook(
           position,
           effectIndex,
           effect,
-          ...(valid && effect.type === 'moveCards'
+          ...(valid &&
+          (effect.type === 'moveCards' || effect.type === 'requestChoice')
             ? {
                 resolvedCards: resolveCardSelector(
                   invocation.state,
@@ -741,9 +803,26 @@ export function executeEffectHook(
             ? 'effect-limit'
             : !valid
               ? 'invalid-payload'
-              : !effectAllowed(hook, effect)
-                ? 'hook-not-allowed'
-                : null;
+              : effect.type === 'requestChoice' &&
+                  contractVersionByRule.get(ruleId) !== 2
+                ? 'contract-version'
+                : effect.type === 'requestChoice' &&
+                    collectedEffects.length !== 1
+                  ? 'choice-request-must-be-alone'
+                  : effect.type === 'requestChoice' &&
+                      effect.player !==
+                        invocation.state.public.field.current?.by
+                    ? 'choice-player-not-actor'
+                    : effect.type === 'requestChoice' &&
+                        (options.previewChoice !== true ||
+                          options.input !== undefined)
+                      ? 'unexpected-choice-request'
+                      : effect.type === 'requestChoice' &&
+                          (emission.resolvedCards?.length ?? 0) < effect.count
+                        ? 'insufficient-choice-options'
+                        : !effectAllowed(hook, effect)
+                          ? 'hook-not-allowed'
+                          : null;
         if (reason) {
           invalid.push({ emission, reason });
         } else {
@@ -753,6 +832,31 @@ export function executeEffectHook(
     }
   }
   const batch = resolveEffectBatch(hook, emissions);
+  if (options.previewChoice === true) {
+    const requested = batch.entries.find(
+      (entry) =>
+        entry.effect.type === 'requestChoice' &&
+        entry.resolution.status === 'adopted',
+    );
+    return {
+      state: invocation.state,
+      setMemory: runtime.setMemory,
+      events: [],
+      clearRequested: false,
+      ...(requested?.effect.type === 'requestChoice'
+        ? {
+            choiceRequest: {
+              ruleId: requested.ruleId,
+              player: requested.effect.player,
+              choiceId: requested.effect.choiceId,
+              messageKey: requested.effect.messageKey,
+              optionCardIds: requested.resolvedCards ?? [],
+              count: requested.effect.count,
+            },
+          }
+        : {}),
+    };
+  }
   let nextState = invocation.state;
   let setMemory = runtime.setMemory;
   let clearRequested = false;
@@ -775,6 +879,8 @@ export function executeEffectHook(
     switch (entry.effect.type) {
       case 'clearField':
         clearRequested = true;
+        break;
+      case 'requestChoice':
         break;
       case 'skipTurns': {
         const player = nextState.players[entry.effect.player];

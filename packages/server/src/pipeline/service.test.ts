@@ -686,6 +686,61 @@ describe('CX-01 judgement and VERDICT_CONFIRMATION', () => {
     });
   });
 
+  it('contract v2のrequestChoice SPECとscaffold metadataを承認できる', async () => {
+    const { proposal, local, pipeline } = await setup();
+    local.record(proposal.id, {
+      verdict: 'clean',
+      reason: '通常の提案',
+      evidence: null,
+      model: 'gpt-5.6-sol',
+      latencyMs: 5,
+    });
+    const choiceSpec = {
+      ...spec('10捨て'),
+      summary: '10を出した枚数分、残り手札を選んで捨てる。',
+      effects: ['requestChoice', 'moveCards', 'announce'],
+    };
+    const recorded = pipeline.recordAi(proposal.id, {
+      ...aiApprove(),
+      spec: choiceSpec,
+      scaffoldMeta: {
+        slug: 'ten-discard',
+        contractVersion: 2,
+        messages: {
+          choose: '捨てるカードを選んでください',
+          fired: '10捨て！',
+        },
+      },
+    });
+    expect(recorded).toMatchObject({
+      status: 'recorded',
+      judgement: {
+        spec: { effects: ['requestChoice', 'moveCards', 'announce'] },
+        scaffoldMeta: { contractVersion: 2 },
+      },
+    });
+    if (recorded.status !== 'recorded') return;
+
+    expect(
+      pipeline.approveSpec(proposal.id, {
+        judgementId: recorded.judgement.id,
+        actor: 'developer',
+        spec: choiceSpec,
+        scaffoldMeta: {
+          slug: 'ten-discard',
+          contractVersion: 2,
+          messages: {
+            choose: '捨てるカードを選んでください',
+            fired: '10捨て！',
+          },
+        },
+      }),
+    ).toMatchObject({
+      status: 'confirmed',
+      judgement: { scaffoldMeta: { contractVersion: 2 } },
+    });
+  });
+
   it('プロンプト版指定時は旧版の未確定AI判定を再判定対象に含める', async () => {
     const { persistence, proposal, local, pipeline } = await setup();
     local.record(proposal.id, {

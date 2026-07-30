@@ -177,7 +177,7 @@ export function createInProcessRuleChainPort(
       return { result, influenced: [...influenced] };
     },
 
-    collectEffects(hookName, entries, context, argument) {
+    collectEffects(hookName, entries, context, argument, input) {
       return [...entries]
         .sort((left, right) => left.position - right.position)
         .flatMap((entry) => {
@@ -195,6 +195,9 @@ export function createInProcessRuleChainPort(
                 hooks.afterPlay?.(
                   ruleContext,
                   detachedFrozen(argument as Play),
+                  input?.ruleId === entry.ruleId
+                    ? detachedFrozen(input.value)
+                    : undefined,
                 ) ?? [],
               );
             } else if (hookName === 'onGameEnd') {

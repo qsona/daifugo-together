@@ -105,11 +105,12 @@ const CX01_OUTPUT_SCHEMA = {
             },
             effects: {
               type: 'array',
-              maxItems: 7,
+              maxItems: 8,
               items: {
                 type: 'string',
                 enum: [
                   'clearField',
+                  'requestChoice',
                   'skipTurns',
                   'reverseTurnOrder',
                   'forceRank',
@@ -144,11 +145,15 @@ const CX01_OUTPUT_SCHEMA = {
         {
           type: 'object',
           additionalProperties: false,
-          required: ['slug', 'messages'],
+          required: ['slug', 'contractVersion', 'messages'],
           properties: {
             slug: {
               type: 'string',
               pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$',
+            },
+            contractVersion: {
+              type: 'integer',
+              enum: [1, 2],
             },
             messages: {
               type: 'array',
