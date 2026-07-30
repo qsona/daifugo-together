@@ -1,7 +1,5 @@
 import type { DeepReadonly, Play, RuleModule } from '@daifugo/core';
 
-const PREVIOUS_SUITS_KEY = 'previousSuits';
-const BINDING_SUITS_KEY = 'bindingSuits';
 const SUITS = ['spade', 'heart', 'diamond', 'club'] as const;
 
 type SuitCounts = [number, number, number, number];
@@ -23,6 +21,45 @@ function signature(counts: SuitCounts): string {
 
 function containsJoker(play: DeepReadonly<Play>): boolean {
   return play.cards.some((card) => card.kind === 'joker');
+}
+
+function bindingFromHistory(
+  context: Parameters<NonNullable<RuleModule['hooks']['modifyLegality']>>[0],
+): string | null {
+  let previous: string | null = null;
+  let binding: string | null = null;
+
+  for (const event of context.game.history) {
+    if (event.type === 'fieldCleared') {
+      previous = null;
+      binding = null;
+      continue;
+    }
+    if (event.type !== 'played') continue;
+    if (containsJoker(event.play)) {
+      previous = null;
+      continue;
+    }
+
+    const current = signature(naturalSuitCounts(event.play));
+    if (binding === null && previous === current) {
+      binding = current;
+    }
+    previous = current;
+  }
+
+  return binding;
+}
+
+function previousPlayOnField(
+  context: Parameters<NonNullable<RuleModule['hooks']['afterPlay']>>[0],
+): DeepReadonly<Play> | null {
+  for (let index = context.game.history.length - 1; index >= 0; index -= 1) {
+    const event = context.game.history[index];
+    if (event?.type === 'fieldCleared') return null;
+    if (event?.type === 'played') return event.play;
+  }
+  return null;
 }
 
 function chooseMissingSuits(
@@ -73,7 +110,7 @@ function suitOptions(play: DeepReadonly<Play>): string[] {
 export const rule: RuleModule = {
   meta: {
     ruleId: 'r0008-shibari-double-shibari',
-    name: '縛り(しばり)・ダブル縛り',
+    name: 'しばり',
     description:
       '同じ場で連続して出されたJOKERを含まない手のスート構成が完全に一致した場合、場が流れるまで、そのスート構成と完全に一致する手だけを合法とする。JOKERを含む手は不足するスートを代用して既存の縛りを満たせるが、新しい縛りの成立判定には使わない。場が流れると縛りを解除する。',
     kind: 'local',
@@ -83,59 +120,23 @@ export const rule: RuleModule = {
   },
   hooks: {
     modifyLegality(context, play, base) {
-      const binding = context.memory.game[BINDING_SUITS_KEY];
-      if (typeof binding !== 'string') return base;
+      const binding = bindingFromHistory(context);
+      if (binding === null) return base;
       return suitOptions(play).includes(binding) ? base : { legal: false };
     },
     afterPlay(context, play) {
-      if (containsJoker(play)) {
-        return [
-          {
-            type: 'setMemory',
-            scope: 'game',
-            key: PREVIOUS_SUITS_KEY,
-            value: null,
-          },
-        ];
-      }
-
-      const current = signature(naturalSuitCounts(play));
-      const effects = [
-        {
-          type: 'setMemory' as const,
-          scope: 'game' as const,
-          key: PREVIOUS_SUITS_KEY,
-          value: current,
-        },
-      ];
+      if (bindingFromHistory(context) !== null || containsJoker(play))
+        return [];
+      const previous = previousPlayOnField(context);
       if (
-        typeof context.memory.game[BINDING_SUITS_KEY] !== 'string' &&
-        context.memory.game[PREVIOUS_SUITS_KEY] === current
+        previous === null ||
+        containsJoker(previous) ||
+        signature(naturalSuitCounts(previous)) !==
+          signature(naturalSuitCounts(play))
       ) {
-        effects.push({
-          type: 'setMemory',
-          scope: 'game',
-          key: BINDING_SUITS_KEY,
-          value: current,
-        });
+        return [];
       }
-      return effects;
-    },
-    afterFieldClear() {
-      return [
-        {
-          type: 'setMemory',
-          scope: 'game',
-          key: PREVIOUS_SUITS_KEY,
-          value: null,
-        },
-        {
-          type: 'setMemory',
-          scope: 'game',
-          key: BINDING_SUITS_KEY,
-          value: null,
-        },
-      ];
+      return [{ type: 'announce', messageKey: 'bindingActivated' }];
     },
   },
 };

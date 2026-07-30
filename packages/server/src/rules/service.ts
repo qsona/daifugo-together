@@ -122,7 +122,7 @@ function engineFeaturesIssue(meta: RuleMeta): string | null {
     : null;
 }
 
-function registryIssue(
+function registryIdentityIssue(
   rule: StoredRule,
   registrations: readonly CodeRuleRegistration[],
 ): string | null {
@@ -136,8 +136,6 @@ function registryIssue(
   if (featureIssue) return featureIssue;
   if (
     meta.ruleId !== rule.id ||
-    meta.name !== rule.name ||
-    meta.description !== rule.description ||
     meta.kind !== rule.kind ||
     (meta.prefecture ?? null) !== rule.prefecture ||
     meta.proposalId !== rule.proposalId
@@ -148,6 +146,18 @@ function registryIssue(
     return 'code slug does not match the database';
   }
   return null;
+}
+
+function registryIssue(
+  rule: StoredRule,
+  registrations: readonly CodeRuleRegistration[],
+): string | null {
+  const identityIssue = registryIdentityIssue(rule, registrations);
+  if (identityIssue) return identityIssue;
+  const meta = registrations[0]!.module.meta;
+  return meta.name !== rule.name || meta.description !== rule.description
+    ? 'code metadata does not match the database'
+    : null;
 }
 
 function versionIssue(
@@ -265,13 +275,28 @@ export class RuleRegistryService {
             });
             createdRule = rule;
           } else {
-            const issue = registryIssue(rule, registrations);
+            const issue = registryIdentityIssue(rule, registrations);
             if (issue) throw new Error(issue);
           }
           const existingVersion = this.#repository
             .versions(ruleId)
             .find(({ version }) => version === registration.version);
+          if (existingVersion) {
+            const metadataIssue = registryIssue(rule, registrations);
+            if (metadataIssue) throw new Error(metadataIssue);
+          }
           if (!existingVersion) {
+            if (
+              !createdRule &&
+              (rule.name !== meta.name || rule.description !== meta.description)
+            ) {
+              this.#repository.updateMetadata({
+                ruleId,
+                name: meta.name,
+                description: meta.description,
+                now,
+              });
+            }
             createdVersion = this.#repository.registerVersion({
               ruleId,
               version: registration.version,
