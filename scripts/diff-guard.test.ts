@@ -214,16 +214,27 @@ describe('diff guard', () => {
     expect(
       check(repository, { branch: 'rule/r9999-other' }).violations,
     ).toContain(
-      `branch rule/r9999-other が rule/${directory} または rule/${directory}-a2 と一致しません。`,
+      `branch rule/r9999-other が rule/${directory} または rule/${directory}-aN (N >= 2) と一致しません。`,
     );
   });
 
-  it('-a2 retry branchを許可する', () => {
+  it('-a2以降のrevision branchを許可する', () => {
     const repository = createRepository();
 
     expect(
       check(repository, { branch: `rule/${directory}-a2` }).violations,
     ).toEqual([]);
+    expect(
+      check(repository, { branch: `rule/${directory}-a3` }).violations,
+    ).toEqual([]);
+    expect(
+      check(repository, { branch: `rule/${directory}-a10` }).violations,
+    ).toEqual([]);
+    expect(
+      check(repository, { branch: `rule/${directory}-a1` }).violations,
+    ).toContain(
+      `branch rule/${directory}-a1 が rule/${directory} または rule/${directory}-aN (N >= 2) と一致しません。`,
+    );
   });
 
   it('第三者PRを拒否する', () => {

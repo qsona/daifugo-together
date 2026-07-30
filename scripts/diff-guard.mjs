@@ -358,9 +358,13 @@ export function validateRulePullRequest(options) {
         `許可ファイル4件が揃っていません: ${expected.join(', ')}`,
       );
     }
-    if (branch !== `rule/${directory}` && branch !== `rule/${directory}-a2`) {
+    const branchPattern = new RegExp(
+      `^rule/${directory}(?:-a(?:[2-9]|[1-9][0-9]+))?$`,
+      'u',
+    );
+    if (!branchPattern.test(branch)) {
       violations.push(
-        `branch ${branch} が rule/${directory} または rule/${directory}-a2 と一致しません。`,
+        `branch ${branch} が rule/${directory} または rule/${directory}-aN (N >= 2) と一致しません。`,
       );
     }
   }

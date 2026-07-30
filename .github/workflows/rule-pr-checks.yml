@@ -87,7 +87,9 @@ jobs:
           RULE_BRANCH: ${{ github.head_ref }}
         run: |
           RULE_DIRECTORY="${RULE_BRANCH#rule/}"
-          RULE_DIRECTORY="${RULE_DIRECTORY%-a2}"
+          if [[ "$RULE_DIRECTORY" =~ ^(.+)-a([2-9]|[1-9][0-9]+)$ ]]; then
+            RULE_DIRECTORY="${BASH_REMATCH[1]}"
+          fi
           node scripts/check-rule-tests.mjs --rule "$RULE_DIRECTORY"
 
   simulation:
@@ -126,5 +128,7 @@ jobs:
           RULE_BRANCH: ${{ github.head_ref }}
         run: |
           RULE_DIRECTORY="${RULE_BRANCH#rule/}"
-          RULE_DIRECTORY="${RULE_DIRECTORY%-a2}"
+          if [[ "$RULE_DIRECTORY" =~ ^(.+)-a([2-9]|[1-9][0-9]+)$ ]]; then
+            RULE_DIRECTORY="${BASH_REMATCH[1]}"
+          fi
           pnpm --filter @daifugo/sim start -- --rule "$RULE_DIRECTORY" --games 200 --seeds 5
