@@ -44,4 +44,28 @@ describe('画面ルーティング', () => {
     expect(roomPath(intermission)).toBe('/rooms/room-1/game-result');
     expect(roomPath(playing, 'activeRules')).toBe('/rooms/room-1/rules');
   });
+
+  it('ルール詳細のruleId付きパスを往復変換する', () => {
+    expect(parseRoomRoute('/rooms/room-1/rules/r0001-eight-cut')).toEqual({
+      roomId: 'room-1',
+      view: 'rules',
+      ruleId: 'r0001-eight-cut',
+    });
+    expect(parseRoomRoute('/rooms/room-1/rules')).toEqual({
+      roomId: 'room-1',
+      view: 'rules',
+    });
+    const room = {
+      roomId: 'room-1',
+      phase: 'playing',
+      game: null,
+    } as import('@daifugo/core').PlayerRoomView;
+    expect(roomPath(room, 'activeRules', 'r0001-eight-cut')).toBe(
+      '/rooms/room-1/rules/r0001-eight-cut',
+    );
+  });
+
+  it('rules以外の余計なパス要素は拒否する', () => {
+    expect(parseRoomRoute('/rooms/room-1/game/rule-id')).toBeNull();
+  });
 });

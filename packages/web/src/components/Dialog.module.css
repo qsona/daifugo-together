@@ -29,6 +29,32 @@
   animation: none;
 }
 
+/* 一覧など縦に伸びる中身。画面からはみ出さないよう内側でだけスクロールさせる。 */
+.wide {
+  max-width: 420px;
+  width: 100%;
+  max-height: 78vh;
+  overflow-y: auto;
+}
+
+.alignStart {
+  text-align: start;
+}
+
+.close {
+  align-self: flex-end;
+  min-width: var(--space-8);
+  min-height: var(--space-8);
+  margin: calc(var(--space-2) * -1) calc(var(--space-2) * -1) 0 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-title-l);
+  line-height: 1;
+  cursor: pointer;
+}
+
 @keyframes pop {
   from {
     transform: scale(0.9);

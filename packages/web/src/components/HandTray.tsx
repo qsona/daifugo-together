@@ -4,6 +4,7 @@ import { Card } from './Card';
 import type { CardView } from './Card';
 import type { CardHint } from '../game/hints';
 import { cx } from '../lib/cx';
+import { TurnCountdown } from './TurnCountdown';
 import styles from './HandTray.module.css';
 
 type HandTrayProps = {
@@ -11,6 +12,9 @@ type HandTrayProps = {
   selectedIds: readonly string[];
   cardHints?: ReadonlyMap<string, CardHint>;
   showStrengthScale?: boolean;
+  /** 自分の手番か。トレイの点灯と残り時間バーの出し分けに使う。 */
+  isMyTurn: boolean;
+  turnDeadlineAt?: number | null;
   onToggle: (id: string) => void;
   onDimmedCardTap?: (id: string) => void;
   /** 出す・パスのボタン。合法手の判定はエンジン側の関心なので props で受ける。 */
@@ -28,6 +32,8 @@ export function HandTray({
   selectedIds,
   cardHints,
   showStrengthScale = false,
+  isMyTurn,
+  turnDeadlineAt,
   onToggle,
   onDimmedCardTap,
   actions,
@@ -39,7 +45,16 @@ export function HandTray({
   const unselectedGapCount = Math.max(0, cards.length - 1 - selectedGapCount);
 
   return (
-    <section className={styles.tray} aria-label="あなたの手札">
+    <section
+      className={cx(styles.tray, isMyTurn && styles.myTurn)}
+      aria-label="あなたの手札"
+    >
+      <div className={styles.header}>
+        {isMyTurn && <span className={styles.turnBadge}>あなたの番</span>}
+        {isMyTurn && turnDeadlineAt != null && (
+          <TurnCountdown deadlineAt={turnDeadlineAt} />
+        )}
+      </div>
       {showStrengthScale && (
         <div
           className={styles.strengthScale}

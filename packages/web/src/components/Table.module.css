@@ -228,4 +228,9 @@
   .turn .chip {
     transform: none;
   }
+
+  .flushing .pile {
+    animation: none;
+    opacity: 0;
+  }
 }

@@ -1,14 +1,22 @@
-import type { RuleCatalogResponse } from '@daifugo/core';
+import type { RuleCatalogItem, RuleCatalogResponse } from '@daifugo/core';
 
 import type { RuleCatalogQuery, RuleCatalogResult } from './repository.js';
 
+/** 一覧の 1 件と同じ形。by-id もこれを受け取る。 */
+export type RuleCatalogEntry = RuleCatalogResult['items'][number];
+
 export interface RuleCatalogPort {
   catalog(query: RuleCatalogQuery): RuleCatalogResult;
+  catalogItem(ruleId: string): RuleCatalogEntry | null;
 }
 
 type CatalogHttpResult =
   | { status: 200; body: RuleCatalogResponse }
   | { status: 400; body: { error: 'invalid_query'; field: string } };
+
+type CatalogDetailHttpResult =
+  | { status: 200; body: RuleCatalogItem }
+  | { status: 404; body: { error: 'rule_not_found' } };
 
 function single(
   parameters: URLSearchParams,
@@ -108,24 +116,37 @@ export class RuleCatalogService {
       body: {
         summary: result.summary,
         page: { total: result.total, limit: limit!, offset: offset! },
-        items: result.items.map((rule) => ({
-          id: rule.id,
-          name: rule.name,
-          description: rule.description,
-          kind: rule.kind,
-          prefecture: rule.prefecture,
-          status: rule.status as 'active' | 'removed',
-          priority: this.#priorityEnabled ? rule.priorityRank : null,
-          popularity: this.#popularityEnabled
-            ? Math.round(rule.popularityScore * 100)
-            : null,
-          implementedAt: new Date(rule.createdAt).toISOString(),
-          removedAt:
-            rule.status === 'removed'
-              ? new Date(rule.updatedAt).toISOString()
-              : null,
-        })),
+        items: result.items.map((rule) => this.#item(rule)),
       },
+    };
+  }
+
+  detail(ruleId: string): CatalogDetailHttpResult {
+    const rule = this.#rules.catalogItem(ruleId);
+    // disabled は未公開。存在しない扱いにする。
+    if (!rule || (rule.status !== 'active' && rule.status !== 'removed')) {
+      return { status: 404, body: { error: 'rule_not_found' } };
+    }
+    return { status: 200, body: this.#item(rule) };
+  }
+
+  #item(rule: RuleCatalogEntry): RuleCatalogItem {
+    return {
+      id: rule.id,
+      name: rule.name,
+      description: rule.description,
+      kind: rule.kind,
+      prefecture: rule.prefecture,
+      status: rule.status as 'active' | 'removed',
+      priority: this.#priorityEnabled ? rule.priorityRank : null,
+      popularity: this.#popularityEnabled
+        ? Math.round(rule.popularityScore * 100)
+        : null,
+      implementedAt: new Date(rule.createdAt).toISOString(),
+      removedAt:
+        rule.status === 'removed'
+          ? new Date(rule.updatedAt).toISOString()
+          : null,
     };
   }
 }

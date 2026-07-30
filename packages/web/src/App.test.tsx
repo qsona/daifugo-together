@@ -7,6 +7,7 @@ import {
   within,
 } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { PlayerRoomView } from '@daifugo/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { App, reconcileSelectedCardIds } from './App';
@@ -351,7 +352,7 @@ describe('DS-02: フェーズ 1 の主要画面が 1 本の導線でつながる
     );
 
     // 文字はルール名だけ。「ルール発動!」「場が流れます」の類は出さない。
-    expect(screen.getByText('8切り')).toBeTruthy();
+    expect(await screen.findByText('8切り')).toBeTruthy();
     expect(screen.queryByText(/ルール発動/)).toBeNull();
     expect(screen.queryByText(/場が流れます/)).toBeNull();
   });
@@ -390,7 +391,7 @@ describe('DS-02: フェーズ 1 の主要画面が 1 本の導線でつながる
     await user.click(screen.getByRole('button', { name: 'スペードの6' }));
     await user.click(play);
 
-    expect(screen.getByText('革命返し')).toBeTruthy();
+    expect(await screen.findByText('革命返し')).toBeTruthy();
     expect(screen.getByText('スペ3返し')).toBeTruthy();
     expect(screen.getByLabelText('3件同時発動')).toBeTruthy();
   });
@@ -480,6 +481,30 @@ describe('画面のURLとリロード復帰', () => {
     ).toBeTruthy();
     expect(window.location.pathname).toBe('/rooms/tutorial-room/rules');
   });
+
+  it.each(['/rooms/tutorial-room/rules', '/rooms/tutorial-room/rules/r1'])(
+    '履歴戻りで %s のモーダルを閉じ、対局画面を残す',
+    (path) => {
+      window.history.replaceState({}, '', path);
+      render(
+        <App
+          client={tutorialHintClient({
+            ...tutorialHintRoom('community', []),
+            activeRules: [{ ruleId: 'r1', name: '8切り' }],
+          })}
+        />,
+      );
+      expect(screen.getByRole('dialog')).toBeTruthy();
+
+      act(() => {
+        window.history.replaceState({}, '', '/rooms/tutorial-room/game');
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      });
+
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(screen.getByRole('region', { name: '卓' })).toBeTruthy();
+    },
+  );
 });
 
 describe('ジョーカーの手札表示', () => {
@@ -864,7 +889,22 @@ describe('E11: ルール閲覧の実App導線', () => {
     await user.click(screen.getByRole('button', { name: /有効ルール/u }));
     expect(screen.getByText('8切り')).toBeTruthy();
     expect(screen.getByText('二枚縛り')).toBeTruthy();
-    await user.click(screen.getByRole('button', { name: 'もどる' }));
+    await user.click(screen.getByRole('button', { name: '閉じる' }));
+    expect(screen.getByRole('region', { name: '卓' })).toBeTruthy();
+  });
+
+  it('一覧のルール名から盤面を残したまま詳細モーダルへ進む', async () => {
+    const user = userEvent.setup();
+    const room = {
+      ...tutorialHintRoom('community', []),
+      activeRules: [{ ruleId: 'r0001-eight-cut', name: '8切り' }],
+    };
+    render(<App client={tutorialHintClient(room)} />);
+
+    await user.click(screen.getByRole('button', { name: /有効ルール/u }));
+    await user.click(screen.getByRole('button', { name: '8切り' }));
+
+    expect(screen.getByRole('dialog', { name: '8切り' })).toBeTruthy();
     expect(screen.getByRole('region', { name: '卓' })).toBeTruthy();
   });
 
@@ -885,6 +925,161 @@ describe('E11: ルール閲覧の実App導線', () => {
     expect(
       screen.queryByRole('heading', { name: 'この対局のルール' }),
     ).toBeNull();
+  });
+});
+
+describe('ルール発動: カットインが引いてから場が流れる', () => {
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+  });
+
+  it('カットイン再生中は出した札を場に残し、引いてから消す', () => {
+    vi.useFakeTimers();
+    const initial = {
+      ...tutorialHintRoom('community', []),
+      activeRules: [{ ruleId: 'r0001-eight-cut', name: '8切り' }],
+    };
+    const observable = observableTutorialClient(initial);
+    render(<App client={observable.client} />);
+    const eight = {
+      kind: 'natural',
+      id: 'S08',
+      suit: 'spade',
+      rank: '8',
+    } as const;
+
+    act(() => {
+      observable.setRoom({
+        ...initial,
+        v: 5,
+        game: {
+          ...initial.game!,
+          field: { cards: [], playedBySeat: null, passedSeats: [] },
+          history: [
+            { t: 'played', seat: 0, cards: [eight], kind: 'single' },
+            {
+              t: 'ruleFired',
+              ruleId: 'r0001-eight-cut',
+              messageKey: null,
+            },
+            { t: 'fieldCleared', reason: 'rule', nextLeaderSeat: 0 },
+            { t: 'turnChanged', seat: 0 },
+          ],
+          yourHand: [],
+        },
+        events: [
+          {
+            seq: 10,
+            t: 'ruleFired',
+            ruleId: 'r0001-eight-cut',
+            name: '8切り',
+            message: null,
+          },
+        ],
+      });
+    });
+
+    const table = within(screen.getByRole('region', { name: '卓' }));
+    expect(table.getByLabelText('スペードの8')).toBeTruthy();
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+    expect(screen.getByText('8切り')).toBeTruthy();
+    expect(table.getByLabelText('スペードの8')).toBeTruthy();
+
+    act(() => {
+      vi.advanceTimersByTime(750);
+    });
+    expect(screen.queryByText('8切り')).toBeNull();
+    expect(table.getByLabelText('スペードの8')).toBeTruthy();
+    act(() => {
+      vi.advanceTimersByTime(320);
+    });
+    expect(table.queryByLabelText('スペードの8')).toBeNull();
+  });
+
+  it('カットイン中に次の札が着地したら古い札の吸い込みを省略する', () => {
+    vi.useFakeTimers();
+    const initial = {
+      ...tutorialHintRoom('community', []),
+      activeRules: [{ ruleId: 'r0001-eight-cut', name: '8切り' }],
+    };
+    const observable = observableTutorialClient(initial);
+    render(<App client={observable.client} />);
+    const eight = {
+      kind: 'natural',
+      id: 'S08',
+      suit: 'spade',
+      rank: '8',
+    } as const;
+    const nine = {
+      kind: 'natural',
+      id: 'H09',
+      suit: 'heart',
+      rank: '9',
+    } as const;
+    const firedRoom: PlayerRoomView = {
+      ...initial,
+      v: 5,
+      game: {
+        ...initial.game!,
+        field: { cards: [], playedBySeat: null, passedSeats: [] },
+        history: [
+          { t: 'played', seat: 0, cards: [eight], kind: 'single' },
+          {
+            t: 'ruleFired',
+            ruleId: 'r0001-eight-cut',
+            messageKey: null,
+          },
+          { t: 'fieldCleared', reason: 'rule', nextLeaderSeat: 0 },
+          { t: 'turnChanged', seat: 0 },
+        ],
+        yourHand: [],
+      },
+      events: [
+        {
+          seq: 10,
+          t: 'ruleFired',
+          ruleId: 'r0001-eight-cut',
+          name: '8切り',
+          message: null,
+        },
+      ],
+    };
+    act(() => observable.setRoom(firedRoom));
+    act(() => {
+      vi.advanceTimersByTime(1050);
+    });
+    expect(
+      within(screen.getByRole('region', { name: '卓' })).getByLabelText(
+        'スペードの8',
+      ),
+    ).toBeTruthy();
+
+    act(() => {
+      observable.setRoom({
+        ...firedRoom,
+        v: 6,
+        game: {
+          ...firedRoom.game!,
+          field: { cards: [nine], playedBySeat: 0, passedSeats: [] },
+          history: [
+            ...firedRoom.game!.history,
+            { t: 'played', seat: 0, cards: [nine], kind: 'single' },
+            { t: 'turnChanged', seat: 1 },
+          ],
+        },
+      });
+    });
+
+    const table = within(screen.getByRole('region', { name: '卓' }));
+    expect(table.queryByLabelText('スペードの8')).toBeNull();
+    expect(table.getByLabelText('ハートの9')).toBeTruthy();
+    act(() => {
+      vi.advanceTimersByTime(320);
+    });
+    expect(table.getByLabelText('ハートの9')).toBeTruthy();
   });
 });
 

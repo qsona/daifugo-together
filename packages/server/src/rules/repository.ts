@@ -422,6 +422,19 @@ export class RuleRepository {
     };
   }
 
+  /** 図鑑の 1 件取得。一覧の items と同じ形を返す。 */
+  catalogItem(
+    ruleId: string,
+  ): (StoredRule & { priorityRank: number | null }) | null {
+    const rule = this.get(ruleId);
+    if (!rule) return null;
+    return {
+      ...rule,
+      priorityRank:
+        rule.status === 'active' ? this.#priorityRank(rule.id) : null,
+    };
+  }
+
   transition(input: RuleLifecycleTransition): {
     changed: boolean;
     rule: StoredRule | null;

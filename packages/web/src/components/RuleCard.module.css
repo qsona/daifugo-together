@@ -106,3 +106,21 @@
   font-size: var(--font-size-body);
   font-weight: var(--font-weight-bold);
 }
+
+/* 行そのものが押せることを、面ではなく矢印で静かに示す。 */
+.slimButton {
+  width: 100%;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.slimButton::after {
+  content: '›';
+  float: inline-end;
+  color: var(--color-text-secondary);
+}

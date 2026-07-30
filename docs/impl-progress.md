@@ -2,6 +2,7 @@
 
 ## 現在
 
+- **インゲーム演出改善 / プロセス2完了・独立再レビューPASS**: 出した札の一拍→カットイン→場を流す進行、部屋内ルール一覧・詳細モーダル、by-id 図鑑 API、自分の手番を示す手札トレイを実装。`PlayerRoomView` / `RuleRef` の契約変更なし
 - **匿名おためし提案枠 / プロセス2完了・完了再レビューPASS**: 未登録ユーザーの同時進行1件枠、投稿ゲート、枠埋まり画面、設計差分を実装済み。初回独立完了レビューのImportant 1件(HTTP前段が冪等再送を遮断)を修正し、実HTTP回帰テストを追加。再レビューは `PASS / APPROVED`、`pnpm verify`成功。375×812実画面だけブラウザのlocalhost遮断で未確認
 - **フェーズ 2 / E14 TU-01〜04 プロセス2完了・完了レビューPASS**: きほんの部屋、カード案内、初戦ガイド、初回卒業導線まで実装・自動テスト・375×812実画面確認を完了。独立完了レビューのImportant 1件を修正し、最新`main` (`1b15732`) 基点へ統合・全検証・独立再レビュー済み
 - **フェーズ 1 完了(2026-07-27)**: TS-02・E1・E2・E3・E4 は main に統合済み、E13 は本番デプロイと動作検証(DP-01・DP-03)まで完了(`https://daifugo-together.fly.dev/`)。残りは DP-02 の仕上げ(GitHub Environment `production` + `FLY_API_TOKEN` 登録と初回 CD 実行確認)のみ
@@ -17,6 +18,40 @@
 - **フェーズ 2 / E10 OP-01・OP-02 プロセス2コード完了**: 人間承認駆動に合わせたキュー・判定・失敗・ファネルCLIを既存台帳から読み取り専用で構成。独立完了レビューは `PASS / APPROVED / GO`、全指摘なし。D-5/OP-01/E-15の正式な文書裁定だけ外部ゲート
 - **フェーズ 2 / E11 RV-01・RV-02 プロセス2完了・完了再レビューGO**: 待機/対局画面の固定ルール一覧と公開ルール図鑑を接続。方向性レビューのImportant 2件と初回完了レビューのImportant 1件を反映し、待機中のregistry変更追従、最終API契約、詳細・再試行・競合fetch・公開API保護、実DB境界、375×812実画面まで仕上げた
 - E1〜E3 の実装記録は本書末尾の「並行進行」節、E13 は「E13」節。E4 の未解消の開発者判断は「詰まっている点」に残っている(1〜4・7・8・11)
+
+## インゲーム演出改善(2026-07-30)
+
+- 状態: 初回独立完了レビューの Important 2件と Minor 1件を修正。再レビューは要件 `PASS` / 品質 `APPROVED`。disabledの公開契約に関する指摘は下記裁定により現仕様を維持
+- ブランチ: `codex/ingame-effects`
+
+### ユーザーストーリーの確認
+
+- `packages/web/src/App.test.tsx` で、8切り直後の空フィールド snapshot でも出した8をカットイン中は保持し、リボンが引いた後の320msだけ flush 状態にしてから消すことを確認
+- 同テストと `packages/web/src/game/table.test.ts` で、保持対象を発動ボレー作成時のプレイへ固定し、次のプレイが着地した場合は古い札の吸い込みを省略すること、全員パスの場流しは保持しないことを確認
+- `packages/web/src/components/RuleCutIn.test.tsx` で、300msの一拍、1050ms後の完了、一拍中のスキップを確認
+- `packages/web/src/components/ActiveRulesModal.test.tsx` / `RuleDetailModal.test.tsx` と `App.test.tsx` で、盤面を残した一覧・詳細モーダル、名前の即時表示、説明文取得失敗後の再試行を確認
+- `packages/web/src/App.test.tsx` で、一覧・詳細URLから `popstate` で戻ったときにモーダルだけ閉じて卓が残ることを確認
+- `packages/web/src/screens/GameScreen.test.tsx` で、自分の番だけ「あなたの番」と残り時間バーが手札トレイ内に出て、相手の番でも札を読めることを確認
+- `packages/server/src/rules/catalog.test.ts` / `app-server.test.ts` で、by-idの200/404、removedの公開、disabledの404、一覧と同じ指標フラグ、共通レート制限経路を確認
+
+### 置いた仮定・競合時の裁定
+
+- 設計書 §2.1 の「実在すれば status をそのまま返す」と、発注書 Task 1・G-17 の「disabled は404」が競合する。今回の依頼対象である発注書の具体的な受け入れ契約と開発者裁定を優先し、disabled は404を維持した。公開型 `RuleCatalogItem.status` も現行の `active | removed` から広げない
+
+### 独立完了レビュー
+
+- 初回判定: 要件適合 `PARTIAL` / 品質 `NEEDS_FIXES`。Criticalなし、Important 3件、Minor 1件
+- 修正したImportant: reduced-motionでも場のflush animationが動く問題を、animationなしの即時消去へ変更
+- 修正したImportant: 場保持が最新snapshotへ追従して別のプレイをflushし得る問題を、ボレー作成時の履歴位置へ固定。次のプレイ到着時は古いflushを省略し、全員パスは保持対象外にした。`RuleCutIn` の完了callback更新でもタイマーを再始動しない
+- 修正したMinor: 一覧・詳細モーダルのAndroid戻る相当の `popstate` 統合テストを追加
+- 維持したImportant候補: disabledの契約競合。上記「置いた仮定・競合時の裁定」のとおり発注書 Task 1・G-17を優先
+- 再レビュー判定: 要件適合 `PASS` / 品質 `APPROVED`。Critical / Importantなし。残った「後続プレイ検出renderの1フレームだけflush classが付き得る」Minorも、描画時点でflushを無効化して反映
+- `CI=true pnpm verify`: format / lint / AI boundary / design lint / typecheck / 全テスト / 全build成功（**120 files / 860 tests成功**）
+- 375×812のテストモード実画面で、卓・席・手札トレイが横スクロールなく収まり、自分の手番表示と札の可読性を確認
+
+### 詰まっている点
+
+- なし
 
 ## 匿名おためし提案枠(AU-D4緩和、2026-07-30)
 

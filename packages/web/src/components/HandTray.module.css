@@ -1,16 +1,64 @@
 /* インゲーム部品: 手札(重ね表示・選択) */
 
 .tray {
-  /* 手札は常に画面の下端に置く(親指の届く位置に固定する)。 */
+  /*
+   * 手札は常に画面の下端に置く。手番でトレイ自身が点灯/沈降する。
+   * 沈めるのは面・枠・影だけで、札の文字は透過させない。
+   */
   margin-top: auto;
-  background: var(--color-bg-surface);
-  border: var(--border-bold) solid var(--color-border-strong);
+  background: var(--color-navy-100);
+  border: var(--border-control) solid var(--color-border-control);
   border-radius: var(--radius-l);
-  box-shadow: var(--shadow-hard-s);
   padding: var(--space-3);
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+  transition:
+    background-color var(--duration-base) var(--easing-standard),
+    border-color var(--duration-base) var(--easing-standard);
+}
+
+.myTurn {
+  background: var(--color-bg-surface);
+  border: var(--border-heavy) solid var(--color-gold-400);
+  outline: var(--border-bold) solid var(--color-border-strong);
+  box-shadow: var(--shadow-hard-m);
+  animation: turn-rise var(--duration-base) var(--easing-pop);
+}
+
+/* 手番が回っても高さが動かないよう、相手の番でも行だけ残す。 */
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--space-5);
+}
+
+.turnBadge {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-ink);
+  border: var(--border-control) solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  padding: 1px var(--space-3);
+  font-size: var(--font-size-micro);
+  font-weight: var(--font-weight-heavy);
+  white-space: nowrap;
+}
+
+@keyframes turn-rise {
+  from {
+    transform: translateY(2px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tray {
+    transition: none;
+  }
+
+  .myTurn {
+    animation: none;
+  }
 }
 
 .strengthScale {

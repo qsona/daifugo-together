@@ -24,7 +24,7 @@ export function RuleDexScreen({
   onBack,
   features = FEATURES,
 }: {
-  api: RuleCatalogApi;
+  api: Pick<RuleCatalogApi, 'list'>;
   onBack: () => void;
   features?: FeatureFlags;
 }) {

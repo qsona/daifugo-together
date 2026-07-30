@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -37,6 +37,7 @@ function game(finishes: readonly SeatFinish[]) {
       selectedCardIds={[]}
       isMyTurn={false}
       onViewRules={() => undefined}
+      onOpenActivation={() => undefined}
       onToggleCard={() => undefined}
       onPlay={() => undefined}
       onPass={() => undefined}
@@ -94,18 +95,20 @@ describe('T1: あがりの認知', () => {
   });
 });
 
-describe('DS-04: 手番残り時間バー', () => {
+describe('DS-04: 自分の手番が手札トレイで分かる', () => {
   afterEach(() => {
     cleanup();
     vi.useRealTimers();
   });
 
-  it('残り時間をテキスト本文ではなく左基点のバーで示す', () => {
+  it('自分の番は手札トレイに「あなたの番」と残り時間バーを出す', () => {
     vi.useFakeTimers();
     vi.setSystemTime(1_000);
-    render(<GameScreen {...game([]).props} turnDeadlineAt={61_000} />);
+    render(<GameScreen {...game([]).props} isMyTurn turnDeadlineAt={61_000} />);
 
-    const timer = screen.getByRole('timer', { name: '手番 残り60秒' });
+    const tray = screen.getByLabelText('あなたの手札');
+    expect(within(tray).getByText('あなたの番')).toBeTruthy();
+    const timer = within(tray).getByRole('timer', { name: '手番 残り60秒' });
     expect(timer.textContent).toBe('');
     expect(
       timer
@@ -116,7 +119,28 @@ describe('DS-04: 手番残り時間バー', () => {
     act(() => {
       vi.advanceTimersByTime(51_000);
     });
-    expect(screen.getByRole('timer', { name: '手番 残り9秒' })).toBeTruthy();
+    expect(
+      within(tray).getByRole('timer', { name: '手番 残り9秒' }),
+    ).toBeTruthy();
+  });
+
+  it('相手の番では残り時間バーを出さない', () => {
+    render(
+      <GameScreen
+        {...game([]).props}
+        isMyTurn={false}
+        turnDeadlineAt={61_000}
+      />,
+    );
+
+    expect(screen.queryByRole('timer')).toBeNull();
+    expect(screen.queryByText('あなたの番')).toBeNull();
+  });
+
+  it('相手の番でも自分の札は読める', () => {
+    render(<GameScreen {...game([]).props} isMyTurn={false} />);
+
+    expect(screen.getByRole('button', { name: 'クラブの3' })).toBeTruthy();
   });
 });
 

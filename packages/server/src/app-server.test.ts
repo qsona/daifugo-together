@@ -335,6 +335,7 @@ describe('production app server', () => {
             ],
           },
         }),
+        detail: () => ({ status: 404, body: { error: 'rule_not_found' } }),
       },
     });
     apps.push(app);
@@ -362,6 +363,9 @@ describe('production app server', () => {
         list: () => {
           throw new Error('database unavailable');
         },
+        detail: () => {
+          throw new Error('database unavailable');
+        },
       },
     });
     apps.push(app);
@@ -369,6 +373,58 @@ describe('production app server', () => {
     await expect(
       fetchText(`http://127.0.0.1:${String(port)}/api/rules`),
     ).resolves.toMatchObject({ status: 500 });
+  });
+
+  it('ルール図鑑APIはby-idで1件返し、無いものは404にする', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'daifugo-web-dist-'));
+    directories.push(directory);
+    const app = createAppServer({
+      webDistDir: directory,
+      ruleCatalog: {
+        list: () => ({
+          status: 200,
+          body: {
+            summary: {
+              implemented: 0,
+              active: 0,
+              removed: 0,
+              prefectureCoverage: 0,
+            },
+            page: { total: 0, limit: 30, offset: 0 },
+            items: [],
+          },
+        }),
+        detail: (ruleId: string) =>
+          ruleId === 'r0001-eight-cut'
+            ? {
+                status: 200,
+                body: {
+                  id: 'r0001-eight-cut',
+                  name: '8切り',
+                  description: '8を含む手を出すと場を流す。',
+                  kind: 'local',
+                  prefecture: '埼玉県',
+                  status: 'active',
+                  priority: null,
+                  popularity: null,
+                  implementedAt: new Date(1_000).toISOString(),
+                  removedAt: null,
+                },
+              }
+            : { status: 404, body: { error: 'rule_not_found' } },
+      },
+    });
+    apps.push(app);
+    const port = await app.listen(0, '127.0.0.1');
+    const baseUrl = `http://127.0.0.1:${String(port)}`;
+
+    const found = await fetch(`${baseUrl}/api/rules/r0001-eight-cut`);
+    expect(found.status).toBe(200);
+    await expect(found.json()).resolves.toMatchObject({ name: '8切り' });
+
+    const missing = await fetch(`${baseUrl}/api/rules/nope`);
+    expect(missing.status).toBe(404);
+    await expect(missing.json()).resolves.toEqual({ error: 'rule_not_found' });
   });
 
   it('本人向けカード一覧と異議申し立てAPIを認証付きで公開する', async () => {

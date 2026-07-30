@@ -25,6 +25,7 @@ describe('HandTray の選択札タップ領域', () => {
       <HandTray
         cards={CARDS}
         selectedIds={['C03', 'H03', 'S03']}
+        isMyTurn={false}
         onToggle={vi.fn()}
       />,
     );
@@ -49,7 +50,12 @@ describe('HandTray の選択札タップ領域', () => {
     const user = userEvent.setup();
     const onToggle = vi.fn();
     render(
-      <HandTray cards={CARDS} selectedIds={['D03']} onToggle={onToggle} />,
+      <HandTray
+        cards={CARDS}
+        selectedIds={['D03']}
+        isMyTurn={false}
+        onToggle={onToggle}
+      />,
     );
 
     await user.click(screen.getByRole('button', { name: 'ダイヤの3' }));

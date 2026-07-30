@@ -9,14 +9,13 @@ import {
   useSyncExternalStore,
 } from 'react';
 
-import type { CardView } from './components/Card';
 import type { MemberView as MemberListView } from './components/MemberList';
 import type { GameRankView } from './components/GameRankRows';
 import type { SetRankView } from './components/SetRankRows';
-import type { TableSeat } from './components/Table';
 import { RuleCutIn, type RuleActivation } from './components/RuleCutIn';
 import { EmptyState } from './components/EmptyState';
-import type { SeatFinish } from './screens/GameScreen';
+import { ActiveRulesModal } from './components/ActiveRulesModal';
+import { RuleDetailModal } from './components/RuleDetailModal';
 import type { RuleVote, SetFunRating } from './screens/SetResultScreen';
 import {
   DEMO_ACTIVATION_VOLLEYS,
@@ -61,6 +60,12 @@ import {
 } from './routing';
 import screenStyles from './screens/screen.module.css';
 import { deriveCardHints } from './game/hints';
+import {
+  cards,
+  pendingFieldClearPlayIndex,
+  seatFinishes,
+  tableSeats,
+} from './game/table';
 import { getBrowserAuthClient, type AuthApi } from './auth/client';
 import { FEATURES } from './features';
 import {
@@ -90,6 +95,16 @@ const AUTH_RESULT_PROMPT_KEY = 'daifugo.authResultPromptShown';
  * サーバーはこの間もセットリザルトのフェーズなので、これはこの端末だけの間。
  */
 const FINAL_RESULT_MS = 10_000;
+/** 場が流れるアニメーションの尺。design-tokens の --duration-slow と合わせる。 */
+const FIELD_FLUSH_MS = 320;
+
+type RoomOverlay =
+  { kind: 'activeRules'; ruleId: string | null } | { kind: 'ruleDex' } | null;
+
+type ActivationVolley = {
+  activations: readonly RuleActivation[];
+  heldPlayedHistoryIndex: number | null;
+};
 
 const DEMO_PROPOSAL_API: ProposalApi = {
   submit: async (request) => ({
@@ -155,6 +170,22 @@ const DEMO_RULE_CATALOG_API: RuleCatalogApi = {
       removedAt: null,
     })),
   }),
+  get: async (ruleId: string) => {
+    const index = DEMO_RULES.findIndex((rule) => rule.ruleId === ruleId);
+    if (index < 0) throw new Error('rule_catalog_unavailable');
+    return {
+      id: ruleId,
+      name: DEMO_RULES[index]!.name,
+      description: '対局にひとひねり加えるルールです。',
+      kind: index === 0 ? ('local' as const) : ('original' as const),
+      prefecture: index === 0 ? '埼玉県' : null,
+      status: 'active' as const,
+      priority: null,
+      popularity: null,
+      implementedAt: new Date().toISOString(),
+      removedAt: null,
+    };
+  },
 };
 
 /**
@@ -305,13 +336,21 @@ function DemoApp() {
           onCutInDone={finishCutIn}
           lastActivation={
             lastVolley && lastVolley[0]
-              ? { name: lastVolley[0].name, count: lastVolley.length }
+              ? {
+                  ruleId: lastVolley[0].ruleId,
+                  name: lastVolley[0].name,
+                  count: lastVolley.length,
+                }
               : null
           }
           hand={DEMO_HAND}
           selectedCardIds={selectedCardIds}
           isMyTurn
           onViewRules={() => {
+            setActiveRulesReturn('game');
+            go('activeRules');
+          }}
+          onOpenActivation={() => {
             setActiveRulesReturn('game');
             go('activeRules');
           }}
@@ -361,23 +400,6 @@ function DemoApp() {
   }
 }
 
-function cards(
-  cards: PlayerRoomView['game'] extends null
-    ? never
-    : NonNullable<PlayerRoomView['game']>['yourHand'],
-): CardView[] {
-  return cards.map((card) =>
-    card.kind === 'joker'
-      ? {
-          id: card.id,
-          rank: 'JOKER',
-          // 2 枚のジョーカーを支援技術で区別できるようにする。
-          label: `ジョーカー${String(card.index + 1)}`,
-        }
-      : { id: card.id, suit: card.suit, rank: card.rank },
-  );
-}
-
 function waitingMembers(room: PlayerRoomView): MemberListView[] {
   const members: MemberListView[] = room.members.map((member) =>
     member.isAI
@@ -394,93 +416,6 @@ function waitingMembers(room: PlayerRoomView): MemberListView[] {
   );
   while (members.length < 4) members.push({ kind: 'empty' });
   return members;
-}
-
-/**
- * この戦であがった人を、あがった順に。
- * 履歴は戦ごとなので、`gameStarted` が来たら積み直す。
- */
-function seatFinishes(room: PlayerRoomView): SeatFinish[] {
-  const game = room.game;
-  if (!game) return [];
-  const bySeat = new Map(
-    room.members.flatMap((member) =>
-      member.seatId === null ? [] : ([[member.seatId, member]] as const),
-    ),
-  );
-  let finishes: SeatFinish[] = [];
-  for (const event of game.history) {
-    if (event.t === 'gameStarted') {
-      finishes = [];
-    } else if (event.t === 'playerFinished') {
-      const member = bySeat.get(event.seat);
-      finishes.push({
-        seat: event.seat,
-        name:
-          member?.memberId === room.you.memberId
-            ? 'あなた'
-            : (member?.displayName ?? `席${String(event.seat + 1)}`),
-        isSelf: member?.memberId === room.you.memberId,
-        rank: event.rank,
-        title: event.title,
-      });
-    }
-  }
-  return finishes;
-}
-
-function tableSeats(room: PlayerRoomView): TableSeat[] {
-  const game = room.game;
-  if (!game || room.you.seatId === null) return [];
-  const plays = new Map<number, CardView[][]>();
-  for (const event of game.history) {
-    if (event.t === 'gameStarted' || event.t === 'fieldCleared') {
-      plays.clear();
-    } else if (event.t === 'played') {
-      plays.set(event.seat, [
-        ...(plays.get(event.seat) ?? []),
-        cards(event.cards),
-      ]);
-    }
-  }
-  const finished = new Map(
-    seatFinishes(room).map((finish) => [finish.seat, finish] as const),
-  );
-  const bySeat = new Map(
-    room.members.flatMap((member) =>
-      member.seatId === null ? [] : ([[member.seatId, member]] as const),
-    ),
-  );
-  return [0, 1, 2, 3].map((offset) => {
-    const seat = ((room.you.seatId! + offset) % 4) as 0 | 1 | 2 | 3;
-    const member = bySeat.get(seat);
-    const finish = finished.get(seat);
-    const status = member?.isAI
-      ? game.turn?.seat === seat
-        ? '考え中…'
-        : undefined
-      : member?.departed
-        ? '退出(AI代行)'
-        : !member?.connected || member.aiActing
-          ? '切断中(AI代行)'
-          : undefined;
-    return {
-      name:
-        member?.memberId === room.you.memberId
-          ? 'あなた'
-          : (member?.displayName ?? `席${String(seat + 1)}`),
-      isSelf: member?.memberId === room.you.memberId,
-      handCount: member?.handCount ?? 0,
-      isCurrentTurn: game.turn?.seat === seat,
-      hasPassed: game.field.passedSeats.includes(seat),
-      kind: member?.isAI ? 'ai' : 'human',
-      ...(status ? { status } : {}),
-      // 履歴に playerFinished が無くても、スナップショットの順位だけは拾う。
-      finishedRank: finish?.rank ?? member?.finishedRank ?? null,
-      ...(finish ? { finishedTitle: finish.title } : {}),
-      plays: plays.get(seat) ?? [],
-    };
-  });
 }
 
 function gameRanks(room: PlayerRoomView): GameRankView[] {
@@ -635,11 +570,14 @@ function ConnectedApp({
   const lastRuleEventSeq = useRef(0);
   const seenRuleIds = useRef(new Set<string>());
   const [activationVolleys, setActivationVolleys] = useState<
-    readonly (readonly RuleActivation[])[]
+    readonly ActivationVolley[]
   >([]);
+  const [isFlushingField, setIsFlushingField] = useState(false);
   const [lastActivation, setLastActivation] = useState<{
+    ruleId: string;
     name: string;
     count: number;
+    effectLabel?: string;
   } | null>(null);
   const guideState = useRef(createGuideState());
   const guideSessionKey = useRef<string | null>(null);
@@ -657,9 +595,7 @@ function ConnectedApp({
   const [isGraduating, setIsGraduating] = useState(false);
   const [graduationError, setGraduationError] = useState<string | null>(null);
   const [playSheetError, setPlaySheetError] = useState<string | null>(null);
-  const [roomOverlay, setRoomOverlay] = useState<
-    'activeRules' | 'ruleDex' | null
-  >(null);
+  const [roomOverlay, setRoomOverlay] = useState<RoomOverlay>(null);
   const ruleCatalogApi = getBrowserRuleCatalogClient();
   const room = state.room;
   const beginLogin = useCallback(() => {
@@ -689,16 +625,28 @@ function ConnectedApp({
     typeof window === 'undefined'
       ? null
       : parseRoomRoute(window.location.pathname);
-  const routedRoomOverlay =
+  const routedRoomOverlay: RoomOverlay =
     room && routeAtRender?.roomId === room.roomId
       ? routeAtRender.view === 'rules'
-        ? 'activeRules'
+        ? { kind: 'activeRules', ruleId: routeAtRender.ruleId ?? null }
         : routeAtRender.view === 'rule-dex'
-          ? 'ruleDex'
+          ? { kind: 'ruleDex' }
           : null
       : null;
   const visibleRoomOverlay = roomOverlay ?? routedRoomOverlay;
-  const desiredRoomPath = room ? roomPath(room, visibleRoomOverlay) : null;
+  const desiredRoomPath = room
+    ? roomPath(
+        room,
+        visibleRoomOverlay?.kind === 'activeRules'
+          ? 'activeRules'
+          : visibleRoomOverlay?.kind === 'ruleDex'
+            ? 'ruleDex'
+            : null,
+        visibleRoomOverlay?.kind === 'activeRules'
+          ? (visibleRoomOverlay.ruleId ?? undefined)
+          : undefined,
+      )
+    : null;
 
   useEffect(() => {
     if (desiredRoomPath) {
@@ -723,9 +671,9 @@ function ConnectedApp({
       }
       setRoomOverlay(
         route.view === 'rules'
-          ? 'activeRules'
+          ? { kind: 'activeRules', ruleId: route.ruleId ?? null }
           : route.view === 'rule-dex'
-            ? 'ruleDex'
+            ? { kind: 'ruleDex' }
             : null,
       );
     };
@@ -910,7 +858,13 @@ function ConnectedApp({
       }
     }
     if (unique.size > 0) {
-      setActivationVolleys((volleys) => [...volleys, [...unique.values()]]);
+      setActivationVolleys((volleys) => [
+        ...volleys,
+        {
+          activations: [...unique.values()],
+          heldPlayedHistoryIndex: pendingFieldClearPlayIndex(room),
+        },
+      ]);
     }
   }, [room]);
 
@@ -1050,7 +1004,7 @@ function ConnectedApp({
   const currentActivationVolley = activationVolleys[0];
   const activations = useMemo(
     () =>
-      (currentActivationVolley ?? []).map((activation) => ({
+      (currentActivationVolley?.activations ?? []).map((activation) => ({
         ...activation,
         isFirstSeen: !seenRuleIds.current.has(activation.ruleId),
       })),
@@ -1061,15 +1015,49 @@ function ConnectedApp({
       seenRuleIds.current.add(activation.ruleId);
     }
   }, [activations]);
+  const latestPlayedHistoryIndex =
+    room?.game?.history.findLastIndex((event) => event.t === 'played') ?? -1;
+  const heldPlayedHistoryIndex =
+    currentActivationVolley?.heldPlayedHistoryIndex ?? null;
+  // 演出中にも対局は進む。次の札が着地済みなら古い札の吸い込みは省略し、
+  // 最新 snapshot の場へ即座に切り替える。
+  const heldPlayWasSuperseded =
+    heldPlayedHistoryIndex !== null &&
+    latestPlayedHistoryIndex > heldPlayedHistoryIndex;
   const finishRuleCutIn = useCallback(() => {
     if (activations.length > 0) {
       setLastActivation({
+        ruleId: activations.at(-1)!.ruleId,
         name: activations.at(-1)!.name,
         count: activations.length,
+        ...(activations.at(-1)!.effectLabel
+          ? { effectLabel: activations.at(-1)!.effectLabel }
+          : {}),
       });
     }
+    // 保持していた場があるときだけ、流れるアニメーションを挟んでから
+    // volley を落とす。保持対象はボレーを積んだ時点のプレイへ固定する。
+    if (heldPlayedHistoryIndex !== null && !heldPlayWasSuperseded) {
+      setIsFlushingField(true);
+      return;
+    }
     setActivationVolleys((volleys) => volleys.slice(1));
-  }, [activations]);
+  }, [activations, heldPlayWasSuperseded, heldPlayedHistoryIndex]);
+  useEffect(() => {
+    if (!isFlushingField) return;
+    if (heldPlayWasSuperseded) {
+      setIsFlushingField(false);
+      setActivationVolleys((volleys) => volleys.slice(1));
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setIsFlushingField(false);
+      setActivationVolleys((volleys) => volleys.slice(1));
+    }, FIELD_FLUSH_MS);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [heldPlayWasSuperseded, isFlushingField]);
   const show = (content: ReactNode) => (
     <>
       <ConnectionStatus state={state}>{content}</ConnectionStatus>
@@ -1082,6 +1070,41 @@ function ConnectedApp({
       : !room && isGraduating && graduationFrom?.phase === 'setResult'
         ? graduationFrom
         : null;
+  const openRules = (ruleId?: string) => {
+    if (!room) return;
+    navigate(roomPath(room, 'activeRules', ruleId));
+    setRoomOverlay({ kind: 'activeRules', ruleId: ruleId ?? null });
+  };
+  const closeRules = () => {
+    if (!room) return;
+    navigate(roomPath(room), 'replace');
+    setRoomOverlay(null);
+  };
+  const rulesOverlay =
+    room && visibleRoomOverlay?.kind === 'activeRules' ? (
+      visibleRoomOverlay.ruleId ? (
+        <RuleDetailModal
+          api={ruleCatalogApi}
+          ruleId={visibleRoomOverlay.ruleId}
+          name={
+            room.activeRules.find(
+              (rule) => rule.ruleId === visibleRoomOverlay.ruleId,
+            )?.name ?? 'ルール'
+          }
+          {...(lastActivation?.ruleId === visibleRoomOverlay.ruleId &&
+          lastActivation.effectLabel
+            ? { effectLabel: lastActivation.effectLabel }
+            : {})}
+          onClose={closeRules}
+        />
+      ) : (
+        <ActiveRulesModal
+          rules={room.activeRules}
+          onSelectRule={openRules}
+          onClose={closeRules}
+        />
+      )
+    ) : null;
 
   if (
     !room &&
@@ -1100,29 +1123,13 @@ function ConnectedApp({
     );
   }
 
-  if (room && visibleRoomOverlay === 'activeRules') {
-    return show(
-      <ActiveRulesScreen
-        rules={room.activeRules}
-        onBack={() => {
-          navigate(roomPath(room), 'replace');
-          setRoomOverlay(null);
-        }}
-        onOpenDex={() => {
-          navigate(roomPath(room, 'ruleDex'));
-          setRoomOverlay('ruleDex');
-        }}
-        showDexLink={FEATURES.ruleDex}
-      />,
-    );
-  }
-  if (room && visibleRoomOverlay === 'ruleDex') {
+  if (room && visibleRoomOverlay?.kind === 'ruleDex') {
     return show(
       <RuleDexScreen
         api={ruleCatalogApi}
         onBack={() => {
           navigate(roomPath(room, 'activeRules'), 'replace');
-          setRoomOverlay('activeRules');
+          setRoomOverlay({ kind: 'activeRules', ruleId: null });
         }}
       />,
     );
@@ -1133,30 +1140,32 @@ function ConnectedApp({
       (member) => member.memberId === room.you.memberId,
     );
     return show(
-      <WaitingRoomScreen
-        members={waitingMembers(room)}
-        inviteCode={room.inviteCode}
-        activeRuleCount={room.activeRules.length}
-        onBack={() => {
-          if (!window.confirm('部屋から出ますか?')) return;
-          invoke(
-            client.leaveRoom().then(() => {
-              go('menu');
-            }),
-          );
-        }}
-        onCopyInvite={() => {
-          void navigator.clipboard?.writeText(room.inviteCode);
-        }}
-        onViewRules={() => {
-          navigate(roomPath(room, 'activeRules'));
-          setRoomOverlay('activeRules');
-        }}
-        onStart={() => {
-          invoke(client.startRoom());
-        }}
-        canStart={you?.isHost === true}
-      />,
+      <>
+        <WaitingRoomScreen
+          members={waitingMembers(room)}
+          inviteCode={room.inviteCode}
+          activeRuleCount={room.activeRules.length}
+          onBack={() => {
+            if (!window.confirm('部屋から出ますか?')) return;
+            invoke(
+              client.leaveRoom().then(() => {
+                go('menu');
+              }),
+            );
+          }}
+          onCopyInvite={() => {
+            void navigator.clipboard?.writeText(room.inviteCode);
+          }}
+          onViewRules={() => {
+            openRules();
+          }}
+          onStart={() => {
+            invoke(client.startRoom());
+          }}
+          canStart={you?.isHost === true}
+        />
+        {rulesOverlay}
+      </>,
     );
   }
 
@@ -1180,52 +1189,62 @@ function ConnectedApp({
       (member) => member.seatId === game.field.playedBySeat,
     );
     return show(
-      <GameScreen
-        gameLabel={`第${String(game.gameNo)}戦`}
-        activeRuleCount={room.activeRules.length}
-        seats={tableSeats(room)}
-        finishes={seatFinishes(room)}
-        leadSeatName={
-          leadMember
-            ? leadMember.memberId === room.you.memberId
-              ? 'あなた'
-              : leadMember.displayName
-            : null
-        }
-        activations={[]}
-        onCutInDone={finishRuleCutIn}
-        lastActivation={activations.length > 0 ? null : lastActivation}
-        hand={cards(game.yourHand)}
-        selectedCardIds={selectedCardIds}
-        {...(cardHints ? { cardHints } : {})}
-        guideCue={tutorialEligible ? guideCue : null}
-        showStrengthScale={tutorialEligible}
-        isMyTurn={game.turn?.seat === room.you.seatId}
-        canPlay={legalSelection}
-        canPass={game.field.cards.length > 0}
-        turnDeadlineAt={game.turn?.deadlineAt ?? null}
-        onViewRules={() => {
-          navigate(roomPath(room, 'activeRules'));
-          setRoomOverlay('activeRules');
-        }}
-        onToggleCard={(id) => {
-          setSelectedCardIds((ids) =>
-            ids.includes(id) ? ids.filter((item) => item !== id) : [...ids, id],
-          );
-        }}
-        onPlay={() => {
-          if (!game.turn || !legalSelection) return;
-          invoke(
-            client.play(game.turn.turnSeq, [...selectedCardIds]).then(() => {
-              setSelectedCardIds([]);
-            }),
-          );
-        }}
-        onPass={() => {
-          if (!game.turn) return;
-          invoke(client.pass(game.turn.turnSeq));
-        }}
-      />,
+      <>
+        <GameScreen
+          gameLabel={`第${String(game.gameNo)}戦`}
+          activeRuleCount={room.activeRules.length}
+          seats={tableSeats(room, {
+            heldPlayedHistoryIndex: heldPlayWasSuperseded
+              ? null
+              : heldPlayedHistoryIndex,
+          })}
+          isFlushing={isFlushingField && !heldPlayWasSuperseded}
+          finishes={seatFinishes(room)}
+          leadSeatName={
+            leadMember
+              ? leadMember.memberId === room.you.memberId
+                ? 'あなた'
+                : leadMember.displayName
+              : null
+          }
+          activations={[]}
+          onCutInDone={finishRuleCutIn}
+          lastActivation={activations.length > 0 ? null : lastActivation}
+          hand={cards(game.yourHand)}
+          selectedCardIds={selectedCardIds}
+          {...(cardHints ? { cardHints } : {})}
+          guideCue={tutorialEligible ? guideCue : null}
+          showStrengthScale={tutorialEligible}
+          isMyTurn={game.turn?.seat === room.you.seatId}
+          canPlay={legalSelection}
+          canPass={game.field.cards.length > 0}
+          turnDeadlineAt={game.turn?.deadlineAt ?? null}
+          onViewRules={() => {
+            openRules();
+          }}
+          onOpenActivation={openRules}
+          onToggleCard={(id) => {
+            setSelectedCardIds((ids) =>
+              ids.includes(id)
+                ? ids.filter((item) => item !== id)
+                : [...ids, id],
+            );
+          }}
+          onPlay={() => {
+            if (!game.turn || !legalSelection) return;
+            invoke(
+              client.play(game.turn.turnSeq, [...selectedCardIds]).then(() => {
+                setSelectedCardIds([]);
+              }),
+            );
+          }}
+          onPass={() => {
+            if (!game.turn) return;
+            invoke(client.pass(game.turn.turnSeq));
+          }}
+        />
+        {rulesOverlay}
+      </>,
     );
   }
 

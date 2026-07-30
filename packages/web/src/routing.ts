@@ -28,6 +28,8 @@ export type RoomRoute = {
   roomId: string;
   view:
     'waiting' | 'game' | 'game-result' | 'set-result' | 'rules' | 'rule-dex';
+  /** view が rules のときだけ。ルール詳細モーダルを開く。 */
+  ruleId?: string;
 };
 
 export function screenPath(screen: ScreenId): string {
@@ -60,14 +62,18 @@ export function screenFromPathname(pathname: string): ScreenId {
 
 export function parseRoomRoute(pathname: string): RoomRoute | null {
   const match =
-    /^\/rooms\/([^/]+)\/(waiting|game|game-result|set-result|rules|rule-dex)\/?$/.exec(
+    /^\/rooms\/([^/]+)\/(waiting|game|game-result|set-result|rules|rule-dex)(?:\/([^/]+))?\/?$/.exec(
       pathname,
     );
   if (!match) return null;
+  if (match[3] !== undefined && match[2] !== 'rules') return null;
   try {
     return {
       roomId: decodeURIComponent(match[1]!),
       view: match[2] as RoomRoute['view'],
+      ...(match[3] === undefined
+        ? {}
+        : { ruleId: decodeURIComponent(match[3]) }),
     };
   } catch {
     return null;
@@ -77,9 +83,14 @@ export function parseRoomRoute(pathname: string): RoomRoute | null {
 export function roomPath(
   room: PlayerRoomView,
   overlay: RoomOverlayRoute = null,
+  ruleId?: string,
 ): string {
   const roomId = encodeURIComponent(room.roomId);
-  if (overlay === 'activeRules') return `/rooms/${roomId}/rules`;
+  if (overlay === 'activeRules') {
+    return ruleId
+      ? `/rooms/${roomId}/rules/${encodeURIComponent(ruleId)}`
+      : `/rooms/${roomId}/rules`;
+  }
   if (overlay === 'ruleDex') return `/rooms/${roomId}/rule-dex`;
   if (room.phase === 'waiting') return `/rooms/${roomId}/waiting`;
   if (room.phase === 'setResult') return `/rooms/${roomId}/set-result`;

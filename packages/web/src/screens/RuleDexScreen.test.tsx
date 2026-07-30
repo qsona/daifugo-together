@@ -61,7 +61,9 @@ describe('RuleDexScreen', () => {
   } as const;
 
   it('出自・状態を表示し、未実装の人気度・優先度を表示しない', async () => {
-    const api: RuleCatalogApi = { list: vi.fn(async () => response()) };
+    const api: Pick<RuleCatalogApi, 'list'> = {
+      list: vi.fn(async () => response()),
+    };
     const { container } = render(
       <RuleDexScreen api={api} onBack={vi.fn()} features={features} />,
     );

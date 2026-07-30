@@ -1,0 +1,39 @@
+.turnCountdown {
+  flex: 1;
+}
+
+.turnCountdownTrack {
+  height: var(--space-2);
+  overflow: hidden;
+  background: var(--color-cream-200);
+  border: var(--border-control) solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+}
+
+.turnCountdownFill {
+  height: 100%;
+  background: var(--color-gold-400);
+  transform: scaleX(var(--turn-remaining));
+  transform-origin: left center;
+  transition:
+    transform 100ms linear,
+    background-color var(--duration-fast) var(--easing-standard);
+}
+
+.turnCountdownUrgent .turnCountdownFill {
+  background: var(--color-action-primary);
+  animation: urgent-pulse var(--duration-slow) ease-in-out infinite alternate;
+}
+
+@keyframes urgent-pulse {
+  to {
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .turnCountdownFill {
+    transition: none;
+    animation: none;
+  }
+}

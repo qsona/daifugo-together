@@ -60,13 +60,32 @@ export function RuleCard({ rule }: { rule: RuleCardView }) {
 /**
  * 対局・待機画面用のルール行。名称のみで、人気度・都道府県・優先度の数値は出さない
  * (企画書 §4.5「ラフな体験」)。
+ * onSelect を渡すと行がボタンになり、詳細を開く導線になる。
  */
-export function RuleNameList({ rules }: { rules: readonly RuleRef[] }) {
+export function RuleNameList({
+  rules,
+  onSelect,
+}: {
+  rules: readonly RuleRef[];
+  onSelect?: (ruleId: string) => void;
+}) {
   return (
     <ul className={styles.list}>
       {rules.map((rule) => (
         <li key={rule.ruleId} className={styles.slim}>
-          {rule.name}
+          {onSelect ? (
+            <button
+              type="button"
+              className={styles.slimButton}
+              onClick={() => {
+                onSelect(rule.ruleId);
+              }}
+            >
+              {rule.name}
+            </button>
+          ) : (
+            rule.name
+          )}
         </li>
       ))}
     </ul>

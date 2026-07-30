@@ -1,4 +1,3 @@
-import type { CSSProperties } from 'react';
 import { useEffect, useRef, useState } from 'react';
 
 import { ActivationChip } from '../components/ActivationChip';
@@ -14,7 +13,6 @@ import type { TableSeat } from '../components/Table';
 import { Toast } from '../components/Toast';
 import type { CardHint } from '../game/hints';
 import type { GuideCue } from '../game/guide';
-import { cx } from '../lib/cx';
 
 import styles from './GameScreen.module.css';
 import screen from './screen.module.css';
@@ -49,7 +47,7 @@ type GameScreenProps = {
   activations: readonly RuleActivation[];
   onCutInDone: () => void;
   /** カットインが引いたあとに残る直近の発動。 */
-  lastActivation: { name: string; count: number } | null;
+  lastActivation: { ruleId: string; name: string; count: number } | null;
   hand: readonly CardView[];
   selectedCardIds: readonly string[];
   cardHints?: ReadonlyMap<string, CardHint>;
@@ -60,6 +58,7 @@ type GameScreenProps = {
   canPass?: boolean;
   turnDeadlineAt?: number | null;
   onViewRules: () => void;
+  onOpenActivation: (ruleId: string) => void;
   onToggleCard: (id: string) => void;
   onDimmedCardTap?: (id: string) => void;
   onPlay: () => void;
@@ -92,6 +91,7 @@ export function GameScreen({
   canPass = true,
   turnDeadlineAt,
   onViewRules,
+  onOpenActivation,
   onToggleCard,
   onDimmedCardTap,
   onPlay,
@@ -113,15 +113,14 @@ export function GameScreen({
           leadSeatName={leadSeatName}
           {...(isFlushing === undefined ? {} : { isFlushing })}
         />
-        {turnDeadlineAt != null && (
-          <TurnCountdown deadlineAt={turnDeadlineAt} />
-        )}
         {/* チップはカットインが引いたあとの痕跡なので、再生中は出さない。 */}
         {lastActivation && activations.length === 0 && (
           <ActivationChip
             name={lastActivation.name}
             count={lastActivation.count}
-            onOpen={onViewRules}
+            onOpen={() => {
+              onOpenActivation(lastActivation.ruleId);
+            }}
           />
         )}
         <HandTray
@@ -129,6 +128,8 @@ export function GameScreen({
           selectedIds={selectedCardIds}
           {...(cardHints ? { cardHints } : {})}
           showStrengthScale={showStrengthScale}
+          isMyTurn={isMyTurn}
+          turnDeadlineAt={turnDeadlineAt ?? null}
           onToggle={onToggleCard}
           {...(onDimmedCardTap ? { onDimmedCardTap } : {})}
           actions={
@@ -201,38 +202,4 @@ function useFinishNotice(finishes: readonly SeatFinish[]): SeatFinish | null {
   }, [notice]);
 
   return notice;
-}
-
-function TurnCountdown({ deadlineAt }: { deadlineAt: number }) {
-  const [remainingMs, setRemainingMs] = useState(() =>
-    Math.max(0, deadlineAt - Date.now()),
-  );
-  useEffect(() => {
-    const update = () => {
-      setRemainingMs(Math.max(0, deadlineAt - Date.now()));
-    };
-    update();
-    const timer = window.setInterval(update, 100);
-    return () => window.clearInterval(timer);
-  }, [deadlineAt]);
-
-  const remainingSeconds = Math.ceil(remainingMs / 1000);
-  const fraction = Math.min(1, remainingMs / 60_000);
-  return (
-    <div
-      className={cx(
-        styles.turnCountdown,
-        remainingMs <= 10_000 && styles.turnCountdownUrgent,
-      )}
-      role="timer"
-      aria-label={`手番 残り${String(remainingSeconds)}秒`}
-    >
-      <div className={styles.turnCountdownTrack} aria-hidden="true">
-        <div
-          className={styles.turnCountdownFill}
-          style={{ '--turn-remaining': fraction } as CSSProperties}
-        />
-      </div>
-    </div>
-  );
 }

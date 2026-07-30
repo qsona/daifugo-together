@@ -1,4 +1,4 @@
-import type { RuleCatalogResponse } from '@daifugo/core';
+import type { RuleCatalogItem, RuleCatalogResponse } from '@daifugo/core';
 
 export interface RuleCatalogFilters {
   prefecture?: string;
@@ -12,6 +12,7 @@ export interface RuleCatalogFilters {
 
 export interface RuleCatalogApi {
   list(filters?: RuleCatalogFilters): Promise<RuleCatalogResponse>;
+  get(ruleId: string): Promise<RuleCatalogItem>;
 }
 
 export class RuleCatalogClient implements RuleCatalogApi {
@@ -37,6 +38,14 @@ export class RuleCatalogClient implements RuleCatalogApi {
     );
     if (!response.ok) throw new Error('rule_catalog_unavailable');
     return (await response.json()) as RuleCatalogResponse;
+  }
+
+  async get(ruleId: string): Promise<RuleCatalogItem> {
+    const response = await this.#fetch(
+      `${this.#baseUrl}/api/rules/${encodeURIComponent(ruleId)}`,
+    );
+    if (!response.ok) throw new Error('rule_catalog_unavailable');
+    return (await response.json()) as RuleCatalogItem;
   }
 }
 

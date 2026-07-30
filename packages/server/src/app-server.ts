@@ -56,7 +56,7 @@ export interface AppServerOptions {
   checkDatabase?: () => boolean;
   proposals?: ProposalSubmissionPort;
   evaluations?: Pick<EvaluationService, 'get' | 'update'>;
-  ruleCatalog?: Pick<RuleCatalogService, 'list'>;
+  ruleCatalog?: Pick<RuleCatalogService, 'detail' | 'list'>;
   ruleCatalogRateLimit?: { maxAttempts: number; windowMs: number };
   now?: () => number;
   yellowCards?: YellowCardPort;
@@ -357,7 +357,8 @@ export function createAppServer(options: AppServerOptions): AppServer {
     response: ServerResponse,
   ): boolean => {
     const url = new URL(request.url ?? '/', 'http://localhost');
-    if (url.pathname !== '/api/rules') return false;
+    const detailMatch = /^\/api\/rules\/([^/]+)$/u.exec(url.pathname);
+    if (url.pathname !== '/api/rules' && !detailMatch) return false;
     if (request.method !== 'GET') {
       response.setHeader('allow', 'GET');
       writeJson(response, 405, { error: 'method_not_allowed' });
@@ -378,7 +379,9 @@ export function createAppServer(options: AppServerOptions): AppServer {
     }
     let result;
     try {
-      result = options.ruleCatalog.list(url.searchParams);
+      result = detailMatch
+        ? options.ruleCatalog.detail(decodeURIComponent(detailMatch[1]!))
+        : options.ruleCatalog.list(url.searchParams);
     } catch {
       writeJson(response, 500, { error: 'rule_catalog_failed' });
       return true;
