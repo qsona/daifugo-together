@@ -1,0 +1,9 @@
+{
+  "ruleId": "r0009-miyako-ochi",
+  "name": "都落ち",
+  "description": "前ゲームの1位が次ゲームで最初に上がれなかった場合、そのプレイヤーを直ちに最下位として順位確定し、残りのプレイヤーでゲームを続ける。初回ゲームでは発動しない。",
+  "kind": "local",
+  "proposalId": "01KYQNNS4EMFQTSKQVS7KN9DWN",
+  "contractVersion": 1,
+  "messages": {}
+}
