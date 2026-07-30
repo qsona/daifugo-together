@@ -84,13 +84,13 @@ only when source or workspace dependencies changed since the last build.
    - Do not simulate shared state with rule-local memory. Memory is isolated
      per rule, so state that other rules would need to read or compose with
      (for example a revolution flag) cannot live there. If `SPEC.json`
-     requires a shared concept that the contract vocabulary cannot express,
-     stop, do not work around it, and report it to the developer the same way
-     a content failure is reported (see "Handle CI, failure, merge, and
-     release"): present your trusted diagnosis of which shared concept the
-     contract vocabulary cannot express, then wait for the developer to
-     decide whether to run `implement:fail` or extend the engine vocabulary
-     first. Do not run `implement:fail` yourself at this stage.
+     requires a shared concept, an Effect, a hook, or an engine feature that
+     the current contract vocabulary cannot express, do not work around it
+     inside `rule.ts` and do not run `implement:fail`. Extending the engine
+     is in scope for this workflow: switch to "Extend the engine vocabulary"
+     below, land that change on `main` first, then come back and implement
+     the rule against the new vocabulary. Report your diagnosis and the
+     vocabulary design you chose as part of the normal progress summary.
    - Engine features are declarations, not code. If `SPEC.json` lists
      `engineFeatures` (for example `sequence` for the staircase hand type, or
      `jokers` for two jokers with wildcard substitution and single-card
@@ -112,10 +112,15 @@ only when source or workspace dependencies changed since the last build.
 5. Create or edit exactly:
    - `rule.ts`
    - `rule.test.ts`
-6. Use `apply_patch` for edits. Do not edit `meta.json`, `SPEC.json`, Git
-   history, configuration, lockfiles, other packages, or other rules.
+6. Use `apply_patch` for edits. Inside the prepared workspace, do not edit
+   `meta.json`, `SPEC.json`, Git history, configuration, lockfiles, other
+   packages, or other rules. Engine changes are never made in the prepared
+   workspace — they follow "Extend the engine vocabulary" below, in the
+   repository root checkout.
 7. During implementation, do not use Web search, connectors, external network
-   access, subagents, or unrelated repository files.
+   access, subagents, or unrelated repository files (engine work under
+   "Extend the engine vocabulary" is exempt from the repository-file
+   restriction).
 8. Run from the returned workspace:
 
 ```sh
@@ -134,7 +139,76 @@ pnpm exec vitest run packages/rules/RULE_ID/rule.test.ts
 ```
 
 Fix local failures within the two allowed files. Do not stage, commit, push, or
-open a PR manually.
+open a PR manually (this restriction applies to the rule branch; engine
+vocabulary changes on `main` are committed and pushed as described below).
+
+## Extend the engine vocabulary
+
+Use this when the approved SPEC needs something the contract cannot express:
+a shared concept other rules must read (revolution state, suit binds), a
+missing Effect or hook, or an engine feature not yet implemented. Extending
+the engine is part of this workflow — do not wait for the developer and do
+not fail the job over a vocabulary gap.
+
+Ground rules:
+
+1. **Where the change lives.** The rule PR is restricted by diff-guard to
+   exactly the scaffold files plus `rule.ts` / `rule.test.ts`, so engine
+   changes can never ride in it. Make them in the repository root checkout
+   and, per `AGENTS.md`, commit and push them directly to `main` once
+   implemented and verified (no PR). Land the engine change on `main`
+   **before** implementing the rule against it.
+2. **Prefer the smallest sufficient vocabulary**, in this order:
+   - Derive the shared signal from what the engine already computes instead
+     of inventing new state. Example: revolution is `modifyStrength` output;
+     dependent rules should read the effective strength (or an inversion
+     signal) from `RuleContext`, not a cross-rule flag. Known gap to close
+     first if relevant: effect hooks (`afterPlay` etc.) currently receive the
+     base strength, not the effective one.
+   - Add an Effect (or extend a payload, like `forceRank`'s `'lowest'`) when
+     rules need a new _action_.
+   - Add an `engineFeature` when the change is a new hand type, deck
+     composition, or other engine-native mechanic.
+   - Add a hook only as a last resort.
+3. **Synchronized update sites.** A vocabulary change is complete only when
+   every consumer is updated in the same change:
+   - `packages/core/src/rules/contract.ts` (types, hook/Effect permission
+     table, conflict-key table) plus the payload validation and execution
+     switches in `packages/core/src/engine/effects.ts`, `conflictKeyOf` in
+     `packages/core/src/priority/effects.ts`, and
+     `packages/core/src/rules/README.md`.
+   - `packages/server/src/pipeline/service.ts` (`HOOKS` / `EFFECTS` /
+     `EFFECTS_BY_HOOK` / `ENGINE_FEATURES` allow-sets).
+   - `packages/pipeline/src/app-server-judge.ts` (judge output schema) and
+     `packages/pipeline/src/judge-prompt.ts` — describe the new vocabulary
+     and bump `CX01_PROMPT_VERSION` whenever judge-visible vocabulary
+     changes (this intentionally re-opens unconfirmed judgements for
+     re-judging).
+   - `scripts/diff-guard.mjs` when `meta.json`'s schema grows (for example
+     new `engineFeatures` values).
+   - `docs/epics/E01-game-engine.md` and a short design note under
+     `docs/specs/` recording the semantics you chose.
+4. **Backward compatibility.** Existing rules, replays, and rooms must behave
+   identically when the new vocabulary is unused. If the change forces edits
+   to an existing `packages/rules/*/rule.ts` (its bundleHash changes), bump
+   that rule in `packages/rules/rule-versions.json` in the same commit —
+   otherwise boot-time registry sync drops the rule from production.
+5. **Verification.** Run `pnpm verify` at the root (typecheck, all tests,
+   lint, build) and add engine tests for the new vocabulary, then push to
+   `main` and wait for CI and the production deploy to succeed before
+   continuing the rule job (the judge, scaffold checks, and rule execution
+   all run against the deployed server).
+6. **Workspace freshness.** A workspace prepared before the engine change is
+   based on the older `main`, and `implement:submit` re-runs typecheck and
+   tests inside that workspace, so a rule using the new vocabulary can never
+   pass submission from it. Because of this, read the approved SPEC (it is
+   part of the approval output and the scaffold) and settle any vocabulary
+   gap **before** running `implement:prepare`. If the gap is only discovered
+   after preparation, do not modify the workspace or its branch to work
+   around it: land the engine change on `main`, then explain the situation
+   to the developer and ask them to authorize the single `implement:retry`
+   attempt — retry builds a fresh branch and workspace from current `main`.
+   If no retry attempt remains, report and let the developer decide.
 
 ## Submit and open the PR
 
