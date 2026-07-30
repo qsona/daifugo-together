@@ -29,7 +29,10 @@ function json(value: unknown): string {
       ) {
         continue;
       }
-      const inline = `  ${JSON.stringify(key)}: ${JSON.stringify(entry)}`;
+      const inlineValue = `[${entry
+        .map((item) => JSON.stringify(item))
+        .join(', ')}]`;
+      const inline = `  ${JSON.stringify(key)}: ${inlineValue}`;
       if (inline.length > 80) continue;
       const expanded = JSON.stringify({ [key]: entry }, null, 2)
         .split('\n')

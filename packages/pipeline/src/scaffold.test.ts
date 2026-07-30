@@ -82,7 +82,7 @@ async function scaffoldMeta(
 
 describe('createRuleScaffold', () => {
   it('SPECのengineFeaturesをmeta.jsonへ転記する', async () => {
-    const item = queued(['sequence']);
+    const item = queued(['sequence', 'jokers']);
     const root = await mkdtemp(join(tmpdir(), 'scaffold-test-'));
     directories.push(root);
     const result = await createRuleScaffold(item, root);
@@ -93,10 +93,14 @@ describe('createRuleScaffold', () => {
       ruleId: 'r0001-kaidan',
       name: '階段',
       contractVersion: 1,
-      engineFeatures: ['sequence'],
+      engineFeatures: ['sequence', 'jokers'],
     });
-    expect(metaSource).toContain('  "engineFeatures": ["sequence"],\n');
-    expect(specSource).toContain('  "engineFeatures": ["sequence"],\n');
+    expect(metaSource).toContain(
+      '  "engineFeatures": ["sequence", "jokers"],\n',
+    );
+    expect(specSource).toContain(
+      '  "engineFeatures": ["sequence", "jokers"],\n',
+    );
   });
 
   it('engineFeaturesが空・未指定のSPECではmeta.jsonへ載せない', async () => {
