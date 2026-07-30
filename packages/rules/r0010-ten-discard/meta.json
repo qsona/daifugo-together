@@ -1,0 +1,12 @@
+{
+  "ruleId": "r0010-ten-discard",
+  "name": "10捨て",
+  "description": "自然なランク10を含む手を出したプレイヤーは、その手に含まれる10の枚数と残り手札枚数の小さい方と同じ枚数のカードを、残り手札から必ず選んで捨て札へ移す。",
+  "kind": "local",
+  "prefecture": "東京都",
+  "proposalId": "01KYSWRBH3YEVTAFC5NTR0TJ41",
+  "contractVersion": 2,
+  "messages": {
+    "ten_discard_choice": "10捨て: 捨てるカードを選んでください。"
+  }
+}
