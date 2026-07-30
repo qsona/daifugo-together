@@ -32,7 +32,7 @@ import type {
   Standings,
   Zone,
 } from '../rules/contract.js';
-import { safeCollectEffects } from '../rules/safe-port.js';
+import { safeCollectEffects, safeModifyStrength } from '../rules/safe-port.js';
 import type { Play } from '../play/play.js';
 import { finishPlayer, forceStanding } from './standing.js';
 
@@ -616,13 +616,42 @@ interface InvalidEffectEmission {
   reason: InvalidEffectReason;
 }
 
+function effectiveStrengthForHook(
+  config: GameConfig,
+  state: GameState,
+  runtime: RuleRuntime,
+): StrengthOrder {
+  const invocation = prepareRuleInvocation(
+    state,
+    config.ruleChain,
+    'modifyStrength',
+    false,
+  );
+  const context = buildRuleContext(
+    config,
+    invocation.state,
+    BASE_STRENGTH_ORDER,
+    runtime,
+    {
+      hook: 'modifyStrength',
+      invocationIndices: invocation.invocationIndices,
+    },
+  );
+  return safeModifyStrength(
+    runtime.port,
+    config.ruleChain,
+    context,
+    BASE_STRENGTH_ORDER,
+  ).result;
+}
+
 export function executeEffectHook(
   config: GameConfig,
   state: GameState,
   runtime: RuleRuntime,
   hook: EffectHook,
   argument?: Play | Standings,
-  strength: StrengthOrder = BASE_STRENGTH_ORDER,
+  strength?: StrengthOrder,
 ): EffectHookResult {
   if (config.ruleChain.length === 0) {
     return {
@@ -632,11 +661,13 @@ export function executeEffectHook(
       clearRequested: false,
     };
   }
+  const effectiveStrength =
+    strength ?? effectiveStrengthForHook(config, state, runtime);
   const invocation = prepareRuleInvocation(state, config.ruleChain, hook, true);
   const context = buildRuleContext(
     config,
     invocation.state,
-    strength,
+    effectiveStrength,
     runtime,
     {
       hook,

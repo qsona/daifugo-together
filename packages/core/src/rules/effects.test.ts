@@ -4,6 +4,7 @@ import { createDeck, type NaturalCard } from '../cards/card.js';
 import { reduceGame } from '../engine/reducer.js';
 import { startGame } from '../game/start-game.js';
 import type { GameConfig, GameState } from '../game/types.js';
+import { BASE_STRENGTH_ORDER } from '../play/strength.js';
 import { seedRng } from '../rng/rng.js';
 import type { RuleRuntime } from './chain.js';
 import type { RuleChainEntry, RuleModule } from './contract.js';
@@ -89,6 +90,143 @@ function oneCardState(ruleChain: RuleChainEntry[]): {
 }
 
 describe('GE-04 effect pipeline and lifecycle hooks', () => {
+  it('onGameStartでもmodifyStrength適用済みの実効順序を渡す', () => {
+    const reverseEntry = entry('r-always-reverse');
+    const observerEntry = {
+      ...entry('r-start-strength-observer'),
+      position: 1,
+    };
+    let observedStrength: string[] = [];
+    const reverse: RuleModule = {
+      meta: {
+        ruleId: reverseEntry.ruleId,
+        name: '常時反転',
+        description: '強さを常に反転するfixture',
+        kind: 'original',
+        proposalId: 'fixture',
+        contractVersion: 1,
+        messages: {},
+      },
+      hooks: {
+        modifyStrength: (_context, base) => ({
+          ranking: [...base.ranking].reverse(),
+        }),
+      },
+    };
+    const observer: RuleModule = {
+      meta: {
+        ruleId: observerEntry.ruleId,
+        name: '開始時強さobserver',
+        description: 'onGameStartが実効強さを読めることを確認するfixture',
+        kind: 'original',
+        proposalId: 'fixture',
+        contractVersion: 1,
+        messages: {},
+      },
+      hooks: {
+        onGameStart: (context) => {
+          observedStrength = [...context.game.strength.ranking];
+          return [];
+        },
+      },
+    };
+    const config: GameConfig = {
+      gameIndex: 0,
+      seats,
+      gameSeed: 'start-hook-strength',
+      ruleChain: [reverseEntry, observerEntry],
+    };
+    const strengthRuntime: RuleRuntime = {
+      port: createInProcessRuleChainPort([reverse, observer]),
+      setHistory: [],
+      setMemory: {},
+    };
+
+    startGame(config, strengthRuntime);
+
+    expect(observedStrength).toEqual(
+      [...BASE_STRENGTH_ORDER.ranking].reverse(),
+    );
+  });
+
+  it('afterPlayへプレイ直前の実効StrengthOrderを全ルール共通で渡す', () => {
+    const revolutionEntry = entry('r-revolution');
+    const observerEntry = { ...entry('r-strength-observer'), position: 1 };
+    let observedStrength: string[] = [];
+    const revolution: RuleModule = {
+      meta: {
+        ruleId: revolutionEntry.ruleId,
+        name: '革命',
+        description: 'ゲーム内メモリから強さを反転するfixture',
+        kind: 'original',
+        proposalId: 'fixture',
+        contractVersion: 1,
+        messages: {},
+      },
+      hooks: {
+        onGameStart: () => [
+          {
+            type: 'setMemory',
+            scope: 'game',
+            key: 'active',
+            value: true,
+          },
+        ],
+        modifyStrength: (context, base) =>
+          context.memory.game.active === true
+            ? { ranking: [...base.ranking].reverse() }
+            : base,
+      },
+    };
+    const observer: RuleModule = {
+      meta: {
+        ruleId: observerEntry.ruleId,
+        name: '実効強さobserver',
+        description: 'Effectフックが実効強さを読めることを確認するfixture',
+        kind: 'original',
+        proposalId: 'fixture',
+        contractVersion: 1,
+        messages: {},
+      },
+      hooks: {
+        afterPlay: (context) => {
+          observedStrength = [...context.game.strength.ranking];
+          return [];
+        },
+      },
+    };
+    const config: GameConfig = {
+      gameIndex: 0,
+      seats,
+      gameSeed: 'effect-hook-strength',
+      ruleChain: [revolutionEntry, observerEntry],
+    };
+    const strengthRuntime: RuleRuntime = {
+      port: createInProcessRuleChainPort([revolution, observer]),
+      setHistory: [],
+      setMemory: {},
+    };
+
+    const started = startGame(config, strengthRuntime);
+    const player = started.state.public.turn;
+    const card = player ? started.state.players[player]?.hand[0] : undefined;
+    if (!player || !card) {
+      throw new Error('Expected opening play');
+    }
+
+    const transition = reduceGame(
+      config,
+      started.state,
+      { type: 'play', player, cards: [card.id] },
+      strengthRuntime,
+    );
+
+    expect(transition.rejections).toEqual([]);
+    expect(observedStrength).toEqual(
+      [...BASE_STRENGTH_ORDER.ranking].reverse(),
+    );
+  });
+
   it('announceなしで採用されたEffectもルール名fallback用の発動eventを出す', () => {
     const ruleEntry = entry('r0097-name-only');
     const module: RuleModule = {

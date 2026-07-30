@@ -568,6 +568,7 @@ function reducePlay(
     runtime,
     'afterPlay',
     interpretedPlay,
+    evaluated.strength,
   );
   nextState = effects.state;
   const afterPlayFired = new Map(
