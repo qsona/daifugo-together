@@ -79,7 +79,10 @@ export interface PipelineJob {
   id: number;
   proposalId: string;
   phase: 'queued' | 'implementing' | 'pr_open' | 'merged' | 'done' | 'failed';
+  /** Scaffold/branch generation. Administrative rebuilds also increment this. */
   attempt: number;
+  /** Substantive implementation attempt. Administrative rebuilds do not increment this. */
+  implementationAttempt: number;
   ciRerun: number;
   ruleId: string;
   slug: string;
@@ -172,6 +175,7 @@ type PipelineJobRow = {
   proposal_id: string;
   phase: PipelineJob['phase'];
   attempt: number;
+  implementation_attempt: number;
   ci_rerun: number;
   rule_id: string;
   slug: string;
@@ -223,6 +227,7 @@ function storedJob(row: PipelineJobRow): PipelineJob {
     proposalId: row.proposal_id,
     phase: row.phase,
     attempt: row.attempt,
+    implementationAttempt: row.implementation_attempt,
     ciRerun: row.ci_rerun,
     ruleId: row.rule_id,
     slug: row.slug,
@@ -300,6 +305,7 @@ export class PipelineRepository {
             )
           ),
         attempt INTEGER NOT NULL DEFAULT 1,
+        implementation_attempt INTEGER NOT NULL DEFAULT 1,
         ci_rerun INTEGER NOT NULL DEFAULT 0,
         rule_id TEXT NOT NULL UNIQUE,
         slug TEXT NOT NULL,
@@ -333,6 +339,13 @@ export class PipelineRepository {
       .all() as Array<{ name: string }>;
     if (!pipelineJobColumns.some(({ name }) => name === 'merge_sha')) {
       this.#sqlite.exec('ALTER TABLE pipeline_jobs ADD COLUMN merge_sha TEXT');
+    }
+    if (
+      !pipelineJobColumns.some(({ name }) => name === 'implementation_attempt')
+    ) {
+      this.#sqlite.exec(
+        'ALTER TABLE pipeline_jobs ADD COLUMN implementation_attempt INTEGER NOT NULL DEFAULT 1',
+      );
     }
     this.#sqlite.exec(`
       DROP INDEX IF EXISTS idx_judgements_ai_source_check;
@@ -568,9 +581,9 @@ export class PipelineRepository {
     const insertion = this.#sqlite
       .prepare(
         `INSERT INTO pipeline_jobs (
-           proposal_id, phase, attempt, ci_rerun, rule_id, slug,
+           proposal_id, phase, attempt, implementation_attempt, ci_rerun, rule_id, slug,
            prompt_version, created_at, updated_at
-         ) VALUES (?, 'queued', 1, 0, ?, ?, ?, ?, ?)`,
+         ) VALUES (?, 'queued', 1, 1, 0, ?, ?, ?, ?, ?)`,
       )
       .run(proposalId, ruleId, slug, promptVersion, now, now);
     return this.job(Number(insertion.lastInsertRowid))!;
@@ -727,18 +740,32 @@ export class PipelineRepository {
     id: number,
     from: PipelineJob['phase'],
     expectedAttempt: number,
+    expectedImplementationAttempt: number,
+    kind: 'administrative' | 'failure',
     now: number,
   ): PipelineJob | null {
     const result = this.#sqlite
       .prepare(
         `UPDATE pipeline_jobs
          SET phase = 'implementing', attempt = attempt + 1,
+             implementation_attempt =
+               implementation_attempt + CASE WHEN ? = 'failure' THEN 1 ELSE 0 END,
              branch = NULL, pr_number = NULL, head_sha = NULL, merge_sha = NULL,
              scaffold_sha = NULL, prompt_version = NULL,
              error_code = NULL, error_note = NULL, updated_at = ?
-         WHERE id = ? AND phase = ? AND attempt = ? AND attempt < 2`,
+         WHERE id = ? AND phase = ? AND attempt = ?
+           AND implementation_attempt = ?
+           AND (? = 'administrative' OR implementation_attempt < 2)`,
       )
-      .run(now, id, from, expectedAttempt);
+      .run(
+        kind,
+        now,
+        id,
+        from,
+        expectedAttempt,
+        expectedImplementationAttempt,
+        kind,
+      );
     return result.changes === 1 ? this.job(id) : null;
   }
 

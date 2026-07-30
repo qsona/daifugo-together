@@ -24,6 +24,7 @@ function queued(engineFeatures?: string[]): QueuedImplementation {
       proposalId: 'proposal-1',
       phase: 'queued',
       attempt: 1,
+      implementationAttempt: 1,
       ciRerun: 0,
       ruleId: 'r0001-kaidan',
       slug: 'kaidan',

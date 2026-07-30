@@ -377,7 +377,7 @@ describe('CX-02 pipeline jobs', () => {
     ).toMatchObject({ status: 'already_failed' });
   });
 
-  it('開発者が明示した1回だけattempt 2へ進め、-a2固定点を要求する', async () => {
+  it('行政的再構築は実装attemptを消費せず、内容失敗だけattempt 2へ進める', async () => {
     const { jobs } = await approvedProposal();
     const item = jobs.next();
     if (!item) throw new Error('queued job missing');
@@ -393,12 +393,15 @@ describe('CX-02 pipeline jobs', () => {
       jobs.retry(item.job.id, {
         from: 'implementing',
         expectedAttempt: 1,
+        expectedImplementationAttempt: 1,
+        kind: 'administrative',
       }),
     ).toMatchObject({
       status: 'retried',
       job: {
         phase: 'implementing',
         attempt: 2,
+        implementationAttempt: 1,
         branch: null,
         scaffoldSha: null,
       },
@@ -425,13 +428,37 @@ describe('CX-02 pipeline jobs', () => {
       }),
     ).toMatchObject({
       status: 'updated',
-      job: { attempt: 2, branch: 'rule/r0001-yagiri-a2' },
+      job: {
+        attempt: 2,
+        implementationAttempt: 1,
+        branch: 'rule/r0001-yagiri-a2',
+      },
     });
     expect(
       jobs.retry(item.job.id, {
         from: 'implementing',
         expectedAttempt: 2,
+        expectedImplementationAttempt: 1,
+        kind: 'failure',
       }),
-    ).toEqual({ status: 'invalid', error: 'invalid_job_retry' });
+    ).toMatchObject({
+      status: 'retried',
+      job: {
+        attempt: 3,
+        implementationAttempt: 2,
+        branch: null,
+      },
+    });
+    expect(
+      jobs.retry(item.job.id, {
+        from: 'implementing',
+        expectedAttempt: 3,
+        expectedImplementationAttempt: 2,
+        kind: 'failure',
+      }),
+    ).toEqual({
+      status: 'conflict',
+      error: 'implementation_failure_limit_reached',
+    });
   });
 });

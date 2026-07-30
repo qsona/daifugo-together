@@ -186,22 +186,39 @@ export class PipelineJobService {
     const value = object(input);
     const from = value?.from;
     const expectedAttempt = value?.expectedAttempt;
+    const expectedImplementationAttempt = value?.expectedImplementationAttempt;
+    const kind = value?.kind;
     if (
       (from !== 'implementing' && from !== 'pr_open') ||
       !Number.isSafeInteger(expectedAttempt) ||
-      expectedAttempt !== 1
+      (expectedAttempt as number) < 1 ||
+      !Number.isSafeInteger(expectedImplementationAttempt) ||
+      (expectedImplementationAttempt as number) < 1 ||
+      (kind !== 'administrative' && kind !== 'failure')
     ) {
       return { status: 'invalid', error: 'invalid_job_retry' };
     }
     const current = this.#pipeline.job(jobId);
     if (!current) return { status: 'not_found' };
-    if (current.phase !== from || current.attempt !== expectedAttempt) {
+    if (
+      current.phase !== from ||
+      current.attempt !== expectedAttempt ||
+      current.implementationAttempt !== expectedImplementationAttempt
+    ) {
       return { status: 'conflict', error: 'stale_job_attempt' };
+    }
+    if (kind === 'failure' && current.implementationAttempt >= 2) {
+      return {
+        status: 'conflict',
+        error: 'implementation_failure_limit_reached',
+      };
     }
     const job = this.#pipeline.retryJob(
       jobId,
       from,
       expectedAttempt as number,
+      expectedImplementationAttempt as number,
+      kind,
       this.#now(),
     );
     return job

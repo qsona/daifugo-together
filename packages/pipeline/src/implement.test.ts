@@ -29,6 +29,7 @@ function queued(): QueuedImplementation {
       proposalId: 'proposal-1',
       phase: 'queued',
       attempt: 1,
+      implementationAttempt: 1,
       ciRerun: 0,
       ruleId: 'r0001-yagiri',
       slug: 'yagiri',

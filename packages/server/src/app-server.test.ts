@@ -508,6 +508,7 @@ describe('production app server', () => {
         proposalId: 'proposal-1',
         phase: 'implementing' as const,
         attempt: 1,
+        implementationAttempt: 1,
         ciRerun: 0,
         ruleId: 'r0001-yagiri',
         slug: 'yagiri',
@@ -728,12 +729,16 @@ describe('production app server', () => {
       body: JSON.stringify({
         from: 'implementing',
         expectedAttempt: 1,
+        expectedImplementationAttempt: 1,
+        kind: 'administrative',
       }),
     });
     expect(retried.status).toBe(200);
     expect(retryJob).toHaveBeenCalledWith(1, {
       from: 'implementing',
       expectedAttempt: 1,
+      expectedImplementationAttempt: 1,
+      kind: 'administrative',
     });
 
     const failed = await fetch(`${baseUrl}/admin/pipeline/jobs/1/fail`, {

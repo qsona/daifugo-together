@@ -343,6 +343,7 @@ export async function prepareImplementationRetry(options: {
   repositoryUrl: string;
   cwd: string;
   jobId: number;
+  kind: 'administrative' | 'failure';
   wait?: (delayMs: number) => Promise<void>;
 }): Promise<QueuedImplementation> {
   const item = await options.jobs.resume(options.jobId);
@@ -358,10 +359,12 @@ export async function prepareImplementationRetry(options: {
   }
   if (
     (previous.phase !== 'implementing' && previous.phase !== 'pr_open') ||
-    previous.attempt !== 1 ||
     !previous.branch
   ) {
-    throw new Error('job is not eligible for one implementation retry');
+    throw new Error('job is not eligible for an implementation rebuild');
+  }
+  if (options.kind === 'failure' && previous.implementationAttempt >= 2) {
+    throw new Error('implementation failure limit reached');
   }
   const transient = (
     input: Parameters<ProcessPort['run']>[0],
@@ -433,6 +436,8 @@ export async function prepareImplementationRetry(options: {
   const retried = await options.jobs.retry(previous.id, {
     from: previous.phase,
     expectedAttempt: previous.attempt,
+    expectedImplementationAttempt: previous.implementationAttempt,
+    kind: options.kind,
   });
   if (retried.status !== 'retried') {
     throw new Error(`retry transition failed: ${retried.status}`);

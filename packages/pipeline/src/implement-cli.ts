@@ -177,14 +177,21 @@ async function main(): Promise<void> {
   if (retryMode) {
     const jobId = positiveJobId(
       process.argv[3],
-      'implement-cli prepare-retry JOB_ID',
+      'implement-cli prepare-retry JOB_ID --kind administrative|failure',
     );
+    const kind = option('--kind');
+    if (kind !== 'administrative' && kind !== 'failure') {
+      throw new Error(
+        'implement-cli prepare-retry requires --kind administrative|failure',
+      );
+    }
     item = await prepareImplementationRetry({
       jobs,
       process: commands,
       repositoryUrl,
       cwd: process.cwd(),
       jobId,
+      kind,
     });
   } else if (resumeMode) {
     const jobId = positiveJobId(

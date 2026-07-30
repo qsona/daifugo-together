@@ -206,7 +206,7 @@ describe('CX-01 judgement and VERDICT_CONFIRMATION', () => {
     });
   });
 
-  it('レビュー前のattempt 1だけ、承認SPECを監査可能なdeveloper judgementとして改訂する', async () => {
+  it('行政的再構築後も、レビュー前の承認SPECを監査可能なdeveloper judgementとして改訂する', async () => {
     const { persistence, proposal, local, pipeline } = await setup();
     local.record(proposal.id, {
       verdict: 'clean',
@@ -244,6 +244,25 @@ describe('CX-01 judgement and VERDICT_CONFIRMATION', () => {
       'pr_open',
       { prNumber: 16, headSha: 'b'.repeat(40) },
       2_001,
+    );
+    persistence.pipeline.retryJob(
+      jobId,
+      'pr_open',
+      1,
+      1,
+      'administrative',
+      2_002,
+    );
+    persistence.pipeline.transitionJob(
+      jobId,
+      'implementing',
+      'implementing',
+      {
+        branch: 'rule/r0001-yagiri-a2',
+        scaffoldSha: 'c'.repeat(40),
+        promptVersion: 'cx02-v4',
+      },
+      2_003,
     );
     const amendedSpec = {
       ...spec(),

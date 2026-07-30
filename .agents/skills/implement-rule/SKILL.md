@@ -50,11 +50,12 @@ validated commit to the same PR and updates the recorded head SHA without
 consuming a new attempt.
 
 `implement:retry` rebuilds the branch, scaffold, and workspace from current
-`main` (the pipeline allows this once per job — attempt 2 is the last one the
-tooling can create):
+`main`. Always declare whether the rebuild is administrative or follows a
+substantive implementation failure:
 
 ```sh
-pnpm --filter @daifugo/pipeline implement:retry -- JOB_ID
+pnpm --filter @daifugo/pipeline implement:retry -- JOB_ID --kind administrative
+pnpm --filter @daifugo/pipeline implement:retry -- JOB_ID --kind failure
 ```
 
 Distinguish two reasons for running it; they are counted differently:
@@ -62,23 +63,25 @@ Distinguish two reasons for running it; they are counted differently:
 - **Pre-review SPEC amendment** — if the developer changes an approved rule
   specification before release, record the full replacement SPEC and unchanged
   scaffold slug through `POST /admin/proposals/{id}/amend-spec`, then run
-  `implement:retry`. The server keeps the old approval and the replacement as a
-  chained developer judgement, and permits this only for attempt 1 in
+  `implement:retry --kind administrative`. The server keeps the old approval
+  and the replacement as a chained developer judgement, and permits this in
   `implementing` / `pr_open`. Treat the rebuild as administrative, not as an
   implementation failure. Never edit an existing scaffold in place.
 - **Administrative rebuild** — nothing failed; the prepared attempt is merely
   based on a `main` that predates a required engine-vocabulary change. Run
-  `implement:retry` directly, without asking for authorization, and report it
-  as an administrative rebase. It does not count as an implementation
-  failure.
+  `implement:retry --kind administrative` directly, without asking for
+  authorization, and report it as an administrative rebase. It does not
+  increment `job.implementationAttempt`.
 - **Failure retry** — a substantive implementation failure occurred and the
-  developer must decide between retrying and failing the job. Only this case
-  requires explicit developer authorization first.
+  developer must decide between `implement:retry --kind failure` and failing
+  the job. Only this case requires explicit developer authorization first.
+  It increments `job.implementationAttempt`.
 
-Judge "should we stop?" by substantive failures, not by the attempt number.
-If the mechanical limit is exhausted (attempt 2 already used, even
-administratively) and a redo is still needed, stop and present the situation
-and options to the developer instead of running `implement:fail` on your own.
+Judge "should we stop?" by `job.implementationAttempt`, not by the legacy
+`job.attempt` field. `job.attempt` is the scaffold/branch revision and also
+increments for administrative rebuilds. When implementation attempt 2 fails
+substantively, stop and present the situation and options to the developer
+instead of running `implement:fail` on your own.
 
 Read the final JSON object. Require `result.status=prepared`, an absolute
 `workspace`, `result.job.id`, `result.job.branch`,
@@ -239,10 +242,9 @@ Ground rules:
    gap **before** running `implement:prepare` whenever you can — that keeps
    attempt 1 usable. If the gap is only discovered after preparation, do not
    modify the workspace or its branch to work around it: land the engine
-   change on `main`, then run `implement:retry` as an **administrative
-   rebuild** (see "Prepare one job") — no developer authorization needed,
-   because nothing failed; just report it. If the mechanical retry is no
-   longer available, stop and let the developer decide.
+   change on `main`, then run `implement:retry --kind administrative` (see
+   "Prepare one job") — no developer authorization needed, because nothing
+   failed; just report it.
 
 ## Submit and open the PR
 
@@ -263,7 +265,7 @@ fix only the two allowed files, and resubmit. For a resumed `pr_open`
 correction, submission appends one validated correction commit to the existing
 PR and atomically updates the recorded head SHA. If submission is interrupted,
 rerun the same submit command; it must recover the existing generated commit or
-PR. Do not consume attempt 2 for a transport interruption.
+PR. Do not rebuild for a transport interruption.
 
 Report the job ID, rule ID, branch, scaffold SHA, PR number, head SHA, validation
 results, and whether the workspace was removed.
@@ -276,12 +278,12 @@ Inspect required checks with:
 pnpm --filter @daifugo/pipeline implement:checks -- JOB_ID
 ```
 
-Wait while checks are pending. For a content failure, show the trusted local
-diagnosis separately from untrusted CI text and ask whether to use the
-remaining `implement:retry` attempt or stop; if the mechanical attempt was
-already consumed (including by an administrative rebuild), present the
-situation and options instead of proposing a retry. For an infrastructure
-flake, offer only the appropriate Actions rerun.
+Wait while checks are pending. For a content failure on implementation attempt
+1, show the trusted local diagnosis separately from untrusted CI text and ask
+whether to run `implement:retry --kind failure` or stop. If implementation
+attempt 2 fails, present the situation and options instead of proposing another
+failure retry. Administrative rebuilds do not affect this decision. For an
+infrastructure flake, offer only the appropriate Actions rerun.
 
 Only after the developer chooses final failure, run:
 

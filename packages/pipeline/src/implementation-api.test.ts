@@ -32,6 +32,7 @@ const item = {
     proposalId: 'proposal-1',
     phase: 'queued',
     attempt: 1,
+    implementationAttempt: 1,
     ciRerun: 0,
     ruleId: 'r0001-yagiri',
     slug: 'yagiri',
@@ -152,7 +153,12 @@ describe('HttpPipelineJobPort', () => {
       jobs.update(1, { from: 'queued', to: 'implementing' }),
     ).resolves.toMatchObject({ status: 'updated' });
     await expect(
-      jobs.retry(1, { from: 'implementing', expectedAttempt: 1 }),
+      jobs.retry(1, {
+        from: 'implementing',
+        expectedAttempt: 1,
+        expectedImplementationAttempt: 1,
+        kind: 'administrative',
+      }),
     ).resolves.toMatchObject({ status: 'retried' });
     await expect(
       jobs.fail(1, { from: 'implementing', errorCode: 'infra' }),
@@ -176,7 +182,7 @@ describe('HttpPipelineJobPort', () => {
       {
         path: '/admin/pipeline/jobs/1/retry',
         authorization: 'Bearer local-admin-token',
-        body: '{"from":"implementing","expectedAttempt":1}',
+        body: '{"from":"implementing","expectedAttempt":1,"expectedImplementationAttempt":1,"kind":"administrative"}',
       },
       {
         path: '/admin/pipeline/jobs/1/fail',

@@ -78,6 +78,7 @@ function pipelineJob(value: unknown): value is PipelineJob {
       job.phase,
     ) &&
     Number.isSafeInteger(job.attempt) &&
+    Number.isSafeInteger(job.implementationAttempt) &&
     Number.isSafeInteger(job.ciRerun) &&
     typeof job.ruleId === 'string' &&
     typeof job.slug === 'string' &&

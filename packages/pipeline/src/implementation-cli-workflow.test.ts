@@ -57,6 +57,7 @@ function item(
       proposalId: 'proposal-1',
       phase,
       attempt: 1,
+      implementationAttempt: 1,
       ciRerun: 0,
       ruleId: 'r0001-yagiri',
       slug: 'yagiri',
@@ -124,12 +125,18 @@ function retryJobs(
     retry: (_jobId, input) => {
       retryCalls.push(input);
       onRetry?.();
+      const kind =
+        typeof input === 'object' && input !== null && 'kind' in input
+          ? input.kind
+          : null;
       return {
         status: 'retried',
         job: {
           ...current.job,
           phase: 'implementing',
-          attempt: 2,
+          attempt: current.job.attempt + 1,
+          implementationAttempt:
+            current.job.implementationAttempt + (kind === 'failure' ? 1 : 0),
           branch: null,
           prNumber: null,
           headSha: null,
@@ -675,6 +682,7 @@ describe('implementation CLI workflow', () => {
         repositoryUrl: 'git@example.test:rules.git',
         cwd: '/repo',
         jobId: 1,
+        kind: 'administrative',
         wait: async () => {},
       }),
     ).resolves.toMatchObject({
@@ -720,7 +728,14 @@ describe('implementation CLI workflow', () => {
         ],
       }),
     ]);
-    expect(jobs.retryCalls).toEqual([{ from: 'pr_open', expectedAttempt: 1 }]);
+    expect(jobs.retryCalls).toEqual([
+      {
+        from: 'pr_open',
+        expectedAttempt: 1,
+        expectedImplementationAttempt: 1,
+        kind: 'administrative',
+      },
+    ]);
   });
 
   it('途中応答消失後は完了済みcleanupを安全に飛ばしてCASを再開する', async () => {
@@ -750,6 +765,7 @@ describe('implementation CLI workflow', () => {
         repositoryUrl: 'repo',
         cwd: '/repo',
         jobId: 1,
+        kind: 'administrative',
         wait: async () => {},
       }),
     ).rejects.toThrow('temporary remote failure');
@@ -763,6 +779,7 @@ describe('implementation CLI workflow', () => {
         repositoryUrl: 'repo',
         cwd: '/repo',
         jobId: 1,
+        kind: 'administrative',
         wait: async () => {},
       }),
     ).resolves.toMatchObject({ job: { attempt: 2 } });
@@ -789,6 +806,7 @@ describe('implementation CLI workflow', () => {
       repositoryUrl: 'repo',
       cwd: '/repo',
       jobId: 1,
+      kind: 'administrative',
       wait: async () => {},
     });
 
@@ -813,6 +831,7 @@ describe('implementation CLI workflow', () => {
         repositoryUrl: 'repo',
         cwd: '/repo',
         jobId: 1,
+        kind: 'administrative',
         wait: async () => {},
       }),
     ).rejects.toThrow('close failed');
@@ -841,32 +860,54 @@ describe('implementation CLI workflow', () => {
         repositoryUrl: 'repo',
         cwd: '/repo',
         jobId: 1,
+        kind: 'administrative',
       }),
     ).resolves.toEqual(retried);
     expect(process.inputs).toHaveLength(0);
     expect(retry).not.toHaveBeenCalled();
   });
 
-  it('scaffold固定後のattempt 2は2回目のretryを拒否する', async () => {
+  it('scaffold固定後のrevision 2も行政的に再構築できる', async () => {
     const secondAttempt = item('implementing', {
       attempt: 2,
       branch: 'rule/r0001-yagiri-a2',
       scaffoldSha: 'b'.repeat(40),
     });
-    const retry = vi.fn<PipelineJobPort['retry']>();
+    const jobs = retryJobs(secondAttempt);
     const process = processPort(async () => result(0));
 
     await expect(
       prepareImplementationRetry({
-        jobs: { resume: () => secondAttempt, retry },
+        jobs,
         process,
         repositoryUrl: 'repo',
         cwd: '/repo',
         jobId: 1,
+        kind: 'administrative',
       }),
-    ).rejects.toThrow('job is not eligible for one implementation retry');
-    expect(process.inputs).toHaveLength(0);
-    expect(retry).not.toHaveBeenCalled();
+    ).resolves.toMatchObject({
+      job: { attempt: 3, implementationAttempt: 1 },
+    });
+    expect(jobs.retryCalls).toHaveLength(1);
+  });
+
+  it('実装attempt 2が内容失敗した後はfailure retryを拒否する', async () => {
+    const secondImplementation = item('implementing', {
+      attempt: 4,
+      implementationAttempt: 2,
+      branch: 'rule/r0001-yagiri-a4',
+    });
+
+    await expect(
+      prepareImplementationRetry({
+        jobs: retryJobs(secondImplementation),
+        process: processPort(async () => result(0)),
+        repositoryUrl: 'repo',
+        cwd: '/repo',
+        jobId: 1,
+        kind: 'failure',
+      }),
+    ).rejects.toThrow('implementation failure limit reached');
   });
 
   it('clone/installの一時失敗を回復し、成功workspaceを明示的に削除する', async () => {

@@ -126,7 +126,7 @@ sequenceDiagram
 |---|---|---|---|---|---|
 | 1 | 受付(E5)+ 静的検査の記録(E6 L0〜L2) | server(同期) | 提案フォーム | `proposals`(screening)+ 検査シグナル記録。**この時点では遮断しない**(受理不受理は非同期。E-18) | 形式不正・停止中ユーザーのみ同期エラー(LLM 不使用) |
 | 2 | 検査判定(E6 L3)+ 可否判断(CX-01) | ローカル判定ツール(開発マシン・codex app-server、**モデルにツールを与えない**) | 提案本文(sanitized)・L0〜L2 シグナル・既存ルール一覧・線引き基準 | E6 決定表の verdict、`judgements` 行 + SPEC。**カード・却下・approve いずれも開発者の確定操作を経て**遷移(カード/却下 → `rejected` + 通知、approve → SPEC 承認 → `queued`) | app-server 障害・スキーマ不正は再試行(§3.1)。未判定のまま残っても提案は screening で保持され、次回起動時に再処理 |
-| 3 | codex 実装(CX-02) | Codex App の通常セッション + 実装 skill(専用隔離なし — C-7 決定 §2.4) | `implement:prepare` が返す scaffold 済みワークスペース | `rule.ts` / `rule.test.ts` | セッション中断は同じ attempt を resume。検収 NG は同じ workspace で修正し、内容起因の再試行だけ開発者判断で attempt 2 |
+| 3 | codex 実装(CX-02) | Codex App の通常セッション + 実装 skill(専用隔離なし — C-7 決定 §2.4) | `implement:prepare` が返す scaffold 済みワークスペース | `rule.ts` / `rule.test.ts` | セッション中断は同じ workspace を resume。検収 NG は同じ workspace で修正する。SPEC・main 更新による行政的再構築は実装 attempt を消費せず、内容起因の再試行だけ開発者判断で実装 attempt 2 へ進む |
 | 4 | PR + CI(CX-03) | GitHub Actions | rule ブランチの PR | checks green | CI 失敗 → フレークなら re-run、内容起因なら CI ログを添えて再実行 or 打ち切り(開発者判断) |
 | 5 | レビュー・マージ | 開発者 | green PR + チェックリスト(§2.7) | main 反映 | 指摘 → 修正再実行 or 打ち切り。コンフリクトは構造上ほぼ発生しない(新規ディレクトリのみ) |
 | 6 | デプロイ・登録 | CD(E13)→ server 起動時同期 | main の `packages/rules/` 差分 | `rules`/`rule_versions` 行(有効化待ち) | デプロイ失敗は E13 の CD 運用に従う。同期は冪等(§2.6) |
@@ -147,7 +147,7 @@ sequenceDiagram
 - **LLM は従量課金 API を使わない**(C-2): 判定は **codex app-server** 経由で subscription のモデル(GPT 5.6 Luna / Sol。評価セット §4-5 の一致率で選定)を呼ぶ。**判定の会話にはツールを一切与えない**(テキスト入力 → 構造化テキスト出力のみ)。敵対的でありうる提案文をエージェントセッションに混ぜないための構造的な安全策で、乗っ取られても被害は「誤判定」までに縮退する(§3.1)。サーバー側には LLM クライアントも API キーも置かない。
 - **受理不受理は非同期**(E-18): サーバーは送信時に形式検証・正規化・保存・L0〜L2 シグナル記録だけを同期で行い、遮断・却下・イエローカード発行はすべてローカル判定ツールの処理後に非同期で確定する。攻撃者が送信時応答から判定境界を探るオラクル攻撃が構造的に成立しなくなる副次効果があり、送信レート制限の廃止(C-3)とも整合する。
 - **実装 skill を開発マシンに置く理由**: 開発者が subscription 認証済みの Codex App 通常セッションで skill を起動し、そのセッション自身が実装する。子 `codex exec` や別CLI認証を必要とせず、実行中の判断・差分・テスト結果を開発者が同じ対話で確認できる。
-- **ツールとサーバーの通信**: サーバーが admin API(HTTPS + Bearer トークン)を提供し、両ドライバはこれ経由で読み書きする(SQLite の単一ライタをサーバープロセスに限定する方針は維持)。主なエンドポイント: `GET /admin/pipeline/screening`(未判定提案の払い出し。sanitized 本文 + L0〜L2 シグナル)/ `POST /admin/proposals/{id}/check`(L3 + 決定表の結果記録)/ `POST /admin/proposals/{id}/judge`(判定記録と、カード・却下・approve の開発者確定)/ `POST /admin/proposals/{id}/approve-spec`(SPEC 承認 → queued)/ `POST /admin/proposals/{id}/amend-spec`(レビュー前の承認 SPEC 改訂。元の承認へ紐づく developer judgement を追記し、attempt 1 の `implementing` / `pr_open` だけ許可)/ `GET /admin/pipeline/next`(次の queued ジョブの払い出し)/ `POST /admin/pipeline/jobs/{id}/update` / `POST /admin/pipeline/jobs/{id}/fail` / `POST /admin/rules/{id}/enable | disable`。
+- **ツールとサーバーの通信**: サーバーが admin API(HTTPS + Bearer トークン)を提供し、両ドライバはこれ経由で読み書きする(SQLite の単一ライタをサーバープロセスに限定する方針は維持)。主なエンドポイント: `GET /admin/pipeline/screening`(未判定提案の払い出し。sanitized 本文 + L0〜L2 シグナル)/ `POST /admin/proposals/{id}/check`(L3 + 決定表の結果記録)/ `POST /admin/proposals/{id}/judge`(判定記録と、カード・却下・approve の開発者確定)/ `POST /admin/proposals/{id}/approve-spec`(SPEC 承認 → queued)/ `POST /admin/proposals/{id}/amend-spec`(レビュー前の承認 SPEC 改訂。元の承認へ紐づく developer judgement を追記し、`implementing` / `pr_open` だけ許可)/ `GET /admin/pipeline/next`(次の queued ジョブの払い出し)/ `POST /admin/pipeline/jobs/{id}/update` / `POST /admin/pipeline/jobs/{id}/fail` / `POST /admin/rules/{id}/enable | disable`。
 - **E6 G2 の実装点**: `GET /admin/pipeline/next` のハンドラは払い出し前に、当該提案に `finalVerdict='pass'` の検査記録(E6 `proposal_checks`)が存在することを再確認し、なければ払い出さず開発者アラートを出す。応答には確認済みの `passedCheckId` を含め、skill はこれを欠くジョブを処理しない(検査と実装が別セッションになっても、この突合で「未検査の提案が codex に届く」事故を塞ぐ)。
 - **将来の拡張点**: もし全自動化(付録 A)を再検討する場合も、段の実装(ライブラリ)は共通のまま、常駐ドライバを追加する形で移行できる。
 
@@ -156,18 +156,18 @@ sequenceDiagram
 - `pipeline_jobs` テーブル(§3.2(c))が実装ジョブを追跡する。`proposal_id` に UNIQUE 制約(1 提案 1 ジョブ)。取り出しは `created_at` 昇順(OP-01 の「明示された順序」)。
 - phase は単純化した単方向遷移のみ: `queued → implementing → pr_open → merged → done(=released)`、任意の点から `→ failed`。
 - **リース・フェンシング・ハートビートは持たない**。駆動者は開発者 1 人・直列実行が前提で、同時に 2 つの実装セッションを走らせない運用とする(skill は起動時に `implementing`/`pr_open` の先行ジョブがあれば警告する)。
-- **中断・PR指摘からの回復**: skill のセッションが途中で死んだ場合や、開いたPRへ許可2ファイルだけの修正が必要になった場合は、`implement:resume` で同じ attempt の決定的ブランチを新しい workspace に回復する。`implement:submit` は検収済みの追補コミットを同じPRへ積み、記録済み head SHA を同phase CASで更新する。scaffoldから作り直す内容起因の再試行だけ `-a2` を使う。
+- **中断・PR指摘からの回復**: skill のセッションが途中で死んだ場合や、開いたPRへ許可2ファイルだけの修正が必要になった場合は、`implement:resume` で同じ revision の決定的ブランチを新しい workspace に回復する。`implement:submit` は検収済みの追補コミットを同じPRへ積み、記録済み head SHA を同phase CASで更新する。scaffoldを作り直すたびに `pipeline_jobs.attempt`(scaffold revision)とブランチ接尾辞 `-aN` を進めるが、行政的再構築では `implementation_attempt` を進めない。
 - **旧試行のブランチは再利用しない**: 再試行の前に、旧試行の PR をコメント付きで close し、リモートの旧ブランチを削除してから作り直す(`rule/**` のルールセットは force-push を拒否・ブランチ削除を許可 §2.5)。
 - ルール ID は `r{proposalId 4 桁 0 埋め}`(桁あふれ時は自然に 5 桁へ)。提案 ID 由来なので採番衝突が構造的に起きない。
 
 #### 失敗分類とリトライ方針(C-5 決定を反映)
 
-**`proposals.failed` は終端**であり、リトライはすべて `implementing` の内側(`pipeline_jobs.attempt`)で行う(E7 内包モデル。§5.3-1)。同じ workspace 内の修正、中断resume、`pr_open` の同一PR追補は同一attemptの継続であり、内容起因で新しいscaffoldからやり直す場合だけ開発者判断で attempt 2 を使う。
+**`proposals.failed` は終端**であり、リトライはすべて `implementing` の内側で行う(E7 内包モデル。§5.3-1)。`pipeline_jobs.attempt` はscaffold/branch revision、`implementation_attempt` は内容実装の試行番号として分離する。同じ workspace 内の修正、中断resume、`pr_open` の同一PR追補は同じrevisionの継続である。SPEC改訂・main更新による再構築はrevisionだけを進め、内容起因で新しいscaffoldからやり直す場合だけ開発者判断で `implementation_attempt=2` へ進む。実装 attempt 2 が本質的に失敗したら停止する。
 
 | 分類 | 例 | 挙動 |
 |---|---|---|
 | 一時障害(インフラ) | git clone 失敗、GitHub API 5xx | skill 内で最大 3 回、指数バックオフ。尽きたら開発者に提示(後で再起動すればよい) |
-| Codexセッション中断・差分ゼロ | — | 同じattemptをresume。内容を破棄してやり直す場合だけ「再実行(-a2)/ 打ち切り」を提示 |
+| Codexセッション中断・差分ゼロ | — | 同じrevisionをresume。内容起因で破棄してやり直す場合だけ「failure retry / 打ち切り」を提示 |
 | 検収不合格 | 範囲外の差分、不変ファイル改変、サイズ超過(§3.2) | push しない。「違反内容を明記した追記付きプロンプト」での再実行を提示 |
 | CI 失敗(内容起因) | 型エラー、テスト落ち、シミュレーション不変条件違反 | CI ログ要約(`CI_FEEDBACK.md`)を添えた再実行を提示 |
 | CI フレーク | 同一コミットの再実行で通る失敗 | failed jobs の re-run(codex は動かさない)。フレーク発生はカウンタに記録(E10) |
@@ -435,7 +435,7 @@ CREATE TABLE judgements (
   3. ローカル履歴の検証: ブランチ先頭が push 済み scaffold SHA を祖先に持ち、scaffold コミット自体が改変されていない(codex がワークスペース内で履歴を書き換えた場合の検知)。
   4. サイズ上限: rule.ts ≤ 64KB、rule.test.ts ≤ 128KB。
   5. 粗い静的検査: `require(`・`process.`・`fetch(`・`eval(`・`child_process` 等の禁止トークン(最終防衛は lint と人間レビュー。ここは早期失敗用)。
-- 失敗系(§2.3 の失敗分類表): セッション中断・通信失敗は同じattemptをresume/submitして回復する。検収不合格は同じworkspaceの2ファイルだけを修正して再submitする。内容起因でscaffoldからやり直す場合だけ、skillがブランチ `-a2` の再試行か打ち切り(`failed`)を開発者に提示する。push/PR 作成失敗(GitHub 障害)はインフラ再試行3回(ブランチ名が決定的なので冪等)。
+- 失敗系(§2.3 の失敗分類表): セッション中断・通信失敗は同じrevisionをresume/submitして回復する。検収不合格は同じworkspaceの2ファイルだけを修正して再submitする。内容起因でscaffoldからやり直す場合だけ、skillが `--kind failure` の再試行か打ち切り(`failed`)を開発者に提示する。SPEC・main更新による `--kind administrative` は実装attemptを消費しない。push/PR 作成失敗(GitHub 障害)はインフラ再試行3回(ブランチ名が決定的なので冪等)。
 - 従量課金 LLM を使わない: 実装工程は codex(subscription)、可否判断も app-server 経由の subscription モデル(C-2)。**パイプライン全体で従量課金 API を使用しない**(受け入れ条件を上回る形で充足)。
 - codex の起動形態: 開発者が開始した Codex App の対話的セッション自身が skill に従って実装し、別の `codex exec` は起動しない。**subscription の通常利用の範囲**であり、旧 A-4(ヘッドレス常用の規約問題)は本モデルでは生じない(decision-log 反映済み)。
 
@@ -446,7 +446,8 @@ CREATE TABLE pipeline_jobs (
   id INTEGER PRIMARY KEY,
   proposal_id INTEGER NOT NULL UNIQUE REFERENCES proposals(id),
   phase TEXT NOT NULL,               -- queued | implementing | pr_open | merged | done | failed
-  attempt INTEGER NOT NULL DEFAULT 1,        -- codex 試行番号
+  attempt INTEGER NOT NULL DEFAULT 1,        -- scaffold/branch revision
+  implementation_attempt INTEGER NOT NULL DEFAULT 1, -- 内容実装の試行番号(最大2)
   ci_rerun INTEGER NOT NULL DEFAULT 0,
   rule_id TEXT,                      -- 'r0042'(採番は queued 遷移時)
   slug TEXT,
@@ -721,7 +722,7 @@ export interface SetResultFiredRule {
 
 ### 5.3 E5・E6 への連絡(決定済み事項の反映依頼)
 
-1. **リトライモデル(C-5)= E7 内包モデルで確定(2026-07-27 開発者決定)**。`proposals.failed` は終端とし、リトライは `implementing` の内側(`pipeline_jobs.attempt`)で行う。`failed → implementing` の遷移辺は使わない。E5 側の対応: E5 §2.3 が用意している取り決めどおり「**`failed` 遷移時に `attempt_count=1` を書き、部分ユニーク索引から即時に外して同一内容の再提案を解禁する**」を `transitionProposal()` の failed 辺の仕様として確定する(索引 predicate の変更は不要)。採用理由: 画面 7 に「実装失敗 → 実装中」の逆行表示が現れない / `proposals` の遷移が単方向でガードが単純 / 人間駆動の再試行はセッション内で完結するため中間失敗を提案状態に露出させる必要がない。
+1. **リトライモデル(C-5)= E7 内包モデルで確定(2026-07-27 開発者決定、2026-07-30 回数定義を補正)**。`proposals.failed` は終端とし、リトライは `implementing` の内側で行う。`failed → implementing` の遷移辺は使わない。`pipeline_jobs.attempt` はscaffold revision、`implementation_attempt` は内容実装の試行番号とし、main取り込み・SPEC改訂などの行政的再構築は後者を消費しない。E5 側の対応: E5 §2.3 が用意している取り決めどおり「**`failed` 遷移時に `attempt_count=1` を書き、部分ユニーク索引から即時に外して同一内容の再提案を解禁する**」を `transitionProposal()` の failed 辺の仕様として確定する(索引 predicate の変更は不要)。採用理由: 画面 7 に「実装失敗 → 実装中」の逆行表示が現れない / `proposals` の遷移が単方向でガードが単純 / 人間駆動の再試行はセッション内で完結するため中間失敗を提案状態に露出させる必要がない。
 2. **遷移の呼び出し規約**。`proposals.status` の全遷移は、E7 が直接 UPDATE せず、**サーバー側のハンドラが E5 の `transitionProposal()` を呼んで**行う。呼び出し点: 可否判断確定(`screening → implementing` / `screening → rejected`)、実装失敗確定(`→ failed`、`reason_code` 付き)、有効化(`→ released`、`rule_id` 付き)。E5 のガード付き UPDATE の冪等性(同一遷移の 2 回目は noop)は、skill の再実行(at-least-once)とそのまま整合する。E5 の `reason_code` 名前空間と本書 §3.2 の `error_code` の対応表を実装時に 1 か所(server 側の変換関数)で定義する。
 3. **RP-03 の期待値文言**(§5.1-5): 「審査中」「実装中」が数時間〜数日続く前提の文言・通知設計を E5 側で調整。提案送信時の応答も「受け付けました(審査中)」のみとし、受理不受理をその場で返さない(E-18)。
 4. **`reason_code` の最終セット(C-6 決定・2026-07-27)**: ユーザー向けの理由区分は**却下系のみ詳細に、実装失敗は 1 本に**する。
