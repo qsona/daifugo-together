@@ -697,7 +697,7 @@ describe('implementation CLI workflow', () => {
           'close',
           '42',
           '--comment',
-          'Closing failed implementation attempt before developer-authorized retry.',
+          'Closing superseded implementation attempt before retry.',
         ],
       }),
       expect.objectContaining({

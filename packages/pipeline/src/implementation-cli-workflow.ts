@@ -390,7 +390,7 @@ export async function prepareImplementationRetry(options: {
           'close',
           String(previous.prNumber),
           '--comment',
-          'Closing failed implementation attempt before developer-authorized retry.',
+          'Closing superseded implementation attempt before retry.',
         ],
         cwd: options.cwd,
         timeoutMs: 60_000,

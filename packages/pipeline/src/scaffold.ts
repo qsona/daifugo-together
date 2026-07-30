@@ -13,7 +13,32 @@ export interface ScaffoldResult {
 }
 
 function json(value: unknown): string {
-  return `${JSON.stringify(value, null, 2)}\n`;
+  let formatted = JSON.stringify(value, null, 2);
+  if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+    for (const [key, entry] of Object.entries(value)) {
+      if (
+        !Array.isArray(entry) ||
+        entry.length === 0 ||
+        entry.some(
+          (item) =>
+            typeof item === 'object' ||
+            typeof item === 'undefined' ||
+            typeof item === 'function' ||
+            typeof item === 'symbol',
+        )
+      ) {
+        continue;
+      }
+      const inline = `  ${JSON.stringify(key)}: ${JSON.stringify(entry)}`;
+      if (inline.length > 80) continue;
+      const expanded = JSON.stringify({ [key]: entry }, null, 2)
+        .split('\n')
+        .slice(1, -1)
+        .join('\n');
+      formatted = formatted.replace(expanded, inline);
+    }
+  }
+  return `${formatted}\n`;
 }
 
 function sha256(value: string): string {
