@@ -12,6 +12,7 @@ import {
 import type { MemberView as MemberListView } from './components/MemberList';
 import type { GameRankView } from './components/GameRankRows';
 import type { SetRankView } from './components/SetRankRows';
+import { FinalPlayReveal } from './components/FinalPlayReveal';
 import { RuleCutIn, type RuleActivation } from './components/RuleCutIn';
 import { EmptyState } from './components/EmptyState';
 import { ActiveRulesModal } from './components/ActiveRulesModal';
@@ -62,9 +63,11 @@ import screenStyles from './screens/screen.module.css';
 import { deriveCardHints } from './game/hints';
 import {
   cards,
+  finalPlay,
   pendingFieldClearPlayIndex,
   seatFinishes,
   tableSeats,
+  type FinalPlay,
 } from './game/table';
 import { getBrowserAuthClient, type AuthApi } from './auth/client';
 import { FEATURES } from './features';
@@ -95,6 +98,8 @@ const AUTH_RESULT_PROMPT_KEY = 'daifugo.authResultPromptShown';
  * サーバーはこの間もセットリザルトのフェーズなので、これはこの端末だけの間。
  */
 const FINAL_RESULT_MS = 10_000;
+/** 最後の人が出した手を結果画面へ進む前に確認できる時間。 */
+const FINAL_PLAY_REVEAL_MS = 1_800;
 /** 場が流れるアニメーションの尺。design-tokens の --duration-slow と合わせる。 */
 const FIELD_FLUSH_MS = 320;
 
@@ -529,6 +534,59 @@ export function reconcileSelectedCardIds(
   return existing.length === selected.length ? selected : existing;
 }
 
+type FinalPlayRevealState = {
+  playerName: string;
+  cards: FinalPlay['cards'];
+};
+
+function useFinalPlayReveal(
+  room: PlayerRoomView | null,
+): FinalPlayRevealState | null {
+  const [reveal, setReveal] = useState<FinalPlayRevealState | null>(null);
+  const seenKey = useRef<string | null>(null);
+  const play = room ? finalPlay(room) : null;
+  const playKey =
+    room && play
+      ? [
+          room.roomId,
+          room.game?.gameNo ?? room.setResult?.setId ?? '',
+          String(play.seat),
+          play.cards.map((card) => card.id).join(','),
+        ].join(':')
+      : null;
+
+  useEffect(() => {
+    if (!room || !play || !playKey) {
+      setReveal(null);
+      return;
+    }
+    if (seenKey.current === playKey) return;
+    seenKey.current = playKey;
+    const member = room.members.find(
+      (candidate) => candidate.seatId === play.seat,
+    );
+    setReveal({
+      playerName:
+        member?.memberId === room.you.memberId
+          ? 'あなた'
+          : (member?.displayName ?? `席${String(play.seat + 1)}`),
+      cards: play.cards,
+    });
+  }, [playKey, room]);
+
+  useEffect(() => {
+    if (!reveal) return;
+    const timer = window.setTimeout(() => {
+      setReveal(null);
+    }, FINAL_PLAY_REVEAL_MS);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [reveal]);
+
+  return reveal;
+}
+
 function ConnectedApp({
   client,
   storage,
@@ -598,6 +656,7 @@ function ConnectedApp({
   const [roomOverlay, setRoomOverlay] = useState<RoomOverlay>(null);
   const ruleCatalogApi = getBrowserRuleCatalogClient();
   const room = state.room;
+  const finalPlayReveal = useFinalPlayReveal(room);
   const beginLogin = useCallback(() => {
     if (
       state.registered &&
@@ -1062,6 +1121,7 @@ function ConnectedApp({
     <>
       <ConnectionStatus state={state}>{content}</ConnectionStatus>
       <RuleCutIn activations={activations} onDone={finishRuleCutIn} />
+      {finalPlayReveal && <FinalPlayReveal {...finalPlayReveal} />}
     </>
   );
   const visibleSetResultRoom =

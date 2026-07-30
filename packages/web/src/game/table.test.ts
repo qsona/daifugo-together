@@ -1,7 +1,7 @@
 import type { PlayerRoomView } from '@daifugo/core';
 import { describe, expect, it } from 'vitest';
 
-import { hasPendingFieldClear, tableSeats } from './table';
+import { finalPlay, hasPendingFieldClear, tableSeats } from './table';
 
 const EIGHT = {
   kind: 'natural',
@@ -102,5 +102,51 @@ describe('tableSeats', () => {
     );
     const seats = tableSeats(room, { heldPlayedHistoryIndex: 0 });
     expect(seats[0]!.plays.at(-1)?.map((card) => card.id)).toEqual(['S08']);
+  });
+});
+
+describe('finalPlay', () => {
+  it('ゲーム間リザルトでは履歴の最後のプレイを返す', () => {
+    const room = roomAfterEightCut();
+    room.game!.status = 'intermission';
+    room.game!.history = [
+      { t: 'played', seat: 0, cards: [EIGHT], kind: 'single' },
+      { t: 'playerFinished', seat: 0, rank: 1, title: '大富豪' },
+      {
+        t: 'gameEnded',
+        standings: [{ seat: 0, rank: 1, title: '大富豪' }],
+      },
+    ];
+
+    expect(finalPlay(room)).toEqual({
+      seat: 0,
+      cards: [{ id: 'S08', suit: 'spade', rank: '8' }],
+    });
+  });
+
+  it('最終戦のセットリザルトでは直前イベントのプレイを返す', () => {
+    const room = roomAfterEightCut();
+    room.phase = 'setResult';
+    room.game = null;
+    room.setResult = {
+      setId: 'set-1',
+      standings: [],
+      finalGame: {
+        gameNo: 3,
+        standings: [],
+        firedRuleIds: [],
+      },
+      firedRules: [],
+      respondBy: 1_000,
+    };
+    room.events = [
+      { seq: 1, t: 'played', seat: 0, cards: [EIGHT] },
+      { seq: 2, t: 'gameEnded' },
+    ];
+
+    expect(finalPlay(room)).toEqual({
+      seat: 0,
+      cards: [{ id: 'S08', suit: 'spade', rank: '8' }],
+    });
   });
 });

@@ -21,6 +21,42 @@ export function cards(
   );
 }
 
+export type FinalPlay = {
+  seat: number;
+  cards: CardView[];
+};
+
+/**
+ * 対局終了時に最後の人が出した手。
+ *
+ * 第1・2戦の終了時は game.history に残っている。最終戦はサーバーが
+ * そのまま setResult へ進むため game が無く、直前の room.events を使う。
+ */
+export function finalPlay(room: PlayerRoomView): FinalPlay | null {
+  const isGameEnd =
+    room.game?.status === 'intermission' ||
+    (room.phase === 'setResult' &&
+      room.setResult?.finalGame !== null &&
+      room.setResult?.finalGame !== undefined);
+  if (!isGameEnd) return null;
+
+  type HistoryPlayed = Extract<
+    NonNullable<PlayerRoomView['game']>['history'][number],
+    { t: 'played' }
+  >;
+  type RoomPlayed = Extract<PlayerRoomView['events'][number], { t: 'played' }>;
+  const historyPlayed = room.game?.history.findLast(
+    (event): event is HistoryPlayed => event.t === 'played',
+  );
+  const roomPlayed = room.events.findLast(
+    (event): event is RoomPlayed => event.t === 'played',
+  );
+  const played = historyPlayed ?? roomPlayed;
+  if (!played) return null;
+
+  return { seat: played.seat, cards: cards(played.cards) };
+}
+
 /**
  * この戦であがった人を、あがった順に。
  * 履歴は戦ごとなので、`gameStarted` が来たら積み直す。

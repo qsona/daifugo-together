@@ -2192,6 +2192,62 @@ describe('セット最終戦のリザルト', () => {
   });
 });
 
+describe('対局終了時の最後の手', () => {
+  beforeEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+  });
+
+  it('最後の人が出した札を結果画面の前に短時間見せる', () => {
+    vi.useFakeTimers();
+    const room = tutorialHintRoom('community', []);
+    room.v += 1;
+    room.game!.status = 'intermission';
+    room.game!.intermission = {
+      durationMs: 15_000,
+      endsAt: Date.now() + 15_000,
+    };
+    room.game!.turn = null;
+    room.game!.history = [
+      {
+        t: 'played',
+        seat: 0,
+        cards: [{ kind: 'natural', id: 'S08', suit: 'spade', rank: '8' }],
+        kind: 'single',
+      },
+      { t: 'playerFinished', seat: 0, rank: 1, title: '大富豪' },
+      {
+        t: 'gameEnded',
+        standings: [{ seat: 0, rank: 1, title: '大富豪' }],
+      },
+    ];
+    const observable = observableTutorialClient(room);
+
+    render(<App client={observable.client} />);
+
+    expect(
+      screen.getByRole('dialog', { name: 'あなたがあがり!' }),
+    ).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'スペードの8' })).toBeTruthy();
+
+    act(() => {
+      vi.advanceTimersByTime(1_799);
+    });
+    expect(
+      screen.getByRole('dialog', { name: 'あなたがあがり!' }),
+    ).toBeTruthy();
+
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(
+      screen.queryByRole('dialog', { name: 'あなたがあがり!' }),
+    ).toBeNull();
+    expect(screen.getByRole('button', { name: '第2戦へ' })).toBeTruthy();
+  });
+});
+
 describe('AU-01: 認証完了のアプリ統合', () => {
   afterEach(() => {
     cleanup();

@@ -1,0 +1,59 @@
+.layer {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: var(--space-5) var(--space-4);
+  background: var(--color-overlay);
+}
+
+.panel {
+  width: 100%;
+  max-width: 360px;
+  padding: var(--space-5) var(--space-4);
+  background: var(--color-bg-surface);
+  border: var(--border-heavy) solid var(--color-border-strong);
+  border-radius: var(--radius-l);
+  box-shadow: var(--shadow-hard-l);
+  text-align: center;
+  animation: reveal-in var(--duration-slow) var(--easing-pop) both;
+}
+
+.label {
+  margin: 0 0 var(--space-1);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-micro);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-wide);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--font-size-title-l);
+  font-weight: var(--font-weight-heavy);
+  letter-spacing: var(--letter-spacing-wide);
+}
+
+.cards {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+  list-style: none;
+  margin: var(--space-4) 0 0;
+  padding: 0;
+}
+
+@keyframes reveal-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel {
+    animation: none;
+  }
+}
