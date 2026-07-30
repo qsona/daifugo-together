@@ -1,6 +1,6 @@
 import type { PendingCxJudgement } from '@daifugo/server';
 
-export const CX01_PROMPT_VERSION = 'cx01-v6';
+export const CX01_PROMPT_VERSION = 'cx01-v7';
 
 const CONTRACT = `
 契約 v1 のフック:
@@ -26,19 +26,27 @@ engineFeatures 宣言（ルールが有効化できるエンジン機能）:
 - sequence: 階段（同スートで連続する3枚以上の手型）
 - jokers: ジョーカー2枚。単体は最強で革命の影響を受けず、set/階段では任意カードを代用
 
-表現できないもの:
+現行契約で表現できないもの（契約の拡張候補。reject 理由にはならない）:
 - プレイヤーへの追加入力、選択、宣言、応答
-- engineFeatures にない手型・カード種の新設、ゲーム状態の形、外部 I/O の追加
-- 実時間や実世界情報への依存
+- engineFeatures にない手型・カード種の新設、ゲーム状態の形の追加
+
+構造的に不可能なもの（ゲーム内で完結しない）:
+- 実時間や実世界情報への依存、外部 I/O
 `.trim();
 
 const CRITERIA = `
-線引き（カオスは歓迎、破壊は却下）:
-- A1 追加入力要求 / A4 外界依存: reject, category=contract（構造的に不可能）
-- A2 語彙外の状態 / A3 エンジン拡張: 原則 needs_review。契約語彙・engineFeatures で
-  表現できないだけでゲーム進行として成立するルールは reject にせず、
-  reasonInternal に不足している語彙を明記する（開発者が語彙拡張を検討する）。
-  A2/A3 でも追加入力や外界依存を伴うものは A1/A4 として reject してよい
+線引き（カオスは歓迎、破壊は却下。いまの契約で実装できないことは reject の理由にしない）:
+- A1 追加入力要求 / A2 語彙外の状態 / A3 エンジン拡張: 原則 needs_review。
+  契約や Effect の枠組みを拡張することはルール実装の範囲に含まれるため、
+  現行の語彙・engineFeatures で表現できないだけでゲーム進行として成立するルールは
+  reject にせず、reasonInternal に不足している語彙・機構
+  （例: プレイ後にカードを選ぶ追加入力）を明記する（開発者が拡張を検討する）。
+  approve にもしない: approve は現行の語彙・engineFeatures だけで SPEC を
+  完全に書けるときに限る
+- A4 外界依存: reject, category=contract（構造的に不可能）。
+  実時間・実世界の情報への依存が A4。プレイヤーに実世界での行動を要求して
+  結果を検証できないものは A4 ではなく B4。
+  A1〜A3 に見えるものでも外界依存を伴う場合は A4 として reject してよい
 - B1 進行破壊 / B2 情報破壊 / B3 参加破壊 / B4 検証不能な行動 /
   B5 根幹置換: reject, category=game_breaking
 - C1 不適切・差別・個人攻撃: reject, category=inappropriate
@@ -47,6 +55,9 @@ const CRITERIA = `
 - 上記以外で実装対象外なら category=other
 
 B1 の境界例は後段シミュレーションがあるため approve 側に倒してよい。
+ただし構造上ゲームが終了しなくなるもの（手札が減らない等）は明確に B1 reject。
+常時・無条件で手札非公開の前提を失わせるものは明確に B2 reject
+（一時的・条件付きの公開は迷えば needs_review でよい）。
 それ以外の B 系で迷う場合と、確信度が低い場合は needs_review。
 reject の reasonForUser は日本語 1〜2 文で、具体的かつ平易にする。
 approve は実装に必要な SPEC を正規化する。提案の意味を勝手に拡張しない。
