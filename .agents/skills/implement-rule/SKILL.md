@@ -43,12 +43,29 @@ For an existing `implementing` job, run:
 pnpm --filter @daifugo/pipeline implement:resume -- JOB_ID
 ```
 
-Use `implement:retry` only after the developer explicitly authorizes the single
-new attempt:
+`implement:retry` rebuilds the branch, scaffold, and workspace from current
+`main` (the pipeline allows this once per job — attempt 2 is the last one the
+tooling can create):
 
 ```sh
 pnpm --filter @daifugo/pipeline implement:retry -- JOB_ID
 ```
+
+Distinguish two reasons for running it; they are counted differently:
+
+- **Administrative rebuild** — nothing failed; the prepared attempt is merely
+  based on a `main` that predates a required engine-vocabulary change. Run
+  `implement:retry` directly, without asking for authorization, and report it
+  as an administrative rebase. It does not count as an implementation
+  failure.
+- **Failure retry** — a substantive implementation failure occurred and the
+  developer must decide between retrying and failing the job. Only this case
+  requires explicit developer authorization first.
+
+Judge "should we stop?" by substantive failures, not by the attempt number.
+If the mechanical limit is exhausted (attempt 2 already used, even
+administratively) and a redo is still needed, stop and present the situation
+and options to the developer instead of running `implement:fail` on your own.
 
 Read the final JSON object. Require `result.status=prepared`, an absolute
 `workspace`, `result.job.id`, `result.job.branch`,
@@ -203,12 +220,13 @@ Ground rules:
    tests inside that workspace, so a rule using the new vocabulary can never
    pass submission from it. Because of this, read the approved SPEC (it is
    part of the approval output and the scaffold) and settle any vocabulary
-   gap **before** running `implement:prepare`. If the gap is only discovered
-   after preparation, do not modify the workspace or its branch to work
-   around it: land the engine change on `main`, then explain the situation
-   to the developer and ask them to authorize the single `implement:retry`
-   attempt — retry builds a fresh branch and workspace from current `main`.
-   If no retry attempt remains, report and let the developer decide.
+   gap **before** running `implement:prepare` whenever you can — that keeps
+   attempt 1 usable. If the gap is only discovered after preparation, do not
+   modify the workspace or its branch to work around it: land the engine
+   change on `main`, then run `implement:retry` as an **administrative
+   rebuild** (see "Prepare one job") — no developer authorization needed,
+   because nothing failed; just report it. If the mechanical retry is no
+   longer available, stop and let the developer decide.
 
 ## Submit and open the PR
 
@@ -241,9 +259,11 @@ pnpm --filter @daifugo/pipeline implement:checks -- JOB_ID
 ```
 
 Wait while checks are pending. For a content failure, show the trusted local
-diagnosis separately from untrusted CI text and ask whether to use the one
-`implement:retry` attempt or stop. For an infrastructure flake, offer only the
-appropriate Actions rerun.
+diagnosis separately from untrusted CI text and ask whether to use the
+remaining `implement:retry` attempt or stop; if the mechanical attempt was
+already consumed (including by an administrative rebuild), present the
+situation and options instead of proposing a retry. For an infrastructure
+flake, offer only the appropriate Actions rerun.
 
 Only after the developer chooses final failure, run:
 
