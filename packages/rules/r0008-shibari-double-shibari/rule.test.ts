@@ -5,16 +5,15 @@ import type {
   NaturalCard,
   Play,
   PlayKind,
+  PublicGameEvent,
   RuleContext,
   RuleModule,
   Suit,
 } from '@daifugo/core';
+import { BASE_STRENGTH_ORDER as STRENGTH } from '@daifugo/core';
 import { describe, expect, it, vi } from 'vitest';
 
 const { rule } = (await vi.importActual('./rule.js')) as { rule: RuleModule };
-
-const suits = (counts: [number, number, number, number]): string =>
-  counts.join(',');
 
 const card = (suit: Suit, rank: CardRank): NaturalCard => ({
   kind: 'natural',
@@ -44,119 +43,172 @@ function play(kind: PlayKind, ...cards: Card[]): Play {
 const single = (cardValue: Card): Play => play('single', cardValue);
 const set = (...cards: Card[]): Play => play('set', ...cards);
 
-const context = (memory: Record<string, string | null> = {}): RuleContext =>
+const played = (playValue: Play, player = 'p1'): PublicGameEvent => ({
+  type: 'played',
+  player,
+  play: playValue,
+});
+
+const context = (history: PublicGameEvent[] = []): RuleContext =>
   ({
-    memory: {
-      game: memory,
-      set: {},
+    contractVersion: 1,
+    game: {
+      gameIndex: 0,
+      seats: ['p1', 'p2', 'p3', 'p4'],
+      direction: 1,
+      turn: 'p1',
+      players: [],
+      field: { passedSinceLastPlay: [] },
+      discard: [],
+      history,
+      strength: STRENGTH,
     },
-  }) as unknown as RuleContext;
+    setHistory: [],
+    memory: { game: {}, set: {} },
+    rng: { next: () => 0.5, int: () => 0 },
+  }) as RuleContext;
+
+const bound = (first: Play, second: Play): RuleContext =>
+  context([played(first), played(second, 'p2')]);
 
 describe('縛り・ダブル縛り', () => {
   it('同じハート単体が連続すると縛りが発動し、以後ハートだけを許可する', () => {
-    const heart = suits([0, 1, 0, 0]);
+    const heartFive = single(card('heart', '5'));
+    const heartEight = single(card('heart', '8'));
     expect(
-      rule.hooks.afterPlay?.(
-        context({ previousSuits: heart }),
-        single(card('heart', '8')),
-      ),
-    ).toContainEqual({
-      type: 'setMemory',
-      scope: 'game',
-      key: 'bindingSuits',
-      value: heart,
-    });
+      rule.hooks.afterPlay?.(context([played(heartFive)]), heartEight),
+    ).toEqual([{ type: 'announce', messageKey: 'bindingActivated' }]);
 
-    const bound = context({ bindingSuits: heart });
+    const heartBound = bound(heartFive, heartEight);
     expect(
-      rule.hooks.modifyLegality?.(bound, single(card('heart', '10')), {
+      rule.hooks.modifyLegality?.(heartBound, single(card('heart', '10')), {
         legal: true,
       }),
     ).toEqual({ legal: true });
     expect(
-      rule.hooks.modifyLegality?.(bound, single(card('spade', '10')), {
+      rule.hooks.modifyLegality?.(heartBound, single(card('spade', '10')), {
         legal: true,
       }),
     ).toEqual({ legal: false });
   });
 
   it('異なる単体スートが連続しても縛りは発動しない', () => {
+    const heartFive = single(card('heart', '5'));
     expect(
       rule.hooks.afterPlay?.(
-        context({ previousSuits: suits([0, 1, 0, 0]) }),
+        context([played(heartFive)]),
         single(card('spade', '8')),
       ),
-    ).not.toContainEqual(expect.objectContaining({ key: 'bindingSuits' }));
+    ).toEqual([]);
   });
 
   it('同じ複数スート構成は列挙順に関係なくダブル縛りになる', () => {
-    const heartSpade = suits([1, 1, 0, 0]);
+    const first = set(card('heart', '7'), card('spade', '7'));
+    const second = set(card('heart', '10'), card('spade', '10'));
+    expect(rule.hooks.afterPlay?.(context([played(first)]), second)).toEqual([
+      { type: 'announce', messageKey: 'bindingActivated' },
+    ]);
     expect(
       rule.hooks.afterPlay?.(
-        context({ previousSuits: heartSpade }),
-        set(card('heart', '10'), card('spade', '10')),
-      ),
-    ).toContainEqual({
-      type: 'setMemory',
-      scope: 'game',
-      key: 'bindingSuits',
-      value: heartSpade,
-    });
-    expect(
-      rule.hooks.afterPlay?.(
-        context({ previousSuits: heartSpade }),
+        context([played(first)]),
         set(card('spade', 'J'), card('heart', 'J')),
       ),
-    ).toContainEqual(
-      expect.objectContaining({ key: 'bindingSuits', value: heartSpade }),
-    );
+    ).toEqual([{ type: 'announce', messageKey: 'bindingActivated' }]);
   });
 
   it('ハート・スペードの後のハート・ダイヤでは発動しない', () => {
     expect(
       rule.hooks.afterPlay?.(
-        context({ previousSuits: suits([1, 1, 0, 0]) }),
+        context([played(set(card('heart', '7'), card('spade', '7')))]),
         set(card('heart', '10'), card('diamond', '10')),
       ),
-    ).not.toContainEqual(expect.objectContaining({ key: 'bindingSuits' }));
+    ).toEqual([]);
   });
 
-  it('単体JOKERは既存の単体縛りを任意のスートとして満たす', () => {
-    const base = { legal: true } as const;
+  it('ダブル縛り成立後は異なるスート構成のペアを禁止する', () => {
+    const pairBound = bound(
+      set(card('heart', '7'), card('spade', '7')),
+      set(card('heart', '10'), card('spade', '10')),
+    );
     expect(
       rule.hooks.modifyLegality?.(
-        context({ bindingSuits: suits([0, 1, 0, 0]) }),
-        single(joker()),
-        base,
+        pairBound,
+        set(card('heart', 'J'), card('diamond', 'J')),
+        { legal: true },
       ),
-    ).toEqual(base);
-  });
-
-  it('ダブル縛りでは自然札とJOKERで不足スートだけを代用する', () => {
-    const bound = context({ bindingSuits: suits([1, 1, 0, 0]) });
-    expect(
-      rule.hooks.modifyLegality?.(bound, set(card('heart', '10'), joker()), {
-        legal: true,
-      }),
-    ).toEqual({ legal: true });
-    expect(
-      rule.hooks.modifyLegality?.(bound, set(card('diamond', '10'), joker()), {
-        legal: true,
-      }),
     ).toEqual({ legal: false });
-  });
-
-  it('2枚のJOKERだけでも既存のダブル縛りを満たせる', () => {
     expect(
       rule.hooks.modifyLegality?.(
-        context({ bindingSuits: suits([1, 1, 0, 0]) }),
-        set(joker(0), joker(1)),
+        pairBound,
+        set(card('spade', 'J'), card('heart', 'J')),
         { legal: true },
       ),
     ).toEqual({ legal: true });
   });
 
+  it('単体JOKERは既存の単体縛りを任意のスートとして満たす', () => {
+    const heartBound = bound(
+      single(card('heart', '5')),
+      single(card('heart', '8')),
+    );
+    const base = { legal: true } as const;
+    expect(
+      rule.hooks.modifyLegality?.(heartBound, single(joker()), base),
+    ).toEqual(base);
+  });
+
+  it('ダブル縛りでは自然札とJOKERで不足スートだけを代用する', () => {
+    const pairBound = bound(
+      set(card('heart', '7'), card('spade', '7')),
+      set(card('heart', '9'), card('spade', '9')),
+    );
+    expect(
+      rule.hooks.modifyLegality?.(
+        pairBound,
+        set(card('heart', '10'), joker()),
+        {
+          legal: true,
+        },
+      ),
+    ).toEqual({ legal: true });
+    expect(
+      rule.hooks.modifyLegality?.(
+        pairBound,
+        set(card('diamond', '10'), joker()),
+        {
+          legal: true,
+        },
+      ),
+    ).toEqual({ legal: false });
+  });
+
+  it('2枚のJOKERだけでも既存のダブル縛りを満たせる', () => {
+    const pairBound = bound(
+      set(card('heart', '7'), card('spade', '7')),
+      set(card('heart', '9'), card('spade', '9')),
+    );
+    expect(
+      rule.hooks.modifyLegality?.(pairBound, set(joker(0), joker(1)), {
+        legal: true,
+      }),
+    ).toEqual({ legal: true });
+  });
+
   it('階段のJOKERは自然札と同じスートを代用する', () => {
+    const heartSequenceBound = bound(
+      play(
+        'sequence',
+        card('heart', '3'),
+        card('heart', '4'),
+        card('heart', '5'),
+      ),
+      play(
+        'sequence',
+        card('heart', '7'),
+        card('heart', '8'),
+        card('heart', '9'),
+      ),
+    );
     const sequence = play(
       'sequence',
       card('heart', '5'),
@@ -164,111 +216,88 @@ describe('縛り・ダブル縛り', () => {
       joker(),
     );
     expect(
-      rule.hooks.modifyLegality?.(
-        context({ bindingSuits: suits([0, 3, 0, 0]) }),
-        sequence,
-        { legal: true },
-      ),
+      rule.hooks.modifyLegality?.(heartSequenceBound, sequence, {
+        legal: true,
+      }),
     ).toEqual({ legal: true });
   });
 
   it('JOKERを含む現在手は新しい縛りを作らず、直前手の記憶を切る', () => {
+    const previous = set(card('heart', '7'), card('spade', '7'));
     expect(
       rule.hooks.afterPlay?.(
-        context({ previousSuits: suits([1, 1, 0, 0]) }),
+        context([played(previous)]),
         set(card('heart', '10'), joker()),
       ),
-    ).toEqual([
-      {
-        type: 'setMemory',
-        scope: 'game',
-        key: 'previousSuits',
-        value: null,
-      },
-    ]);
+    ).toEqual([]);
   });
 
   it('ハートとJOKERの直後の手との間にも新しい縛りを作らない', () => {
-    const afterJokerPlay = context({ previousSuits: null });
+    const afterJokerPlay = context([played(set(card('heart', '7'), joker()))]);
     expect(
       rule.hooks.afterPlay?.(
         afterJokerPlay,
         set(card('heart', 'J'), card('spade', 'J')),
       ),
-    ).not.toContainEqual(expect.objectContaining({ key: 'bindingSuits' }));
+    ).toEqual([]);
   });
 
   it('既存の縛り中にJOKERを代用しても縛りは変更しない', () => {
-    const heartSpade = suits([1, 1, 0, 0]);
+    const history = [
+      played(set(card('heart', '7'), card('spade', '7'))),
+      played(set(card('heart', '9'), card('spade', '9')), 'p2'),
+    ];
     expect(
       rule.hooks.afterPlay?.(
-        context({
-          previousSuits: heartSpade,
-          bindingSuits: heartSpade,
-        }),
+        context(history),
         set(card('heart', '10'), joker()),
       ),
-    ).toEqual([
-      {
-        type: 'setMemory',
-        scope: 'game',
-        key: 'previousSuits',
-        value: null,
-      },
-    ]);
+    ).toEqual([]);
   });
 
   it('パス相当の状態変化がなくても縛りを維持し、baseの不合法性も覆さない', () => {
-    const bound = context({ bindingSuits: suits([0, 1, 0, 0]) });
+    const heartBound = context([
+      played(single(card('heart', '5'))),
+      { type: 'passed', player: 'p2' },
+      played(single(card('heart', '8')), 'p3'),
+      { type: 'passed', player: 'p4' },
+    ]);
     expect(
-      rule.hooks.modifyLegality?.(bound, single(card('spade', '9')), {
+      rule.hooks.modifyLegality?.(heartBound, single(card('spade', '9')), {
         legal: true,
       }),
     ).toEqual({ legal: false });
     expect(
-      rule.hooks.modifyLegality?.(bound, single(card('heart', '9')), {
+      rule.hooks.modifyLegality?.(heartBound, single(card('heart', '9')), {
         legal: false,
         reasonKey: 'base',
       }),
     ).toEqual({ legal: false, reasonKey: 'base' });
   });
 
-  it('場が流れると直前の手と縛りの記憶を解除する', () => {
-    expect(rule.hooks.afterFieldClear?.(context())).toEqual([
-      {
-        type: 'setMemory',
-        scope: 'game',
-        key: 'previousSuits',
-        value: null,
-      },
-      {
-        type: 'setMemory',
-        scope: 'game',
-        key: 'bindingSuits',
-        value: null,
-      },
-    ]);
+  it('場が流れると履歴上の縛りを解除し、カットインを出さない', () => {
+    const history: PublicGameEvent[] = [
+      played(single(card('heart', '5'))),
+      played(single(card('heart', '8')), 'p2'),
+      { type: 'fieldCleared', reason: 'allPassed', nextLeader: 'p2' },
+      played(single(card('spade', '5')), 'p2'),
+    ];
+    expect(
+      rule.hooks.modifyLegality?.(
+        context(history),
+        single(card('diamond', '8')),
+        { legal: true },
+      ),
+    ).toEqual({ legal: true });
+    expect(rule.hooks.afterFieldClear).toBeUndefined();
   });
 
-  it('縛り成立手で直ちに場が流れると解除効果が最後に適用される', () => {
-    const heart = suits([0, 1, 0, 0]);
-    const activation =
+  it('縛り未成立の通常プレイではカットインを出さない', () => {
+    expect(
       rule.hooks.afterPlay?.(
-        context({ previousSuits: heart }),
-        single(card('heart', '8')),
-      ) ?? [];
-    const reset = rule.hooks.afterFieldClear?.(context()) ?? [];
-    const memory: Record<string, string | null> = {};
-
-    for (const effect of [...activation, ...reset]) {
-      if (effect.type === 'setMemory') {
-        memory[effect.key] =
-          typeof effect.value === 'string' ? effect.value : null;
-      }
-    }
-    expect(memory).toEqual({
-      previousSuits: null,
-      bindingSuits: null,
-    });
+        context([played(single(card('heart', '5')))]),
+        single(card('spade', '8')),
+      ),
+    ).toEqual([]);
   });
 });
