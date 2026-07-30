@@ -287,7 +287,17 @@ export class GitImplementationPublisher implements ScaffoldPublisher {
         '--untracked-files=all',
       ]);
       if (statusLines(status.stdout).length > 0) {
-        throw new Error('recovered generated commit has uncommitted changes');
+        await this.#git([
+          'add',
+          '--',
+          `${directory}/rule.ts`,
+          `${directory}/rule.test.ts`,
+        ]);
+        await this.#git([
+          'commit',
+          '-m',
+          `fix(rules): update ${input.item.job.ruleId}`,
+        ]);
       }
     }
     const headSha = (await this.#git(['rev-parse', 'HEAD'])).stdout.trim();

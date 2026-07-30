@@ -51,9 +51,11 @@ export function cloneValidStrengthOrder(value: unknown): StrengthOrder | null {
     const cloned: unknown = structuredClone(value);
     if (
       !isPlainRecord(cloned) ||
-      !hasExactKeys(cloned, ['ranking']) ||
+      !hasExactKeys(cloned, ['ranking'], ['revolution']) ||
       !Array.isArray(cloned.ranking) ||
-      cloned.ranking.length !== CARD_RANKS.length
+      cloned.ranking.length !== CARD_RANKS.length ||
+      (cloned.revolution !== undefined &&
+        typeof cloned.revolution !== 'boolean')
     ) {
       return null;
     }
@@ -68,7 +70,12 @@ export function cloneValidStrengthOrder(value: unknown): StrengthOrder | null {
     ) {
       return null;
     }
-    return { ranking: [...ranking] };
+    return {
+      ranking: [...ranking],
+      ...(cloned.revolution === undefined
+        ? {}
+        : { revolution: cloned.revolution }),
+    };
   } catch {
     return null;
   }
@@ -108,8 +115,15 @@ export function safeModifyStrength(
       return { result: base, influenced: [] };
     }
     const result = cloneValidStrengthOrder(returned.result);
-    return result
-      ? { result, influenced: validInfluenced(returned.influenced, entries) }
+    const composed =
+      result && result.revolution === undefined && base.revolution !== undefined
+        ? { ...result, revolution: base.revolution }
+        : result;
+    return composed
+      ? {
+          result: composed,
+          influenced: validInfluenced(returned.influenced, entries),
+        }
       : { result: base, influenced: [] };
   } catch {
     return { result: base, influenced: [] };

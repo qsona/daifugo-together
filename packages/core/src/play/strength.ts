@@ -2,6 +2,11 @@ import { CARD_RANKS, type CardRank } from '../cards/card.js';
 
 export interface StrengthOrder {
   ranking: CardRank[];
+  /**
+   * 革命系の永続的な強さ反転が有効かを表す合成シグナル。
+   * 省略時は false。一時的な強さ反転はこの値を変更しない。
+   */
+  revolution?: boolean;
 }
 
 export const BASE_STRENGTH_ORDER: StrengthOrder = {
