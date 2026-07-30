@@ -3,7 +3,7 @@ import type { RuleModule } from '@daifugo/core';
 export const rule: RuleModule = {
   meta: {
     ruleId: 'r0006-two-jokers-all-mighty',
-    name: 'ジョーカー(2枚・オールマイティ)',
+    name: 'ジョーカー',
     description:
       'ジョーカー2枚を有効にする。ジョーカーは単体では革命の影響を受けない最強カードで、同一ランクの組および階段では任意のカードを代用する。ジョーカーを含む手で手札を出し切ったプレイヤーは、反則あがりとして最下位にする。',
     kind: 'local',

@@ -1,6 +1,6 @@
 {
   "ruleId": "r0008-shibari-double-shibari",
-  "name": "縛り(しばり)・ダブル縛り",
+  "name": "しばり",
   "description": "同じ場で連続して出されたJOKERを含まない手のスート構成が完全に一致した場合、場が流れるまで、そのスート構成と完全に一致する手だけを合法とする。JOKERを含む手は不足するスートを代用して既存の縛りを満たせるが、新しい縛りの成立判定には使わない。場が流れると縛りを解除する。",
   "kind": "local",
   "proposalId": "01KYQNNS40BN7CXGYDHZQCKQD3",
