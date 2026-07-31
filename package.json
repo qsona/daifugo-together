@@ -14,6 +14,8 @@
     "lint": "eslint . --max-warnings 0 && node scripts/check-ai-boundaries.mjs",
     "lint:design": "node scripts/check-design-tokens.mjs && node scripts/check-key-visual.mjs && node scripts/outline-key-visual.mjs --check",
     "ops": "pnpm --filter @daifugo/server ops:dev",
+    "rules:bump-changed": "pnpm --filter @daifugo/rules build && node scripts/check-rule-version-bumps.mjs --write",
+    "rules:check-versions": "pnpm --filter @daifugo/rules build && node scripts/check-rule-version-bumps.mjs",
     "start": "pnpm --filter @daifugo/server start",
     "sync:production-proposals": "pnpm --filter @daifugo/server build && node scripts/sync-production-proposals.mjs",
     "test": "pnpm --filter @daifugo/ai... build && vitest run",

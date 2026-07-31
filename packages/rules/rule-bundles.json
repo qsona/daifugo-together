@@ -1,0 +1,42 @@
+{
+  "r0001-eight-cut": {
+    "version": 2,
+    "hash": "c2d86bb0d6bd9c66177a663ee281006cc12aae112e45fdd314f3f511e8d94496"
+  },
+  "r0002-kaidan": {
+    "version": 1,
+    "hash": "2164002b2d46104ce3e87885c24e16d4bd62f73d24a42c80520b32e85c16ed07"
+  },
+  "r0003-kakumei": {
+    "version": 2,
+    "hash": "d701feaa5b17c1e292f75bc08210fd35b6ff079648f7e90655cacc6b9216c91a"
+  },
+  "r0004-no-finish-with-two": {
+    "version": 1,
+    "hash": "30d2ff94c4b967bb17549286b2fa628dc0e72c30529ed99f6b46a73014c155bc"
+  },
+  "r0005-eleven-back": {
+    "version": 2,
+    "hash": "19ae0b3153dc9e15f902c4ebee3a2b5ae4ad3cf56322594e119ddaa3181f703d"
+  },
+  "r0006-two-jokers-all-mighty": {
+    "version": 2,
+    "hash": "2f1a40544d2004a8f24a338586c455fbf6acd153dda234749c20a7009f4d2360"
+  },
+  "r0007-spade-3-gaeshi": {
+    "version": 2,
+    "hash": "14e53eeacefd7d13b0efb3129cf442af9211a38bd2312e9304810922b93662a4"
+  },
+  "r0008-shibari-double-shibari": {
+    "version": 3,
+    "hash": "3002bc003d5b878267f200598f0dba12de514ffb42dd512cb449a37b8c9452a8"
+  },
+  "r0009-miyako-ochi": {
+    "version": 2,
+    "hash": "9c298f57f4c500795f56428e65c14fd3a017934fe7714e232af43bde3400923c"
+  },
+  "r0010-ten-discard": {
+    "version": 1,
+    "hash": "b023e599269fa6b1756a3fe58f5978e65b7b431bf18da472976e171b915984dc"
+  }
+}
