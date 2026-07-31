@@ -1,13 +1,24 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  inviteCodeFromSearch,
   parseRoomRoute,
+  roomInviteUrl,
   roomPath,
   screenFromPathname,
   screenPath,
 } from './routing';
 
 describe('画面ルーティング', () => {
+  it('共有URLに招待コードを埋め込み、URLから安全に復元する', () => {
+    expect(roomInviteUrl('01234', 'https://example.com')).toBe(
+      'https://example.com/?room=01234',
+    );
+    expect(inviteCodeFromSearch('?room=01234')).toBe('01234');
+    expect(inviteCodeFromSearch('?room=1234')).toBeNull();
+    expect(inviteCodeFromSearch('?room=12A45')).toBeNull();
+  });
+
   it('通常画面を往復変換する', () => {
     expect(screenPath('menu')).toBe('/menu');
     expect(screenPath('proposal')).toBe('/proposals/new');

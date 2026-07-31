@@ -54,8 +54,10 @@ import { TitleScreen } from './screens/TitleScreen';
 import { WaitingRoomScreen } from './screens/WaitingRoomScreen';
 import { useScreenStore } from './store/screen';
 import {
+  inviteCodeFromSearch,
   navigate,
   parseRoomRoute,
+  roomInviteUrl,
   roomPath,
   screenFromPathname,
 } from './routing';
@@ -315,6 +317,7 @@ function DemoApp() {
         <WaitingRoomScreen
           members={DEMO_MEMBERS}
           inviteCode={DEMO_INVITE_CODE}
+          inviteUrl={roomInviteUrl(DEMO_INVITE_CODE, window.location.origin)}
           activeRuleCount={DEMO_ACTIVE_RULE_COUNT}
           onBack={() => {
             go('menu');
@@ -606,7 +609,13 @@ function ConnectedApp({
     client.snapshot,
     client.snapshot,
   );
-  const [isChoosingRoom, setIsChoosingRoom] = useState(false);
+  const sharedInviteCode =
+    typeof window === 'undefined'
+      ? null
+      : inviteCodeFromSearch(window.location.search);
+  const [isChoosingRoom, setIsChoosingRoom] = useState(
+    sharedInviteCode !== null,
+  );
   const [selectedCardIds, setSelectedCardIds] = useState<readonly string[]>([]);
   const [funRating, setFunRating] = useState<SetFunRating | null>(null);
   const [ruleVotes, setRuleVotes] = useState<Record<string, RuleVote>>({});
@@ -1200,11 +1209,13 @@ function ConnectedApp({
     const you = room.members.find(
       (member) => member.memberId === room.you.memberId,
     );
+    const inviteUrl = roomInviteUrl(room.inviteCode, window.location.origin);
     return show(
       <>
         <WaitingRoomScreen
           members={waitingMembers(room)}
           inviteCode={room.inviteCode}
+          inviteUrl={inviteUrl}
           activeRuleCount={room.activeRules.length}
           onBack={() => {
             if (!window.confirm('部屋から出ますか?')) return;
@@ -1215,7 +1226,10 @@ function ConnectedApp({
             );
           }}
           onCopyInvite={() => {
-            void navigator.clipboard?.writeText(room.inviteCode);
+            if (!navigator.clipboard) {
+              return Promise.reject(new Error('clipboard_unavailable'));
+            }
+            return navigator.clipboard.writeText(inviteUrl);
           }}
           onViewRules={() => {
             openRules();
@@ -1471,10 +1485,10 @@ function ConnectedApp({
     );
   }
 
-  if (current === 'title') {
+  if (!sharedInviteCode && current === 'title') {
     return show(<TitleScreen onStart={() => go('menu')} />);
   }
-  if (current === 'proposal') {
+  if (!sharedInviteCode && current === 'proposal') {
     return show(
       <ProposalFormScreen
         api={getBrowserProposalClient()}
@@ -1484,7 +1498,7 @@ function ConnectedApp({
       />,
     );
   }
-  if (current === 'myProposals') {
+  if (!sharedInviteCode && current === 'myProposals') {
     return show(
       <MyProposalsScreen
         api={proposalApi}
@@ -1493,7 +1507,7 @@ function ConnectedApp({
       />,
     );
   }
-  if (current === 'ruleDex') {
+  if (!sharedInviteCode && current === 'ruleDex') {
     return show(
       <RuleDexScreen api={ruleCatalogApi} onBack={() => go('menu')} />,
     );
@@ -1523,6 +1537,7 @@ function ConnectedApp({
           {...(!state.registered
             ? { anonymousDisplayName: state.displayName }
             : {})}
+          {...(sharedInviteCode ? { initialInviteCode: sharedInviteCode } : {})}
           initialMode={playSheetError === GRADUATION_ERROR ? 'community' : null}
           onCreate={(mode) => {
             setPlaySheetError(null);
@@ -1550,6 +1565,9 @@ function ConnectedApp({
           onClose={() => {
             setIsChoosingRoom(false);
             setPlaySheetError(null);
+            if (sharedInviteCode) {
+              navigate('/menu', 'replace');
+            }
           }}
           error={playSheetError ?? friendlyError(state.error)}
         />

@@ -32,6 +32,17 @@ export type RoomRoute = {
   ruleId?: string;
 };
 
+export function inviteCodeFromSearch(search: string): string | null {
+  const inviteCode = new URLSearchParams(search).get('room');
+  return inviteCode && /^[0-9]{5}$/.test(inviteCode) ? inviteCode : null;
+}
+
+export function roomInviteUrl(inviteCode: string, origin: string): string {
+  const url = new URL('/', origin);
+  url.searchParams.set('room', inviteCode);
+  return url.href;
+}
+
 export function screenPath(screen: ScreenId): string {
   return SCREEN_PATHS[screen];
 }

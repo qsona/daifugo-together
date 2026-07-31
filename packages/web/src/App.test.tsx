@@ -432,6 +432,60 @@ describe('画面のURLとリロード復帰', () => {
     expect(window.location.pathname).toBe('/proposals/new');
   });
 
+  it('招待リンクを開いた匿名ユーザーが名前を確認して部屋へ参加できる', async () => {
+    window.history.replaceState({}, '', '/?room=01234');
+    const waitingRoom = {
+      ...tutorialHintRoom('community', []),
+      phase: 'waiting',
+      game: null,
+    } satisfies PlayerRoomView;
+    let state: MultiplayerState = {
+      connection: 'ready',
+      registered: false,
+      displayName: 'ゲスト',
+      room: null,
+      roomClosedReason: null,
+      error: null,
+    };
+    const listeners = new Set<() => void>();
+    const joinRoom = vi.fn(async (inviteCode: string) => {
+      expect(inviteCode).toBe('01234');
+      state = { ...state, room: waitingRoom };
+      for (const listener of listeners) listener();
+    });
+    const client = {
+      subscribe: (listener: () => void) => {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+      snapshot: () => state,
+      joinRoom,
+    } as unknown as MultiplayerClient;
+
+    render(<App client={client} />);
+
+    expect(
+      await screen.findByRole('dialog', { name: '友だちの部屋にはいる' }),
+    ).toBeTruthy();
+    expect(
+      (screen.getByLabelText('招待コード') as HTMLInputElement).value,
+    ).toBe('01234');
+    expect(
+      (screen.getByLabelText('あなたのなまえ') as HTMLInputElement).value,
+    ).toBe('ゲスト');
+
+    await userEvent
+      .setup()
+      .click(screen.getByRole('button', { name: 'はいる' }));
+
+    await waitFor(() => expect(joinRoom).toHaveBeenCalledOnce());
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: '待機中' })).toBeTruthy(),
+    );
+    expect(window.location.pathname).toBe('/rooms/tutorial-room/waiting');
+    expect(window.location.search).toBe('');
+  });
+
   it('接続確定前の対局URLではタイトルへ戻さず復帰中と表示する', () => {
     window.history.replaceState({}, '', '/rooms/room-1/game');
     const connectingState: MultiplayerState = {

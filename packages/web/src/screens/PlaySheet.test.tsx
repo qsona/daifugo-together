@@ -97,6 +97,28 @@ describe('TU-01: あそぶモードの選択', () => {
     expect(onJoin).toHaveBeenCalledWith('01234', 'たろう');
   });
 
+  it('招待リンクから開くとコード入力済みの参加フォームから始める', () => {
+    render(
+      <PlaySheet
+        anonymousDisplayName="ゲスト000001"
+        initialInviteCode="01234"
+        onCreate={vi.fn()}
+        onJoin={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole('dialog', { name: '友だちの部屋にはいる' }),
+    ).toBeTruthy();
+    expect(
+      (screen.getByLabelText('招待コード') as HTMLInputElement).value,
+    ).toBe('01234');
+    expect(
+      (screen.getByLabelText('あなたのなまえ') as HTMLInputElement).value,
+    ).toBe('ゲスト000001');
+  });
+
   it('匿名ユーザーのなまえはサーバーと同じ制約で検証する', async () => {
     const user = userEvent.setup();
     render(

@@ -13,6 +13,8 @@ type PlaySheetProps = {
   onClose: () => void;
   /** 匿名ユーザーの現在の表示名。指定時だけ入室前の名前入力を出す。 */
   anonymousDisplayName?: string | null;
+  /** 招待リンクから開いたときの初期コード。この場合は参加フォームから始める。 */
+  initialInviteCode?: string;
   initialMode?: RoomMode | null;
   error?: string | null;
 };
@@ -28,12 +30,15 @@ export function PlaySheet({
   onJoin,
   onClose,
   anonymousDisplayName,
+  initialInviteCode,
   initialMode = null,
   error,
 }: PlaySheetProps) {
-  const [code, setCode] = useState('');
+  const [code, setCode] = useState(
+    () => initialInviteCode?.replaceAll(/[^0-9]/g, '').slice(0, 5) ?? '',
+  );
   const [displayName, setDisplayName] = useState(anonymousDisplayName ?? '');
-  const [isJoining, setIsJoining] = useState(false);
+  const [isJoining, setIsJoining] = useState(initialInviteCode !== undefined);
   const asksDisplayName = anonymousDisplayName !== undefined;
   const parsedDisplayName = asksDisplayName
     ? clientPayloadSchemas['user:rename'].safeParse({ displayName })

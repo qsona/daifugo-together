@@ -9,6 +9,7 @@ import screen from './screen.module.css';
 type WaitingRoomScreenProps = {
   members: readonly MemberView[];
   inviteCode: string;
+  inviteUrl: string;
   /** 有効ルールの件数。適用ルールセットは選べない(全体共有)。 */
   activeRuleCount: number;
   onBack: () => void;
@@ -25,6 +26,7 @@ type WaitingRoomScreenProps = {
 export function WaitingRoomScreen({
   members,
   inviteCode,
+  inviteUrl,
   activeRuleCount,
   onBack,
   onCopyInvite,
@@ -48,7 +50,11 @@ export function WaitingRoomScreen({
          * (UI文言ガイド 原則 2・3)。
          */}
         <MemberList members={members} />
-        <InviteCode code={inviteCode} onCopy={onCopyInvite} />
+        <InviteCode
+          code={inviteCode}
+          inviteUrl={inviteUrl}
+          onCopy={onCopyInvite}
+        />
         {/*
          * ルールセットは選べないので「変更不可」は書かない。対局画面と同じ語彙にする。
          * 主導線は「はじめる」なので、脇道であることが分かる大きさに留める。
