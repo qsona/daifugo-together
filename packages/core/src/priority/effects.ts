@@ -55,6 +55,8 @@ export function conflictKeyOf(
   switch (effect.type) {
     case 'clearField':
       return 'field';
+    case 'requestChoice':
+      return 'choice';
     case 'skipTurns':
       return `turn:${effect.player}`;
     case 'reverseTurnOrder':

@@ -13,7 +13,12 @@ import type { FieldState } from '../game/types.js';
 import type { Play } from '../play/play.js';
 import type { StrengthOrder } from '../play/strength.js';
 
-export const ENGINE_CONTRACT_VERSION = 1;
+export type RuleContractVersion = 1 | 2;
+
+export const ENGINE_CONTRACT_VERSION: RuleContractVersion = 2;
+export const SUPPORTED_CONTRACT_VERSIONS: readonly RuleContractVersion[] = [
+  1, 2,
+];
 
 /** エンジンのネイティブ機能のうち、ルールが宣言で有効化できるもの。 */
 export type EngineFeature = 'sequence' | 'jokers';
@@ -56,7 +61,7 @@ export interface RuleMeta {
   kind: 'local' | 'original';
   prefecture?: string;
   proposalId: string;
-  contractVersion: number;
+  contractVersion: RuleContractVersion;
   messages: Record<string, string>;
   /** このルールが要求するエンジン機能。省略時は []。 */
   engineFeatures?: readonly EngineFeature[];
@@ -104,14 +109,18 @@ export interface RuleHooks {
     context: RuleContext,
     base: DeepReadonly<StrengthOrder>,
   ): DeepReadonly<StrengthOrder>;
-  afterPlay(context: RuleContext, play: DeepReadonly<Play>): Effect[];
+  afterPlay(
+    context: RuleContext,
+    play: DeepReadonly<Play>,
+    input?: DeepReadonly<RuleInput>,
+  ): Effect[];
   afterFieldClear(context: RuleContext): Effect[];
   onGameStart(context: RuleContext): Effect[];
   onGameEnd(context: RuleContext, standings: DeepReadonly<Standings>): Effect[];
 }
 
 export interface RuleContext {
-  readonly contractVersion: 1;
+  readonly contractVersion: RuleContractVersion;
   readonly game: GameView;
   readonly setHistory: readonly DeepReadonly<GameResult>[];
   readonly memory: {
@@ -160,6 +169,12 @@ export type CardSelector =
 
 export type MemoryScope = 'game' | 'set';
 
+export interface RuleInput {
+  kind: 'cards';
+  choiceId: string;
+  cardIds: CardId[];
+}
+
 /**
  * Declarative state changes accepted from contract v1 rules.
  *
@@ -168,6 +183,7 @@ export type MemoryScope = 'game' | 'set';
  * | Effect | afterPlay | afterFieldClear | onGameStart | onGameEnd |
  * | --- | --- | --- | --- | --- |
  * | clearField | yes | no | no | no |
+ * | requestChoice (contract v2) | yes | no | no | no |
  * | skipTurns / reverseTurnOrder / forceRank / moveCards | yes | yes | yes | no |
  * | setMemory | yes | yes | yes | set scope only |
  * | announce | yes | yes | yes | yes |
@@ -180,6 +196,15 @@ export type MemoryScope = 'game' | 'set';
  */
 export type Effect =
   | { type: 'clearField' }
+  | {
+      type: 'requestChoice';
+      player: PlayerId;
+      choiceId: string;
+      from: Extract<Zone, { kind: 'hand' }>;
+      cards: CardSelector;
+      count: number;
+      messageKey: string;
+    }
   | { type: 'skipTurns'; player: PlayerId; count: number }
   | { type: 'reverseTurnOrder' }
   | { type: 'forceRank'; player: PlayerId; rank: Standing | 'lowest' }

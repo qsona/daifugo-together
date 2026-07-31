@@ -102,6 +102,21 @@ describe('イレブンバック', () => {
     );
   });
 
+  it('ジョーカーがJを代用しても発動しない (自然カードのJのみが対象)', () => {
+    const played: Play = {
+      kind: 'sequence',
+      cards: [
+        naturalCard('10'),
+        { kind: 'joker', id: 'JK0', index: 0 },
+        naturalCard('Q'),
+      ],
+      count: 3,
+      repRank: 'Q',
+    };
+
+    expect(rule.hooks?.afterPlay?.(contextWith(false), played)).toEqual([]);
+  });
+
   it('場が流れると一時反転を解除して直前の基準へ戻す', () => {
     expect(rule.hooks?.afterFieldClear?.(contextWith(true))).toEqual([
       {

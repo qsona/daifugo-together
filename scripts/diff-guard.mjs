@@ -163,8 +163,8 @@ function validateMeta(meta, directory) {
   if (meta.kind !== 'local' && meta.kind !== 'original') {
     violations.push('meta.json: kind は local または original が必要です。');
   }
-  if (meta.contractVersion !== 1) {
-    violations.push('meta.json: contractVersion は 1 が必要です。');
+  if (meta.contractVersion !== 1 && meta.contractVersion !== 2) {
+    violations.push('meta.json: contractVersion は 1 または 2 が必要です。');
   }
   if (
     meta.prefecture !== undefined &&

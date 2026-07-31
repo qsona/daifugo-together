@@ -10,6 +10,7 @@ import type {
   Legality,
   RuleChainEntry,
   RuleContext,
+  RuleInput,
   Standings,
 } from './contract.js';
 import { detachedFrozen } from './context.js';
@@ -214,6 +215,7 @@ export function safeCollectEffects(
   entries: RuleChainEntry[],
   context: RuleContext,
   argument?: Play | Standings,
+  input?: { ruleId: string; value: RuleInput },
 ): unknown {
   try {
     const returned: unknown = port.collectEffects(
@@ -223,6 +225,9 @@ export function safeCollectEffects(
       argument === undefined
         ? undefined
         : (detachedFrozen(argument) as Play | Standings),
+      input === undefined
+        ? undefined
+        : (detachedFrozen(input) as { ruleId: string; value: RuleInput }),
     );
     return structuredClone(returned);
   } catch {

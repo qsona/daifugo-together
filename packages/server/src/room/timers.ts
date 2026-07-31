@@ -204,7 +204,8 @@ export class RoomTimerCoordinator {
       this.#decideTurn &&
       state.phase === 'playing' &&
       state.engine?.phase.name === 'gameInProgress' &&
-      state.engine.currentGame?.public.phase === 'awaitingPlay' &&
+      (state.engine.currentGame?.public.phase === 'awaitingPlay' ||
+        state.engine.currentGame?.public.phase === 'awaitingChoice') &&
       state.engine.currentGame.public.turn
     ) {
       const memberId = state.engine.currentGame.public.turn;

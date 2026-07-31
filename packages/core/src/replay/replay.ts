@@ -1,4 +1,7 @@
-import { ENGINE_CONTRACT_VERSION } from '../rules/contract.js';
+import {
+  ENGINE_CONTRACT_VERSION,
+  SUPPORTED_CONTRACT_VERSIONS,
+} from '../rules/contract.js';
 import { NO_RULE_CHAIN_PORT, type RuleChainPort } from '../rules/chain.js';
 import { reduceSet, startSet, type StartSetInput } from '../set/set-reducer.js';
 import type {
@@ -74,7 +77,15 @@ function warningsFor(
   }
   if (
     expectations.contractVersion !== undefined &&
-    expectations.contractVersion !== init.contractVersion
+    expectations.contractVersion !== init.contractVersion &&
+    !(
+      SUPPORTED_CONTRACT_VERSIONS.includes(
+        init.contractVersion as (typeof SUPPORTED_CONTRACT_VERSIONS)[number],
+      ) &&
+      SUPPORTED_CONTRACT_VERSIONS.includes(
+        expectations.contractVersion as (typeof SUPPORTED_CONTRACT_VERSIONS)[number],
+      )
+    )
   ) {
     warnings.push(
       `contractVersion mismatch: replay=${init.contractVersion}, current=${expectations.contractVersion}`,

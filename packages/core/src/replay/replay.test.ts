@@ -79,7 +79,6 @@ describe('GE-05 replay execution and append boundary', () => {
     });
     expect(replayed.warnings).toEqual([
       'engineVersion mismatch: replay=old-engine, current=new-engine',
-      'contractVersion mismatch: replay=1, current=2',
     ]);
 
     const records: ReplayRecord[] = [];

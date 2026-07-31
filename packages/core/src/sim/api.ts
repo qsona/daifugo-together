@@ -134,7 +134,7 @@ export function createSimulationApi(
     },
 
     applyPlay(position, action) {
-      const transition = reduceGame(
+      let transition = reduceGame(
         config,
         position.state,
         action,
@@ -146,6 +146,37 @@ export function createSimulationApi(
             transition.rejections,
           )}`,
         );
+      }
+      const pending = transition.state.private.pendingChoice;
+      if (
+        transition.state.public.phase === 'awaitingChoice' &&
+        pending !== undefined
+      ) {
+        const resumed = reduceGame(
+          config,
+          transition.state,
+          {
+            type: 'ruleInput',
+            player: pending.player,
+            choiceId: pending.choiceId,
+            cardIds: [...pending.optionCardIds].sort().slice(0, pending.count),
+          },
+          {
+            ...runtimeFor(position),
+            setMemory: transition.setMemory ?? position.setMemory,
+          },
+        );
+        if (resumed.rejections.length > 0) {
+          throw new Error(
+            `Simulation rule input was rejected: ${JSON.stringify(
+              resumed.rejections,
+            )}`,
+          );
+        }
+        transition = {
+          ...resumed,
+          events: [...transition.events, ...resumed.events],
+        };
       }
       return {
         position: {

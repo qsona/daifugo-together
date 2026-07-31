@@ -6,6 +6,7 @@ import type {
   Legality,
   RuleChainEntry,
   RuleContext,
+  RuleInput,
   Standings,
 } from './contract.js';
 
@@ -36,6 +37,7 @@ export interface RuleChainPort {
     entries: RuleChainEntry[],
     context: RuleContext,
     argument?: Play | Standings,
+    input?: { ruleId: RuleId; value: RuleInput },
   ): { ruleId: RuleId; effects: Effect[] }[];
 }
 

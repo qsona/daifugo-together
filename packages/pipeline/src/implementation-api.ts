@@ -123,6 +123,9 @@ function queuedImplementation(value: unknown): value is QueuedImplementation {
     typeof source.body === 'string' &&
     scaffoldMeta !== null &&
     typeof scaffoldMeta.slug === 'string' &&
+    (scaffoldMeta.contractVersion === undefined ||
+      scaffoldMeta.contractVersion === 1 ||
+      scaffoldMeta.contractVersion === 2) &&
     messages(scaffoldMeta.messages)
   );
 }

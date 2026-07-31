@@ -57,6 +57,16 @@ export function buildPlayerSnapshot(
   ).result;
   const isTurn =
     state.public.phase === 'awaitingPlay' && state.public.turn === forPlayer;
+  const pending = state.private.pendingChoice;
+  const pendingCards =
+    pending?.player === forPlayer
+      ? pending.optionCardIds.flatMap((cardId) => {
+          const card = ownState.hand.find(
+            (candidate) => candidate.id === cardId,
+          );
+          return card ? [card] : [];
+        })
+      : [];
 
   return structuredClone({
     forPlayer,
@@ -106,5 +116,16 @@ export function buildPlayerSnapshot(
       name,
     })),
     history: [...state.public.history],
+    pendingChoice:
+      pending === undefined
+        ? null
+        : {
+            ruleId: pending.ruleId,
+            player: pending.player,
+            choiceId: pending.choiceId,
+            messageKey: pending.messageKey,
+            count: pending.count,
+            cards: pendingCards,
+          },
   });
 }

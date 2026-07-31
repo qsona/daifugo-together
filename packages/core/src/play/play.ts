@@ -3,7 +3,7 @@ import type { PlayRank } from './strength.js';
 
 export type PlayKind = 'single' | 'set' | 'sequence';
 
-/** 解釈タイブレーク用の kind 優先順 (single < set < sequence)。 */
+/** kind 未指定時の自動解釈優先順 (single < set < sequence)。 */
 export const PLAY_KIND_ORDER: Record<PlayKind, number> = {
   single: 0,
   set: 1,

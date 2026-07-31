@@ -143,6 +143,14 @@ export interface MultiplayerGameView {
   previousResults: GameResultView[];
   yourHand: Card[];
   legalMoves: Play[] | null;
+  pendingChoice?: {
+    ruleId: string;
+    choiceId: string;
+    message: string | null;
+    seat: SeatId;
+    count: number;
+    cards: Card[] | null;
+  } | null;
 }
 
 export interface SetResultView {
@@ -202,6 +210,13 @@ export const clientPayloadSchemas = {
       kind: z.enum(['single', 'set', 'sequence']).optional(),
     })
     .strict(),
+  'game:ruleInput': z
+    .object({
+      turnSeq: turnSeqSchema,
+      choiceId: z.string().regex(/^[a-z][a-z0-9_]{0,63}$/),
+      cardIds: z.array(z.string().min(1)).min(1).max(14),
+    })
+    .strict(),
   'game:pass': z.object({ turnSeq: turnSeqSchema }).strict(),
   'sync:request': emptyPayloadSchema,
   'user:rename': z
@@ -250,6 +265,10 @@ export interface ClientToServerEvents {
   ) => void;
   'game:play': (
     payload: ClientPayload<'game:play'>,
+    ack: (result: Ack<Record<string, never>>) => void,
+  ) => void;
+  'game:ruleInput': (
+    payload: ClientPayload<'game:ruleInput'>,
     ack: (result: Ack<Record<string, never>>) => void,
   ) => void;
   'game:pass': (

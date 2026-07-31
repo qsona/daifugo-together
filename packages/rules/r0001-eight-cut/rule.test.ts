@@ -85,12 +85,12 @@ describe('8切り', () => {
     const played: Play = {
       kind: 'sequence',
       cards: [
+        card('S06', '6', 'spade'),
         card('S07', '7', 'spade'),
         { kind: 'joker', id: 'JK0', index: 0 },
-        card('S09', '9', 'spade'),
       ],
       count: 3,
-      repRank: '9',
+      repRank: '8',
     };
 
     expect(

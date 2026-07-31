@@ -1232,17 +1232,27 @@ function ConnectedApp({
   if (room?.phase === 'playing' && room.game?.status === 'playing') {
     const game = room.game;
     const selected = [...selectedCardIds].sort();
-    const legalSelection =
-      game.legalMoves?.some(
-        (move) =>
-          move.cards.length === selected.length &&
-          move.cards
-            .map((card) => card.id)
-            .sort()
-            .every((id, index) => id === selected[index]),
-      ) ?? false;
+    const pendingChoice =
+      game.pendingChoice?.seat === room.you.seatId &&
+      game.pendingChoice.cards !== null
+        ? game.pendingChoice
+        : null;
+    const choiceCardIds = new Set(
+      pendingChoice?.cards?.map((card) => card.id) ?? [],
+    );
+    const legalSelection = pendingChoice
+      ? selected.length === pendingChoice.count &&
+        selected.every((id) => choiceCardIds.has(id))
+      : (game.legalMoves?.some(
+          (move) =>
+            move.cards.length === selected.length &&
+            move.cards
+              .map((card) => card.id)
+              .sort()
+              .every((id, index) => id === selected[index]),
+        ) ?? false);
     const cardHints =
-      room.mode === 'basic'
+      room.mode === 'basic' && !pendingChoice
         ? deriveCardHints(game.yourHand, game.legalMoves, selectedCardIds)
         : undefined;
     const leadMember = room.members.find(
@@ -1277,13 +1287,25 @@ function ConnectedApp({
           showStrengthScale={tutorialEligible}
           isMyTurn={game.turn?.seat === room.you.seatId}
           canPlay={legalSelection}
-          canPass={game.field.cards.length > 0}
+          canPass={!pendingChoice && game.field.cards.length > 0}
+          playLabel={
+            pendingChoice
+              ? `えらんだ${String(pendingChoice.count)}枚を捨てる`
+              : 'えらんだカードを出す'
+          }
+          actionPrompt={
+            pendingChoice
+              ? (pendingChoice.message ??
+                `カードを${String(pendingChoice.count)}枚選んでください`)
+              : null
+          }
           turnDeadlineAt={game.turn?.deadlineAt ?? null}
           onViewRules={() => {
             openRules();
           }}
           onOpenActivation={openRules}
           onToggleCard={(id) => {
+            if (pendingChoice && !choiceCardIds.has(id)) return;
             setSelectedCardIds((ids) =>
               ids.includes(id)
                 ? ids.filter((item) => item !== id)
@@ -1293,7 +1315,12 @@ function ConnectedApp({
           onPlay={() => {
             if (!game.turn || !legalSelection) return;
             invoke(
-              client.play(game.turn.turnSeq, [...selectedCardIds]).then(() => {
+              (pendingChoice
+                ? client.ruleInput(game.turn.turnSeq, pendingChoice.choiceId, [
+                    ...selectedCardIds,
+                  ])
+                : client.play(game.turn.turnSeq, [...selectedCardIds])
+              ).then(() => {
                 setSelectedCardIds([]);
               }),
             );

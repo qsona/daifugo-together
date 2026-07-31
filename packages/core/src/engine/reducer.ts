@@ -18,7 +18,7 @@ import {
 import { rankPosition, type StrengthOrder } from '../play/strength.js';
 import { noRuleRuntime, type RuleRuntime } from '../rules/chain.js';
 import { engineFeaturesOf } from '../rules/contract.js';
-import { executeEffectHook } from './effects.js';
+import { executeEffectHook, type EffectHookResult } from './effects.js';
 import {
   activePlayers,
   finishGame,
@@ -428,25 +428,25 @@ function removeCards(hand: readonly Card[], selected: readonly Card[]): Card[] {
 }
 
 /**
- * 解釈の決定順: 実効 StrengthOrder 上で最弱の repRank を先頭に、
- * 同順位は kind 優先順 (single < set < sequence)、次いでカード ID 列の
- * 辞書順で並べる。生成順に依存しない決定的な順序。
+ * 解釈の決定順: kind 優先順 (single < set < sequence) を先に適用し、
+ * 同じ kind では実効 StrengthOrder 上で最強の repRank を先頭にする。
+ * 最後はカード ID 列の辞書順で、生成順に依存しない決定的な順序にする。
  */
-function sortMatchesWeakestFirst(
+function sortMatchesPreferredFirst(
   matches: readonly PlayCandidateMatch[],
   strength: StrengthOrder,
 ): PlayCandidateMatch[] {
   return [...matches].sort((left, right) => {
-    const byStrength =
-      rankPosition(left.play.repRank, strength) -
-      rankPosition(right.play.repRank, strength);
-    if (byStrength !== 0) {
-      return byStrength;
-    }
     const byKind =
       PLAY_KIND_ORDER[left.play.kind] - PLAY_KIND_ORDER[right.play.kind];
     if (byKind !== 0) {
       return byKind;
+    }
+    const byStrength =
+      rankPosition(right.play.repRank, strength) -
+      rankPosition(left.play.repRank, strength);
+    if (byStrength !== 0) {
+      return byStrength;
     }
     const leftIds = left.play.cards.map((card) => card.id).join(',');
     const rightIds = right.play.cards.map((card) => card.id).join(',');
@@ -454,117 +454,16 @@ function sortMatchesWeakestFirst(
   });
 }
 
-function reducePlay(
+function completeAfterPlay(
   config: GameConfig,
-  state: GameState,
-  action: Extract<GameAction, { type: 'play' }>,
+  initialState: GameState,
+  player: PlayerId,
+  initialEvents: EngineEvent[],
+  effects: EffectHookResult,
   runtime: RuleRuntime,
 ): GameTransition {
-  const player = state.players[action.player];
-  if (!player) {
-    return reject(state, action.player, 'CARD_NOT_IN_HAND');
-  }
-  const baseFieldExists = state.public.field.current !== undefined;
-  const candidates = generateCandidates(
-    player.hand,
-    engineFeaturesOf(config.ruleChain),
-  );
-  const matched = matchPlayCandidates(
-    player.hand,
-    action.cards,
-    candidates,
-    action.kind,
-  );
-  if (!matched.ok) {
-    return reject(state, action.player, matched.code);
-  }
-  const evaluated = evaluateCandidates(config, state, candidates, runtime, {
-    authoritative: true,
-  });
-  const legalMatches = matched.matches.filter(
-    (match) => evaluated.results[match.index]?.legal === true,
-  );
-  if (legalMatches.length === 0) {
-    if (
-      baseFieldExists &&
-      matched.matches.every(
-        (match) => evaluated.baseResults[match.index]?.legal === false,
-      )
-    ) {
-      return reject(state, action.player, 'TOO_WEAK');
-    }
-    const ordered = sortMatchesWeakestFirst(
-      matched.matches,
-      evaluated.strength,
-    );
-    const finalLegality = evaluated.results[ordered[0]!.index];
-    return reject(
-      state,
-      action.player,
-      'FORBIDDEN_BY_RULE',
-      finalLegality?.legal === false ? finalLegality.reasonKey : undefined,
-    );
-  }
-  const interpretedPlay = sortMatchesWeakestFirst(
-    legalMatches,
-    evaluated.strength,
-  )[0]!.play;
-
-  const priorFieldCards = state.public.field.current?.play.cards ?? [];
-  const playedEvent: PublicGameEvent = {
-    type: 'played',
-    player: action.player,
-    play: interpretedPlay,
-  };
-  let nextState: GameState = {
-    ...evaluated.state,
-    public: {
-      ...evaluated.state.public,
-      field: {
-        current: { play: interpretedPlay, by: action.player },
-        passedSinceLastPlay: [],
-      },
-      discard: [...evaluated.state.public.discard, ...priorFieldCards],
-      firedRules: evaluated.state.public.firedRules,
-      turnCount: evaluated.state.public.turnCount + 1,
-    },
-    players: {
-      ...evaluated.state.players,
-      [action.player]: {
-        ...player,
-        hand: removeCards(player.hand, interpretedPlay.cards),
-      },
-    },
-  };
-  const events: EngineEvent[] = [
-    ...(evaluated.failsafeActivated
-      ? [
-          {
-            type: 'failsafe' as const,
-            reason: 'leadNoLegalMove' as const,
-            relatedRuleIds: evaluated.influenced,
-          },
-        ]
-      : []),
-    playedEvent,
-  ];
-  if (nextState.players[action.player]?.hand.length === 0) {
-    const finished = finishPlayer(nextState, action.player);
-    nextState = finished.state;
-    events.push(finished.event);
-  }
-
-  const effects = executeEffectHook(
-    config,
-    nextState,
-    runtime,
-    'afterPlay',
-    interpretedPlay,
-    evaluated.strength,
-  );
-  nextState = effects.state;
-  events.push(...effects.events);
-
+  const events = [...initialEvents];
+  const nextState = effects.state;
   if (nextState.public.turnCount > TURN_LIMIT) {
     const finished = finishForTurnLimit(
       config,
@@ -630,7 +529,7 @@ function reducePlay(
   const advanced = advanceTurn(
     config,
     appendEvents(nextState, events),
-    action.player,
+    player,
     {
       ...runtime,
       setMemory: effects.setMemory,
@@ -669,12 +568,237 @@ function reducePlay(
   };
 }
 
+function reducePlay(
+  config: GameConfig,
+  state: GameState,
+  action: Extract<GameAction, { type: 'play' }>,
+  runtime: RuleRuntime,
+): GameTransition {
+  const player = state.players[action.player];
+  if (!player) {
+    return reject(state, action.player, 'CARD_NOT_IN_HAND');
+  }
+  const baseFieldExists = state.public.field.current !== undefined;
+  const candidates = generateCandidates(
+    player.hand,
+    engineFeaturesOf(config.ruleChain),
+  );
+  const matched = matchPlayCandidates(
+    player.hand,
+    action.cards,
+    candidates,
+    action.kind,
+  );
+  if (!matched.ok) {
+    return reject(state, action.player, matched.code);
+  }
+  const evaluated = evaluateCandidates(config, state, candidates, runtime, {
+    authoritative: true,
+  });
+  const legalMatches = matched.matches.filter(
+    (match) => evaluated.results[match.index]?.legal === true,
+  );
+  if (legalMatches.length === 0) {
+    if (
+      baseFieldExists &&
+      matched.matches.every(
+        (match) => evaluated.baseResults[match.index]?.legal === false,
+      )
+    ) {
+      return reject(state, action.player, 'TOO_WEAK');
+    }
+    const ordered = sortMatchesPreferredFirst(
+      matched.matches,
+      evaluated.strength,
+    );
+    const finalLegality = evaluated.results[ordered[0]!.index];
+    return reject(
+      state,
+      action.player,
+      'FORBIDDEN_BY_RULE',
+      finalLegality?.legal === false ? finalLegality.reasonKey : undefined,
+    );
+  }
+  const interpretedPlay = sortMatchesPreferredFirst(
+    legalMatches,
+    evaluated.strength,
+  )[0]!.play;
+
+  const priorFieldCards = state.public.field.current?.play.cards ?? [];
+  const playedEvent: PublicGameEvent = {
+    type: 'played',
+    player: action.player,
+    play: interpretedPlay,
+  };
+  let nextState: GameState = {
+    ...evaluated.state,
+    public: {
+      ...evaluated.state.public,
+      field: {
+        current: { play: interpretedPlay, by: action.player },
+        passedSinceLastPlay: [],
+      },
+      discard: [...evaluated.state.public.discard, ...priorFieldCards],
+      firedRules: evaluated.state.public.firedRules,
+      turnCount: evaluated.state.public.turnCount + 1,
+    },
+    players: {
+      ...evaluated.state.players,
+      [action.player]: {
+        ...player,
+        hand: removeCards(player.hand, interpretedPlay.cards),
+      },
+    },
+  };
+  const events: EngineEvent[] = [
+    ...(evaluated.failsafeActivated
+      ? [
+          {
+            type: 'failsafe' as const,
+            reason: 'leadNoLegalMove' as const,
+            relatedRuleIds: evaluated.influenced,
+          },
+        ]
+      : []),
+    playedEvent,
+  ];
+  if (nextState.players[action.player]?.hand.length === 0) {
+    const finished = finishPlayer(nextState, action.player);
+    nextState = finished.state;
+    events.push(finished.event);
+  }
+
+  if (config.ruleChain.some((entry) => entry.contractVersion === 2)) {
+    const preview = executeEffectHook(
+      config,
+      nextState,
+      runtime,
+      'afterPlay',
+      interpretedPlay,
+      evaluated.strength,
+      { previewChoice: true },
+    );
+    if (preview.choiceRequest) {
+      const request = preview.choiceRequest;
+      const withEvents = appendEvents(nextState, events);
+      return {
+        state: {
+          ...withEvents,
+          public: {
+            ...withEvents.public,
+            phase: 'awaitingChoice',
+          },
+          private: {
+            ...withEvents.private,
+            pendingChoice: {
+              ...request,
+              play: interpretedPlay,
+              strength: evaluated.strength,
+            },
+          },
+        },
+        events,
+        rejections: [],
+        setMemory: runtime.setMemory,
+      };
+    }
+  }
+
+  const effects = executeEffectHook(
+    config,
+    nextState,
+    runtime,
+    'afterPlay',
+    interpretedPlay,
+    evaluated.strength,
+  );
+  nextState = effects.state;
+  events.push(...effects.events);
+  return completeAfterPlay(
+    config,
+    nextState,
+    action.player,
+    events,
+    effects,
+    runtime,
+  );
+}
+
+function reduceRuleInput(
+  config: GameConfig,
+  state: GameState,
+  action: Extract<GameAction, { type: 'ruleInput' }>,
+  runtime: RuleRuntime,
+): GameTransition {
+  const pending = state.private.pendingChoice;
+  if (
+    state.public.phase !== 'awaitingChoice' ||
+    !pending ||
+    pending.player !== action.player ||
+    pending.choiceId !== action.choiceId
+  ) {
+    return reject(state, action.player, 'NO_PENDING_CHOICE');
+  }
+  const unique = new Set(action.cardIds);
+  const options = new Set(pending.optionCardIds);
+  if (
+    action.cardIds.length !== pending.count ||
+    unique.size !== action.cardIds.length ||
+    action.cardIds.some((cardId) => !options.has(cardId))
+  ) {
+    return reject(state, action.player, 'INVALID_RULE_CHOICE');
+  }
+  const privateState = {
+    excluded: state.private.excluded,
+    memory: state.private.memory,
+    rng: state.private.rng,
+    hookCalls: state.private.hookCalls,
+  };
+  const resumedState: GameState = {
+    ...state,
+    public: {
+      ...state.public,
+      phase: 'awaitingPlay',
+    },
+    private: privateState,
+  };
+  const effects = executeEffectHook(
+    config,
+    resumedState,
+    runtime,
+    'afterPlay',
+    pending.play,
+    pending.strength,
+    {
+      input: {
+        ruleId: pending.ruleId,
+        value: {
+          kind: 'cards',
+          choiceId: pending.choiceId,
+          cardIds: [...action.cardIds],
+        },
+      },
+    },
+  );
+  return completeAfterPlay(
+    config,
+    effects.state,
+    action.player,
+    effects.events,
+    effects,
+    runtime,
+  );
+}
+
 export function reduceGame(
   config: GameConfig,
   state: GameState,
   action: GameAction,
   runtime: RuleRuntime = noRuleRuntime(),
 ): GameTransition {
+  if (action.type === 'ruleInput') {
+    return reduceRuleInput(config, state, action, runtime);
+  }
   if (
     state.public.phase !== 'awaitingPlay' ||
     state.public.turn !== action.player

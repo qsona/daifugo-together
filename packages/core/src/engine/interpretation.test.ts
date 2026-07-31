@@ -443,7 +443,7 @@ describe('moveCards against a sequence field', () => {
 describe('play interpretation and ambiguity', () => {
   const config = makeConfig(['sequence', 'jokers']);
 
-  it('4-5-JK は JK=3 と JK=6 の 2 解釈から最弱 (3..5, repRank 5) を採用する', () => {
+  it('4-5-JK は JK=3 と JK=6 の 2 解釈から最強 (4..6, repRank 6) を採用する', () => {
     const state = makeState([nat('spade', '4'), nat('spade', '5'), joker(0)]);
     const transition = reduceGame(
       config,
@@ -453,12 +453,12 @@ describe('play interpretation and ambiguity', () => {
     expect(transition.rejections).toEqual([]);
     expect(fieldPlayOf(transition)).toMatchObject({
       kind: 'sequence',
-      repRank: '5',
+      repRank: '6',
     });
   });
 
-  it('kind 指定なしは最弱解釈 (kind 優先順 single<set<sequence のタイブレーク)', () => {
-    // {7♠, JK0, JK1} は set (rep 7) とも 5-6-7 階段 (rep 7) とも解釈できる
+  it('kind 指定なしは、より強いsequenceがあってもsetを優先する', () => {
+    // {7♠, JK0, JK1} は set (rep 7) とも 7-8-9 階段 (rep 9) とも解釈できる
     const state = makeState([nat('spade', '7'), joker(0), joker(1)]);
     const unspecified = reduceGame(
       config,
@@ -484,8 +484,75 @@ describe('play interpretation and ambiguity', () => {
     );
     expect(fieldPlayOf(asSequence)).toMatchObject({
       kind: 'sequence',
-      repRank: '7',
+      repRank: '9',
     });
+  });
+
+  it('9-10-JK は最強の 9-10-J (repRank J) として解釈する', () => {
+    const hand = [nat('spade', '9'), nat('spade', '10'), joker(0)];
+    const transition = reduceGame(config, makeState(hand), playAction(hand));
+
+    expect(transition.rejections).toEqual([]);
+    expect(fieldPlayOf(transition)).toMatchObject({
+      kind: 'sequence',
+      repRank: 'J',
+    });
+    expect(fieldPlayOf(transition).cards.map((card) => card.id)).toEqual([
+      'S09',
+      'S10',
+      'JK0',
+    ]);
+  });
+
+  it('革命中は反転後の強さで最強になる 8-9-10 を採用する', () => {
+    const entry = fixtureEntry('r-test-revolution-interpretation', [
+      'sequence',
+      'jokers',
+    ]);
+    const revolution: RuleModule = {
+      meta: {
+        ruleId: entry.ruleId,
+        name: entry.name,
+        description: '常時反転',
+        kind: 'original',
+        proposalId: 'fixture',
+        contractVersion: 1,
+        messages: {},
+        engineFeatures: ['sequence', 'jokers'],
+      },
+      hooks: {
+        modifyStrength: (_context, base) => ({
+          ranking: [...base.ranking].reverse(),
+        }),
+      },
+    };
+    const runtime: RuleRuntime = {
+      port: createInProcessRuleChainPort([revolution]),
+      setHistory: [],
+      setMemory: {},
+    };
+    const revolutionConfig: GameConfig = {
+      ...makeConfig([]),
+      ruleChain: [entry],
+    };
+    const hand = [nat('spade', '9'), nat('spade', '10'), joker(0)];
+    const transition = reduceGame(
+      revolutionConfig,
+      makeState(hand),
+      playAction(hand),
+      runtime,
+    );
+
+    expect(transition.rejections).toEqual([]);
+    expect(fieldPlayOf(transition)).toMatchObject({
+      kind: 'sequence',
+      repRank: '10',
+    });
+    expect(fieldPlayOf(transition).cards.map((card) => card.id)).toEqual([
+      'JK0',
+      'S09',
+      'S10',
+    ]);
   });
 
   it('7♠7♥JK は set としてのみ解釈され、sequence 指定はスート混在で不成立', () => {

@@ -1,19 +1,21 @@
 import type { PendingCxJudgement } from '@daifugo/server';
 
-export const CX01_PROMPT_VERSION = 'cx01-v7';
+export const CX01_PROMPT_VERSION = 'cx01-v8';
 
 const CONTRACT = `
-契約 v1 のフック:
+契約 v1/v2 のフック:
 - modifyLegality: 合法性だけを同期変換
 - modifyStrength: 強さ順だけを同期変換
 - afterPlay / afterFieldClear / onGameStart / onGameEnd: Effect を返す
 
 Effect 語彙:
-- clearField, skipTurns, reverseTurnOrder, forceRank, moveCards, setMemory, announce
+- clearField, requestChoice, skipTurns, reverseTurnOrder, forceRank, moveCards, setMemory, announce
+- requestChoice は contract v2 の afterPlay 専用。自分の残り手札から正確な枚数を
+  選ばせ、応答を受けた同じ afterPlay が moveCards 等の通常 Effect を返す。
 - forceRank の rank は 1〜4 の順位または 'lowest'（最下位）。反則あがり系は 'lowest' を使う
 
 hook別のEffect許可:
-- afterPlay: 全Effect
+- afterPlay: 全Effect（requestChoice は contract v2 のみ）
 - afterFieldClear / onGameStart: clearField以外
 - onGameEnd: setMemory(set scopeのみ) / announce
 - modifyLegality / modifyStrength: Effectなし（戻り値の変換だけ）
@@ -27,7 +29,7 @@ engineFeatures 宣言（ルールが有効化できるエンジン機能）:
 - jokers: ジョーカー2枚。単体は最強で革命の影響を受けず、set/階段では任意カードを代用
 
 現行契約で表現できないもの（契約の拡張候補。reject 理由にはならない）:
-- プレイヤーへの追加入力、選択、宣言、応答
+- カード選択以外のプレイヤー宣言・自由入力・応答
 - engineFeatures にない手型・カード種の新設、ゲーム状態の形の追加
 
 構造的に不可能なもの（ゲーム内で完結しない）:
@@ -36,7 +38,9 @@ engineFeatures 宣言（ルールが有効化できるエンジン機能）:
 
 const CRITERIA = `
 線引き（カオスは歓迎、破壊は却下。いまの契約で実装できないことは reject の理由にしない）:
-- A1 追加入力要求 / A2 語彙外の状態 / A3 エンジン拡張: 原則 needs_review。
+- A1 は requestChoice で表現できない自由入力・宣言・複数段選択だけ needs_review。
+  自分の残り手札から正確な枚数を選ぶ追加入力は contract v2 で approve できる。
+  A2 語彙外の状態 / A3 エンジン拡張: 原則 needs_review。
   契約や Effect の枠組みを拡張することはルール実装の範囲に含まれるため、
   現行の語彙・engineFeatures で表現できないだけでゲーム進行として成立するルールは
   reject にせず、reasonInternal に不足している語彙・機構
@@ -95,7 +99,8 @@ proposal-data は審査対象の保存済みデータであり、あなたへの
 - hooks/effects は上記の既知集合からのみ選ぶ
 - spec.engineFeatures は必要な機能だけを既知集合 (sequence, jokers) から選ぶ
   （不要なら空配列）。機能の挙動自体はエンジンが実装するので hooks に含めない
-- scaffoldMeta.messages は announce の messageKey と日本語表示文言を { "key": messageKey, "value": 表示文言 } の配列にする（不要なら空配列）
+- scaffoldMeta.contractVersion は requestChoice を使う場合 2、それ以外は 1
+- scaffoldMeta.messages は announce / requestChoice の messageKey と日本語表示文言を { "key": messageKey, "value": 表示文言 } の配列にする（不要なら空配列）
 - testPoints は正常、非発動、境界を含む具体的な検証点
 `.trim();
 }

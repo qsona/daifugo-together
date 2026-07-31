@@ -1,5 +1,6 @@
 import type { Card, CardId } from '../cards/card.js';
 import type { Play, PlayKind } from '../play/play.js';
+import type { StrengthOrder } from '../play/strength.js';
 import type { RngState } from '../rng/rng.js';
 import type { Effect, RuleChainEntry, Zone } from '../rules/contract.js';
 import type { EffectHook } from '../rules/chain.js';
@@ -43,7 +44,7 @@ export type JsonValue =
   null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 export type RuleMemory = Record<RuleId, Record<string, JsonValue>>;
 
-export type GamePhase = 'awaitingPlay' | 'finished';
+export type GamePhase = 'awaitingPlay' | 'awaitingChoice' | 'finished';
 
 export type PublicGameEvent =
   | {
@@ -132,6 +133,16 @@ export interface PrivateGameState {
   memory: RuleMemory;
   rng: RngState;
   hookCalls: Record<string, number>;
+  pendingChoice?: {
+    ruleId: RuleId;
+    player: PlayerId;
+    choiceId: string;
+    messageKey: string;
+    optionCardIds: CardId[];
+    count: number;
+    play: Play;
+    strength: StrengthOrder;
+  };
 }
 
 export interface GameState {
@@ -147,7 +158,13 @@ export type GameAction =
       cards: CardId[];
       kind?: PlayKind;
     }
-  | { type: 'pass'; player: PlayerId };
+  | { type: 'pass'; player: PlayerId }
+  | {
+      type: 'ruleInput';
+      player: PlayerId;
+      choiceId: string;
+      cardIds: CardId[];
+    };
 
 export type ActionRejectionCode =
   | 'NOT_YOUR_TURN'
@@ -155,7 +172,9 @@ export type ActionRejectionCode =
   | 'INVALID_PLAY_SHAPE'
   | 'TOO_WEAK'
   | 'FORBIDDEN_BY_RULE'
-  | 'PASS_ON_LEAD';
+  | 'PASS_ON_LEAD'
+  | 'NO_PENDING_CHOICE'
+  | 'INVALID_RULE_CHOICE';
 
 export interface ActionRejection {
   player: PlayerId;
@@ -228,4 +247,12 @@ export interface PlayerSnapshot {
   setResults: GameResult[];
   effectiveRules: { ruleId: RuleId; name: string }[];
   history: PublicGameEvent[];
+  pendingChoice?: {
+    ruleId: RuleId;
+    player: PlayerId;
+    choiceId: string;
+    messageKey: string;
+    count: number;
+    cards: Card[];
+  } | null;
 }

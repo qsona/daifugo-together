@@ -274,7 +274,7 @@ export const CX_JUDGE_CORPUS: readonly CxJudgeCorpusCase[] = [
     name: '10捨て',
     body: '10を出した枚数分好きな自分の手持ちのカードを場に関係ないところに捨てることができる。捨てないことはできない。',
     expected: {
-      verdict: 'needs_review',
+      verdict: 'approve',
       rejectCategory: null,
       rejectSubtype: null,
     },

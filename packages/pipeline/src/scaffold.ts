@@ -92,7 +92,7 @@ function ruleMetadata(item: QueuedImplementation) {
       ? {}
       : { prefecture: item.proposal.prefecture }),
     proposalId: item.proposal.id,
-    contractVersion: 1,
+    contractVersion: item.scaffoldMeta.contractVersion ?? 1,
     ...(engineFeatures.length === 0 ? {} : { engineFeatures }),
     messages: item.scaffoldMeta.messages,
   };

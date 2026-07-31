@@ -109,4 +109,14 @@ describe('createRuleScaffold', () => {
       expect(meta).not.toHaveProperty('engineFeatures');
     }
   });
+
+  it('choiceを使う承認SPECのcontractVersion 2をmeta.jsonへ転記する', async () => {
+    const item = queued();
+    item.scaffoldMeta.contractVersion = 2;
+
+    await expect(scaffoldMeta(item)).resolves.toMatchObject({
+      ruleId: 'r0001-kaidan',
+      contractVersion: 2,
+    });
+  });
 });

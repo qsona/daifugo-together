@@ -46,6 +46,13 @@ export const rule: RuleModule = {
 
 The exported `rule.meta` must be deeply equal to `meta.json`.
 
+For a contract v2 SPEC using `requestChoice`, copy `contractVersion: 2`
+exactly from `meta.json`. The initial `afterPlay` call must return only one
+`requestChoice`. When the optional third `input` argument contains the matching
+card choice, return the approved ordinary Effects (for example `moveCards`
+with a `specific` selector) instead of requesting another choice. Do not add
+rule-local pending state or implement input handling outside this contract.
+
 Before finishing, run these commands from the prepared repository workspace and
 fix any failure:
 
