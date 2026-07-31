@@ -1,4 +1,4 @@
-import type { RoomMode } from '@daifugo/core';
+import { clientPayloadSchemas, type RoomMode } from '@daifugo/core';
 import { useState } from 'react';
 
 import { Button } from '../components/Button';
@@ -9,8 +9,10 @@ import styles from './PlaySheet.module.css';
 
 type PlaySheetProps = {
   onCreate: (mode: RoomMode) => void;
-  onJoin: (code: string) => void;
+  onJoin: (code: string, displayName?: string) => void;
   onClose: () => void;
+  /** 匿名ユーザーの現在の表示名。指定時だけ入室前の名前入力を出す。 */
+  anonymousDisplayName?: string | null;
   initialMode?: RoomMode | null;
   error?: string | null;
 };
@@ -25,11 +27,25 @@ export function PlaySheet({
   onCreate,
   onJoin,
   onClose,
+  anonymousDisplayName,
   initialMode = null,
   error,
 }: PlaySheetProps) {
   const [code, setCode] = useState('');
+  const [displayName, setDisplayName] = useState(anonymousDisplayName ?? '');
   const [isJoining, setIsJoining] = useState(false);
+  const asksDisplayName = anonymousDisplayName !== undefined;
+  const parsedDisplayName = asksDisplayName
+    ? clientPayloadSchemas['user:rename'].safeParse({ displayName })
+    : null;
+  const normalizedDisplayName =
+    parsedDisplayName?.success === true
+      ? parsedDisplayName.data.displayName
+      : undefined;
+  const displayNameError =
+    asksDisplayName && displayName.length > 0 && !normalizedDisplayName
+      ? 'なまえは1〜10文字で、改行なしで入力してね'
+      : undefined;
 
   return (
     <ChoiceSheet
@@ -52,12 +68,33 @@ export function PlaySheet({
               setCode(event.target.value.replaceAll(/[^0-9]/g, '').slice(0, 5));
             }}
           />
+          {asksDisplayName && (
+            <InputField
+              label="あなたのなまえ"
+              caption="友だちに見えるなまえ・10文字まで"
+              {...(displayNameError ? { error: displayNameError } : {})}
+              placeholder="例: たろう"
+              value={displayName}
+              type="text"
+              autoComplete="nickname"
+              onChange={(event) => {
+                setDisplayName(event.target.value);
+              }}
+            />
+          )}
           <Button
             variant="primary"
             block
-            disabled={code.length !== 5}
+            disabled={
+              code.length !== 5 ||
+              (asksDisplayName && normalizedDisplayName === undefined)
+            }
             onClick={() => {
-              onJoin(code);
+              if (normalizedDisplayName === undefined) {
+                onJoin(code);
+                return;
+              }
+              onJoin(code, normalizedDisplayName);
             }}
           >
             はいる

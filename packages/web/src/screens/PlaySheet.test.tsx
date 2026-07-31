@@ -69,6 +69,62 @@ describe('TU-01: あそぶモードの選択', () => {
     expect(onJoin).toHaveBeenCalledWith('01234');
   });
 
+  it('匿名ユーザーは友だちの部屋へ入る前になまえを設定できる', async () => {
+    const user = userEvent.setup();
+    const onJoin = vi.fn();
+    render(
+      <PlaySheet
+        anonymousDisplayName="ゲスト000001"
+        onCreate={vi.fn()}
+        onJoin={onJoin}
+        onClose={vi.fn()}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole('button', { name: '友だちの部屋にはいる' }),
+    );
+    const nameInput = screen.getByLabelText(
+      'あなたのなまえ',
+    ) as HTMLInputElement;
+    expect(nameInput.value).toBe('ゲスト000001');
+
+    await user.clear(nameInput);
+    await user.type(nameInput, ' たろう ');
+    await user.type(screen.getByLabelText('招待コード'), '01234');
+    await user.click(screen.getByRole('button', { name: 'はいる' }));
+
+    expect(onJoin).toHaveBeenCalledWith('01234', 'たろう');
+  });
+
+  it('匿名ユーザーのなまえはサーバーと同じ制約で検証する', async () => {
+    const user = userEvent.setup();
+    render(
+      <PlaySheet
+        anonymousDisplayName=""
+        onCreate={vi.fn()}
+        onJoin={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole('button', { name: '友だちの部屋にはいる' }),
+    );
+    await user.type(screen.getByLabelText('招待コード'), '01234');
+    const join = screen.getByRole('button', { name: 'はいる' });
+    expect(join.hasAttribute('disabled')).toBe(true);
+
+    const nameInput = screen.getByLabelText('あなたのなまえ');
+    await user.type(nameInput, '12345678901');
+    expect(screen.getByText(/1〜10文字/)).toBeTruthy();
+    expect(join.hasAttribute('disabled')).toBe(true);
+
+    await user.clear(nameInput);
+    await user.type(nameInput, '😀😀😀😀😀😀😀😀😀😀');
+    expect(join.hasAttribute('disabled')).toBe(false);
+  });
+
   it('作成失敗をモード選択肢の下へ出し、その場で再試行できる', async () => {
     const user = userEvent.setup();
     const onCreate = vi.fn();
