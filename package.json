@@ -15,6 +15,7 @@
     "lint:design": "node scripts/check-design-tokens.mjs && node scripts/check-key-visual.mjs && node scripts/outline-key-visual.mjs --check",
     "ops": "pnpm --filter @daifugo/server ops:dev",
     "start": "pnpm --filter @daifugo/server start",
+    "sync:production-proposals": "pnpm --filter @daifugo/server build && node scripts/sync-production-proposals.mjs",
     "test": "pnpm --filter @daifugo/ai... build && vitest run",
     "pretypecheck": "pnpm --filter @daifugo/core build",
     "typecheck": "pnpm --recursive --if-present run typecheck",

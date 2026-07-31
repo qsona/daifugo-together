@@ -88,6 +88,30 @@ db.close();
 '
 ```
 
+## ルール提案データをローカルへ同期
+
+ルール提案の再現調査では、次のコマンドで本番の提案、L0–L3検査記録、
+AI・開発者の判定履歴、実装ジョブだけを専用のローカルDBへ同期する。
+
+```sh
+pnpm sync:production-proposals
+DATABASE_PATH="$PWD/data/production-proposals.sqlite" pnpm start
+```
+
+同期処理は本番DBをreadonlyで一貫したスナップショットとして読み取る。
+`users`テーブル、対局、評価、イエローカード、異議申立ては取得しない。
+提案者、検査対象ユーザー、判定者の識別子はすべてローカル専用の
+「本番提案データの神」ユーザーへ置き換える。
+
+既に同期先DBがある場合は、検証済みの新しいDBへ丸ごと入れ替え、
+直前のDBを`data/production-proposals.sqlite.backup`へ保存する。
+別のFly appや保存先を使う場合は`--app`、`--database`で指定する。
+
+```sh
+pnpm sync:production-proposals -- --app daifugo-together \
+  --database data/production-proposals.sqlite
+```
+
 ## ログ
 
 ```sh
