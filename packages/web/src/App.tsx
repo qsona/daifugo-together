@@ -1518,6 +1518,9 @@ function ConnectedApp({
       />
       {isChoosingRoom && (
         <PlaySheet
+          {...(!state.registered
+            ? { anonymousDisplayName: state.displayName }
+            : {})}
           initialMode={playSheetError === GRADUATION_ERROR ? 'community' : null}
           onCreate={(mode) => {
             setPlaySheetError(null);
@@ -1527,11 +1530,19 @@ function ConnectedApp({
               }),
             );
           }}
-          onJoin={(inviteCode) => {
+          onJoin={(inviteCode, displayName) => {
+            const renameBeforeJoin =
+              !state.registered &&
+              displayName !== undefined &&
+              displayName !== state.displayName
+                ? client.rename(displayName)
+                : Promise.resolve();
             invoke(
-              client.joinRoom(inviteCode).then(() => {
-                setIsChoosingRoom(false);
-              }),
+              renameBeforeJoin
+                .then(() => client.joinRoom(inviteCode))
+                .then(() => {
+                  setIsChoosingRoom(false);
+                }),
             );
           }}
           onClose={() => {

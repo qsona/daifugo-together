@@ -125,6 +125,14 @@ export class MultiplayerClient {
     );
   }
 
+  async rename(displayName: string): Promise<void> {
+    await this.#request((ack) =>
+      this.#socket.emit('user:rename', { displayName }, ack),
+    );
+    this.#state = { ...this.#state, displayName: displayName.trim() };
+    this.#notify();
+  }
+
   async leaveRoom(): Promise<void> {
     await this.#request((ack) => this.#socket.emit('room:leave', {}, ack));
     this.#state = { ...this.#state, room: null };

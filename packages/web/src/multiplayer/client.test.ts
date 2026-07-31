@@ -158,6 +158,34 @@ describe('MultiplayerClient', () => {
     });
   });
 
+  it('表示名を変更してクライアントの状態にも反映する', async () => {
+    const socket = new FakeSocket();
+    const client = new MultiplayerClient(
+      'http://example.test',
+      {
+        getItem: () => null,
+        setItem: () => undefined,
+        removeItem: () => undefined,
+      },
+      () => socket as never,
+    );
+    socket.trigger('session:ready', {
+      userId: 'user-1',
+      userToken: 'persistent-token-0001',
+      displayName: 'ゲスト000001',
+      registered: false,
+      room: null,
+    });
+
+    await client.rename(' たろう ');
+
+    expect(socket.emitted.at(-1)).toEqual({
+      event: 'user:rename',
+      payload: { displayName: ' たろう ' },
+    });
+    expect(client.snapshot().displayName).toBe('たろう');
+  });
+
   it('ログイン完了とログアウトでtokenを差し替えて再接続する', () => {
     const socket = new FakeSocket();
     const values = new Map<string, string>();
