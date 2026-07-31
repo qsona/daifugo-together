@@ -744,6 +744,7 @@ function observableTutorialClient(
 ): {
   client: MultiplayerClient;
   setRoom(room: import('@daifugo/core').PlayerRoomView | null): void;
+  readyNextGame: () => Promise<void>;
 } {
   let state: MultiplayerState = {
     connection: 'ready',
@@ -754,6 +755,7 @@ function observableTutorialClient(
     error: null,
   };
   const listeners = new Set<() => void>();
+  const readyNextGame = vi.fn(async () => undefined);
   return {
     client: {
       subscribe: (listener: () => void) => {
@@ -761,7 +763,9 @@ function observableTutorialClient(
         return () => listeners.delete(listener);
       },
       snapshot: () => state,
+      readyNextGame,
     } as unknown as MultiplayerClient,
+    readyNextGame,
     setRoom(room) {
       state = { ...state, room };
       for (const listener of listeners) listener();
@@ -1629,6 +1633,7 @@ describe('TU-03: はじめての1戦のガイド', () => {
     intermission.game!.intermission = {
       durationMs: 15_000,
       endsAt: Date.now() + 15_000,
+      ready: false,
     };
     intermission.game!.turn = null;
     intermission.game!.previousResults = [
@@ -1649,6 +1654,34 @@ describe('TU-03: はじめての1戦のガイド', () => {
     expect(
       screen.queryByLabelText('カードの強さ: 左がよわい、右がつよい'),
     ).toBeNull();
+  });
+
+  it('次戦ボタンを押すと準備完了を送り、押下後は待機表示で無効になる', async () => {
+    const user = userEvent.setup();
+    const room = tutorialHintRoom('basic', []);
+    room.game!.status = 'intermission';
+    room.game!.intermission = {
+      durationMs: 15_000,
+      endsAt: Date.now() + 15_000,
+      ready: false,
+    };
+    room.game!.turn = null;
+    const observable = observableTutorialClient(room);
+    render(<App client={observable.client} />);
+
+    await user.click(screen.getByRole('button', { name: '第2戦へ' }));
+    expect(observable.readyNextGame).toHaveBeenCalledOnce();
+
+    const waiting = structuredClone(room);
+    waiting.v += 1;
+    waiting.game!.intermission!.ready = true;
+    act(() => observable.setRoom(waiting));
+
+    const button = screen.getByRole('button', {
+      name: 'ほかのプレイヤーを待っています',
+    });
+    expect((button as HTMLButtonElement).disabled).toBe(true);
+    expect(button.classList.contains(buttonStyles.primary!)).toBe(false);
   });
 
   it('communityとbasic人間複数では一言も強さ目盛りも表示しない', () => {
@@ -2083,7 +2116,11 @@ describe('TU-01: 既プレイ端末の記録', () => {
       game: {
         gameNo: 1,
         status: 'intermission',
-        intermission: { durationMs: 15_000, endsAt: Date.now() + 15_000 },
+        intermission: {
+          durationMs: 15_000,
+          endsAt: Date.now() + 15_000,
+          ready: false,
+        },
         field: { cards: [], playedBySeat: null, passedSeats: [] },
         turn: null,
         history: [],
@@ -2261,6 +2298,7 @@ describe('対局終了時の最後の手', () => {
     room.game!.intermission = {
       durationMs: 15_000,
       endsAt: Date.now() + 15_000,
+      ready: false,
     };
     room.game!.turn = null;
     room.game!.history = [

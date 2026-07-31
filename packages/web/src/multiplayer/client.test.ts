@@ -131,6 +131,12 @@ describe('MultiplayerClient', () => {
       payload: {},
     });
 
+    await client.readyNextGame();
+    expect(socket.emitted.at(-1)).toEqual({
+      event: 'game:readyNext',
+      payload: {},
+    });
+
     socket.trigger('room:closed', { reason: 'abandoned' });
     expect(client.snapshot()).toMatchObject({
       room: null,

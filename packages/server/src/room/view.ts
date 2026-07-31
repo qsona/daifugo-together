@@ -233,6 +233,7 @@ function gameView(
         ? {
             durationMs: engine.config.interimAutoAdvanceMs,
             endsAt: state.intermissionEndsAt,
+            ready: state.intermissionReadyMemberIds.includes(memberId),
           }
         : null,
     field: {

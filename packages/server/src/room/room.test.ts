@@ -395,7 +395,75 @@ describe('pure room reducer', () => {
     expect(viewFor(intermission, 'member-1').game?.intermission).toEqual({
       durationMs: 15_000,
       endsAt: 42_000,
+      ready: false,
     });
+  });
+
+  it('人間が1人なら準備完了を押すとすぐ次戦を始める', () => {
+    const started = start(room());
+    const intermission: RoomState = {
+      ...started,
+      engine: {
+        ...started.engine!,
+        phase: { name: 'interimResult', gameIndex: 0 },
+      },
+      intermissionEndsAt: 16_000,
+      turnDeadlineAt: null,
+    };
+
+    const ready = reduceRoom(intermission, {
+      type: 'readyIntermission',
+      memberId: 'member-1',
+      now: 2_000,
+    });
+
+    expect(ready.accepted).toBe(true);
+    expect(ready.state.engine?.phase).toEqual({
+      name: 'gameInProgress',
+      gameIndex: 1,
+    });
+    expect(ready.state.intermissionEndsAt).toBeNull();
+    expect(ready.state.intermissionReadyMemberIds).toEqual([]);
+  });
+
+  it('人間が複数なら全員の準備完了を待ち、元の15秒期限を維持する', () => {
+    const started = start(join(room(), 2));
+    const intermission: RoomState = {
+      ...started,
+      engine: {
+        ...started.engine!,
+        phase: { name: 'interimResult', gameIndex: 0 },
+      },
+      intermissionEndsAt: 16_000,
+      turnDeadlineAt: null,
+    };
+
+    const first = reduceRoom(intermission, {
+      type: 'readyIntermission',
+      memberId: 'member-1',
+      now: 2_000,
+    });
+    expect(first.accepted).toBe(true);
+    expect(first.state.engine?.phase.name).toBe('interimResult');
+    expect(first.state.intermissionEndsAt).toBe(16_000);
+    expect(viewFor(first.state, 'member-1').game?.intermission?.ready).toBe(
+      true,
+    );
+    expect(viewFor(first.state, 'member-2').game?.intermission?.ready).toBe(
+      false,
+    );
+
+    const second = reduceRoom(first.state, {
+      type: 'readyIntermission',
+      memberId: 'member-2',
+      now: 3_000,
+    });
+    expect(second.accepted).toBe(true);
+    expect(second.state.engine?.phase).toEqual({
+      name: 'gameInProgress',
+      gameIndex: 1,
+    });
+    expect(second.state.intermissionEndsAt).toBeNull();
   });
 
   it('待機中のホスト離脱で参加順に移譲し、最後の人間離脱で閉じる', () => {

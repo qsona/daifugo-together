@@ -66,6 +66,7 @@ export interface RoomState {
   setNo: number;
   turnDeadlineAt: number | null;
   intermissionEndsAt: number | null;
+  intermissionReadyMemberIds: string[];
   setRespondBy: number | null;
   lobbyExpiresAt: number;
   abandonAt: number | null;
@@ -157,7 +158,8 @@ export type RoomAction =
       reason: 'ai' | 'turnTimeout';
       now: number;
     }
-  | { type: 'advanceIntermission'; now: number };
+  | { type: 'advanceIntermission'; now: number }
+  | { type: 'readyIntermission'; memberId: string; now: number };
 
 export interface RoomTransition {
   state: RoomState;

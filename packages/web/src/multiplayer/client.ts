@@ -169,6 +169,10 @@ export class MultiplayerClient {
     );
   }
 
+  async readyNextGame(): Promise<void> {
+    await this.#request((ack) => this.#socket.emit('game:readyNext', {}, ack));
+  }
+
   async sync(): Promise<void> {
     await this.#request((ack) => this.#socket.emit('sync:request', {}, ack));
   }

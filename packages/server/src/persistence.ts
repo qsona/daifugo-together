@@ -170,6 +170,8 @@ function replayInit(state: RoomState): ReplayInit | undefined {
 function replayAction(
   action: RoomAction,
   seq: number,
+  previous: RoomState,
+  next: RoomState,
 ): ReplayAction | undefined {
   const coreAction: ReplayAction['action'] | undefined =
     action.type === 'play'
@@ -182,9 +184,13 @@ function replayAction(
             : { type: 'pass', player: action.memberId }
           : action.type === 'advanceIntermission'
             ? { type: 'advance' }
-            : action.type === 'requestDrain'
-              ? { type: 'requestDrain' }
-              : undefined;
+            : action.type === 'readyIntermission' &&
+                previous.engine?.phase.name === 'interimResult' &&
+                next.engine?.phase.name !== 'interimResult'
+              ? { type: 'advance' }
+              : action.type === 'requestDrain'
+                ? { type: 'requestDrain' }
+                : undefined;
   return coreAction ? { seq, action: coreAction } : undefined;
 }
 
@@ -365,7 +371,7 @@ export class SqlitePersistence implements RoomPersistencePort {
         : 0;
       const record = isInit
         ? replayInit(next)
-        : replayAction(action, nextReplaySeq);
+        : replayAction(action, nextReplaySeq, previous, next);
       if (record) {
         const setId =
           'setId' in record ? record.setId : (next.engine?.setId ?? '');

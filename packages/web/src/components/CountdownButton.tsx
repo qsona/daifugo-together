@@ -10,6 +10,7 @@ type CountdownButtonProps = {
   /** サーバーが確定した終了時刻。経過したら onActivate を呼ぶ。 */
   deadlineAt: number;
   onActivate: () => void;
+  disabled?: boolean;
   children: ReactNode;
 };
 
@@ -21,6 +22,7 @@ export function CountdownButton({
   durationMs,
   deadlineAt,
   onActivate,
+  disabled = false,
   children,
 }: CountdownButtonProps) {
   const remainingMs = Math.max(0, deadlineAt - Date.now());
@@ -28,15 +30,21 @@ export function CountdownButton({
     durationMs <= 0 ? 0 : Math.min(1, remainingMs / durationMs);
 
   useEffect(() => {
+    if (disabled) return;
     const timer = setTimeout(onActivate, Math.max(0, deadlineAt - Date.now()));
     return () => {
       clearTimeout(timer);
     };
-  }, [deadlineAt, onActivate]);
+  }, [deadlineAt, disabled, onActivate]);
 
   return (
     <div className={styles.wrap}>
-      <Button variant="primary" block onClick={onActivate}>
+      <Button
+        variant={disabled ? 'secondary' : 'primary'}
+        block
+        disabled={disabled}
+        onClick={onActivate}
+      >
         {children}
       </Button>
       <div className={styles.track} aria-hidden="true">

@@ -139,6 +139,7 @@ export function createRoomState(input: CreateRoomInput): RoomState {
     setNo: 0,
     turnDeadlineAt: null,
     intermissionEndsAt: null,
+    intermissionReadyMemberIds: [],
     setRespondBy: null,
     lobbyExpiresAt: input.now + (input.lobbyTtlMs ?? DEFAULT_LOBBY_TTL_MS),
     abandonAt: null,
@@ -499,6 +500,7 @@ function startSet(
         started.state.phase.name === 'interimResult'
           ? input.now + started.state.config.interimAutoAdvanceMs
           : null,
+      intermissionReadyMemberIds: [],
       abandonAt: null,
       setRespondBy:
         phase === 'setResult'
@@ -1107,6 +1109,7 @@ function gameAction(
         transition.state.phase.name === 'interimResult'
           ? action.now + transition.state.config.interimAutoAdvanceMs
           : null,
+      intermissionReadyMemberIds: [],
       setRespondBy:
         phase === 'setResult'
           ? action.now +
@@ -1120,7 +1123,7 @@ function gameAction(
 
 function advanceIntermission(
   state: RoomState,
-  action: Extract<RoomAction, { type: 'advanceIntermission' }>,
+  action: { now: number },
   options: RoomReducerOptions,
 ): RoomTransition {
   if (
@@ -1176,6 +1179,7 @@ function advanceIntermission(
         options,
       ),
       intermissionEndsAt: null,
+      intermissionReadyMemberIds: [],
       setRespondBy:
         phase === 'setResult'
           ? action.now +
@@ -1185,6 +1189,44 @@ function advanceIntermission(
     },
     events,
   );
+}
+
+function readyIntermission(
+  state: RoomState,
+  action: Extract<RoomAction, { type: 'readyIntermission' }>,
+  options: RoomReducerOptions,
+): RoomTransition {
+  if (
+    state.phase !== 'playing' ||
+    !state.engine ||
+    state.engine.phase.name !== 'interimResult'
+  ) {
+    return rejected(state, 'INVALID_SET_PHASE');
+  }
+  const member = state.members.find(
+    (candidate) =>
+      candidate.memberId === action.memberId &&
+      !candidate.isAI &&
+      !candidate.departed,
+  );
+  if (!member) {
+    return rejected(state, 'NOT_IN_ROOM');
+  }
+  const readyMemberIds = state.intermissionReadyMemberIds.includes(
+    action.memberId,
+  )
+    ? state.intermissionReadyMemberIds
+    : [...state.intermissionReadyMemberIds, action.memberId];
+  const humanMemberIds = state.members.flatMap((candidate) =>
+    !candidate.isAI && !candidate.departed ? [candidate.memberId] : [],
+  );
+  if (
+    humanMemberIds.length <= 1 ||
+    humanMemberIds.every((memberId) => readyMemberIds.includes(memberId))
+  ) {
+    return advanceIntermission(state, action, options);
+  }
+  return committed(state, { intermissionReadyMemberIds: readyMemberIds }, []);
 }
 
 function requestDrain(
@@ -1229,6 +1271,10 @@ function requestDrain(
         transition.state.phase.name === 'interimResult'
           ? state.intermissionEndsAt
           : null,
+      intermissionReadyMemberIds:
+        transition.state.phase.name === 'interimResult'
+          ? state.intermissionReadyMemberIds
+          : [],
       setRespondBy:
         phase === 'setResult'
           ? action.now +
@@ -1288,6 +1334,8 @@ export function reduceRoom(
       return gameAction(state, action, options);
     case 'advanceIntermission':
       return advanceIntermission(state, action, options);
+    case 'readyIntermission':
+      return readyIntermission(state, action, options);
     case 'requestDrain':
       return requestDrain(state, action, options);
   }

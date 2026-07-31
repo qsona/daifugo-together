@@ -136,6 +136,8 @@ export interface MultiplayerGameView {
   intermission: {
     durationMs: number;
     endsAt: number;
+    /** このプレイヤーが次戦へ進む準備を済ませているか。 */
+    ready: boolean;
   } | null;
   field: {
     cards: Card[];
@@ -226,6 +228,7 @@ export const clientPayloadSchemas = {
     })
     .strict(),
   'game:pass': z.object({ turnSeq: turnSeqSchema }).strict(),
+  'game:readyNext': emptyPayloadSchema,
   'sync:request': emptyPayloadSchema,
   'user:rename': z
     .object({
@@ -281,6 +284,10 @@ export interface ClientToServerEvents {
   ) => void;
   'game:pass': (
     payload: ClientPayload<'game:pass'>,
+    ack: (result: Ack<Record<string, never>>) => void,
+  ) => void;
+  'game:readyNext': (
+    payload: ClientPayload<'game:readyNext'>,
     ack: (result: Ack<Record<string, never>>) => void,
   ) => void;
   'sync:request': (

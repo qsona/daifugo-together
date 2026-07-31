@@ -665,6 +665,36 @@ export function attachRoomSocketGateway(
       }
     });
 
+    socket.on('game:readyNext', (payload, ack) => {
+      try {
+        if (
+          !clientPayloadSchemas['game:readyNext'].safeParse(payload).success
+        ) {
+          safeAck(ack, failure('BAD_PAYLOAD'));
+          return;
+        }
+        const current = rooms.findByUser(session.userId);
+        if (!current) {
+          safeAck(ack, failure('NOT_IN_ROOM'));
+          return;
+        }
+        const transition = rooms.apply(current.room.roomId, {
+          type: 'readyIntermission',
+          memberId: current.member.memberId,
+          now: now(),
+        });
+        const error = roomFailure(transition);
+        if (error) {
+          safeAck(ack, error);
+          return;
+        }
+        publishTransition(current.room, transition!);
+        safeAck(ack, { ok: true, value: {} });
+      } catch (error) {
+        handleUnexpected(error, ack);
+      }
+    });
+
     socket.on('sync:request', (payload, ack) => {
       try {
         if (!clientPayloadSchemas['sync:request'].safeParse(payload).success) {

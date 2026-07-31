@@ -16,6 +16,7 @@ type GameResultScreenProps = {
   autoAdvanceMs: number;
   /** サーバーが決めた自動進行時刻。再接続後もバーの残量を一致させる。 */
   autoAdvanceAt: number;
+  waitingForOthers: boolean;
   onNext: () => void;
 };
 
@@ -30,6 +31,7 @@ export function GameResultScreen({
   nextLabel,
   autoAdvanceMs,
   autoAdvanceAt,
+  waitingForOthers,
   onNext,
 }: GameResultScreenProps) {
   return (
@@ -48,8 +50,9 @@ export function GameResultScreen({
             durationMs={autoAdvanceMs}
             deadlineAt={autoAdvanceAt}
             onActivate={onNext}
+            disabled={waitingForOthers}
           >
-            {nextLabel}
+            {waitingForOthers ? 'ほかのプレイヤーを待っています' : nextLabel}
           </CountdownButton>
         </div>
       </main>

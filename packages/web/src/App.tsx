@@ -384,6 +384,7 @@ function DemoApp() {
           nextLabel="セット結果へ"
           autoAdvanceMs={FINAL_RESULT_MS}
           autoAdvanceAt={Date.now() + FINAL_RESULT_MS}
+          waitingForOthers={false}
           onNext={() => {
             go('setResult');
           }}
@@ -1362,8 +1363,9 @@ function ConnectedApp({
         nextLabel={`第${String(nextGame)}戦へ`}
         autoAdvanceMs={intermission?.durationMs ?? 15_000}
         autoAdvanceAt={intermission?.endsAt ?? Date.now() + 15_000}
+        waitingForOthers={intermission?.ready ?? false}
         onNext={() => {
-          invoke(client.sync());
+          invoke(client.readyNextGame());
         }}
       />,
     );
@@ -1396,6 +1398,7 @@ function ConnectedApp({
           nextLabel="セット結果へ"
           autoAdvanceMs={FINAL_RESULT_MS}
           autoAdvanceAt={finalResultDeadline.current.at}
+          waitingForOthers={false}
           onNext={() => {
             setFinalResultSeen(key);
           }}
