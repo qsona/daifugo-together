@@ -21,6 +21,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Set up pnpm
@@ -34,6 +35,12 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Check rule version bumps
+        run: node scripts/check-rule-version-bumps.mjs
+        env:
+          RULE_VERSION_DIFF_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          RULE_VERSION_DIFF_HEAD: ${{ github.sha }}
 
       - name: Check formatting
         run: pnpm format:check
