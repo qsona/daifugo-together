@@ -44,6 +44,7 @@ function context(input: {
   field?: Play;
   passed?: string[];
   previousPlay?: Play;
+  fieldClearedAfterPreviousPlay?: boolean;
 }): RuleContext {
   return {
     game: {
@@ -51,9 +52,26 @@ function context(input: {
         ...(input.field ? { current: { play: input.field, by: 'p2' } } : {}),
         passedSinceLastPlay: input.passed ?? [],
       },
-      history: input.previousPlay
-        ? [{ type: 'played', player: 'p2', play: input.previousPlay }]
-        : [],
+      history: [
+        ...(input.previousPlay
+          ? [
+              {
+                type: 'played' as const,
+                player: 'p2',
+                play: input.previousPlay,
+              },
+            ]
+          : []),
+        ...(input.fieldClearedAfterPreviousPlay
+          ? [
+              {
+                type: 'fieldCleared' as const,
+                reason: 'allPassed' as const,
+                nextLeader: 'p2',
+              },
+            ]
+          : []),
+      ],
     },
   } as unknown as RuleContext;
 }
@@ -112,6 +130,22 @@ describe('スペ3返し', () => {
         { legal: false, reasonKey: 'TOO_WEAK' },
       ),
     ).toEqual({ legal: true });
+  });
+
+  it('単体ジョーカーの場が流れた後にスペードの3をリードしても発動しない', () => {
+    const jokerPlay = single(joker(0));
+    const spadeThree = single(natural('spade', '3'));
+
+    expect(
+      rule.hooks.afterPlay?.(
+        context({
+          field: spadeThree,
+          previousPlay: jokerPlay,
+          fieldClearedAfterPreviousPlay: true,
+        }),
+        spadeThree,
+      ),
+    ).toEqual([]);
   });
 
   it('ジョーカー2枚組にスペードの3単体は出せない', () => {

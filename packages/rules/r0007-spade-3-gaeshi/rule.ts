@@ -26,9 +26,14 @@ function isSingleSpadeThree(play: DeepReadonly<Play>): boolean {
   );
 }
 
-function previousPlay(context: RuleContext): DeepReadonly<Play> | undefined {
+function previousPlayOnCurrentField(
+  context: RuleContext,
+): DeepReadonly<Play> | undefined {
   for (let index = context.game.history.length - 1; index >= 0; index -= 1) {
     const event = context.game.history[index];
+    if (event?.type === 'fieldCleared') {
+      return undefined;
+    }
     if (event?.type === 'played') {
       return event.play;
     }
@@ -74,7 +79,8 @@ export const rule: RuleModule = {
         : base;
     },
     afterPlay(context, play) {
-      return isSingleJoker(previousPlay(context)) && isSingleSpadeThree(play)
+      return isSingleJoker(previousPlayOnCurrentField(context)) &&
+        isSingleSpadeThree(play)
         ? [{ type: 'clearField' }]
         : [];
     },
