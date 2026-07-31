@@ -62,6 +62,7 @@ import {
 import screenStyles from './screens/screen.module.css';
 import { deriveCardHints } from './game/hints';
 import {
+  cardDiscardNotices,
   cards,
   finalPlay,
   pendingFieldClearPlayIndex,
@@ -1270,6 +1271,7 @@ function ConnectedApp({
           })}
           isFlushing={isFlushingField && !heldPlayWasSuperseded}
           finishes={seatFinishes(room)}
+          discardNotices={cardDiscardNotices(room)}
           leadSeatName={
             leadMember
               ? leadMember.memberId === room.you.memberId

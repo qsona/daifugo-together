@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivationChip } from '../components/ActivationChip';
 import { AppBar } from '../components/AppBar';
 import { Button } from '../components/Button';
+import { Card } from '../components/Card';
 import type { CardView } from '../components/Card';
 import { HandTray } from '../components/HandTray';
 import { GuideMessage } from '../components/GuideMessage';
@@ -29,8 +30,17 @@ export type SeatFinish = {
 
 /** あがり告知を出しておく時間。読み切れて、かつ次の手を邪魔しない長さ。 */
 const FINISH_NOTICE_MS = 2600;
+const DISCARD_NOTICE_MS = 3000;
 
 const NO_FINISHES: readonly SeatFinish[] = [];
+const NO_DISCARD_NOTICES: readonly CardDiscardNotice[] = [];
+
+export type CardDiscardNotice = {
+  id: string;
+  ruleName: string;
+  playerName: string;
+  cards: readonly CardView[];
+};
 
 type GameScreenProps = {
   /** セット内の何戦目か。巡目は誰の判断にも使われないので出さない。 */
@@ -43,6 +53,8 @@ type GameScreenProps = {
   isFlushing?: boolean;
   /** この戦であがった人を、あがった順に。増えた分だけを告知する。 */
   finishes?: readonly SeatFinish[];
+  /** 公開されたカード破棄。増えた分だけ札面つきで数秒告知する。 */
+  discardNotices?: readonly CardDiscardNotice[];
   /** 再生中のカットイン。空なら出さない。 */
   activations: readonly RuleActivation[];
   onCutInDone: () => void;
@@ -80,6 +92,7 @@ export function GameScreen({
   leadSeatName,
   isFlushing,
   finishes = NO_FINISHES,
+  discardNotices = NO_DISCARD_NOTICES,
   activations,
   onCutInDone,
   lastActivation,
@@ -102,6 +115,7 @@ export function GameScreen({
   onPass,
 }: GameScreenProps) {
   const finishNotice = useFinishNotice(finishes);
+  const discardNotice = useDiscardNotice(discardNotices);
   return (
     <div className={screen.screen}>
       <AppBar
@@ -169,6 +183,27 @@ export function GameScreen({
           ) : null}
         </div>
       )}
+      {discardNotice && (
+        <div className={styles.discardLayer}>
+          <section
+            className={styles.discardNotice}
+            role="status"
+            aria-label={`${discardNotice.playerName}が${discardNotice.ruleName}で捨てたカード`}
+          >
+            <strong className={styles.discardTitle}>
+              {discardNotice.playerName}の{discardNotice.ruleName}
+            </strong>
+            <span className={styles.discardLabel}>捨てたカード</span>
+            <ul className={styles.discardCards}>
+              {discardNotice.cards.map((card) => (
+                <li key={card.id}>
+                  <Card card={card} size="small" />
+                </li>
+              ))}
+            </ul>
+          </section>
+        </div>
+      )}
       <RuleCutIn activations={activations} onDone={onCutInDone} />
     </div>
   );
@@ -203,6 +238,33 @@ function useFinishNotice(finishes: readonly SeatFinish[]): SeatFinish | null {
     const timer = window.setTimeout(() => {
       setNotice(null);
     }, FINISH_NOTICE_MS);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [notice]);
+
+  return notice;
+}
+
+function useDiscardNotice(
+  notices: readonly CardDiscardNotice[],
+): CardDiscardNotice | null {
+  const seenCount = useRef<number | null>(null);
+  const [notice, setNotice] = useState<CardDiscardNotice | null>(null);
+
+  useEffect(() => {
+    const previous = seenCount.current;
+    seenCount.current = notices.length;
+    if (previous === null || notices.length <= previous) return;
+    const latest = notices.at(-1);
+    if (latest) setNotice(latest);
+  }, [notices]);
+
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => {
+      setNotice(null);
+    }, DISCARD_NOTICE_MS);
     return () => {
       window.clearTimeout(timer);
     };

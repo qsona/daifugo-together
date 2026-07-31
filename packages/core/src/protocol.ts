@@ -109,7 +109,15 @@ export type PublicPlayView =
   | { t: 'ruleFired'; ruleId: string; messageKey: string | null }
   | { t: 'failsafe'; reason: 'leadNoLegalMove' | 'turnLimit' }
   | { t: 'playerRetired'; seat: SeatId; cardCount: number; rank: Standing }
-  | { t: 'cardsMoved'; count: number };
+  | {
+      t: 'cardsMoved';
+      ruleId: string;
+      fromSeat: SeatId | null;
+      to: 'hand' | 'field' | 'discard';
+      count: number;
+      /** 公開ゾーンが絡む移動だけ札面を含む。hand→hand は null。 */
+      cards: Card[] | null;
+    };
 
 export interface GameResultView {
   gameNo: number;

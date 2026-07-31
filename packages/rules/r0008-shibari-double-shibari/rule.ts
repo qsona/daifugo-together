@@ -26,10 +26,18 @@ function containsJoker(play: DeepReadonly<Play>): boolean {
 function bindingFromHistory(
   context: Parameters<NonNullable<RuleModule['hooks']['modifyLegality']>>[0],
 ): string | null {
+  return bindingFromEvents(context.game.history);
+}
+
+function bindingFromEvents(
+  history: Parameters<
+    NonNullable<RuleModule['hooks']['modifyLegality']>
+  >[0]['game']['history'],
+): string | null {
   let previous: string | null = null;
   let binding: string | null = null;
 
-  for (const event of context.game.history) {
+  for (const event of history) {
     if (event.type === 'fieldCleared') {
       previous = null;
       binding = null;
@@ -52,14 +60,45 @@ function bindingFromHistory(
 }
 
 function previousPlayOnField(
-  context: Parameters<NonNullable<RuleModule['hooks']['afterPlay']>>[0],
+  history: Parameters<
+    NonNullable<RuleModule['hooks']['afterPlay']>
+  >[0]['game']['history'],
 ): DeepReadonly<Play> | null {
-  for (let index = context.game.history.length - 1; index >= 0; index -= 1) {
-    const event = context.game.history[index];
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    const event = history[index];
     if (event?.type === 'fieldCleared') return null;
     if (event?.type === 'played') return event.play;
   }
   return null;
+}
+
+function samePlay(
+  left: DeepReadonly<Play>,
+  right: DeepReadonly<Play>,
+): boolean {
+  if (left.kind !== right.kind || left.cards.length !== right.cards.length) {
+    return false;
+  }
+  const leftIds = left.cards.map((card) => card.id).toSorted();
+  const rightIds = right.cards.map((card) => card.id).toSorted();
+  return leftIds.every((id, index) => id === rightIds[index]);
+}
+
+/**
+ * contract v2 の追加入力後は、最初の play イベントが履歴へ確定した状態で
+ * afterPlay が再開される。通常の afterPlay と同じ「今回の手より前」の履歴へ
+ * 揃えないと、今回の手を自分自身の直前手として縛りを誤検出する。
+ */
+function historyBeforeCurrentPlay(
+  context: Parameters<NonNullable<RuleModule['hooks']['afterPlay']>>[0],
+  play: DeepReadonly<Play>,
+) {
+  const currentIndex = context.game.history.findLastIndex(
+    (event) => event.type === 'played' && samePlay(event.play, play),
+  );
+  return currentIndex < 0
+    ? context.game.history
+    : context.game.history.slice(0, currentIndex);
 }
 
 function chooseMissingSuits(
@@ -125,9 +164,10 @@ export const rule: RuleModule = {
       return suitOptions(play).includes(binding) ? base : { legal: false };
     },
     afterPlay(context, play) {
-      if (bindingFromHistory(context) !== null || containsJoker(play))
+      const priorHistory = historyBeforeCurrentPlay(context, play);
+      if (bindingFromEvents(priorHistory) !== null || containsJoker(play))
         return [];
-      const previous = previousPlayOnField(context);
+      const previous = previousPlayOnField(priorHistory);
       if (
         previous === null ||
         containsJoker(previous) ||

@@ -6,7 +6,7 @@ import {
 
 import type { CardView } from '../components/Card';
 import type { TableSeat } from '../components/Table';
-import type { SeatFinish } from '../screens/GameScreen';
+import type { CardDiscardNotice, SeatFinish } from '../screens/GameScreen';
 
 export function cards(
   cards: PlayerRoomView['game'] extends null
@@ -29,6 +29,43 @@ export type FinalPlay = {
   seat: number;
   cards: CardView[];
 };
+
+/** 公開された hand→discard の移動を、短時間表示用の札面へ整える。 */
+export function cardDiscardNotices(room: PlayerRoomView): CardDiscardNotice[] {
+  const game = room.game;
+  if (!game) return [];
+  const bySeat = new Map(
+    room.members.flatMap((member) =>
+      member.seatId === null ? [] : ([[member.seatId, member]] as const),
+    ),
+  );
+  const ruleName = new Map(
+    room.activeRules.map((rule) => [rule.ruleId, rule.name] as const),
+  );
+
+  return game.history.flatMap((event, index) => {
+    if (
+      event.t !== 'cardsMoved' ||
+      event.to !== 'discard' ||
+      event.fromSeat === null ||
+      !event.cards?.length
+    ) {
+      return [];
+    }
+    const member = bySeat.get(event.fromSeat);
+    return [
+      {
+        id: `${String(game.gameNo)}:${String(index)}`,
+        ruleName: ruleName.get(event.ruleId) ?? 'カード効果',
+        playerName:
+          member?.memberId === room.you.memberId
+            ? 'あなた'
+            : (member?.displayName ?? `席${String(event.fromSeat + 1)}`),
+        cards: cards(event.cards),
+      },
+    ];
+  });
+}
 
 /**
  * 対局終了時に最後の人が出した手。

@@ -1,5 +1,6 @@
 import {
   buildPlayerSnapshot,
+  createDeck,
   NO_RULE_CHAIN_PORT,
   orderPlayCards,
   POINTS_BY_STANDING,
@@ -20,6 +21,10 @@ import type {
   SeatId,
   SetResultView,
 } from './types.js';
+
+const CARD_BY_ID = new Map(
+  createDeck(['jokers']).map((card) => [card.id, card] as const),
+);
 
 function seatByMember(members: readonly RoomMember[]): Map<string, SeatId> {
   return new Map(
@@ -129,7 +134,21 @@ function historyView(
         rank: event.standing,
       };
     case 'cardsMoved':
-      return { t: 'cardsMoved', count: event.count };
+      return {
+        t: 'cardsMoved',
+        ruleId: event.by,
+        fromSeat:
+          event.from.kind === 'hand'
+            ? requiredSeat(seats, event.from.player)
+            : null,
+        to: event.to.kind,
+        count: event.count,
+        cards:
+          event.cardIds?.flatMap((cardId) => {
+            const card = CARD_BY_ID.get(cardId);
+            return card ? [card] : [];
+          }) ?? null,
+      };
   }
 }
 

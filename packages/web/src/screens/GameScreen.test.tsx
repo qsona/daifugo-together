@@ -4,7 +4,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { DEMO_HAND, DEMO_SEATS } from '../fixtures/demo';
 
-import { GameScreen, type SeatFinish } from './GameScreen';
+import {
+  GameScreen,
+  type CardDiscardNotice,
+  type SeatFinish,
+} from './GameScreen';
 
 const FINISH_B: SeatFinish = {
   seat: 1,
@@ -132,6 +136,57 @@ describe('contract v2 choice UI', () => {
         .getByRole('button', { name: 'えらんだ2枚を捨てる' })
         .hasAttribute('disabled'),
     ).toBe(true);
+  });
+});
+
+describe('10捨ての結果表示', () => {
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+  });
+
+  it('新しく捨てた札をカード面つきで表示し、数秒で消す', () => {
+    vi.useFakeTimers();
+    const notice: CardDiscardNotice = {
+      id: 'game-1:history-5',
+      ruleName: '10捨て',
+      playerName: 'あなた',
+      cards: [
+        { id: 'S03', suit: 'spade', rank: '3' },
+        { id: 'H07', suit: 'heart', rank: '7' },
+      ],
+    };
+    const { rerender } = render(
+      <GameScreen {...game([]).props} discardNotices={[]} />,
+    );
+
+    rerender(<GameScreen {...game([]).props} discardNotices={[notice]} />);
+
+    expect(screen.getByText('あなたの10捨て')).toBeTruthy();
+    expect(screen.getByText('捨てたカード')).toBeTruthy();
+    const result = screen.getByRole('status', {
+      name: 'あなたが10捨てで捨てたカード',
+    });
+    expect(within(result).getByLabelText('スペードの3')).toBeTruthy();
+    expect(within(result).getByLabelText('ハートの7')).toBeTruthy();
+
+    act(() => {
+      vi.advanceTimersByTime(3200);
+    });
+    expect(screen.queryByText('あなたの10捨て')).toBeNull();
+  });
+
+  it('再接続時に履歴へ既にある捨て札は再表示しない', () => {
+    const notice: CardDiscardNotice = {
+      id: 'game-1:history-5',
+      ruleName: '10捨て',
+      playerName: 'プレイヤーB',
+      cards: [{ id: 'D04', suit: 'diamond', rank: '4' }],
+    };
+
+    render(<GameScreen {...game([]).props} discardNotices={[notice]} />);
+
+    expect(screen.queryByText('プレイヤーBの10捨て')).toBeNull();
   });
 });
 

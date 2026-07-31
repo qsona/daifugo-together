@@ -300,4 +300,28 @@ describe('縛り・ダブル縛り', () => {
       ),
     ).toEqual([]);
   });
+
+  it('追加入力から再開した同じ手を直前手と誤認してカットインを出さない', () => {
+    const previous = single(card('heart', '5'));
+    const resumed = single(card('spade', '10'));
+
+    expect(
+      rule.hooks.afterPlay?.(
+        context([played(previous), played(resumed, 'p2')]),
+        resumed,
+      ),
+    ).toEqual([]);
+  });
+
+  it('追加入力からの再開でも直前手と同じスートなら正しく縛りを告知する', () => {
+    const previous = single(card('heart', '5'));
+    const resumed = single(card('heart', '10'));
+
+    expect(
+      rule.hooks.afterPlay?.(
+        context([played(previous), played(resumed, 'p2')]),
+        resumed,
+      ),
+    ).toEqual([{ type: 'announce', messageKey: 'bindingActivated' }]);
+  });
 });

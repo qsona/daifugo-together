@@ -1,7 +1,12 @@
 import type { PlayerRoomView } from '@daifugo/core';
 import { describe, expect, it } from 'vitest';
 
-import { finalPlay, hasPendingFieldClear, tableSeats } from './table';
+import {
+  cardDiscardNotices,
+  finalPlay,
+  hasPendingFieldClear,
+  tableSeats,
+} from './table';
 
 const EIGHT = {
   kind: 'natural',
@@ -115,6 +120,51 @@ describe('tableSeats', () => {
       finishedRank: 4,
       finishedTitle: '大貧民',
     });
+  });
+});
+
+describe('cardDiscardNotices', () => {
+  it('公開されたhand→discardの札と実行者を表示用に整える', () => {
+    const room = roomAfterEightCut();
+    room.activeRules = [{ ruleId: 'r0010-ten-discard', name: '10捨て' }];
+    room.game!.history.push({
+      t: 'cardsMoved',
+      ruleId: 'r0010-ten-discard',
+      fromSeat: 0,
+      to: 'discard',
+      count: 1,
+      cards: [
+        {
+          kind: 'natural',
+          id: 'H07',
+          suit: 'heart',
+          rank: '7',
+        },
+      ],
+    });
+
+    expect(cardDiscardNotices(room)).toEqual([
+      {
+        id: '1:4',
+        ruleName: '10捨て',
+        playerName: 'あなた',
+        cards: [{ id: 'H07', suit: 'heart', rank: '7' }],
+      },
+    ]);
+  });
+
+  it('非公開のhand→hand移動は告知しない', () => {
+    const room = roomAfterEightCut();
+    room.game!.history.push({
+      t: 'cardsMoved',
+      ruleId: 'hidden-transfer',
+      fromSeat: 0,
+      to: 'hand',
+      count: 1,
+      cards: null,
+    });
+
+    expect(cardDiscardNotices(room)).toEqual([]);
   });
 });
 
