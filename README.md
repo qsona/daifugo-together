@@ -20,8 +20,8 @@ pnpm verify
 次のスクリプトで `release` ブランチへ fast-forward push します。
 
 ```sh
-scripts/release.sh --dry-run
-scripts/release.sh
+pnpm run release --dry-run
+pnpm run release
 ```
 
 `release` ブランチの CI が成功すると、検証済みの同一コミットが Fly.io へ
@@ -31,6 +31,6 @@ scripts/release.sh
 `--allow-dirty` を指定します。`--dry-run` と併用できます。
 
 ```sh
-scripts/release.sh --dry-run --allow-dirty
-scripts/release.sh --allow-dirty
+pnpm run release --dry-run --allow-dirty
+pnpm run release --allow-dirty
 ```
