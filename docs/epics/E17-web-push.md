@@ -1,10 +1,12 @@
 # E17: Web Push 通知(PWA 化を含む)
 
 - 作成日: 2026-07-29
-- 状態: 提案(方向性は 2026-07-29 に開発者承認済み。詳細レビュー待ち)
+- 状態: 実装済み(2026-08-01。WP-01〜03。VAPID 設定と実機受入は runbook の実施待ち)
 - 一次情報源: `docs/リテンション施策提案.md`(§2 施策A段階2)/ `docs/epics/E16-notification-center.md`(通知種別モデル・イベントソースの正)/ `docs/epics/E05-rule-proposal.md`(§3.3(g) Web Push 見送りの判断基準)/ `docs/epics/E15-auth-account.md`(登録済みユーザーの定義)/ `docs/epics/E12-tech-stack.md`(単一プロセス・運用物最小方針)
 
 > **前提(着手ゲート)**: 本 Epic は設計を先に固めるが、**着手には 2 つの前提がある**(§1.1)。(1) **E15(Google 紐付け)のリリース** — 本書の対象者「提案者」は E15 後は全員登録済みになる。E15 は本書の作成時点で**実装未着手**である。(2) **E16 の計測による投資判断** — 「センターでは届かない層」(未読の `proposal_released` を放置して再訪しないユーザー)の規模を E16 で計測し(E16 §2.6・NC-T3)、E05 §3.3(g) の判断基準「離脱ユーザーに届かない問題が再訪に効くか」をデータで確認してから着手する。**この判断を経ずに実装着手しない**(例外: WP-01 の PWA 化のみ両前提と独立に先行できる。§1.3)。
+>
+> **2026-08-01 上書き裁定**: 開発者が今回に限り上記ゲートを明示的に上書きし、E16 に続けて **E17 全体(WP-01〜03)を実装する**と裁定した。ゲートの設計意図と計測 SQL は将来の効果検証用に残す。
 
 ---
 
@@ -77,7 +79,7 @@ E16 NotificationService.publish()
 
 - **Web App Manifest**: `packages/web/public/manifest.webmanifest` を新設し、`index.html` に `<link rel="manifest">` を追加。アイコンは既存の事前生成物(`packages/web/public/icon-192.png` / `icon-512.png`。2026-07-29 実コード確認で存在)をそのまま使う。`theme-color`(`#2B6FC2`)・タイトル・説明は `index.html` の既存値と一致させる(design-tokens の CI 照合 `scripts/check-design-tokens.mjs` との整合に注意)。
 - **Service Worker**: `packages/web/` に SW ソースを新設(Vite のビルドに組み込む。プラグイン選定は実装時。自前の小さな SW で足りる想定 — プリキャッシュはせず、`push` / `notificationclick` ハンドラ + 最小の fetch フォールバックのみ)。**アプリ本体のオフラインキャッシュは本 Epic ではやらない**(キャッシュ起因の「更新が届かない」事故は Push の価値を損なう。§5)。
-- **iOS**: 「iOS は PWA のホーム画面追加が Push 受信の前提」という一般知識に基づいて WP-02 のオプトイン導線に「ホーム画面に追加してね」の分岐を置く設計とするが、**iOS の最新挙動の再確認は着手時の開発者タスク**(WP-T1)。確認結果次第で iOS 向け導線の文言・手順を確定する。
+- **iOS(WP-T1 確認済み: 2026-08-01)**: WebKit の公式情報で、iOS/iPadOS 16.4 以降は**ホーム画面に追加した Web App**が Web Push を使え、許諾要求はボタン操作などの直接的なユーザー操作から行う必要があることを確認した。実装は standalone 判定で「ホーム画面に追加」案内に分岐し、提案送信後の「通知を受け取る」操作だけが `Notification.requestPermission()` を呼ぶ。Safari 18.4 の Declarative Web Push は任意の新方式であるため、初期実装は幅広い互換性を優先し Push API + Service Worker を維持する。出典: [WebKit: Web Push for Web Apps on iOS and iPadOS](https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/), [Apple: Sending web push notifications](https://developer.apple.com/documentation/usernotifications/sending-web-push-notifications-in-web-apps-and-browsers), [WebKit: Meet Declarative Web Push](https://webkit.org/blog/16535/meet-declarative-web-push/)。
 
 ### 2.3 データモデル
 
@@ -251,8 +253,8 @@ CREATE TABLE IF NOT EXISTS push_preferences (
 
 | # | 内容 | デフォルト案 | 期限 |
 |---|---|---|---|
-| WP-T1 | **iOS の Web Push 最新挙動の再確認**(ホーム画面追加が受信の前提か、許諾 UI の制約、standalone 判定方法)。本書の iOS 分岐(§2.2・§2.9)は一般知識に基づく仮置き | 確認結果に合わせて iOS 導線の文言・手順を確定(設計の骨格は変えない想定) | WP-01 着手時 |
+| WP-T1 | **iOS の Web Push 最新挙動の再確認**(ホーム画面追加が受信の前提か、許諾 UI の制約、standalone 判定方法) | **2026-08-01 完了**。§2.2 に公式情報と実装判断を記録 | 完了 |
 | WP-T2 | VAPID 鍵の生成・`fly secrets set` | — (開発は FakePushTransport で先行可) | WP-03 の実ブラウザ通し確認まで |
-| WP-T3 | 投資判断ゲートの実施(E16 計測値のレビューと着手可否の裁定。閾値の目安は E16 NC-T3) | 「未読 `proposal_released` の 7 日放置が提案者の相当数(目安 3 割以上)」なら着手、下回れば延期 — 数値は裁定時に開発者が決める | E17 着手前(必須) |
+| WP-T3 | 投資判断ゲートの実施(E16 計測値のレビューと着手可否の裁定。閾値の目安は E16 NC-T3) | **2026-08-01 に開発者が今回の着手ゲートを明示的に上書き**。閾値と SQL は効果検証用に維持 | 上書き済み |
 | WP-T4 | オプトイン提示の文言と再提示ポリシー(拒否後に設定画面以外で再び誘うか) | 再提示しない(せがまない)。文言は UI 文言ガイド準拠で仮置き→レビュー | WP-02 完了レビュー |
 | WP-T5 | 夜間帯(21:00〜7:00)の妥当性確認(ターゲット年齢帯の生活時間として) | 提案書の値のまま開始し、苦情・実態が見えたら調整 | WP-03 完了レビュー |

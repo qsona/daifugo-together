@@ -1,4 +1,5 @@
 import { cx } from '../lib/cx';
+import type { ReactNode } from 'react';
 
 import styles from './AppBar.module.css';
 
@@ -8,9 +9,10 @@ type AppBarProps = {
   onBack?: () => void;
   /** 右端のアクションチップ(有効ルール件数など)。 */
   action?: { label: string; onClick?: () => void };
+  notification?: ReactNode;
 };
 
-export function AppBar({ title, onBack, action }: AppBarProps) {
+export function AppBar({ title, onBack, action, notification }: AppBarProps) {
   return (
     <header className={styles.appbar}>
       {onBack && (
@@ -24,6 +26,7 @@ export function AppBar({ title, onBack, action }: AppBarProps) {
         </button>
       )}
       <h1 className={styles.title}>{title}</h1>
+      {notification}
       {action &&
         (action.onClick ? (
           <button

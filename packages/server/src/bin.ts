@@ -17,6 +17,10 @@ import { RuleRegistryService } from './rules/service.js';
 import { RuleCatalogService } from './rules/catalog.js';
 import { AuthService } from './auth/service.js';
 import { createGoogleAuthProvider } from './auth/provider.js';
+import { NotificationService } from './notification/service.js';
+import { PushSender, WebPushTransport } from './push/sender.js';
+import { PushService } from './push/service.js';
+import type { RoomSocketGateway } from './room/socket-gateway.js';
 
 function errorFields(error: unknown): Record<string, unknown> {
   return error instanceof Error
@@ -71,6 +75,42 @@ try {
 }
 const codeRules = await loadRuleCodeBundles();
 let refreshWaitingRules = (): void => undefined;
+const notificationGateway: { current?: RoomSocketGateway } = {};
+const vapidPublicKey = process.env.VAPID_PUBLIC_KEY;
+const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
+const vapidSubject = process.env.VAPID_SUBJECT;
+let pushTransport: WebPushTransport | undefined;
+if (vapidPublicKey && vapidPrivateKey && vapidSubject) {
+  try {
+    pushTransport = new WebPushTransport({
+      publicKey: vapidPublicKey,
+      privateKey: vapidPrivateKey,
+      subject: vapidSubject,
+    });
+  } catch (error) {
+    writeLog('error', 'web_push_transport_unavailable', errorFields(error));
+  }
+}
+const pushSender = new PushSender(persistence.push, {
+  ...(pushTransport ? { transport: pushTransport } : {}),
+  onError: (error) =>
+    writeLog('error', 'web_push_send_failed', errorFields(error)),
+});
+const push = new PushService(persistence.push, {
+  ...(pushTransport && vapidPublicKey ? { publicKey: vapidPublicKey } : {}),
+  available: pushTransport !== undefined,
+});
+const notifications = new NotificationService(persistence.notifications, {
+  push: pushSender,
+  emit: {
+    emitNew: (userId, item) =>
+      notificationGateway.current?.emitNotification(userId, item),
+    sync: (userId, unreadCount) =>
+      notificationGateway.current?.emitNotificationSync(userId, unreadCount),
+  },
+  onError: (error) =>
+    writeLog('error', 'notification_delivery_failed', errorFields(error)),
+});
 const rules = new RuleRegistryService(persistence.rules, codeRules, {
   proposals: persistence.proposals,
   pipeline: persistence.pipeline,
@@ -92,6 +132,10 @@ const rules = new RuleRegistryService(persistence.rules, codeRules, {
       ruleId: rule.id,
       proposalId: rule.proposalId,
     });
+    const proposal = persistence.proposals.findById(rule.proposalId);
+    if (proposal) {
+      notifications.publishProposal('proposal_released', proposal);
+    }
   },
   onAvailabilityChanged: () => refreshWaitingRules(),
 });
@@ -139,6 +183,8 @@ const app = createAppServer({
   proposals: new ProposalSubmissionService(persistence.proposals, {
     signals,
   }),
+  notifications,
+  push,
   evaluations: new EvaluationService(persistence.evaluations),
   ruleCatalog: new RuleCatalogService(persistence.rules, {
     eliminationEnabled: process.env.FEATURE_ELIMINATION !== 'false',
@@ -164,10 +210,14 @@ const app = createAppServer({
             persistence.pipeline,
             persistence.proposals,
             persistence.injection,
+            Date.now,
+            notifications,
           ),
           jobs: new PipelineJobService(
             persistence.pipeline,
             persistence.proposals,
+            Date.now,
+            notifications,
           ),
         },
         adminRules: {
@@ -183,6 +233,8 @@ const app = createAppServer({
     effectiveRuleChainForSet: (setId, entries) =>
       rules.effectiveRuleChainForSet(setId, entries),
     aiRuleBundles: (entries) => rules.aiRuleBundles(entries),
+    notificationUnreadCount: (userId) =>
+      persistence.notifications.unreadCount(userId, Date.now()),
     onError: (error) => {
       writeLog('error', 'socket_internal_error', errorFields(error));
     },
@@ -193,6 +245,7 @@ const app = createAppServer({
     },
   },
 });
+notificationGateway.current = app.gateway;
 refreshWaitingRules = () => {
   app.gateway.refreshWaitingRules();
 };

@@ -1,4 +1,4 @@
-import type { PlayerRoomView } from '@daifugo/core';
+import type { NotificationView, PlayerRoomView } from '@daifugo/core';
 import type { ReactNode } from 'react';
 import {
   useCallback,
@@ -15,6 +15,7 @@ import type { SetRankView } from './components/SetRankRows';
 import { FinalPlayReveal } from './components/FinalPlayReveal';
 import { RuleCutIn, type RuleActivation } from './components/RuleCutIn';
 import { EmptyState } from './components/EmptyState';
+import { NotificationBell } from './components/NotificationBell';
 import { ActiveRulesModal } from './components/ActiveRulesModal';
 import { RuleDetailModal } from './components/RuleDetailModal';
 import type { RuleVote, SetFunRating } from './screens/SetResultScreen';
@@ -36,6 +37,8 @@ import { GameResultScreen } from './screens/GameResultScreen';
 import { GameScreen } from './screens/GameScreen';
 import { MenuScreen } from './screens/MenuScreen';
 import { MyProposalsScreen } from './screens/MyProposalsScreen';
+import { NotificationsScreen } from './screens/NotificationsScreen';
+import { PushSettingsScreen } from './screens/PushSettingsScreen';
 import { ActiveRulesScreen } from './screens/ActiveRulesScreen';
 import { RuleDexScreen } from './screens/RuleDexScreen';
 import {
@@ -75,6 +78,8 @@ import {
 } from './game/table';
 import { getBrowserAuthClient, type AuthApi } from './auth/client';
 import { FEATURES } from './features';
+import { getBrowserNotificationClient } from './notification/client';
+import { getBrowserPushClient } from './push/client';
 import {
   getBrowserEvaluationClient,
   type EvaluationApi,
@@ -638,6 +643,8 @@ function ConnectedApp({
   const [authMessage, setAuthMessage] = useState<string | null>(null);
   const [showResultAuthPrompt, setShowResultAuthPrompt] = useState(false);
   const proposalApi = getBrowserProposalClient();
+  const notificationApi = getBrowserNotificationClient();
+  const pushApi = getBrowserPushClient();
   const ruleEventRoomId = useRef<string | null>(null);
   const lastRuleEventSeq = useRef(0);
   const seenRuleIds = useRef(new Set<string>());
@@ -670,6 +677,12 @@ function ConnectedApp({
   const [roomOverlay, setRoomOverlay] = useState<RoomOverlay>(null);
   const ruleCatalogApi = getBrowserRuleCatalogClient();
   const room = state.room;
+  const notificationBell = (
+    <NotificationBell
+      unreadCount={state.unreadNotificationCount ?? 0}
+      onClick={() => go('notifications')}
+    />
+  );
   const finalPlayReveal = useFinalPlayReveal(room);
   const beginLogin = useCallback(() => {
     if (
@@ -734,6 +747,23 @@ function ConnectedApp({
       useScreenStore.setState({ current: 'menu' });
     }
   }, [desiredRoomPath, state.connection]);
+
+  useEffect(() => {
+    if (state.connection !== 'ready') return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('src') !== 'push') return;
+    const rawId = url.searchParams.get('nid');
+    if (!rawId || !/^[1-9]\d*$/u.test(rawId)) return;
+    void notificationApi.opened(Number(rawId), 'push').finally(() => {
+      url.searchParams.delete('src');
+      url.searchParams.delete('nid');
+      window.history.replaceState(
+        {},
+        '',
+        `${url.pathname}${url.search}${url.hash}`,
+      );
+    });
+  }, [notificationApi, state.connection]);
 
   useEffect(() => {
     const restoreOverlayFromUrl = () => {
@@ -1513,6 +1543,12 @@ function ConnectedApp({
         onBack={() => go('menu')}
         registered={state.registered}
         onLogin={beginLogin}
+        notification={notificationBell}
+        pushOffer={{
+          shouldOffer: () => pushApi.shouldOffer(),
+          subscribe: () => pushApi.subscribeProposalResults(),
+          decline: () => pushApi.declineOffer(),
+        }}
       />,
     );
   }
@@ -1522,12 +1558,42 @@ function ConnectedApp({
         api={proposalApi}
         onBack={() => go('menu')}
         onUnreadCountChange={setUnreadProposalCount}
+        notification={notificationBell}
       />,
+    );
+  }
+  if (!sharedInviteCode && current === 'notifications') {
+    return show(
+      <NotificationsScreen
+        api={notificationApi}
+        onBack={() => go('menu')}
+        onSettings={() => go('pushSettings')}
+        onUnreadCountChange={(count) =>
+          client.setUnreadNotificationCount(count)
+        }
+        onOpen={(item: NotificationView) => {
+          navigate(item.url);
+          useScreenStore.setState({
+            current: screenFromPathname(
+              new URL(item.url, window.location.origin).pathname,
+            ),
+          });
+        }}
+      />,
+    );
+  }
+  if (!sharedInviteCode && current === 'pushSettings') {
+    return show(
+      <PushSettingsScreen api={pushApi} onBack={() => go('notifications')} />,
     );
   }
   if (!sharedInviteCode && current === 'ruleDex') {
     return show(
-      <RuleDexScreen api={ruleCatalogApi} onBack={() => go('menu')} />,
+      <RuleDexScreen
+        api={ruleCatalogApi}
+        onBack={() => go('menu')}
+        notification={notificationBell}
+      />,
     );
   }
   return show(
@@ -1543,12 +1609,15 @@ function ConnectedApp({
         registered={state.registered}
         onLogin={beginLogin}
         onLogout={() => {
-          client.switchSession(null);
-          setAuthMessage('ログアウトしました');
+          void pushApi.disableThisDevice().finally(() => {
+            client.switchSession(null);
+            setAuthMessage('ログアウトしました');
+          });
         }}
         authPending={authPending}
         authMessage={authMessage}
         unreadProposalCount={unreadProposalCount}
+        notification={notificationBell}
       />
       {isChoosingRoom && (
         <PlaySheet

@@ -16,6 +16,7 @@ import {
   type RuleChainEntry,
   type RuleChainPort,
   type RuleRuntime,
+  type NotificationView,
 } from '@daifugo/core';
 import type { Server, Socket } from 'socket.io';
 
@@ -93,12 +94,15 @@ export interface RoomSocketGatewayOptions {
   onError?: (error: unknown) => void;
   onAiLog?: (log: AiTurnLog) => void;
   onAiMetric?: (metric: AiTurnMetric) => void;
+  notificationUnreadCount?: (userId: string) => number;
 }
 
 export interface RoomSocketGateway {
   rooms: RoomManager;
   sessions: SessionStore;
   refreshWaitingRules(): number;
+  emitNotification(userId: string, item: NotificationView): void;
+  emitNotificationSync(userId: string, unreadCount: number): void;
   beginDrain(): Promise<void>;
   close(): void;
 }
@@ -410,6 +414,13 @@ export function attachRoomSocketGateway(
           })
         : null,
     });
+    try {
+      socket.emit('notification:sync', {
+        unreadCount: options.notificationUnreadCount?.(session.userId) ?? 0,
+      });
+    } catch (error) {
+      report(error);
+    }
     readySocketIds.add(socket.id);
 
     socket.on('room:create', (payload, ack) => {
@@ -788,6 +799,24 @@ export function attachRoomSocketGateway(
   return {
     rooms,
     sessions,
+    emitNotification(userId, item) {
+      const socket = activeByUser.get(userId);
+      if (!socket || !readySocketIds.has(socket.id)) return;
+      try {
+        socket.emit('notification:new', { item });
+      } catch (error) {
+        report(error);
+      }
+    },
+    emitNotificationSync(userId, unreadCount) {
+      const socket = activeByUser.get(userId);
+      if (!socket || !readySocketIds.has(socket.id)) return;
+      try {
+        socket.emit('notification:sync', { unreadCount });
+      } catch (error) {
+        report(error);
+      }
+    },
     refreshWaitingRules() {
       const refreshed = rooms.refreshWaitingRules();
       for (const { transition } of refreshed) emitState(transition.state);

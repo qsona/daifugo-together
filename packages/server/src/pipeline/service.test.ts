@@ -10,6 +10,7 @@ import { LocalScreeningService } from '../injection/local-screening.js';
 import { InjectionSignalRecorder } from '../injection/screening.js';
 import { SqlitePersistence } from '../persistence.js';
 import { ProposalSubmissionService } from '../proposal/submission.js';
+import { NotificationService } from '../notification/service.js';
 import { PipelineJudgementService } from './service.js';
 
 const instances: SqlitePersistence[] = [];
@@ -97,18 +98,31 @@ async function setup(path = ':memory:') {
     persistence.proposals,
     () => ++now,
   );
+  const notifications = new NotificationService(persistence.notifications, {
+    now: () => ++now,
+  });
   const pipeline = new PipelineJudgementService(
     persistence.pipeline,
     persistence.proposals,
     persistence.injection,
     () => ++now,
+    notifications,
   );
-  return { persistence, proposal, local, pipeline, submissions };
+  return {
+    persistence,
+    proposal,
+    local,
+    pipeline,
+    submissions,
+    notifications,
+    userToken: session.userToken,
+  };
 }
 
 describe('CX-01 judgement and VERDICT_CONFIRMATION', () => {
   it('E6 pass後だけを払い出し、AI判定とSPEC承認を経てqueuedへ進める', async () => {
-    const { persistence, proposal, local, pipeline } = await setup();
+    const { persistence, proposal, local, pipeline, notifications, userToken } =
+      await setup();
     expect(pipeline.pending()).toEqual([]);
 
     expect(
@@ -179,6 +193,13 @@ describe('CX-01 judgement and VERDICT_CONFIRMATION', () => {
     expect(persistence.proposals.findById(proposal.id)?.status).toBe(
       'implementing',
     );
+    expect(notifications.list(userToken)).toMatchObject({
+      status: 200,
+      body: {
+        unreadCount: 1,
+        items: [{ type: 'proposal_implementing' }],
+      },
+    });
     expect(persistence.pipeline.pendingConfirmations()).toEqual([]);
     expect(persistence.pipeline.jobForProposal(proposal.id)).toMatchObject({
       phase: 'queued',
@@ -203,6 +224,9 @@ describe('CX-01 judgement and VERDICT_CONFIRMATION', () => {
     ).toMatchObject({
       status: 'already_confirmed',
       jobId: approved.status === 'confirmed' ? approved.jobId : undefined,
+    });
+    expect(notifications.list(userToken)).toMatchObject({
+      body: { unreadCount: 1 },
     });
   });
 

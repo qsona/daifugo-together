@@ -32,11 +32,13 @@
     "better-sqlite3": "13.0.1",
     "drizzle-orm": "0.45.2",
     "openid-client": "^6.8.4",
-    "socket.io": "^4.8.3"
+    "socket.io": "^4.8.3",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@types/better-sqlite3": "7.6.13",
     "@types/node": "^26.0.0",
+    "@types/web-push": "^3.6.4",
     "socket.io-client": "^4.8.3"
   }
 }

@@ -4,6 +4,7 @@ import {
   createDeck,
   createInProcessRuleChainPort,
   enumerateLegalPlays,
+  type NotificationView,
   type RuleChainEntry,
   type RuleModule,
 } from '@daifugo/core';
@@ -84,7 +85,12 @@ async function createHarness(
   gatewayOptions: Partial<
     Pick<
       RoomSocketGatewayOptions,
-      'rooms' | 'decideTurn' | 'timers' | 'joinRateLimit' | 'rulePortForSet'
+      | 'rooms'
+      | 'decideTurn'
+      | 'timers'
+      | 'joinRateLimit'
+      | 'rulePortForSet'
+      | 'notificationUnreadCount'
     >
   > = {},
 ): Promise<Harness> {
@@ -140,6 +146,7 @@ async function connect(
   client: TestClient;
   ready: Parameters<ServerToClientEvents['session:ready']>[0];
   statesBeforeReady: PlayerRoomView[];
+  notificationSyncs: number[];
 }> {
   const client: TestClient = createClient(harness.url, {
     autoConnect: false,
@@ -152,9 +159,13 @@ async function connect(
   });
   harness.clients.push(client);
   const statesBeforeReady: PlayerRoomView[] = [];
+  const notificationSyncs: number[] = [];
   let readyReceived = false;
   client.on('room:state', (view) => {
     if (!readyReceived) statesBeforeReady.push(view);
+  });
+  client.on('notification:sync', ({ unreadCount }) => {
+    notificationSyncs.push(unreadCount);
   });
   const readyPromise = once<
     Parameters<ServerToClientEvents['session:ready']>[0]
@@ -165,7 +176,12 @@ async function connect(
     }),
   );
   client.connect();
-  return { client, ready: await readyPromise, statesBeforeReady };
+  return {
+    client,
+    ready: await readyPromise,
+    statesBeforeReady,
+    notificationSyncs,
+  };
 }
 
 function emitAck<Event extends keyof ClientToServerEvents, Result>(
@@ -201,6 +217,32 @@ afterEach(async () => {
 });
 
 describe('Socket.IO room gateway', () => {
+  it('接続時の未読数と接続中の新着通知を対象ユーザーへ送る', async () => {
+    const harness = await createHarness({ notificationUnreadCount: () => 3 });
+    const connected = await connect(harness);
+    await vi.waitFor(() => expect(connected.notificationSyncs).toEqual([3]));
+    const item: NotificationView = {
+      id: 1,
+      type: 'proposal_released',
+      payload: { proposalName: '革命' },
+      title: '提案がルールになったよ！',
+      body: '「革命」が、みんなの対局で遊べるようになりました。',
+      url: '/proposals/mine',
+      priority: 'highest',
+      createdAt: 1,
+      readAt: null,
+      openedAt: null,
+      openedVia: null,
+    };
+    const received = once<NotificationView>((resolve) =>
+      connected.client.once('notification:new', ({ item: value }) =>
+        resolve(value),
+      ),
+    );
+    harness.gateway.emitNotification(connected.ready.userId, item);
+    await expect(received).resolves.toEqual(item);
+  });
+
   it('クライアント用の合法手計算にも対局ごとのrule portを使う', async () => {
     const entry: RuleChainEntry = {
       ruleId: 'r-view-strength',
