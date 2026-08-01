@@ -226,6 +226,86 @@ describe('production app server', () => {
     expect(submit).not.toHaveBeenCalled();
   });
 
+  it('提案POSTをfly-client-ip単位で制限する', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'daifugo-web-dist-'));
+    directories.push(directory);
+    const submit = vi.fn(async () => ({
+      status: 200 as const,
+      body: {
+        outcome: 'accepted' as const,
+        proposal: {
+          id: 'proposal-1',
+          kind: 'original' as const,
+          prefectureCode: null,
+          prefectureName: null,
+          name: '都落ち',
+          body: '都落ちを追加',
+          status: 'screening' as const,
+          reason: null,
+          releasedRuleId: null,
+          popularity: null,
+          priorityRank: null,
+          unread: false,
+          occupiesSlot: true,
+          createdAt: 1_000,
+          statusChangedAt: 1_000,
+        },
+      },
+    }));
+    const app = createAppServer({
+      webDistDir: directory,
+      now: () => 1_000,
+      proposalRateLimit: { maxAttempts: 1, windowMs: 60_000 },
+      proposals: {
+        authorize: () => ({ status: 204 as const, body: null }),
+        submit,
+        mine: async () => ({
+          status: 401 as const,
+          body: { error: 'unauthorized' as const },
+        }),
+        seen: async () => ({
+          status: 401 as const,
+          body: { error: 'unauthorized' as const },
+        }),
+      },
+    });
+    apps.push(app);
+    const port = await app.listen(0, '127.0.0.1');
+    const url = `http://127.0.0.1:${String(port)}/api/proposals`;
+    const submitFrom = (ip: string) =>
+      fetch(url, {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer valid-token',
+          'content-type': 'application/json',
+          'fly-client-ip': ip,
+        },
+        body: JSON.stringify({ title: '都落ち', description: '都落ちを追加' }),
+      });
+
+    expect((await submitFrom('203.0.113.1')).status).toBe(200);
+    expect((await submitFrom('203.0.113.1')).status).toBe(429);
+    expect((await submitFrom('203.0.113.2')).status).toBe(200);
+    expect(submit).toHaveBeenCalledTimes(2);
+  });
+
+  it('PNGを正しいContent-Typeで配信する', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'daifugo-web-dist-'));
+    directories.push(directory);
+    writeFileSync(join(directory, 'ogp.png'), 'png fixture');
+    const app = createAppServer({ webDistDir: directory });
+    apps.push(app);
+    const port = await app.listen(0, '127.0.0.1');
+
+    await expect(
+      fetchText(`http://127.0.0.1:${String(port)}/ogp.png`),
+    ).resolves.toEqual({
+      status: 200,
+      body: 'png fixture',
+      contentType: 'image/png',
+    });
+  });
+
   it('SPA fallbackを配信し、同じoriginでSocket.IO sessionを確立する', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'daifugo-web-dist-'));
     directories.push(directory);

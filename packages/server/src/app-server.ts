@@ -43,9 +43,13 @@ const AUTH_RESULT_COOKIE_ATTRIBUTES = 'Path=/menu; Secure; SameSite=Strict';
 const CONTENT_TYPES: Record<string, string> = {
   '.css': 'text/css; charset=utf-8',
   '.html': 'text/html; charset=utf-8',
+  '.jpeg': 'image/jpeg',
+  '.jpg': 'image/jpeg',
   '.js': 'text/javascript; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
+  '.png': 'image/png',
   '.svg': 'image/svg+xml',
+  '.webp': 'image/webp',
   '.woff': 'font/woff',
   '.woff2': 'font/woff2',
 };
@@ -58,6 +62,7 @@ export interface AppServerOptions {
   evaluations?: Pick<EvaluationService, 'get' | 'update'>;
   ruleCatalog?: Pick<RuleCatalogService, 'detail' | 'list'>;
   ruleCatalogRateLimit?: { maxAttempts: number; windowMs: number };
+  proposalRateLimit?: { maxAttempts: number; windowMs: number };
   now?: () => number;
   yellowCards?: YellowCardPort;
   auth?: Pick<AuthService, 'begin' | 'callback' | 'complete'>;
@@ -240,6 +245,12 @@ export function createAppServer(options: AppServerOptions): AppServer {
     options.ruleCatalogRateLimit ?? {
       maxAttempts: 120,
       windowMs: 60_000,
+    },
+  );
+  const proposalRateLimiter = new FixedWindowRateLimiter(
+    options.proposalRateLimit ?? {
+      maxAttempts: 10,
+      windowMs: 60 * 60_000,
     },
   );
   const handleAuth = async (
@@ -836,6 +847,15 @@ export function createAppServer(options: AppServerOptions): AppServer {
     const authorization = options.proposals.authorize(bearerToken(request));
     if (authorization.status !== 204) {
       writeJson(response, authorization.status, authorization.body);
+      return true;
+    }
+    if (
+      !proposalRateLimiter.allow(
+        clientIp(request),
+        options.now?.() ?? Date.now(),
+      )
+    ) {
+      writeJson(response, 429, { error: 'rate_limited' });
       return true;
     }
     let body: unknown;

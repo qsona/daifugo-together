@@ -14,4 +14,19 @@ describe('FixedWindowRateLimiter', () => {
     expect(limiter.allow('ip-b', 1_002)).toBe(true);
     expect(limiter.allow('ip-a', 61_000)).toBe(true);
   });
+
+  it('期限切れwindowを定期的に掃除してkeyを再利用できる', () => {
+    const limiter = new FixedWindowRateLimiter({
+      maxAttempts: 1,
+      windowMs: 100,
+    });
+    expect(limiter.allow('old-ip', 0)).toBe(true);
+
+    for (let index = 0; index < 63; index += 1) {
+      expect(limiter.allow(`new-ip-${String(index)}`, 100)).toBe(true);
+    }
+
+    expect(limiter.allow('old-ip', 100)).toBe(true);
+    expect(limiter.allow('old-ip', 101)).toBe(false);
+  });
 });

@@ -9,9 +9,12 @@ interface Window {
 }
 
 export class FixedWindowRateLimiter {
+  static readonly #PRUNE_INTERVAL = 64;
+
   readonly #maxAttempts: number;
   readonly #windowMs: number;
   readonly #windows = new Map<string, Window>();
+  #windowsStartedSincePrune = 0;
 
   constructor(options: FixedWindowRateLimitOptions) {
     if (
@@ -30,10 +33,25 @@ export class FixedWindowRateLimiter {
     const existing = this.#windows.get(key);
     if (!existing || now - existing.startedAt >= this.#windowMs) {
       this.#windows.set(key, { startedAt: now, attempts: 1 });
+      this.#windowsStartedSincePrune += 1;
+      if (
+        this.#windowsStartedSincePrune >= FixedWindowRateLimiter.#PRUNE_INTERVAL
+      ) {
+        this.#pruneExpired(now);
+      }
       return true;
     }
     if (existing.attempts >= this.#maxAttempts) return false;
     existing.attempts += 1;
     return true;
+  }
+
+  #pruneExpired(now: number): void {
+    this.#windowsStartedSincePrune = 0;
+    for (const [key, window] of this.#windows) {
+      if (now - window.startedAt >= this.#windowMs) {
+        this.#windows.delete(key);
+      }
+    }
   }
 }

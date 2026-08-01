@@ -135,6 +135,7 @@ async function createHarness(
 async function connect(
   harness: Harness,
   userToken?: string,
+  flyClientIp?: string,
 ): Promise<{
   client: TestClient;
   ready: Parameters<ServerToClientEvents['session:ready']>[0];
@@ -144,6 +145,9 @@ async function connect(
     autoConnect: false,
     transports: ['websocket'],
     auth: userToken === undefined ? {} : { userToken },
+    ...(flyClientIp === undefined
+      ? {}
+      : { extraHeaders: { 'fly-client-ip': flyClientIp } }),
     reconnection: false,
   });
   harness.clients.push(client);
@@ -614,6 +618,36 @@ describe('Socket.IO room gateway', () => {
     expect(first).toEqual({ ok: false, code: 'ROOM_NOT_FOUND' });
     expect(second).toEqual({ ok: false, code: 'ROOM_NOT_FOUND' });
     expect(limited).toEqual({ ok: false, code: 'RATE_LIMITED' });
+  });
+
+  it('Fly proxy越しでもjoin制限をクライアントIPごとに分離する', async () => {
+    const harness = await createHarness({
+      joinRateLimit: { maxAttempts: 1, windowMs: 60_000 },
+    });
+    const firstClient = await connect(harness, undefined, '203.0.113.1');
+    const secondClient = await connect(harness, undefined, '203.0.113.2');
+
+    await expect(
+      emitAck<'room:join', { roomId: string }>(
+        firstClient.client,
+        'room:join',
+        { inviteCode: '11111' },
+      ),
+    ).resolves.toEqual({ ok: false, code: 'ROOM_NOT_FOUND' });
+    await expect(
+      emitAck<'room:join', { roomId: string }>(
+        firstClient.client,
+        'room:join',
+        { inviteCode: '22222' },
+      ),
+    ).resolves.toEqual({ ok: false, code: 'RATE_LIMITED' });
+    await expect(
+      emitAck<'room:join', { roomId: string }>(
+        secondClient.client,
+        'room:join',
+        { inviteCode: '33333' },
+      ),
+    ).resolves.toEqual({ ok: false, code: 'ROOM_NOT_FOUND' });
   });
 
   it('runtime payload schema違反をドメインエラーと分離してBAD_PAYLOADにする', async () => {

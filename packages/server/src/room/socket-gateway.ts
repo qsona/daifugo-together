@@ -120,6 +120,13 @@ function safeAck<T>(
   }
 }
 
+function clientIp(socket: RoomSocket): string {
+  const flyClientIp = socket.handshake.headers['fly-client-ip'];
+  return typeof flyClientIp === 'string'
+    ? flyClientIp
+    : socket.handshake.address;
+}
+
 function roomFailure(
   transition: RoomTransition | undefined,
 ): Ack<Record<string, never>> | undefined {
@@ -443,7 +450,7 @@ export function attachRoomSocketGateway(
           safeAck(ack, failure('INTERNAL', 'server is draining'));
           return;
         }
-        if (!joinRateLimiter.allow(socket.handshake.address, now())) {
+        if (!joinRateLimiter.allow(clientIp(socket), now())) {
           safeAck(ack, failure('RATE_LIMITED'));
           return;
         }
