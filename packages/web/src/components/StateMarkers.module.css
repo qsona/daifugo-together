@@ -1,0 +1,182 @@
+/* ============================================================
+   インゲーム部品: 継続状態のマーカー(DS-02 §5-16)
+
+   状態は「それが死ぬ場所」に置く。
+   局スコープ(革命)は卓の左上に刺さるリボン、場スコープ(イレブンバック・
+   縛り)は場の中心に置かれる札の形のチップ。置き場所と造形だけで寿命が読める。
+   ============================================================ */
+
+/* 局リボンのドック。卓の左上に縦へ段重ねる。 */
+.dock {
+  position: absolute;
+  top: 0;
+  left: var(--space-2);
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+/*
+ * リボンは caption サイズなので、見た目は小さいまま当たり判定だけを
+ * 余白で 44px へ広げる(トークン --size-tap-min)。
+ */
+.ribbonHit {
+  display: flex;
+  align-items: center;
+  min-height: var(--size-tap-min);
+  margin: 0;
+  padding: 0;
+  background: none;
+  border: 0;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.ribbon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 24px 4px;
+  background: var(--color-red-600);
+  border: var(--border-control) solid var(--color-border-strong);
+  box-shadow: var(--shadow-hard-s);
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-heavy);
+  letter-spacing: var(--letter-spacing-wide);
+  color: var(--color-cream-50);
+  white-space: nowrap;
+  /* リボンの脇役傾き。 */
+  transform: rotate(-2deg);
+}
+
+/* 両端の折り返し。カットインの赤リボンと同じ造形を小さいまま保つ。 */
+.ribbon::before,
+.ribbon::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 11px;
+  background: var(--color-red-700);
+}
+
+.ribbon::before {
+  left: 0;
+  clip-path: polygon(0 0, 100% 0, 0 50%, 100% 100%, 0 100%);
+}
+
+.ribbon::after {
+  right: 0;
+  clip-path: polygon(100% 0, 0 0, 100% 50%, 0 100%, 100% 100%);
+}
+
+/* 場チップ。菱形の中心に縦積みする。 */
+.chips {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transform: translate(-50%, -50%);
+}
+
+.chipHit {
+  display: flex;
+  margin: 0;
+  padding: var(--space-1);
+  background: none;
+  border: 0;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 10px 3px;
+  /* 白面・紺輪郭・ベタ落ち影 = 札と同じ造形。場チップは場札の仲間。 */
+  background: var(--color-bg-surface);
+  border: var(--border-control) solid var(--color-border-strong);
+  border-radius: var(--radius-s);
+  box-shadow: var(--shadow-hard-s);
+  font-size: var(--font-size-micro);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+}
+
+/* スートの字は札と同じ色の規律(♥♦ は赤、♠♣ は紺)。 */
+.suit {
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-heavy);
+}
+
+.redSuit {
+  color: var(--color-red-500);
+}
+
+/* 登場は 1 回だけ弾む。以後は静止する(常時ループ禁止)。 */
+.entering {
+  animation: marker-pop var(--duration-base) var(--easing-pop);
+}
+
+@keyframes marker-pop {
+  from {
+    transform: scale(0.3);
+    opacity: 0;
+  }
+}
+
+/* 局リボンの退場: 卓から外れて飛んでいく。 */
+.ribbonHit.exiting {
+  animation: ribbon-fly var(--duration-slow) var(--easing-exit) forwards;
+  pointer-events: none;
+}
+
+@keyframes ribbon-fly {
+  to {
+    transform: translate(120px, -60px) rotate(18deg) scale(0.7);
+    opacity: 0;
+  }
+}
+
+/* 場チップの退場: 場札と一緒に中心へ吸い込まれる。 */
+.chipHit.exiting {
+  animation: chip-suck var(--duration-slow) var(--easing-exit) forwards;
+  pointer-events: none;
+}
+
+@keyframes chip-suck {
+  to {
+    transform: scale(0.1);
+    opacity: 0;
+  }
+}
+
+/* 場流しを伴わない消滅(全員パスなど)は、静かにフェードで引く。 */
+.chipHit.fading {
+  animation: marker-fade var(--duration-base) linear forwards;
+  pointer-events: none;
+}
+
+@keyframes marker-fade {
+  to {
+    opacity: 0;
+  }
+}
+
+/* 動きを減らす設定では、ドッキングも吸い込みもフェードに落とす。 */
+@media (prefers-reduced-motion: reduce) {
+  .entering {
+    animation: none;
+  }
+
+  .ribbonHit.exiting,
+  .chipHit.exiting {
+    animation: marker-fade var(--duration-base) linear forwards;
+  }
+}

@@ -767,6 +767,39 @@ table.spec th { background: var(--color-bg-subtle); white-space: nowrap; }
 }
 .c-callout > p { flex: 1; min-width: 0; }
 
+/* 継続状態(局リボン・場チップ)。カットインが引いたあとの「留まる/場に置かれる」表示。2026-08-01 追加 */
+.c-stateribbon {
+  position: relative; display: inline-flex; align-items: center;
+  padding: 3px 24px 4px;
+  background: var(--color-red-600);
+  border: var(--border-control) solid var(--color-border-strong);
+  box-shadow: var(--shadow-hard-s);
+  font-family: inherit; cursor: pointer;
+  font-size: var(--font-size-caption); font-weight: var(--font-weight-heavy);
+  letter-spacing: var(--letter-spacing-wide); color: var(--color-cream-50);
+  transform: rotate(-2deg);
+}
+.c-stateribbon::before, .c-stateribbon::after { content: ""; position: absolute; top: 0; bottom: 0; width: 11px; background: var(--color-red-700); }
+.c-stateribbon::before { left: 0; clip-path: polygon(0 0, 100% 0, 0 50%, 100% 100%, 0 100%); }
+.c-stateribbon::after { right: 0; clip-path: polygon(100% 0, 0 0, 100% 50%, 0 100%, 100% 100%); }
+
+.c-fstate {
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 2px 10px 3px;
+  background: var(--color-white);
+  border: var(--border-control) solid var(--color-border-strong);
+  border-radius: var(--radius-s);
+  box-shadow: var(--shadow-hard-s);
+  font-family: inherit; cursor: pointer;
+  font-size: var(--font-size-micro); font-weight: var(--font-weight-bold);
+  color: var(--color-navy-800); white-space: nowrap;
+}
+.c-fstate .su { font-weight: var(--font-weight-heavy); font-size: var(--font-size-caption); }
+.c-fstate .su.-red { color: var(--color-red-500); }
+
+/* 強さ目盛り: 反転中は「つよい」側だけ強調して向きを示す。2026-08-01 追加 */
+.c-tray .strength .strong { color: var(--color-text-primary); }
+
 /* 見本行 */
 .specimen { display: flex; flex-wrap: wrap; gap: var(--space-4); align-items: center; margin-bottom: var(--space-3); }
 .specimen .lbl { width: 100%; font-size: var(--font-size-micro); font-weight: var(--font-weight-bold); color: var(--color-text-secondary); margin-bottom: -6px; }
@@ -1376,6 +1409,48 @@ table.spec th { background: var(--color-bg-subtle); white-space: nowrap; }
         <div class="c-callout"><p>31 件・すべての卓に適用(変更不可)</p><button class="c-btn -small" type="button">一覧を見る</button></div>
       </div>
       <div class="note">画面に添える一文。強調色は使わず地の説明として淡く出す(§5-14 の停止告知ボックスと同じ文法)。右端に小さな導線を置ける。</div>
+    </div>
+
+    <div class="panel">
+      <div class="specimen">
+        <span class="lbl">局リボン(局スコープ状態)— 卓の左上に留まる / 単体</span>
+        <span style="position:relative; display:inline-block; background:var(--color-green-600); border:var(--border-bold) solid var(--color-border-strong); border-radius:var(--radius-m); padding:14px 20px;">
+          <button class="c-stateribbon" type="button">革命</button>
+        </span>
+        <button class="c-stateribbon" type="button">革命</button>
+      </div>
+      <div class="note">
+        カットインの赤リボンが引いたあと、小さなリボンが卓の左上に「刺さって」留まる — 発動(大きいリボンが走る)→ 継続(小さいリボンが留まる)→ 解除(外れて飛ぶ)が同じ 1 枚のリボンの一生として読める。現行実装の登場はポップ(easing-pop 1 回)。カットインからの連続モーフは将来の上積み。カットインの退場アニメーションに行き先を与えただけで、部品としては増やしていない。<br>
+        文字はルール名だけ(「革命中」の「中」は書かない — 留まっていること自体が「中」であり、状態語の常設テキストは置かない)。面は cutin の red-500 ではなく <b>red-600</b>(caption サイズの cream-50 文字で AA 4.92。red-500 は大型表示限定の色)。<br>
+        タップで既存のルール詳細モーダル(ワイヤー画面3 §2.2 相当)を開く。文字は小さいが当たり判定は余白を含めて 44px を確保する。複数の局スコープ状態が同時に生きたら縦に段重ね(カットインの段重ねと同じ文法)、3 枚目からは「+N」でまとめる。
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="specimen">
+        <span class="lbl">場チップ(場スコープ状態)— 場の中心に置かれる札の形のチップ</span>
+        <button class="c-fstate" type="button">イレブンバック</button>
+        <button class="c-fstate" type="button"><span class="su">♠</span>しばり</button>
+        <button class="c-fstate" type="button"><span class="su">♠</span><span class="su -red">♥</span>しばり</button>
+      </div>
+      <div class="note">
+        白面・紺輪郭・ベタ落ち影 — 意図的に「札」と同じ造形にする。場チップは場に出ている札の仲間であり、札と同じ運命(場が流れたら消える)をたどるから。局リボンの「ルール界の赤」との対比で、スコープの違いが色と形で読める。<br>
+        縛りはスートの字が主役(♥♦ は red-500、♠♣ は navy-800 — 札のスート色と同じ規律)。ダブル縛りはスート構成をそのまま並べる。<br>
+        登場は easing-pop で 1 回だけ弾み、以後は静止する(常時ループ禁止)。縛りはカットインを持たない静かなルールだが、チップが弾んで現れること自体が小さな発動告知になる(小さい出来事には小さい演出)。場が流れるとき、場チップは場札と一緒に中心へ吸い込まれて消える — この動きがそのまま「状態の終了通知」になるので、「イレブンバックが終わりました」の文字はどこにも要らない。
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="specimen" style="margin-top:0;">
+        <span class="lbl">強さ目盛り・反転中(革命など、正味の強さが反転している間はだれにでも表示)</span>
+        <span class="c-tray" style="padding:8px 14px; display:inline-flex;">
+          <span class="strength" aria-label="カードの強さ: 左がつよい、右がよわい"><span class="strong">つよい</span><b aria-hidden="true">← →</b><span>よわい</span></span>
+        </span>
+      </div>
+      <div class="note">
+        既存の強さ目盛り(現在は未プレイ端末の basic solo 初戦のみ表示)を、<b>正味の強さが反転している間はだれにでも出す</b>形へ拡張する。手札は基本順(3→2)の固定ソートのままなので、反転中は「つよい」が左に来る — ラベルの位置が入れ替わること自体が信号になる。「つよい」側だけ navy-800 の太字にして向きを一目にする(通常時も同じ規律)。<br>
+        <b>原因(マーカー)と正味(目盛り)を分ける。</b>革命とイレブンバックが重なると強さは元に戻る(反転×反転)。局リボン・場チップは「どのルールが生きているか = 原因」を示し、いまどちら向きかの「正味」はこの目盛りが一手に引き受ける。両方が重なって正味が元の向きに戻ったときは目盛りを消す(原因が 2 枚残っていることと矛盾しない)。
+      </div>
     </div>
   </section>
 

@@ -1,0 +1,479 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>継続状態の表示 — 動くモック</title>
+<style>
+/* トークン(design-tokens.css と同値をインライン化。正はあちら) */
+:root {
+  --color-white: #FFFFFF;
+  --color-cream-50: #FFFBEF;
+  --color-cream-100: #FFF4DC;
+  --color-cream-200: #F6E8C6;
+  --color-cream-300: #E8D9B5;
+  --color-navy-100: #E9EBF2;
+  --color-navy-300: #A9B0C7;
+  --color-navy-600: #4A5578;
+  --color-navy-800: #1C2447;
+  --color-navy-900: #14203D;
+  --color-red-500: #E14B3B;
+  --color-red-600: #C93A2B;
+  --color-red-700: #B23A2E;
+  --color-gold-400: #FFC53D;
+  --color-green-500: #2FA36B;
+  --color-green-600: #268A58;
+  --color-bg-app: var(--color-cream-100);
+  --color-bg-surface: var(--color-white);
+  --color-text-primary: var(--color-navy-800);
+  --color-text-secondary: var(--color-navy-600);
+  --color-text-on-fill: var(--color-cream-50);
+  --color-border-strong: var(--color-navy-800);
+  --color-border-control: var(--color-navy-600);
+  --color-border-subtle: var(--color-cream-300);
+  --color-action-primary: var(--color-red-600);
+  --color-warning-bg: var(--color-gold-400);
+  --font-family-base: 'M PLUS Rounded 1c', 'Hiragino Maru Gothic ProN', 'Hiragino Sans', 'Yu Gothic', sans-serif;
+  --font-size-display: 28px;
+  --font-size-title-s: 16px;
+  --font-size-caption: 12px;
+  --font-size-micro: 11px;
+  --letter-spacing-wide: 0.04em;
+  --letter-spacing-cta: 0.08em;
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px; --space-8: 32px;
+  --radius-s: 6px; --radius-m: 10px; --radius-l: 16px; --radius-pill: 999px;
+  --border-thin: 1px; --border-control: 1.5px; --border-bold: 2px; --border-heavy: 3px;
+  --shadow-hard-s: 0 2px 0 var(--color-navy-900);
+  --shadow-hard-m: 0 3px 0 var(--color-navy-900);
+  --shadow-hard-l: 0 5px 0 var(--color-navy-900);
+  --duration-slow: 320ms;
+  --easing-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --easing-exit: cubic-bezier(0.4, 0, 1, 1);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: var(--font-family-base);
+  background: var(--color-bg-app);
+  color: var(--color-text-primary);
+  font-size: 14px; line-height: 1.6;
+  padding: var(--space-5) var(--space-4) var(--space-8);
+  display: flex; flex-direction: column; align-items: center; gap: var(--space-4);
+}
+h1 { font-size: var(--font-size-title-s); font-weight: 800; letter-spacing: var(--letter-spacing-wide); }
+.sub { font-size: var(--font-size-caption); color: var(--color-text-secondary); text-align: center; }
+
+/* ============ 375px フレーム ============ */
+.frame {
+  width: 375px; max-width: 100%;
+  background: var(--color-bg-app);
+  border: var(--border-heavy) solid var(--color-border-strong);
+  border-radius: 28px; overflow: hidden;
+  box-shadow: var(--shadow-hard-l);
+  display: flex; flex-direction: column;
+  position: relative;
+}
+.statusbar { display: flex; justify-content: space-between; align-items: center; padding: 6px 18px 4px; font-size: var(--font-size-micro); font-weight: 700; }
+.statusbar .icons { display: flex; gap: 4px; }
+.statusbar .icons i { display: block; width: 14px; height: 8px; background: var(--color-navy-300); border-radius: 2px; }
+.appbar { display: flex; justify-content: space-between; align-items: center; padding: var(--space-2) var(--space-3); }
+.appbar .ttl { font-size: var(--font-size-title-s); font-weight: 800; }
+.appbar .rules { font-size: var(--font-size-micro); font-weight: 700; background: var(--color-bg-surface); border: var(--border-control) solid var(--color-border-strong); border-radius: var(--radius-pill); padding: 3px 10px; }
+.scr-body { padding: 0 var(--space-3) var(--space-3); display: flex; flex-direction: column; gap: var(--space-3); }
+
+/* ============ 卓(design-system.html §5-16 転記) ============ */
+.c-card {
+  position: relative;
+  display: inline-flex; flex-direction: column; justify-content: space-between;
+  width: 56px; height: 80px; flex-shrink: 0;
+  padding: var(--space-1) 6px;
+  background: var(--color-white);
+  border: var(--border-bold) solid var(--color-border-strong);
+  border-radius: var(--radius-s);
+  box-shadow: var(--shadow-hard-s);
+  font-weight: 800; line-height: 1;
+  color: var(--color-navy-800);
+}
+.c-card.-red { color: var(--color-red-500); }
+.c-card b { font-size: 18px; }
+.c-card i { align-self: flex-end; font-size: 18px; font-style: normal; }
+.c-card.-small { width: 44px; height: 62px; }
+.c-table {
+  position: relative; height: 330px;
+  background: var(--color-green-600);
+  border: var(--border-bold) solid var(--color-border-strong);
+  border-radius: var(--radius-l); box-shadow: var(--shadow-hard-s);
+  padding: var(--space-2);
+}
+.c-diamond { position: absolute; inset-inline: var(--space-2); top: 50%; transform: translateY(-50%); height: 296px; }
+.c-diamond .flow { position: absolute; inset: 0; pointer-events: none; }
+.c-tseat { position: absolute; display: flex; flex-direction: column; align-items: center; gap: var(--space-1); }
+.c-tseat.-top { top: 0; left: 50%; transform: translateX(-50%); }
+.c-tseat.-bottom { bottom: 0; left: 50%; transform: translateX(-50%); flex-direction: column-reverse; }
+.c-tseat.-left { left: 0; top: 50%; transform: translateY(-50%); align-items: flex-end; }
+.c-tseat.-right { right: 0; top: 50%; transform: translateY(-50%); align-items: flex-start; }
+.c-tseat .info { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.c-tseat .chip {
+  display: inline-flex; align-items: center; gap: var(--space-1); max-width: 140px;
+  padding: 1px var(--space-2); background: var(--color-cream-100);
+  border: var(--border-control) solid var(--color-border-strong); border-radius: var(--radius-pill);
+  font-size: var(--font-size-micro); font-weight: 700; white-space: nowrap;
+}
+.c-tseat .meta { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: var(--space-1); max-width: 140px; font-size: var(--font-size-micro); font-weight: 700; }
+.c-tseat .meta .ct { padding: 0 var(--space-1); background: var(--color-bg-surface); border: var(--border-control) solid var(--color-border-strong); border-radius: var(--radius-s); white-space: nowrap; }
+.c-tseat .pile { display: flex; }
+.c-tseat .pile > .c-card { margin-right: -30px; }
+.c-tseat .pile > .c-card:last-child { margin-right: 0; }
+.c-tseat.-lead .pile > .c-card:last-child { outline: var(--border-heavy) solid var(--color-gold-400); border-radius: var(--radius-s); }
+.c-fempty { width: 46px; height: 66px; border: var(--border-control) dashed var(--color-green-500); border-radius: var(--radius-s); }
+
+/* ============ 手札トレイ ============ */
+.c-tray {
+  background: var(--color-bg-surface);
+  border: var(--border-bold) solid var(--color-border-strong);
+  border-radius: var(--radius-l); box-shadow: var(--shadow-hard-s);
+  padding: var(--space-3);
+  display: flex; flex-direction: column; gap: var(--space-2);
+}
+.c-tray .strength {
+  display: flex; align-items: center; justify-content: flex-end; gap: var(--space-2);
+  min-height: var(--space-4); color: var(--color-text-secondary);
+  font-size: var(--font-size-micro); font-weight: 700; line-height: 1;
+  transition: opacity 200ms, transform 200ms;
+}
+.c-tray .strength b { color: var(--color-action-primary); letter-spacing: var(--letter-spacing-wide); }
+.c-tray .strength .strong { color: var(--color-text-primary); }
+.c-tray .strength.is-hidden { opacity: 0; }
+.c-tray .strength.flip { animation: scaleflip 220ms ease; }
+@keyframes scaleflip { 0% { transform: rotateX(0); } 50% { transform: rotateX(90deg); } 100% { transform: rotateX(0); } }
+.c-tray .cs { display: flex; padding: var(--space-3) var(--space-1) var(--space-2); }
+.c-tray .cs > .c-card + .c-card { margin-left: -28px; }
+.c-tray .cs > .c-card { transition: opacity var(--duration-slow), transform var(--duration-slow); }
+.c-tray .ac { display: flex; gap: var(--space-2); }
+.c-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 44px; padding: 0 var(--space-5);
+  background: var(--color-bg-surface);
+  border: var(--border-bold) solid var(--color-border-strong);
+  border-radius: var(--radius-pill); box-shadow: var(--shadow-hard-m);
+  font-family: inherit; font-size: var(--font-size-title-s); font-weight: 700;
+  color: var(--color-text-primary); cursor: pointer;
+}
+.c-btn:active { transform: translateY(2px); box-shadow: var(--shadow-hard-s); }
+.c-btn.-primary { background: var(--color-action-primary); color: var(--color-text-on-fill); letter-spacing: var(--letter-spacing-cta); flex: 1; }
+.c-btn:disabled { opacity: .45; cursor: default; }
+
+/* ============ ★局リボン(局スコープ状態) ============ */
+.dock-tl { position: absolute; top: var(--space-2); left: var(--space-3); z-index: 2; display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); }
+.c-stateribbon {
+  position: relative; display: inline-flex; align-items: center;
+  padding: 3px 24px 4px;
+  background: var(--color-red-600);
+  border: var(--border-control) solid var(--color-border-strong);
+  box-shadow: var(--shadow-hard-s);
+  font-family: inherit; cursor: pointer;
+  font-size: var(--font-size-caption); font-weight: 800;
+  letter-spacing: var(--letter-spacing-wide); color: var(--color-cream-50);
+  transform: rotate(-2deg);
+}
+.c-stateribbon::before, .c-stateribbon::after { content: ""; position: absolute; top: 0; bottom: 0; width: 11px; background: var(--color-red-700); }
+.c-stateribbon::before { left: 0; clip-path: polygon(0 0, 100% 0, 0 50%, 100% 100%, 0 100%); }
+.c-stateribbon::after { right: 0; clip-path: polygon(100% 0, 0 0, 100% 50%, 0 100%, 100% 100%); }
+.c-stateribbon.fly { transition: transform 380ms var(--easing-exit), opacity 380ms; transform: translate(140px, -70px) rotate(18deg) scale(.7); opacity: 0; }
+
+/* ============ ★場チップ(場スコープ状態) ============ */
+.c-fstates { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: var(--space-1); z-index: 1; }
+.c-fstate {
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 2px 10px 3px;
+  background: var(--color-white);
+  border: var(--border-control) solid var(--color-border-strong);
+  border-radius: var(--radius-s);
+  box-shadow: var(--shadow-hard-s);
+  font-family: inherit; cursor: pointer;
+  font-size: var(--font-size-micro); font-weight: 700;
+  color: var(--color-navy-800); white-space: nowrap;
+}
+.c-fstate .su { font-weight: 800; font-size: var(--font-size-caption); }
+.c-fstate.pop { animation: pop 260ms var(--easing-pop); }
+@keyframes pop { 0% { transform: scale(.3); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+
+/* ============ カットイン(既存 + ドッキングの行き先) ============ */
+.cutin-layer { position: absolute; inset: 0; z-index: 5; pointer-events: none; overflow: hidden; }
+.c-cutin {
+  position: absolute; left: 50%; top: 38%;
+  display: inline-flex; align-items: baseline; gap: var(--space-2);
+  padding: var(--space-2) var(--space-8);
+  background: var(--color-red-500);
+  border: var(--border-heavy) solid var(--color-border-strong);
+  box-shadow: var(--shadow-hard-m);
+  font-size: var(--font-size-display); font-weight: 800;
+  letter-spacing: var(--letter-spacing-wide); color: var(--color-cream-100);
+  white-space: nowrap;
+  transform: translate(-170%, -50%);
+}
+.c-cutin::before, .c-cutin::after { content: ""; position: absolute; top: 0; bottom: 0; width: 18px; background: var(--color-red-700); }
+.c-cutin::before { left: 0; clip-path: polygon(0 0, 100% 0, 0 50%, 100% 100%, 0 100%); }
+.c-cutin::after { right: 0; clip-path: polygon(100% 0, 0 0, 100% 50%, 0 100%, 100% 100%); }
+.c-cutin.in { transition: transform 300ms cubic-bezier(0.2, 0, 0, 1); transform: translate(-50%, -50%); }
+.c-cutin.out { transition: transform 300ms var(--easing-exit), opacity 300ms; transform: translate(120%, -50%); opacity: .9; }
+
+/* ============ 操作パネル(モック用・デモの外身) ============ */
+.controls {
+  width: 375px; max-width: 100%;
+  display: flex; flex-direction: column; gap: var(--space-2);
+}
+.caption {
+  min-height: 78px;
+  background: var(--color-bg-surface);
+  border: var(--border-control) solid var(--color-border-subtle);
+  border-radius: var(--radius-m); padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-caption); color: var(--color-text-secondary); line-height: 1.7;
+}
+.caption b { color: var(--color-text-primary); }
+.caption .step { display: inline-block; background: var(--color-navy-800); color: var(--color-cream-50); border-radius: var(--radius-s); font-size: var(--font-size-micro); font-weight: 700; padding: 0 6px; margin-right: 6px; }
+.controls .row { display: flex; gap: var(--space-2); }
+.controls .row .c-btn { flex: 1; }
+</style>
+</head>
+<body>
+
+<h1>継続状態の表示 — 動くモック</h1>
+<div class="sub">「次へ」で1局のストーリーが進みます(発動 → 継続 → 場が流れる → 解除)。<br>静的な見本と設計意図は persistent-state-proposal.html を参照。</div>
+
+<div class="frame">
+  <div class="statusbar"><span>9:41</span><span class="icons"><i></i><i></i><i></i></span></div>
+  <div class="appbar"><span class="ttl">第1戦</span><span class="rules">有効ルール 8</span></div>
+  <div class="scr-body">
+    <div class="c-table" id="table">
+      <div class="dock-tl" id="dock"></div>
+      <div class="c-diamond" id="diamond">
+        <svg class="flow" viewBox="0 0 100 100" preserveAspectRatio="none">
+          <ellipse cx="50" cy="50" rx="26" ry="23" fill="none" stroke="var(--color-green-500)" stroke-width="1" stroke-dasharray="2 3" vector-effect="non-scaling-stroke"/>
+          <g fill="var(--color-green-500)"><path d="M50 27 l3 2 l-3 2 z"/><path d="M76 50 l-2 3 l-2 -3 z"/><path d="M50 73 l-3 -2 l3 -2 z"/><path d="M24 50 l2 -3 l2 3 z"/></g>
+        </svg>
+        <div class="c-fstates" id="fstates"></div>
+        <div class="c-tseat -top" id="seat-top">
+          <span class="info"><span class="chip"><span class="nm">プレイヤーC</span></span><span class="meta"><span class="ct" id="ct-top">6枚</span></span></span>
+          <span class="pile" id="pile-top"><span class="c-fempty"></span></span>
+        </div>
+        <div class="c-tseat -left" id="seat-left">
+          <span class="info"><span class="chip"><span class="nm">AIプレイヤー2</span></span><span class="meta"><span class="ct" id="ct-left">7枚</span></span></span>
+          <span class="pile" id="pile-left"><span class="c-fempty"></span></span>
+        </div>
+        <div class="c-tseat -right" id="seat-right">
+          <span class="info"><span class="chip"><span class="nm">プレイヤーD</span></span><span class="meta"><span class="ct" id="ct-right">11枚</span></span></span>
+          <span class="pile" id="pile-right"><span class="c-fempty"></span></span>
+        </div>
+        <div class="c-tseat -bottom" id="seat-bottom">
+          <span class="pile" id="pile-bottom"><span class="c-fempty"></span></span>
+          <span class="info"><span class="chip"><span class="nm">あなた</span></span><span class="meta"><span class="ct" id="ct-bottom">10枚</span></span></span>
+        </div>
+      </div>
+      <div class="cutin-layer" id="cutinLayer"></div>
+    </div>
+    <div class="c-tray">
+      <div class="strength is-hidden" id="scale" aria-hidden="true"><span>よわい</span><b>← →</b><span class="strong">つよい</span></div>
+      <div class="cs" id="hand">
+        <span class="c-card"><b>3</b><i>♣</i></span>
+        <span class="c-card -red"><b>4</b><i>♦</i></span>
+        <span class="c-card"><b>6</b><i>♠</i></span>
+        <span class="c-card -red"><b>7</b><i>♥</i></span>
+        <span class="c-card" id="hand-j"><b>J</b><i>♠</i></span>
+        <span class="c-card"><b>2</b><i>♠</i></span>
+      </div>
+      <div class="ac"><button class="c-btn" type="button">パス</button><button class="c-btn -primary" type="button">えらんだカードを出す</button></div>
+    </div>
+  </div>
+</div>
+
+<div class="controls">
+  <div class="caption" id="caption"><span class="step">0/7</span>初期状態。継続状態は何もなく、強さ目盛りも出ていない(強さが素直な間、ベテランには出さない)。</div>
+  <div class="row">
+    <button class="c-btn" type="button" id="btnReset">リセット</button>
+    <button class="c-btn -primary" type="button" id="btnNext">次へ</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  const table = $('table'), diamond = $('diamond'), dock = $('dock');
+  const fstates = $('fstates'), cutinLayer = $('cutinLayer');
+  const scale = $('scale'), caption = $('caption');
+  const btnNext = $('btnNext'), btnReset = $('btnReset');
+
+  // --- 部品ファクトリ -------------------------------------------------
+  const card = (rank, suit) => {
+    const red = suit === '♥' || suit === '♦';
+    const el = document.createElement('span');
+    el.className = 'c-card -small' + (red ? ' -red' : '');
+    el.innerHTML = `<b>${rank}</b><i>${suit}</i>`;
+    return el;
+  };
+
+  const play = (seatId, cards, counts) => {
+    const pile = $('pile-' + seatId);
+    pile.innerHTML = '';
+    cards.forEach(([r, s]) => pile.appendChild(card(r, s)));
+    ['top', 'left', 'right', 'bottom'].forEach((s) =>
+      $('seat-' + s).classList.toggle('-lead', s === seatId));
+    if (counts) $('ct-' + seatId).textContent = counts;
+  };
+
+  const fchip = (html) => {
+    const el = document.createElement('button');
+    el.type = 'button';
+    el.className = 'c-fstate pop';
+    el.innerHTML = html;
+    fstates.appendChild(el);
+    return el;
+  };
+
+  // --- カットイン: 走り込み → 保持 → ドッキング or 退場 ---------------
+  async function cutin(name, { dockAfter = false } = {}) {
+    const el = document.createElement('div');
+    el.className = 'c-cutin';
+    el.textContent = name;
+    cutinLayer.appendChild(el);
+    el.getBoundingClientRect(); // reflow
+    el.classList.add('in');
+    await wait(300 + 750); // LEAD_IN + HOLD
+
+    if (!dockAfter) {
+      el.classList.remove('in');
+      el.classList.add('out');
+      await wait(300);
+      el.remove();
+      return null;
+    }
+    // 引く代わりに、縮みながら卓の左上へ刺さる(FLIP)
+    const ribbon = document.createElement('button');
+    ribbon.type = 'button';
+    ribbon.className = 'c-stateribbon';
+    ribbon.textContent = name;
+    ribbon.style.visibility = 'hidden';
+    dock.appendChild(ribbon);
+    const from = el.getBoundingClientRect();
+    const to = ribbon.getBoundingClientRect();
+    el.style.transformOrigin = 'top left';
+    el.style.transition = 'transform 320ms cubic-bezier(0.4, 0, 1, 1)';
+    el.style.transform =
+      `translate(${to.left - from.left}px, ${to.top - from.top}px) ` +
+      `scale(${to.width / from.width}, ${to.height / from.height})`;
+    await wait(330);
+    el.remove();
+    ribbon.style.visibility = '';
+    return ribbon;
+  }
+
+  // --- 場が流れる: 札と場チップが中心へ吸い込まれる --------------------
+  async function flush() {
+    const d = diamond.getBoundingClientRect();
+    const cx = d.left + d.width / 2, cy = d.top + d.height / 2;
+    const targets = [
+      ...document.querySelectorAll('.c-tseat .pile > .c-card'),
+      ...fstates.querySelectorAll('.c-fstate'),
+    ];
+    targets.forEach((el) => {
+      const r = el.getBoundingClientRect();
+      const dx = cx - (r.left + r.width / 2), dy = cy - (r.top + r.height / 2);
+      el.style.transition = 'transform 320ms cubic-bezier(0.4, 0, 1, 1), opacity 320ms';
+      el.style.transform = `translate(${dx}px, ${dy}px) scale(.1)`;
+      el.style.opacity = '0';
+    });
+    await wait(340);
+    fstates.innerHTML = '';
+    ['top', 'left', 'right', 'bottom'].forEach((s) => {
+      $('pile-' + s).innerHTML = '<span class="c-fempty"></span>';
+      $('seat-' + s).classList.remove('-lead');
+    });
+  }
+
+  // --- 強さ目盛り: 正味が反転している間だけ出す ------------------------
+  async function setScale(state) { // 'hidden' | 'inverted'
+    if (state === 'inverted') {
+      scale.innerHTML = '<span class="strong">つよい</span><b>← →</b><span>よわい</span>';
+      scale.classList.remove('is-hidden');
+      scale.classList.add('flip');
+      await wait(220);
+      scale.classList.remove('flip');
+    } else {
+      scale.classList.add('is-hidden');
+    }
+  }
+
+  // --- ストーリー -----------------------------------------------------
+  let ribbonEl = null;
+
+  const steps = [
+    async () => {
+      play('top', [['5','♣'],['5','♦'],['5','♥'],['5','♠']], '2枚');
+      await wait(350);
+      ribbonEl = await cutin('革命', { dockAfter: true });
+      await setScale('inverted');
+      say(1, '<b>プレイヤーCが5を4枚 → 革命。</b>カットインのリボンが、画面外へ引く代わりに縮みながら卓の左上へ刺さって留まる。強さ目盛りが「つよい ← → よわい」に反転して現れる。');
+    },
+    async () => {
+      await flush();
+      say(2, '<b>全員パス → 場が流れる。</b>札は中心へ吸い込まれたが、<b>革命のリボンは残っている</b>。局スコープの状態は場が何度流れても続く — これが「イレブンバックとの寿命の違い」の絵になる。');
+    },
+    async () => {
+      play('right', [['Q','♠']], '10枚');
+      say(3, '<b>プレイヤーDが ♠Q。</b>新しい場。革命中なので、これより「弱い」札で上書きできる。');
+    },
+    async () => {
+      play('bottom', [['J','♠']], '9枚');
+      const j = $('hand-j');
+      j.style.opacity = '0'; j.style.transform = 'translateY(-20px)';
+      await wait(350);
+      j.remove();
+      await cutin('イレブンバック');
+      fchip('イレブンバック');
+      await wait(200);
+      fchip('<span class="su">♠</span>しばり');
+      await setScale('hidden');
+      say(4, '<b>あなたが ♠J → イレブンバック発動。</b>場の中心に場チップが弾んで現れる。♠が2連続なので<b>♠しばり</b>も成立(縛りにカットインは無い — チップが弾むことが小さな発動告知)。革命×イレブンバックで<b>正味の強さは元に戻る</b>ので、目盛りは消える。原因は数えさせず、向きは目盛りに任せる。');
+    },
+    async () => {
+      play('top', [['K','♠']], '1枚');
+      say(5, '<b>プレイヤーCが ♠K。</b>縛りで♠しか出せず、正味は元の向きなので K が J を上回る。場チップ2枚とリボンは出たまま — いま効いている制約が全部見えている。');
+    },
+    async () => {
+      await flush();
+      await setScale('inverted');
+      say(6, '<b>全員パス → 場が流れる。</b>イレブンバックと♠しばりの場チップは<b>札と一緒に吸い込まれて消えた</b>。「場が流れると終わる」を仕組みごと見せる。革命のリボンだけが残り、目盛りが反転表示に戻る。');
+    },
+    async () => {
+      play('left', [['3','♣'],['3','♦'],['3','♥'],['3','♠']], '3枚');
+      await wait(350);
+      await cutin('革命返し');
+      if (ribbonEl) { ribbonEl.classList.add('fly'); await wait(400); ribbonEl.remove(); ribbonEl = null; }
+      await setScale('hidden');
+      say(7, '<b>AIプレイヤー2が3を4枚 → 革命返し。</b>リボンが外れて飛んでいき、目盛りも消える。継続状態ゼロの画面に戻った。「リセット」で最初から。');
+      btnNext.disabled = true;
+    },
+  ];
+
+  let step = 0;
+  const say = (n, html) => {
+    caption.innerHTML = `<span class="step">${n}/7</span>` + html;
+  };
+
+  btnNext.addEventListener('click', async () => {
+    if (step >= steps.length) return;
+    btnNext.disabled = true;
+    btnReset.disabled = true;
+    const fn = steps[step++];
+    await fn();
+    btnReset.disabled = false;
+    if (step < steps.length) btnNext.disabled = false;
+  });
+
+  btnReset.addEventListener('click', () => location.reload());
+})();
+</script>
+
+</body>
+</html>

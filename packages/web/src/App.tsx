@@ -23,6 +23,7 @@ import {
   DEMO_ACTIVE_RULE_COUNT,
   DEMO_FIRED_RULES,
   DEMO_GAME_RANKS,
+  DEMO_GAME_STATUSES,
   DEMO_HAND,
   DEMO_INVITE_CODE,
   DEMO_LEAD_SEAT,
@@ -341,6 +342,8 @@ function DemoApp() {
           seats={DEMO_SEATS}
           finishes={DEMO_SEAT_FINISHES}
           leadSeatName={DEMO_LEAD_SEAT}
+          statuses={DEMO_GAME_STATUSES}
+          strengthInverted
           activations={activations}
           onCutInDone={finishCutIn}
           lastActivation={
@@ -1285,6 +1288,14 @@ function ConnectedApp({
               : heldPlayedHistoryIndex,
           })}
           isFlushing={isFlushingField && !heldPlayWasSuperseded}
+          statuses={game.statuses}
+          // 場を保持しているあいだは、消えた場スコープの状態も一緒に留める。
+          // 保持が解けた瞬間(= 場が流れる瞬間)に札と同じタイミングで吸い込む。
+          holdFieldStatuses={
+            heldPlayedHistoryIndex !== null &&
+            !heldPlayWasSuperseded &&
+            !isFlushingField
+          }
           finishes={seatFinishes(room)}
           discardNotices={cardDiscardNotices(room)}
           leadSeatName={
@@ -1295,6 +1306,9 @@ function ConnectedApp({
               : null
           }
           activations={[]}
+          // リボンが引いた時点で反映を再開する。場流しのあいだ止めたままだと、
+          // 場チップの吸い込みが札の流れに乗り遅れる。
+          isCutInPlaying={activations.length > 0 && !isFlushingField}
           onCutInDone={finishRuleCutIn}
           lastActivation={activations.length > 0 ? null : lastActivation}
           hand={cards(game.yourHand)}
@@ -1302,6 +1316,7 @@ function ConnectedApp({
           {...(cardHints ? { cardHints } : {})}
           guideCue={tutorialEligible ? guideCue : null}
           showStrengthScale={tutorialEligible}
+          strengthInverted={game.strengthInverted}
           isMyTurn={game.turn?.seat === room.you.seatId}
           canPlay={legalSelection}
           canPass={!pendingChoice && game.field.cards.length > 0}

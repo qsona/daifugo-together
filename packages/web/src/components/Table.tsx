@@ -2,6 +2,8 @@ import { cx } from '../lib/cx';
 
 import { Card } from './Card';
 import type { CardView } from './Card';
+import { FieldStateChips, StateRibbons } from './StateMarkers';
+import type { GameStatusMarker } from './StateMarkers';
 import { Tag } from './Tag';
 import styles from './Table.module.css';
 
@@ -31,6 +33,13 @@ type TableProps = {
   /** いま超えるべきプレイの持ち主。場が流れていれば null。 */
   leadSeatName: string | null;
   isFlushing?: boolean;
+  /** 継続中のルール状態。局スコープは卓の左上、場スコープは場の中心に置く。 */
+  statuses?: readonly GameStatusMarker[];
+  /** カットイン中の場の保持モード。真のあいだは消えた場スコープの状態も残す。 */
+  holdFieldStatuses?: boolean;
+  onOpenStatus?: (ruleId: string) => void;
+  /** 段重ねに収まらない局スコープの状態(「+N」)の行き先。 */
+  onViewAllStatuses?: () => void;
 };
 
 /**
@@ -40,12 +49,27 @@ type TableProps = {
  * 各席の場には最新のプレイ 1 回分だけを置く。「誰がいま何を出しているか」が
  * 常に見えていて、文字の実況ログを置かなくてよい。
  */
-export function Table({ seats, leadSeatName, isFlushing = false }: TableProps) {
+export function Table({
+  seats,
+  leadSeatName,
+  isFlushing = false,
+  statuses,
+  holdFieldStatuses = false,
+  onOpenStatus,
+  onViewAllStatuses,
+}: TableProps) {
+  const gameStatuses = statuses?.filter((status) => status.scope === 'game');
+  const fieldStatuses = statuses?.filter((status) => status.scope === 'field');
   return (
     <section
       className={cx(styles.table, isFlushing && styles.flushing)}
       aria-label="卓"
     >
+      <StateRibbons
+        {...(gameStatuses ? { statuses: gameStatuses } : {})}
+        {...(onOpenStatus ? { onOpen: onOpenStatus } : {})}
+        {...(onViewAllStatuses ? { onOverflow: onViewAllStatuses } : {})}
+      />
       {/* preserveAspectRatio=none: 卓は横長なので、輪も卓の比率に合わせて潰す。 */}
       <div className={styles.diamond}>
         <svg
@@ -143,6 +167,12 @@ export function Table({ seats, leadSeatName, isFlushing = false }: TableProps) {
             </div>
           );
         })}
+        <FieldStateChips
+          {...(fieldStatuses ? { statuses: fieldStatuses } : {})}
+          hold={holdFieldStatuses}
+          isFlushing={isFlushing}
+          {...(onOpenStatus ? { onOpen: onOpenStatus } : {})}
+        />
       </div>
     </section>
   );

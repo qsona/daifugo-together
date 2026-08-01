@@ -78,6 +78,28 @@
   letter-spacing: var(--letter-spacing-wide);
 }
 
+/* 「つよい」側だけ濃くして向きを一目にする(反転中も通常時も同じ規律)。 */
+.strong {
+  color: var(--color-text-primary);
+}
+
+/* 向きが変わる瞬間だけ 1 回裏返す。 */
+.flip {
+  animation: strength-flip var(--duration-base) var(--easing-standard);
+}
+
+@keyframes strength-flip {
+  50% {
+    transform: rotateX(90deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flip {
+    animation: none;
+  }
+}
+
 /*
  * 実際の手札と同じく左から重ねる。スクロールはさせない。
  * --card-w は Card の幅、--card-gap は重ならないときの間隔。

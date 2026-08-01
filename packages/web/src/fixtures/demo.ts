@@ -9,6 +9,7 @@ import type { MemberView } from '../components/MemberList';
 import type { GameRankView } from '../components/GameRankRows';
 import type { SetRankView } from '../components/SetRankRows';
 import type { RuleActivation } from '../components/RuleCutIn';
+import type { GameStatusMarker } from '../components/StateMarkers';
 import type { TableSeat } from '../components/Table';
 import type { SeatFinish } from '../screens/GameScreen';
 import type { FiredRuleVote } from '../screens/SetResultScreen';
@@ -190,6 +191,15 @@ export const DEMO_ACTIVATION_VOLLEYS: readonly (readonly RuleActivation[])[] = [
     { ruleId: 'r-spe3', name: 'スペ3返し', isFirstSeen: false },
     { ruleId: 'r-miyakoochi', name: '都落ち', isFirstSeen: true },
   ],
+];
+
+/**
+ * 継続状態の見本。革命(局スコープ)と ♠ 縛り(場スコープ)が同時に生きた状態で、
+ * 局リボン・場チップ・反転した強さ目盛りをまとめて目視できる。
+ */
+export const DEMO_GAME_STATUSES: readonly GameStatusMarker[] = [
+  { ruleId: 'r-kakumei', name: '革命', scope: 'game' },
+  { ruleId: 'r-shibari', name: 'しばり', scope: 'field', suits: ['spade'] },
 ];
 
 export const DEMO_FIRED_RULES: readonly FiredRuleVote[] = [

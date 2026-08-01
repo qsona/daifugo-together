@@ -646,6 +646,8 @@ describe('MP-04: タイムアウト代行後の選択状態', () => {
         field: { cards: [], playedBySeat: null, passedSeats: [] },
         turn: { seat: 1, turnSeq: 3, deadlineAt: null },
         history: [],
+        strengthInverted: false,
+        statuses: [],
         previousResults: [],
         yourHand: [{ kind: 'natural', id: 'S03', suit: 'spade', rank: '3' }],
         legalMoves: [],
@@ -713,6 +715,8 @@ function tutorialHintRoom(
       field: { cards: [], playedBySeat: null, passedSeats: [] },
       turn: { seat: 0, turnSeq: 1, deadlineAt: null },
       history: [],
+      strengthInverted: false,
+      statuses: [],
       previousResults: [],
       yourHand: [three, four],
       legalMoves,
@@ -2124,6 +2128,8 @@ describe('TU-01: 既プレイ端末の記録', () => {
         field: { cards: [], playedBySeat: null, passedSeats: [] },
         turn: null,
         history: [],
+        strengthInverted: false,
+        statuses: [],
         previousResults: [
           {
             gameNo: 1,

@@ -1,8 +1,12 @@
+import { useEffect, useState } from 'react';
+
 import { act, cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { DEMO_HAND, DEMO_SEATS } from '../fixtures/demo';
+
+import markerStyles from '../components/StateMarkers.module.css';
 
 import {
   GameScreen,
@@ -263,5 +267,137 @@ describe('TU-02: 出せるカード案内', () => {
 
     expect(onToggleCard).not.toHaveBeenCalled();
     expect(onDimmedCardTap).toHaveBeenCalledWith('h-c3');
+  });
+});
+
+describe('継続状態の常設表示', () => {
+  afterEach(cleanup);
+
+  const STATUSES = [
+    { ruleId: 'r-kakumei', name: '革命', scope: 'game' },
+    {
+      ruleId: 'r-shibari',
+      name: 'しばり',
+      scope: 'field',
+      suits: ['spade'],
+    },
+  ] as const;
+
+  it('局リボンと場チップを卓に出し、タップで詳細導線を呼ぶ', async () => {
+    const user = userEvent.setup();
+    const onOpenActivation = vi.fn();
+    render(
+      <GameScreen
+        {...game([]).props}
+        statuses={STATUSES}
+        onOpenActivation={onOpenActivation}
+      />,
+    );
+
+    const table = screen.getByRole('region', { name: '卓' });
+    const ribbon = within(table).getByRole('button', {
+      name: '革命 — 継続中。タップで説明',
+    });
+    const chip = within(table).getByRole('button', {
+      name: 'スペードのしばり — 継続中。タップで説明',
+    });
+    expect(chip.textContent).toBe('♠しばり');
+
+    await user.click(ribbon);
+    await user.click(chip);
+
+    expect(onOpenActivation.mock.calls).toEqual([['r-kakumei'], ['r-shibari']]);
+  });
+
+  it('マーカーが出ているルールの発動チップは出さず、一発ものだけ残す', () => {
+    const { rerender } = render(
+      <GameScreen
+        {...game([]).props}
+        statuses={STATUSES}
+        lastActivation={{ ruleId: 'r-kakumei', name: '革命', count: 1 }}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: '革命' })).toBeNull();
+
+    rerender(
+      <GameScreen
+        {...game([]).props}
+        statuses={STATUSES}
+        lastActivation={{ ruleId: 'r-8giri', name: '8切り', count: 1 }}
+      />,
+    );
+    expect(screen.getByRole('button', { name: '8切り' })).toBeTruthy();
+  });
+
+  it('反転中は誰にでも目盛りを出し、戻れば(非チュートリアルでは)消す', () => {
+    const { rerender } = render(
+      <GameScreen {...game([]).props} strengthInverted />,
+    );
+    expect(
+      screen.getByLabelText('カードの強さ: 左がつよい、右がよわい'),
+    ).toBeTruthy();
+
+    rerender(<GameScreen {...game([]).props} strengthInverted={false} />);
+    expect(
+      screen.queryByLabelText('カードの強さ: 左がよわい、右がつよい'),
+    ).toBeNull();
+  });
+
+  it('チュートリアル表示は通常向きのまま残る', () => {
+    render(<GameScreen {...game([]).props} showStrengthScale />);
+    const scale = screen.getByLabelText('カードの強さ: 左がよわい、右がつよい');
+    expect(scale.textContent).toBe('よわい← →つよい');
+  });
+});
+
+describe('カットインと継続マーカーの順序', () => {
+  afterEach(cleanup);
+
+  const REVOLUTION = {
+    ruleId: 'r-kakumei',
+    name: '革命',
+    scope: 'game',
+  } as const;
+
+  /**
+   * App と同じ順序を再現する。スナップショットの statuses が先に更新され、
+   * カットインの再生フラグはそのあとの effect で立つ(App の volley 積みと同じ)。
+   */
+  function CutInHarness({
+    statuses,
+    done = false,
+  }: {
+    statuses: readonly (typeof REVOLUTION)[];
+    done?: boolean;
+  }) {
+    const [playing, setPlaying] = useState(false);
+    useEffect(() => {
+      if (statuses.length > 0 && !done) setPlaying(true);
+    }, [statuses, done]);
+    useEffect(() => {
+      if (done) setPlaying(false);
+    }, [done]);
+    return (
+      <GameScreen
+        {...game([]).props}
+        statuses={statuses}
+        isCutInPlaying={playing}
+      />
+    );
+  }
+
+  it('カットイン再生中はマーカーを出さず、引けてからポップさせる', () => {
+    const { rerender } = render(<CutInHarness statuses={[]} />);
+
+    // 状態が載ったレンダリングでは、まだ再生フラグが立っていない。ここで
+    // 先走ってリボンを出すと「発動 → 継続」の順序が壊れる。
+    rerender(<CutInHarness statuses={[REVOLUTION]} />);
+    expect(screen.queryByRole('button', { name: /^革命/ })).toBeNull();
+
+    rerender(<CutInHarness statuses={[REVOLUTION]} done />);
+    const ribbon = screen.getByRole('button', {
+      name: '革命 — 継続中。タップで説明',
+    });
+    expect(ribbon.classList.contains(String(markerStyles.entering))).toBe(true);
   });
 });

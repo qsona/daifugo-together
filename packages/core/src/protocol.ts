@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import type { Card } from './cards/card.js';
+import type { Card, Suit } from './cards/card.js';
 import type { Play } from './play/play.js';
 import type { Standing, Title } from './game/types.js';
 
@@ -119,6 +119,21 @@ export type PublicPlayView =
       cards: Card[] | null;
     };
 
+/**
+ * 継続中のルール状態(革命・イレブンバック・縛りなど)を 1 件表す。
+ * scope はその状態が死ぬ場所: 'game' は局が終わるまで、'field' は場が流れるまで。
+ */
+export interface GameStatusView {
+  ruleId: string;
+  name: string;
+  scope: 'game' | 'field';
+  /**
+   * 縛りが要求するスート構成。構成をそのまま並べるので同じスートが複数入りうる
+   * (♥2枚の組で縛られたら ['heart', 'heart'])。縛り以外の状態では省略する。
+   */
+  suits?: readonly Suit[];
+}
+
 export interface GameResultView {
   gameNo: number;
   /** points はこの戦で得た順位点(POINTS_BY_STANDING、5-3-2-1)。 */
@@ -150,6 +165,13 @@ export interface MultiplayerGameView {
     deadlineAt: number | null;
   } | null;
   history: PublicPlayView[];
+  /**
+   * 正味の強さが反転しているか。反転するルールが 2 つ重なれば元の向きへ戻るので false。
+   * 「どのルールが生きているか」は statuses、「いまどちら向きか」はこちらが引き受ける。
+   */
+  strengthInverted: boolean;
+  /** 継続中の状態。局スコープを先に、同スコープ内はルールチェーン順で並ぶ。 */
+  statuses: readonly GameStatusView[];
   previousResults: GameResultView[];
   yourHand: Card[];
   legalMoves: Play[] | null;

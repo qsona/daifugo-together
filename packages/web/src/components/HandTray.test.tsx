@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -61,5 +61,75 @@ describe('HandTray の選択札タップ領域', () => {
     await user.click(screen.getByRole('button', { name: 'ダイヤの3' }));
 
     expect(onToggle).toHaveBeenCalledWith('D03');
+  });
+});
+
+describe('HandTray の強さ目盛り', () => {
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+  });
+
+  it('反転中はラベルを入れ替え、「つよい」側だけを強調する', () => {
+    const { rerender } = render(
+      <HandTray
+        cards={CARDS}
+        selectedIds={[]}
+        isMyTurn={false}
+        strengthInverted
+        onToggle={vi.fn()}
+      />,
+    );
+
+    const scale = screen.getByLabelText('カードの強さ: 左がつよい、右がよわい');
+    expect(scale.textContent).toBe('つよい← →よわい');
+    expect(scale.firstElementChild?.className).toContain(String(styles.strong));
+
+    rerender(
+      <HandTray
+        cards={CARDS}
+        selectedIds={[]}
+        isMyTurn={false}
+        showStrengthScale
+        onToggle={vi.fn()}
+      />,
+    );
+    const normal = screen.getByLabelText(
+      'カードの強さ: 左がよわい、右がつよい',
+    );
+    expect(normal.lastElementChild?.className).toContain(String(styles.strong));
+  });
+
+  it('向きが変わった瞬間だけ 1 回フリップする', () => {
+    vi.useFakeTimers();
+    const props = {
+      cards: CARDS,
+      selectedIds: [],
+      isMyTurn: false,
+      showStrengthScale: true,
+      onToggle: vi.fn(),
+    };
+    const { rerender } = render(<HandTray {...props} />);
+    expect(
+      screen
+        .getByLabelText('カードの強さ: 左がよわい、右がつよい')
+        .className.includes(String(styles.flip)),
+    ).toBe(false);
+
+    rerender(<HandTray {...props} strengthInverted />);
+    expect(
+      screen
+        .getByLabelText('カードの強さ: 左がつよい、右がよわい')
+        .className.includes(String(styles.flip)),
+    ).toBe(true);
+
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+    expect(
+      screen
+        .getByLabelText('カードの強さ: 左がつよい、右がよわい')
+        .className.includes(String(styles.flip)),
+    ).toBe(false);
   });
 });

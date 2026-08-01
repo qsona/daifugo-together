@@ -1,0 +1,565 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>継続状態の表示 — 設計提案</title>
+<style>
+/* ============================================================
+   トークン(design-tokens.css と同値をインライン化。正はあちら)
+   ============================================================ */
+:root {
+  --color-white: #FFFFFF;
+  --color-cream-50: #FFFBEF;
+  --color-cream-100: #FFF4DC;
+  --color-cream-200: #F6E8C6;
+  --color-cream-300: #E8D9B5;
+  --color-navy-100: #E9EBF2;
+  --color-navy-200: #C9CDDB;
+  --color-navy-300: #A9B0C7;
+  --color-navy-600: #4A5578;
+  --color-navy-800: #1C2447;
+  --color-navy-900: #14203D;
+  --color-blue-100: #E1ECFA;
+  --color-blue-400: #4585D4;
+  --color-blue-500: #2B6FC2;
+  --color-red-100: #FBE3DF;
+  --color-red-500: #E14B3B;
+  --color-red-600: #C93A2B;
+  --color-red-700: #B23A2E;
+  --color-gold-200: #FFE29A;
+  --color-gold-400: #FFC53D;
+  --color-gold-700: #7A5A10;
+  --color-green-100: #DFF2E7;
+  --color-green-500: #2FA36B;
+  --color-green-600: #268A58;
+  --color-green-700: #1E7A50;
+  --color-bg-app: var(--color-cream-100);
+  --color-bg-surface: var(--color-white);
+  --color-bg-subtle: var(--color-cream-50);
+  --color-text-primary: var(--color-navy-800);
+  --color-text-secondary: var(--color-navy-600);
+  --color-text-on-fill: var(--color-cream-50);
+  --color-border-strong: var(--color-navy-800);
+  --color-border-control: var(--color-navy-600);
+  --color-border-subtle: var(--color-cream-300);
+  --color-action-primary: var(--color-red-600);
+  --color-warning-bg: var(--color-gold-400);
+  --color-warning-ink: var(--color-navy-800);
+  --font-family-base: 'M PLUS Rounded 1c', 'Hiragino Maru Gothic ProN', 'Hiragino Sans', 'Yu Gothic', sans-serif;
+  --font-weight-regular: 400;
+  --font-weight-bold: 700;
+  --font-weight-heavy: 800;
+  --font-size-display: 28px;
+  --font-size-title-l: 22px;
+  --font-size-title-m: 18px;
+  --font-size-title-s: 16px;
+  --font-size-body: 14px;
+  --font-size-caption: 12px;
+  --font-size-micro: 11px;
+  --letter-spacing-wide: 0.04em;
+  --letter-spacing-cta: 0.08em;
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
+  --space-5: 20px; --space-6: 24px; --space-8: 32px;
+  --radius-s: 6px; --radius-m: 10px; --radius-l: 16px; --radius-pill: 999px;
+  --border-thin: 1px; --border-control: 1.5px; --border-bold: 2px; --border-heavy: 3px;
+  --shadow-hard-s: 0 2px 0 var(--color-navy-900);
+  --shadow-hard-m: 0 3px 0 var(--color-navy-900);
+  --shadow-hard-l: 0 5px 0 var(--color-navy-900);
+}
+
+/* ============================================================
+   ページ地(design-system.html と同じ文法)
+   ============================================================ */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: var(--font-family-base);
+  background: var(--color-bg-app);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-body);
+  line-height: 1.6;
+  padding: var(--space-6) var(--space-4) var(--space-8);
+}
+.wrap { max-width: 1040px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--space-8); }
+h1 { font-size: var(--font-size-title-l); font-weight: var(--font-weight-heavy); letter-spacing: var(--letter-spacing-wide); }
+h2 { font-size: var(--font-size-title-m); font-weight: var(--font-weight-heavy); letter-spacing: var(--letter-spacing-wide); margin-bottom: var(--space-3); border-bottom: var(--border-bold) solid var(--color-border-strong); padding-bottom: var(--space-1); }
+.lead { color: var(--color-text-secondary); font-size: var(--font-size-caption); margin-top: var(--space-1); }
+.truth {
+  background: var(--color-bg-subtle); border: var(--border-control) solid var(--color-border-subtle);
+  border-radius: var(--radius-m); padding: var(--space-3) var(--space-4);
+  font-size: var(--font-size-caption); color: var(--color-text-secondary); line-height: 1.7;
+}
+.panel {
+  background: var(--color-bg-surface); border: var(--border-bold) solid var(--color-border-strong);
+  border-radius: var(--radius-l); box-shadow: var(--shadow-hard-s); padding: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+.note { font-size: var(--font-size-caption); color: var(--color-text-secondary); line-height: 1.8; margin-top: var(--space-3); }
+.note b { color: var(--color-text-primary); }
+.specimen { display: flex; flex-wrap: wrap; gap: var(--space-4); align-items: center; margin-bottom: var(--space-2); }
+.specimen .lbl { width: 100%; font-size: var(--font-size-micro); font-weight: var(--font-weight-bold); color: var(--color-text-secondary); }
+table.spec { border-collapse: collapse; width: 100%; font-size: var(--font-size-caption); }
+table.spec th, table.spec td { border: var(--border-thin) solid var(--color-navy-100); padding: var(--space-2) var(--space-3); text-align: left; vertical-align: top; line-height: 1.7; }
+table.spec th { background: var(--color-bg-subtle); white-space: nowrap; }
+code { font-family: ui-monospace, monospace; font-size: 0.92em; background: var(--color-navy-100); border-radius: 4px; padding: 0 4px; }
+
+/* ============================================================
+   既存インゲーム部品(design-system.html §5-16 から必要分を転記)
+   ============================================================ */
+.c-card {
+  position: relative;
+  display: inline-flex; flex-direction: column; justify-content: space-between;
+  width: 56px; height: 80px; flex-shrink: 0;
+  padding: var(--space-1) 6px;
+  background: var(--color-white);
+  border: var(--border-bold) solid var(--color-border-strong);
+  border-radius: var(--radius-s);
+  box-shadow: var(--shadow-hard-s);
+  font-weight: var(--font-weight-heavy); line-height: 1;
+  color: var(--color-navy-800);
+}
+.c-card.-red { color: var(--color-red-500); }
+.c-card b { font-size: var(--font-size-title-m); }
+.c-card i { align-self: flex-end; font-size: var(--font-size-title-m); font-style: normal; }
+.c-card.-small { width: 44px; height: 62px; }
+
+.c-table {
+  position: relative; height: 330px;
+  background: var(--color-green-600);
+  border: var(--border-bold) solid var(--color-border-strong);
+  border-radius: var(--radius-l); box-shadow: var(--shadow-hard-s);
+  padding: var(--space-2);
+}
+.c-diamond { position: absolute; inset-inline: var(--space-2); top: 50%; transform: translateY(-50%); height: 296px; }
+.c-diamond .flow { position: absolute; inset: 0; pointer-events: none; }
+.c-tseat { position: absolute; display: flex; flex-direction: column; align-items: center; gap: var(--space-1); }
+.c-tseat.-top { top: 0; left: 50%; transform: translateX(-50%); }
+.c-tseat.-bottom { bottom: 0; left: 50%; transform: translateX(-50%); flex-direction: column-reverse; }
+.c-tseat.-left { left: 0; top: 50%; transform: translateY(-50%); align-items: flex-end; }
+.c-tseat.-right { right: 0; top: 50%; transform: translateY(-50%); align-items: flex-start; }
+.c-tseat .info { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.c-tseat .chip {
+  display: inline-flex; align-items: center; gap: var(--space-1); max-width: 140px;
+  padding: 1px var(--space-2); background: var(--color-cream-100);
+  border: var(--border-control) solid var(--color-border-strong); border-radius: var(--radius-pill);
+  font-size: var(--font-size-micro); font-weight: var(--font-weight-bold); white-space: nowrap;
+}
+.c-tseat .meta {
+  display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: var(--space-1);
+  max-width: 140px; font-size: var(--font-size-micro); font-weight: var(--font-weight-bold);
+}
+.c-tseat .meta .ct { padding: 0 var(--space-1); background: var(--color-bg-surface); border: var(--border-control) solid var(--color-border-strong); border-radius: var(--radius-s); white-space: nowrap; }
+.c-tseat .meta .st { padding: 0 var(--space-1); background: var(--color-navy-100); border-radius: var(--radius-s); color: var(--color-text-secondary); white-space: nowrap; }
+.c-tseat.-turn .chip { background: var(--color-warning-bg); border-width: var(--border-bold); transform: scale(1.08); }
+.c-tseat.-passed .chip { background: var(--color-navy-100); color: var(--color-text-secondary); }
+.c-tseat .pile { display: flex; }
+.c-tseat .pile > .c-card { margin-right: -30px; }
+.c-tseat .pile > .c-card:last-child { margin-right: 0; }
+.c-tseat.-lead .pile > .c-card:last-child { outline: var(--border-heavy) solid var(--color-gold-400); border-radius: var(--radius-s); }
+.c-fempty { width: 46px; height: 66px; border: var(--border-control) dashed var(--color-green-500); border-radius: var(--radius-s); }
+
+.c-cutin {
+  position: relative; display: inline-flex; align-items: baseline; gap: var(--space-2);
+  padding: var(--space-2) var(--space-8);
+  background: var(--color-red-500);
+  border: var(--border-heavy) solid var(--color-border-strong);
+  box-shadow: var(--shadow-hard-m);
+  font-size: var(--font-size-display); font-weight: var(--font-weight-heavy);
+  letter-spacing: var(--letter-spacing-wide); color: var(--color-cream-100);
+}
+.c-cutin::before, .c-cutin::after { content: ""; position: absolute; top: 0; bottom: 0; width: 18px; background: var(--color-red-700); }
+.c-cutin::before { left: 0; clip-path: polygon(0 0, 100% 0, 0 50%, 100% 100%, 0 100%); }
+.c-cutin::after { right: 0; clip-path: polygon(100% 0, 0 0, 100% 50%, 0 100%, 100% 100%); }
+
+.c-tray {
+  background: var(--color-bg-surface);
+  border: var(--border-bold) solid var(--color-border-strong);
+  border-radius: var(--radius-l); box-shadow: var(--shadow-hard-s);
+  padding: var(--space-3);
+  display: flex; flex-direction: column; gap: var(--space-2);
+}
+.c-tray .hd { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); font-size: var(--font-size-micro); font-weight: var(--font-weight-bold); color: var(--color-text-secondary); }
+.c-tray .strength { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-2); min-height: var(--space-4); color: var(--color-text-secondary); font-size: var(--font-size-micro); font-weight: var(--font-weight-bold); line-height: 1; }
+.c-tray .strength b { color: var(--color-action-primary); letter-spacing: var(--letter-spacing-wide); }
+.c-tray .strength .strong { color: var(--color-text-primary); }
+.c-tray .cs { display: flex; padding: var(--space-3) var(--space-1) var(--space-2); }
+.c-tray .cs > .c-card + .c-card { margin-left: -28px; }
+.c-tray .ac { display: flex; gap: var(--space-2); }
+.c-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 44px; padding: 0 var(--space-5);
+  background: var(--color-bg-surface);
+  border: var(--border-bold) solid var(--color-border-strong);
+  border-radius: var(--radius-pill); box-shadow: var(--shadow-hard-m);
+  font-family: inherit; font-size: var(--font-size-title-s); font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+}
+.c-btn.-primary { background: var(--color-action-primary); color: var(--color-text-on-fill); letter-spacing: var(--letter-spacing-cta); flex: 1; }
+.turnpill {
+  display: inline-flex; align-items: center; gap: var(--space-1);
+  background: var(--color-gold-400); color: var(--color-navy-800);
+  border: var(--border-control) solid var(--color-border-strong); border-radius: var(--radius-pill);
+  padding: 1px 10px; font-size: var(--font-size-micro); font-weight: var(--font-weight-heavy);
+}
+.timebar { flex: 1; height: 6px; max-width: 120px; background: var(--color-cream-200); border: var(--border-thin) solid var(--color-border-strong); border-radius: var(--radius-pill); overflow: hidden; }
+.timebar i { display: block; height: 100%; width: 62%; background: var(--color-gold-400); }
+
+/* ============================================================
+   ★ 新規部品 1: 局リボン(局スコープ状態の常設マーカー)
+   カットインの赤リボンがそのまま小さくなって卓の枠に「留まる」。
+   面は red-600(小さい文字でも cream-50 と AA 4.92)。
+   ============================================================ */
+.c-stateribbon {
+  position: relative; display: inline-flex; align-items: center;
+  padding: 3px 24px 4px;
+  background: var(--color-red-600);
+  border: var(--border-control) solid var(--color-border-strong);
+  box-shadow: var(--shadow-hard-s);
+  font-family: inherit; cursor: pointer;
+  font-size: var(--font-size-caption); font-weight: var(--font-weight-heavy);
+  letter-spacing: var(--letter-spacing-wide); color: var(--color-cream-50);
+  transform: rotate(-2deg);
+}
+.c-stateribbon::before, .c-stateribbon::after { content: ""; position: absolute; top: 0; bottom: 0; width: 11px; background: var(--color-red-700); }
+.c-stateribbon::before { left: 0; clip-path: polygon(0 0, 100% 0, 0 50%, 100% 100%, 0 100%); }
+.c-stateribbon::after { right: 0; clip-path: polygon(100% 0, 0 0, 100% 50%, 0 100%, 100% 100%); }
+.dock-tl { position: absolute; top: var(--space-2); left: var(--space-3); z-index: 2; display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); }
+
+/* ============================================================
+   ★ 新規部品 2: 場チップ(場スコープ状態の常設マーカー)
+   白面・紺輪郭・ベタ落ち影 = 「札」の造形。場の中心に置かれ、
+   場が流れるとき札と一緒に中心へ吸い込まれて消える。
+   ============================================================ */
+.c-fstate {
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 2px 10px 3px;
+  background: var(--color-white);
+  border: var(--border-control) solid var(--color-border-strong);
+  border-radius: var(--radius-s);
+  box-shadow: var(--shadow-hard-s);
+  font-family: inherit; cursor: pointer;
+  font-size: var(--font-size-micro); font-weight: var(--font-weight-bold);
+  color: var(--color-navy-800); white-space: nowrap;
+}
+.c-fstate .su { font-weight: var(--font-weight-heavy); font-size: var(--font-size-caption); }
+.c-fstate .su.-red { color: var(--color-red-500); }
+.c-fstates { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: var(--space-1); z-index: 1; }
+
+/* ============================================================
+   適用例: 375px フレーム
+   ============================================================ */
+.screens { display: flex; flex-wrap: wrap; gap: var(--space-6); }
+.screen-cell { width: 375px; max-width: 100%; }
+.screen-cell > h3 { font-size: var(--font-size-title-s); font-weight: var(--font-weight-heavy); margin-bottom: var(--space-2); }
+.frame {
+  width: 375px; max-width: 100%;
+  background: var(--color-bg-app);
+  border: var(--border-heavy) solid var(--color-border-strong);
+  border-radius: 28px; overflow: hidden;
+  box-shadow: var(--shadow-hard-l);
+  display: flex; flex-direction: column;
+}
+.statusbar { display: flex; justify-content: space-between; align-items: center; padding: 6px 18px 4px; font-size: var(--font-size-micro); font-weight: var(--font-weight-bold); }
+.statusbar .icons { display: flex; gap: 4px; }
+.statusbar .icons i { display: block; width: 14px; height: 8px; background: var(--color-navy-300); border-radius: 2px; }
+.appbar { display: flex; justify-content: space-between; align-items: center; padding: var(--space-2) var(--space-3); }
+.appbar .ttl { font-size: var(--font-size-title-s); font-weight: var(--font-weight-heavy); }
+.appbar .rules { font-size: var(--font-size-micro); font-weight: var(--font-weight-bold); background: var(--color-bg-surface); border: var(--border-control) solid var(--color-border-strong); border-radius: var(--radius-pill); padding: 3px 10px; }
+.scr-body { padding: 0 var(--space-3) var(--space-3); display: flex; flex-direction: column; gap: var(--space-3); flex: 1; }
+
+/* ライフサイクルの小さな図 */
+.lifecycle { display: flex; flex-wrap: wrap; gap: var(--space-4); align-items: stretch; }
+.lc-step { width: 200px; display: flex; flex-direction: column; gap: var(--space-2); }
+.lc-board { position: relative; height: 120px; background: var(--color-green-600); border: var(--border-bold) solid var(--color-border-strong); border-radius: var(--radius-m); overflow: hidden; }
+.lc-cap { font-size: var(--font-size-micro); color: var(--color-text-secondary); line-height: 1.7; }
+.lc-cap b { color: var(--color-text-primary); }
+.lc-cutin { position: absolute; left: 50%; top: 42%; transform: translate(-50%,-50%); padding: 2px 20px 3px; background: var(--color-red-500); border: var(--border-control) solid var(--color-border-strong); color: var(--color-cream-50); font-size: var(--font-size-caption); font-weight: var(--font-weight-heavy); }
+.lc-ribbon { position: absolute; top: 6px; left: 8px; transform: rotate(-2deg) scale(.9); padding: 1px 14px 2px; background: var(--color-red-600); border: var(--border-thin) solid var(--color-border-strong); color: var(--color-cream-50); font-size: var(--font-size-micro); font-weight: var(--font-weight-heavy); }
+.lc-chip { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); padding: 1px 8px 2px; background: var(--color-white); border: var(--border-thin) solid var(--color-border-strong); border-radius: var(--radius-s); font-size: var(--font-size-micro); font-weight: var(--font-weight-bold); }
+.lc-card { position: absolute; width: 22px; height: 31px; background: var(--color-white); border: var(--border-thin) solid var(--color-border-strong); border-radius: 3px; }
+.lc-arrow { align-self: center; font-size: var(--font-size-title-m); color: var(--color-text-secondary); }
+
+@media (max-width: 430px) { .panel { padding: var(--space-3); } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div>
+    <h1>継続状態の表示 — 設計提案</h1>
+    <div class="lead">作成日: 2026-07-31 / 対象: 対局画面(画面3)/ 位置づけ: <b>提案(未決定)</b>。デザインシステム.md・UI文言・情報量ガイド.md・ingame-effects-design.md の上に載る</div>
+  </div>
+
+  <div class="truth">
+    <b>問題</b>: 革命・イレブンバック・縛りは、発動の瞬間はカットインで分かるが、<b>続いていることの表示が無い</b>。
+    途中で目を離した人・あとから再接続した人・カットインをスキップした人は、いま 3 が強いのか 2 が強いのか、次に出せるスートが縛られているのかを知る手段が無い。
+    しかもこのゲームは提案ルールが増え続けるので、「革命アイコンを 1 個作って終わり」ではなく、<b>状態を持つルール一般</b>に効く仕組みが要る。
+  </div>
+
+  <!-- ============================================================ -->
+  <section>
+    <h2>1. 考え方 — 状態は「それが死ぬ場所」に置く</h2>
+    <div class="panel">
+      <table class="spec">
+        <tr><th>スコープ</th><th>例</th><th>いつ消えるか</th><th>置き場所</th><th>消え方</th></tr>
+        <tr>
+          <td><b>局スコープ</b></td>
+          <td>革命</td>
+          <td>革命返し or 局の終わり</td>
+          <td><b>卓の枠(左上)に留まる小さなリボン</b> = 局リボン</td>
+          <td>解除のカットインと同時に外れて飛んでいく</td>
+        </tr>
+        <tr>
+          <td><b>場スコープ</b></td>
+          <td>イレブンバック・縛り</td>
+          <td>場が流れるまで</td>
+          <td><b>場の中心に置かれる札の形のチップ</b> = 場チップ</td>
+          <td><b>場が流れるとき、札と一緒に中心へ吸い込まれる</b></td>
+        </tr>
+      </table>
+      <div class="note">
+        場チップは「場の持ち物」なので、場が流れる吸い込みアニメーションがそのまま<b>状態の終了通知</b>になる。
+        「イレブンバックが終わりました」という文字はどこにも要らない — 札と一緒にチップが消えるのを 1 回見れば、
+        「これは場が流れると終わるやつだ」を仕組みごと学習できる(文言ガイド原則 3・5: 結果で伝える、行動で教える)。
+        逆に局リボンは場が何度流れても<b>残り続ける</b>。この「流れても残った」という絵が、革命とイレブンバックの寿命の違いを説明なしで教える。
+      </div>
+      <div class="note">
+        <b>原因と正味を分ける。</b>革命とイレブンバックが重なると強さは<b>元に戻る</b>(反転×反転)。
+        マーカー(局リボン・場チップ)は「どのルールが生きているか = 原因」を示し、
+        いまどちら向きかの「正味」は §4 の強さ目盛りが一手に引き受ける。原因の数を数えて向きを暗算させない。
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section>
+    <h2>2. 新規部品</h2>
+
+    <div class="panel">
+      <div class="specimen">
+        <span class="lbl">局リボン(卓の左上に留まる。タップでそのルールの詳細モーダル)</span>
+        <span style="position:relative; display:inline-block; background:var(--color-green-600); border:var(--border-bold) solid var(--color-border-strong); border-radius:var(--radius-m); padding: 14px 20px;">
+          <button class="c-stateribbon" type="button">革命</button>
+        </span>
+        <button class="c-stateribbon" type="button">革命</button>
+      </div>
+      <div class="note">
+        <b>カットインの赤リボンが、引くときに小さくなって卓の左上に「刺さる」。</b>発動(大きいリボンが走る)→ 継続(小さいリボンが留まる)→ 解除(外れて飛ぶ)が
+        同じ 1 枚のリボンの一生として読める。部品を増やしているようで、実は<b>カットインの退場アニメーションに行き先を与えただけ</b>。
+        文字はルール名だけ(「革命中」の「中」は書かない — 留まっていること自体が「中」)。斜め 2° はリボンの脇役傾き(トーン Do/Don't)。
+        面はカットインの red-500 ではなく <b>red-600</b>(caption サイズの cream-50 文字で AA 4.92。red-500 は大型表示限定)。
+        タップで既存のルール詳細モーダル(ingame-effects §2.2)。当たり判定は余白で 44px を確保。
+        複数の局スコープ状態が同時に生きたら縦に段重ね(カットインの段重ねと同じ文法)、3 枚目からは「+N」。
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="specimen">
+        <span class="lbl">場チップ(場の中心。白面 = 札の造形。タップでそのルールの詳細モーダル)</span>
+        <button class="c-fstate" type="button"><span class="su">♠</span>しばり</button>
+        <button class="c-fstate" type="button"><span class="su">♠</span><span class="su -red">♥</span>しばり</button>
+        <button class="c-fstate" type="button">イレブンバック</button>
+      </div>
+      <div class="note">
+        <b>白面・紺輪郭・ベタ落ち影 — 意図的に「札」と同じ造形にする。</b>場チップは場に出ている札の仲間であり、札と同じ運命(場が流れたら消える)をたどるから。
+        局リボンの「ルール界の赤」との対比で、スコープの違いが色と形で読める。
+        縛りはスートの字が主役(♥♦ は red-500、♠♣ は navy-800 — 札のスート色と同じ規律)。ダブル縛りはスート構成をそのまま並べる。
+        登場は easing-pop で 1 回だけ弾む。以後は静止(常時ループ禁止)。
+        縛りはカットインを持たない静かなルールだが、チップが弾んで現れること自体が小さな発動告知になる(小さい出来事には小さい演出)。
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section>
+    <h2>3. 適用例(375px)</h2>
+    <div class="screens">
+
+      <div class="screen-cell">
+        <h3>A. 革命が継続中(自分の番)</h3>
+        <div class="frame">
+          <div class="statusbar"><span>9:41</span><span class="icons"><i></i><i></i><i></i></span></div>
+          <div class="appbar"><span class="ttl">第1戦</span><span class="rules">有効ルール 8</span></div>
+          <div class="scr-body">
+            <div class="c-table">
+              <div class="dock-tl">
+                <button class="c-stateribbon" type="button">革命</button>
+              </div>
+              <div class="c-diamond">
+                <svg class="flow" viewBox="0 0 100 100" preserveAspectRatio="none">
+                  <ellipse cx="50" cy="50" rx="26" ry="23" fill="none" stroke="var(--color-green-500)" stroke-width="1" stroke-dasharray="2 3" vector-effect="non-scaling-stroke"/>
+                  <g fill="var(--color-green-500)"><path d="M50 27 l3 2 l-3 2 z"/><path d="M76 50 l-2 3 l-2 -3 z"/><path d="M50 73 l-3 -2 l3 -2 z"/><path d="M24 50 l2 -3 l2 3 z"/></g>
+                </svg>
+                <div class="c-tseat -top -lead">
+                  <span class="info"><span class="chip"><span class="nm">プレイヤーC</span></span><span class="meta"><span class="ct">2枚</span></span></span>
+                  <span class="pile"><span class="c-card -small"><b>5</b><i>♣</i></span><span class="c-card -red -small"><b>5</b><i>♦</i></span><span class="c-card -red -small"><b>5</b><i>♥</i></span><span class="c-card -small"><b>5</b><i>♠</i></span></span>
+                </div>
+                <div class="c-tseat -left -passed"><span class="info"><span class="chip"><span class="nm">AIプレイヤー2</span></span><span class="meta"><span class="ct">7枚</span><span class="st">パス</span></span></span><span class="c-fempty"></span></div>
+                <div class="c-tseat -right"><span class="info"><span class="chip"><span class="nm">プレイヤーD</span></span><span class="meta"><span class="ct">11枚</span></span></span><span class="c-fempty"></span></div>
+                <div class="c-tseat -bottom"><span class="c-fempty"></span><span class="info"><span class="chip"><span class="nm">あなた</span></span><span class="meta"><span class="ct">10枚</span></span></span></div>
+              </div>
+            </div>
+            <div class="c-tray">
+              <div class="hd"><span class="turnpill">あなたの番</span><span class="timebar"><i></i></span></div>
+              <div class="strength" aria-label="カードの強さ: いまは左がつよい"><span class="strong">つよい</span><b aria-hidden="true">← →</b><span>よわい</span></div>
+              <div class="cs">
+                <span class="c-card"><b>3</b><i>♣</i></span>
+                <span class="c-card -red"><b>4</b><i>♦</i></span>
+                <span class="c-card"><b>6</b><i>♠</i></span>
+                <span class="c-card -red"><b>7</b><i>♥</i></span>
+                <span class="c-card -red"><b>J</b><i>♥</i></span>
+                <span class="c-card"><b>2</b><i>♠</i></span>
+              </div>
+              <div class="ac"><button class="c-btn" type="button">パス</button><button class="c-btn -primary" type="button">えらんだカードを出す</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="screen-cell">
+        <h3>B. 革命 × イレブンバック × ♠縛り(正味は元の向き)</h3>
+        <div class="frame">
+          <div class="statusbar"><span>9:44</span><span class="icons"><i></i><i></i><i></i></span></div>
+          <div class="appbar"><span class="ttl">第1戦</span><span class="rules">有効ルール 8</span></div>
+          <div class="scr-body">
+            <div class="c-table">
+              <div class="dock-tl">
+                <button class="c-stateribbon" type="button">革命</button>
+              </div>
+              <div class="c-diamond">
+                <svg class="flow" viewBox="0 0 100 100" preserveAspectRatio="none">
+                  <ellipse cx="50" cy="50" rx="26" ry="23" fill="none" stroke="var(--color-green-500)" stroke-width="1" stroke-dasharray="2 3" vector-effect="non-scaling-stroke"/>
+                  <g fill="var(--color-green-500)"><path d="M50 27 l3 2 l-3 2 z"/><path d="M76 50 l-2 3 l-2 -3 z"/><path d="M50 73 l-3 -2 l3 -2 z"/><path d="M24 50 l2 -3 l2 3 z"/></g>
+                </svg>
+                <div class="c-fstates">
+                  <button class="c-fstate" type="button">イレブンバック</button>
+                  <button class="c-fstate" type="button"><span class="su">♠</span>しばり</button>
+                </div>
+                <div class="c-tseat -top -lead">
+                  <span class="info"><span class="chip"><span class="nm">プレイヤーC</span></span><span class="meta"><span class="ct">5枚</span></span></span>
+                  <span class="pile"><span class="c-card -small"><b>K</b><i>♠</i></span></span>
+                </div>
+                <div class="c-tseat -left -turn"><span class="info"><span class="chip"><span class="nm">AIプレイヤー2</span></span><span class="meta"><span class="ct">7枚</span><span class="st">考え中…</span></span></span><span class="c-fempty"></span></div>
+                <div class="c-tseat -right"><span class="info"><span class="chip"><span class="nm">プレイヤーD</span></span><span class="meta"><span class="ct">11枚</span></span></span><span class="pile"><span class="c-card -small"><b>Q</b><i>♠</i></span></span></div>
+                <div class="c-tseat -bottom"><span class="pile"><span class="c-card -small"><b>J</b><i>♠</i></span></span><span class="info"><span class="chip"><span class="nm">あなた</span></span><span class="meta"><span class="ct">9枚</span></span></span></div>
+              </div>
+            </div>
+            <div class="c-tray">
+              <div class="hd"><span></span><span></span></div>
+              <div class="strength" style="visibility:hidden"><span>よわい</span><b>← →</b><span>つよい</span></div>
+              <div class="cs">
+                <span class="c-card"><b>3</b><i>♣</i></span>
+                <span class="c-card -red"><b>4</b><i>♦</i></span>
+                <span class="c-card"><b>6</b><i>♠</i></span>
+                <span class="c-card -red"><b>7</b><i>♥</i></span>
+                <span class="c-card -red"><b>10</b><i>♥</i></span>
+                <span class="c-card"><b>2</b><i>♠</i></span>
+              </div>
+              <div class="ac" style="opacity:.5"><button class="c-btn" type="button">パス</button><button class="c-btn -primary" type="button">えらんだカードを出す</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+    <div class="note" style="max-width:790px">
+      <b>A</b>: 革命だけが生きている。局リボンが卓に刺さり、強さ目盛りが「つよい ← → よわい」に反転して現れる(§4)。手札の並びは変えない。<br>
+      <b>B</b>: ♠Q(革命中なので Q より弱い J で上書き)→ ♠J でイレブンバックが発動し、スートが 2 連続で縛られた場面。
+      場の中心にイレブンバックと ♠しばりの場チップ、卓の枠に革命の局リボン。反転が 2 枚重なって<b>正味は元の向き</b>なので、強さ目盛りは出ない。
+      この場が流れると、場チップ 2 枚は札と一緒に吸い込まれて消え、局リボンだけが残る。
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section>
+    <h2>4. 強さ目盛り — 「正味の向き」の専任表示</h2>
+    <div class="panel">
+      <div class="specimen">
+        <span class="lbl">通常(チュートリアルのみ表示・現行どおり)/ 反転中(全員に表示)</span>
+        <span class="c-tray" style="padding:8px 14px"><span class="strength"><span>よわい</span><b aria-hidden="true">← →</b><span class="strong">つよい</span></span></span>
+        <span class="c-tray" style="padding:8px 14px"><span class="strength"><span class="strong">つよい</span><b aria-hidden="true">← →</b><span>よわい</span></span></span>
+      </div>
+      <div class="note">
+        既存の StrengthScale(現在は未プレイ端末の basic solo 初戦のみ)を<b>「正味の強さが反転している間はだれにでも出す」</b>に拡張する。
+        手札は基本順(3 → 2)の固定ソートのままなので、反転中は「つよい」が左に来る — ラベルの位置が入れ替わること自体が信号。
+        「つよい」側だけ navy-800 の太字にして向きを一目にする(通常時も同じ規律)。
+        切り替わりの瞬間は 1 回だけ裏返るフリップ、<code>prefers-reduced-motion</code> では差し替えのみ。
+        <b>革命 × イレブンバックで正味が元に戻ったら目盛りは消える</b> — 原因(マーカー 2 枚)と正味(目盛りなし)が矛盾なく並ぶ。
+        手札を実効強で並び替える案は捨てた(§6)。
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section>
+    <h2>5. ライフサイクル — カットインに「行き先」を与える</h2>
+    <div class="panel">
+      <div class="lifecycle">
+        <div class="lc-step">
+          <div class="lc-board">
+            <span class="lc-card" style="left:44%; top:8px;"></span>
+            <span class="lc-cutin">革命</span>
+          </div>
+          <div class="lc-cap"><b>発動</b> — 現行どおり: 札が着地 → リボンが走る(300ms)→ 保持(750ms)</div>
+        </div>
+        <div class="lc-arrow">→</div>
+        <div class="lc-step">
+          <div class="lc-board">
+            <span class="lc-ribbon">革命</span>
+            <span class="lc-card" style="left:44%; top:8px;"></span>
+            <span class="lc-chip" style="top:58%">イレブンバック</span>
+          </div>
+          <div class="lc-cap"><b>継続</b> — リボンは画面外へ引く代わりに<b>縮みながら卓の左上へ刺さる</b>(320ms)。場スコープなら中心に場チップが弾んで出る。スキップのタップでも同じ行き先へ直行</div>
+        </div>
+        <div class="lc-arrow">→</div>
+        <div class="lc-step">
+          <div class="lc-board">
+            <span class="lc-ribbon">革命</span>
+          </div>
+          <div class="lc-cap"><b>終了</b> — 場チップは場が流れるとき<b>札と一緒に吸い込まれる</b>。局リボンは解除カットイン(革命返し)と同時に外れて飛ぶ。局が終われば全部消える</div>
+        </div>
+      </div>
+      <div class="note">
+        ingame-effects §1.1 のタイムライン(着地 → リボン → 場が流れる)はそのまま。変わるのはリボンの退場先だけ。<br>
+        <b>再接続・途中参加</b>はスナップショットからマーカーを無演出で描く(カットインは再演しない)。あがりトーストの「初回描画時点の件数は基準として飲む」と同じ裁定。<br>
+        <b>発動チップ(c-achip)との整理</b>: 状態を持つルールはマーカー自身が痕跡 + タップ導線を兼ねるので、そのルールの発動チップは出さない。発動チップは 8 切りのような<b>一発もの</b>専用に戻る。役割が重ならない。
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section>
+    <h2>6. データ供給と段階</h2>
+    <div class="panel">
+      <table class="spec">
+        <tr><th>現状</th><td>クライアントは状態を一切受け取っていない。<code>strengthNote.inverted</code> はサーバー内で計算済みだが <code>PlayerRoomView</code> に載せていない(AI だけが使用)。イベント列からの推測は再接続で壊れる</td></tr>
+        <tr><th>追加する契約</th><td><code>game.strengthInverted: boolean</code>(正味)と <code>game.statuses: { ruleId, name, scope: 'game' | 'field', suits? }[]</code>(原因。suits は縛りのスート構成)。スナップショット毎に状態から算出するので再接続に強い</td></tr>
+        <tr><th>フェーズ 1</th><td>サーバー側で既知のコアルール 3 件だけをアダプタ実装(革命 = r0003 のメモリ / イレブンバック = r0005 のメモリ / 縛り = r0008 の <code>bindingFromHistory</code> 相当)。<b>ルール契約(rule.ts の語彙)は変更しない</b>ので、5 箇所同時更新も rule-versions 繰り上げも不要</td></tr>
+        <tr><th>フェーズ 2</th><td>提案ルールが状態を持ち始めたら、ルール契約に省略可能フック(例: <code>presentStatus(context)</code> → <code>{ active, label?, scope }</code>)を追加して自己申告制へ。このときは語彙拡張の全手順が要る。ラベルはルール名と同じ 12 文字制限</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section>
+    <h2>7. 検討して採らなかった案</h2>
+    <div class="panel">
+      <table class="spec">
+        <tr><th>手札を実効強で並び替える</th><td>盤面で語る案としては最強だが、対局中に並びが変わると位置記憶が壊れて誤タップを生む。イレブンバックでは 1 つの場の間に 2 回並び替わる。固定ソート + 目盛り反転を採る</td></tr>
+        <tr><th>卓の緑を革命中だけ変色させる</th><td>「世界がひっくり返る」演出としては魅力的だが、(1) 提案ルールの名前を伝えられず「ルール名は文字で堂々と」に反する、(2) 反転 2 枚重ねの正味を面の色で表せない、(3) 面全体の塗り替えは警報のトーンに寄る。将来の飾りとしては残しうるが背骨にはしない</td></tr>
+        <tr><th>AppBar に状態アイコン列</th><td>操作対象(手札)から最も遠い上流に置くことになり、視線が届かない。AppBar はアウトゲームの領分でもある</td></tr>
+        <tr><th>「革命中」等の文字バナー常設</th><td>状態語(〜中)の常設テキストは実況ログ廃止の決定に逆行する。ルール名だけを、位置と造形(留まるリボン / 場の札チップ)に語らせる</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <div class="truth">
+    <b>アクセシビリティ</b>: マーカーはすべてボタン(タップでルール詳細モーダル)。<code>aria-label</code> は「革命 — 継続中。タップで説明」の形。
+    状態の増減の読み上げは未実装(対局画面に既存のライブリージョンが無いため見送り。将来 polite なライブリージョンを設ける際に 1 行だけ読み上げる)。色だけに頼らない(リボン=位置+形+文字、場チップ=文字、目盛り=文字位置)。
+    点滅・常時ループなし。<code>prefers-reduced-motion</code> ではドッキングとフリップをフェードに落とす。
+    新規トークンの追加はゼロ(既存トークンのみで構成)。
+  </div>
+
+</div>
+</body>
+</html>

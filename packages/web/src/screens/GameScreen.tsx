@@ -9,6 +9,7 @@ import { HandTray } from '../components/HandTray';
 import { GuideMessage } from '../components/GuideMessage';
 import { RuleCutIn } from '../components/RuleCutIn';
 import type { RuleActivation } from '../components/RuleCutIn';
+import type { GameStatusMarker } from '../components/StateMarkers';
 import { Table } from '../components/Table';
 import type { TableSeat } from '../components/Table';
 import { Toast } from '../components/Toast';
@@ -33,6 +34,7 @@ const FINISH_NOTICE_MS = 2600;
 const DISCARD_NOTICE_MS = 3000;
 
 const NO_FINISHES: readonly SeatFinish[] = [];
+const NO_STATUSES: readonly GameStatusMarker[] = [];
 const NO_DISCARD_NOTICES: readonly CardDiscardNotice[] = [];
 
 export type CardDiscardNotice = {
@@ -51,12 +53,21 @@ type GameScreenProps = {
   /** いま超えるべきプレイの持ち主。場が流れていれば null。 */
   leadSeatName: string | null;
   isFlushing?: boolean;
+  /** 継続中のルール状態。局スコープは卓の左上、場スコープは場の中心に置く。 */
+  statuses?: readonly GameStatusMarker[];
+  /** カットイン中の場の保持モード。真のあいだは消えた場スコープの状態も残す。 */
+  holdFieldStatuses?: boolean;
   /** この戦であがった人を、あがった順に。増えた分だけを告知する。 */
   finishes?: readonly SeatFinish[];
   /** 公開されたカード破棄。増えた分だけ札面つきで数秒告知する。 */
   discardNotices?: readonly CardDiscardNotice[];
   /** 再生中のカットイン。空なら出さない。 */
   activations: readonly RuleActivation[];
+  /**
+   * カットインを画面の外側(App)で再生しているか。
+   * 接続時は App が RuleCutIn を持つので、再生中かどうかはここで受ける。
+   */
+  isCutInPlaying?: boolean;
   onCutInDone: () => void;
   /** カットインが引いたあとに残る直近の発動。 */
   lastActivation: { ruleId: string; name: string; count: number } | null;
@@ -65,6 +76,8 @@ type GameScreenProps = {
   cardHints?: ReadonlyMap<string, CardHint>;
   guideCue?: GuideCue | null;
   showStrengthScale?: boolean;
+  /** 正味の強さが反転しているか。反転中は誰にでも強さ目盛りを出す。 */
+  strengthInverted?: boolean;
   isMyTurn: boolean;
   canPlay?: boolean;
   canPass?: boolean;
@@ -91,9 +104,12 @@ export function GameScreen({
   seats,
   leadSeatName,
   isFlushing,
+  statuses = NO_STATUSES,
+  holdFieldStatuses = false,
   finishes = NO_FINISHES,
   discardNotices = NO_DISCARD_NOTICES,
   activations,
+  isCutInPlaying = false,
   onCutInDone,
   lastActivation,
   hand,
@@ -101,6 +117,7 @@ export function GameScreen({
   cardHints,
   guideCue = null,
   showStrengthScale = false,
+  strengthInverted = false,
   isMyTurn,
   canPlay,
   canPass = true,
@@ -116,6 +133,15 @@ export function GameScreen({
 }: GameScreenProps) {
   const finishNotice = useFinishNotice(finishes);
   const discardNotice = useDiscardNotice(discardNotices);
+  const settledStatuses = useSettledStatuses(
+    statuses,
+    activations.length > 0 || isCutInPlaying,
+  );
+  // 状態を持つルールはマーカー自身が痕跡 + 導線を兼ねるので、発動チップは出さない
+  // (発動チップは 8 切りのような一発もの専用)。
+  const hasStatusMarker =
+    lastActivation !== null &&
+    settledStatuses.some((status) => status.ruleId === lastActivation.ruleId);
   return (
     <div className={screen.screen}>
       <AppBar
@@ -130,9 +156,13 @@ export function GameScreen({
           seats={seats}
           leadSeatName={leadSeatName}
           {...(isFlushing === undefined ? {} : { isFlushing })}
+          statuses={settledStatuses}
+          holdFieldStatuses={holdFieldStatuses}
+          onOpenStatus={onOpenActivation}
+          onViewAllStatuses={onViewRules}
         />
         {/* チップはカットインが引いたあとの痕跡なので、再生中は出さない。 */}
-        {lastActivation && activations.length === 0 && (
+        {lastActivation && !hasStatusMarker && activations.length === 0 && (
           <ActivationChip
             name={lastActivation.name}
             count={lastActivation.count}
@@ -146,6 +176,7 @@ export function GameScreen({
           selectedIds={selectedCardIds}
           {...(cardHints ? { cardHints } : {})}
           showStrengthScale={showStrengthScale}
+          strengthInverted={strengthInverted}
           isMyTurn={isMyTurn}
           turnDeadlineAt={turnDeadlineAt ?? null}
           onToggle={onToggleCard}
@@ -207,6 +238,28 @@ export function GameScreen({
       <RuleCutIn activations={activations} onDone={onCutInDone} />
     </div>
   );
+}
+
+/**
+ * カットインの再生中は継続状態の差分を止め、引けてから反映する。
+ * スナップショットは発動と同時に状態を載せてくるので、そのまま描くと
+ * カットインの裏でマーカーが先に現れ、「発動 → 継続」の順序が壊れる。
+ *
+ * 新しい statuses をいったん effect で受け直すのが肝。カットインを積むのも
+ * スナップショット反映後の effect なので、両方の state 更新が同じフラッシュに
+ * まとまり、「まだ再生フラグが立っていない 1 レンダリング」で先走らない。
+ */
+function useSettledStatuses(
+  statuses: readonly GameStatusMarker[],
+  isPlayingCutIn: boolean,
+): readonly GameStatusMarker[] {
+  const [pending, setPending] = useState(statuses);
+  useEffect(() => {
+    setPending(statuses);
+  }, [statuses]);
+  const settled = useRef(statuses);
+  if (!isPlayingCutIn) settled.current = pending;
+  return settled.current;
 }
 
 /**

@@ -10,6 +10,7 @@ import {
   type RuleChainPort,
 } from '@daifugo/core';
 
+import { gameStatusViews } from './statuses.js';
 import type {
   GameResultView,
   GameView,
@@ -222,6 +223,11 @@ function gameView(
       setMemory: engine.setMemory,
     },
   );
+  /*
+   * 局が終わってリザルトを見せている間の継続状態は、もう盤面の情報ではない。
+   * 対局中だけ出す。
+   */
+  const inPlay = engine.phase.name === 'gameInProgress';
   return {
     gameNo:
       engine.phase.name === 'setResult'
@@ -254,6 +260,8 @@ function gameView(
           }
         : null,
     history: game.public.history.map((event) => historyView(event, seats)),
+    strengthInverted: inPlay && playerSnapshot.strengthNote.inverted,
+    statuses: inPlay ? gameStatusViews(game, engine.ruleChain) : [],
     previousResults: engine.results.map((result) => resultView(result, seats)),
     yourHand: sortCards(game.players[memberId]?.hand ?? []),
     legalMoves: playerSnapshot.legalMoves,
