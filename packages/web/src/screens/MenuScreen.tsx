@@ -3,6 +3,7 @@ import { Button } from '../components/Button';
 import type { ReactNode } from 'react';
 
 import { PROPOSE_RULE_LABEL } from '../messages';
+import { SUPPORT_URL, X_ACCOUNT_URL } from '../links';
 
 import styles from './MenuScreen.module.css';
 import screen from './screen.module.css';
@@ -77,6 +78,16 @@ export function MenuScreen({
           </Button>
         )}
         {authMessage && <p role="status">{authMessage}</p>}
+        <footer className={styles.appLinks}>
+          {SUPPORT_URL && (
+            <a href={SUPPORT_URL} target="_blank" rel="noreferrer">
+              ☕ 開発を支援する
+            </a>
+          )}
+          <a href={X_ACCOUNT_URL} target="_blank" rel="noreferrer">
+            開発者X
+          </a>
+        </footer>
         <HillDivider />
       </main>
     </div>

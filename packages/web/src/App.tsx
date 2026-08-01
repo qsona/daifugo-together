@@ -343,7 +343,6 @@ function DemoApp() {
           onBack={() => {
             go('menu');
           }}
-          onCopyInvite={() => undefined}
           onViewRules={() => {
             setActiveRulesReturn('waitingRoom');
             go('activeRules');
@@ -1348,12 +1347,6 @@ function ConnectedApp({
           onBack={() => {
             setLeaveConfirm('waiting');
           }}
-          onCopyInvite={() => {
-            if (!navigator.clipboard) {
-              return Promise.reject(new Error('clipboard_unavailable'));
-            }
-            return navigator.clipboard.writeText(inviteUrl);
-          }}
           onViewRules={() => {
             openRules();
           }}
@@ -1629,6 +1622,7 @@ function ConnectedApp({
         showEvaluation
         waitingFor={waitingFor}
         actionPending={isGraduating}
+        showSupport={resultRoom.mode !== 'basic'}
         {...(showResultAuthPrompt ? { onRegister: beginLogin } : {})}
       />,
     );

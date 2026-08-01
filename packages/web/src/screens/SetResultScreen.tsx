@@ -1,10 +1,11 @@
 import { AppBar } from '../components/AppBar';
-import { Button } from '../components/Button';
+import { Button, LinkButton } from '../components/Button';
 import { Confetti } from '../components/Confetti';
 import { MoodPicker } from '../components/MoodPicker';
 import { SetRankRows } from '../components/SetRankRows';
 import type { SetRankView } from '../components/SetRankRows';
 import { VoteButton } from '../components/VoteButton';
+import { buildXShareUrl, SUPPORT_URL } from '../links';
 
 import styles from './SetResultScreen.module.css';
 import screen from './screen.module.css';
@@ -34,6 +35,14 @@ type SetResultScreenProps = {
   showEvaluation?: boolean;
   waitingFor?: readonly string[] | null;
   onRegister?: () => void;
+  showSupport?: boolean;
+};
+
+const RESULT_SHARE_TEXT: Readonly<Record<number, string>> = {
+  1: '大富豪になりました',
+  2: '富豪でした',
+  3: '貧民でした',
+  4: '大貧民でした…',
 };
 
 /**
@@ -56,7 +65,10 @@ export function SetResultScreen({
   showEvaluation = true,
   waitingFor = null,
   onRegister,
+  showSupport = true,
 }: SetResultScreenProps) {
+  const yourPlace = ranks.find((rank) => rank.isYou)?.place;
+  const shareText = yourPlace ? RESULT_SHARE_TEXT[yourPlace] : undefined;
   return (
     <div className={screen.screen}>
       <AppBar title="セットリザルト" />
@@ -170,6 +182,26 @@ export function SetResultScreen({
           <Button block disabled={actionPending} onClick={onHome}>
             ホームへ
           </Button>
+          {shareText && (
+            <LinkButton
+              block
+              href={buildXShareUrl(shareText)}
+              target="_blank"
+              rel="noreferrer"
+            >
+              𝕏 でシェアする
+            </LinkButton>
+          )}
+          {showSupport && SUPPORT_URL && (
+            <a
+              className={styles.supportLink}
+              href={SUPPORT_URL}
+              target="_blank"
+              rel="noreferrer"
+            >
+              ☕ 楽しかったら開発を支援する
+            </a>
+          )}
         </div>
       </main>
     </div>

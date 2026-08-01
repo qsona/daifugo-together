@@ -20,3 +20,17 @@
   font-size: var(--font-size-micro);
   line-height: 1;
 }
+
+.appLinks {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-4);
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: var(--border-control) dashed var(--color-border-control);
+  font-size: var(--font-size-caption);
+}
+
+.appLinks a {
+  color: var(--color-text-secondary);
+}

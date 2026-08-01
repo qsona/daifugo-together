@@ -1,47 +1,86 @@
-import { cleanup, render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { InviteCode } from './InviteCode';
 
-describe('InviteCode', () => {
-  afterEach(cleanup);
+const shareDescriptor = Object.getOwnPropertyDescriptor(navigator, 'share');
+const clipboardDescriptor = Object.getOwnPropertyDescriptor(
+  navigator,
+  'clipboard',
+);
 
-  it('招待リンクを表示してコピーできる', async () => {
-    const user = userEvent.setup();
-    const onCopy = vi.fn().mockResolvedValue(undefined);
+afterEach(() => {
+  cleanup();
+  restoreNavigatorProperty('share', shareDescriptor);
+  restoreNavigatorProperty('clipboard', clipboardDescriptor);
+});
+
+describe('InviteCode', () => {
+  it('Web Share APIが使えるときは招待文とリンクを共有する', async () => {
+    const share = vi.fn(async () => undefined);
+    Object.defineProperty(navigator, 'share', {
+      configurable: true,
+      value: share,
+    });
 
     render(
-      <InviteCode
-        code="01234"
-        inviteUrl="https://example.com/?room=01234"
-        onCopy={onCopy}
-      />,
-    );
-
-    expect(screen.getByLabelText('招待リンク')).toHaveProperty(
-      'value',
-      'https://example.com/?room=01234',
-    );
-    await user.click(screen.getByRole('button', { name: 'コピー' }));
-    expect(onCopy).toHaveBeenCalledOnce();
-    expect(screen.getByRole('button', { name: 'コピー済み' })).toBeTruthy();
-  });
-
-  it('QRコードは必要なときだけ開き、同じリンクを持つ', async () => {
-    const user = userEvent.setup();
-    const { container } = render(
       <InviteCode code="01234" inviteUrl="https://example.com/?room=01234" />,
     );
 
-    const details = container.querySelector('details');
-    expect(details?.hasAttribute('open')).toBe(false);
-    await user.click(screen.getByText('QRコードを表示'));
-    expect(details?.hasAttribute('open')).toBe(true);
+    expect(screen.queryByLabelText('招待リンク')).toBeNull();
+    expect(screen.getByText('部屋コード')).toBeTruthy();
     expect(
       screen.getByRole('img', {
         name: '友だちが参加するためのQRコード',
       }),
     ).toBeTruthy();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: '📤 リンクを共有する' }),
+    );
+    await waitFor(() =>
+      expect(share).toHaveBeenCalledWith({
+        text: '大富豪しよう。この部屋に入って: https://example.com/?room=01234',
+      }),
+    );
+  });
+
+  it('Web Share APIがないときは同じ位置でコピーして完了を伝える', async () => {
+    const writeText = vi.fn(async () => undefined);
+    Object.defineProperty(navigator, 'share', {
+      configurable: true,
+      value: undefined,
+    });
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+
+    render(
+      <InviteCode code="01234" inviteUrl="https://example.com/?room=01234" />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'リンクをコピー' }));
+
+    await waitFor(() =>
+      expect(writeText).toHaveBeenCalledWith('https://example.com/?room=01234'),
+    );
+    expect(await screen.findByText('コピーしました')).toBeTruthy();
   });
 });
+
+function restoreNavigatorProperty(
+  key: 'share' | 'clipboard',
+  descriptor: PropertyDescriptor | undefined,
+): void {
+  if (descriptor) {
+    Object.defineProperty(navigator, key, descriptor);
+  } else {
+    Reflect.deleteProperty(navigator, key);
+  }
+}

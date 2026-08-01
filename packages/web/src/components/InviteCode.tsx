@@ -2,77 +2,76 @@ import { useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 
 import { Button } from './Button';
+import { Toast } from './Toast';
 import styles from './InviteCode.module.css';
 
 type InviteCodeProps = {
   code: string;
   inviteUrl: string;
-  /** 省略するとコピーボタンを出さない。 */
-  onCopy?: () => void | Promise<void>;
 };
 
-export function InviteCode({ code, inviteUrl, onCopy }: InviteCodeProps) {
-  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>(
+export function InviteCode({ code, inviteUrl }: InviteCodeProps) {
+  const [shareState, setShareState] = useState<'idle' | 'copied' | 'failed'>(
     'idle',
   );
+  const canShare =
+    typeof navigator !== 'undefined' && typeof navigator.share === 'function';
 
-  const copy = async () => {
-    if (!onCopy) return;
+  const share = async () => {
+    setShareState('idle');
     try {
-      await onCopy();
-      setCopyState('copied');
-      window.setTimeout(() => setCopyState('idle'), 2_000);
-    } catch {
-      setCopyState('failed');
+      if (canShare) {
+        await navigator.share({
+          text: `大富豪しよう。この部屋に入って: ${inviteUrl}`,
+        });
+        return;
+      }
+      if (!navigator.clipboard) throw new Error('clipboard_unavailable');
+      await navigator.clipboard.writeText(inviteUrl);
+      setShareState('copied');
+      window.setTimeout(() => setShareState('idle'), 2_000);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
+      setShareState('failed');
     }
   };
 
   return (
     <section className={styles.invite} aria-label="部屋に招待する">
       <span className={styles.code}>
-        <small className={styles.label}>招待リンク</small>
+        <small className={styles.label}>部屋コード</small>
         {code}
       </span>
 
-      <div className={styles.shareRow}>
-        <input
-          aria-label="招待リンク"
-          className={styles.link}
-          readOnly
+      <figure className={styles.qr}>
+        <QRCodeSVG
+          aria-label="友だちが参加するためのQRコード"
+          className={styles.qrCode}
+          level="M"
+          marginSize={4}
+          role="img"
+          size={200}
+          title="友だちが参加するためのQRコード"
           value={inviteUrl}
-          onFocus={(event) => event.currentTarget.select()}
         />
-        {onCopy && (
-          <Button size="small" onClick={() => void copy()}>
-            {copyState === 'copied' ? 'コピー済み' : 'コピー'}
-          </Button>
-        )}
-      </div>
+        <figcaption>スマホのカメラで読み取って参加</figcaption>
+      </figure>
+      <Button block onClick={() => void share()}>
+        {canShare ? '📤 リンクを共有する' : 'リンクをコピー'}
+      </Button>
       <p className={styles.note}>
         このリンクを送ると、ログインしていない友だちも参加できます
       </p>
-      {copyState === 'failed' && (
+      {shareState === 'copied' && (
+        <div className={styles.toast}>
+          <Toast>コピーしました</Toast>
+        </div>
+      )}
+      {shareState === 'failed' && (
         <p className={styles.copyError} role="alert">
-          リンクを長押ししてコピーしてください
+          リンクを共有できませんでした。もう一度ためしてください
         </p>
       )}
-
-      <details className={styles.qrDisclosure}>
-        <summary>QRコードを表示</summary>
-        <figure className={styles.qr}>
-          <QRCodeSVG
-            aria-label="友だちが参加するためのQRコード"
-            className={styles.qrCode}
-            level="M"
-            marginSize={4}
-            role="img"
-            size={200}
-            title="友だちが参加するためのQRコード"
-            value={inviteUrl}
-          />
-          <figcaption>スマホのカメラで読み取って参加</figcaption>
-        </figure>
-      </details>
     </section>
   );
 }

@@ -22,6 +22,7 @@
     transform var(--duration-fast) var(--easing-standard),
     box-shadow var(--duration-fast) var(--easing-standard),
     background-color var(--duration-fast) var(--easing-standard);
+  text-decoration: none;
 }
 
 .primary {
