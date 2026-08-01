@@ -6,8 +6,10 @@
 # その検証済みコミットが Fly.io (https://daifugo-together.fly.dev) へデプロイされる。
 #
 # 使い方:
-#   scripts/release.sh            release を更新してデプロイを開始する
-#   scripts/release.sh --dry-run  対象コミットと実行内容を表示する(pushしない)
+#   scripts/release.sh                         release を更新してデプロイを開始する
+#   scripts/release.sh --dry-run               対象コミットと実行内容を表示する(pushしない)
+#   scripts/release.sh --allow-dirty           未コミットの変更を無視して実行する
+#   scripts/release.sh --dry-run --allow-dirty 両オプションは併用・順不同
 #
 set -euo pipefail
 
@@ -16,12 +18,22 @@ MAIN=main
 RELEASE=release
 
 DRY_RUN=0
-if [ "${1:-}" = "--dry-run" ]; then
-  DRY_RUN=1
-elif [ -n "${1:-}" ]; then
-  echo "✗ 不明な引数: $1 (使えるのは --dry-run のみ)" >&2
-  exit 2
-fi
+ALLOW_DIRTY=0
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --dry-run)
+      DRY_RUN=1
+      ;;
+    --allow-dirty)
+      ALLOW_DIRTY=1
+      ;;
+    *)
+      echo "✗ 不明な引数: $1 (使えるのは --dry-run / --allow-dirty)" >&2
+      exit 2
+      ;;
+  esac
+  shift
+done
 
 run() {
   if [ "$DRY_RUN" = 1 ]; then
@@ -33,10 +45,17 @@ run() {
 
 cd "$(git rev-parse --show-toplevel)"
 
-# 未追跡ファイルも含め、意図しない作業中の状態からのリリースを防ぐ。
-if [ -n "$(git status --porcelain)" ]; then
-  echo "✗ 未コミットの変更があります。コミットまたは退避してから実行してください。" >&2
-  exit 1
+# 未追跡ファイルも含め、意図しない作業中の状態からのリリースをデフォルトで防ぐ。
+# --allow-dirty でもデプロイ対象は作業ツリーではなく、コミット済みの main のSHA。
+DIRTY_STATUS=$(git status --porcelain)
+if [ -n "$DIRTY_STATUS" ]; then
+  if [ "$ALLOW_DIRTY" = 1 ]; then
+    echo "⚠ 未コミットの変更を無視します。リリース対象には含まれません:" >&2
+    printf '%s\n' "$DIRTY_STATUS" | sed 's/^/    /' >&2
+  else
+    echo "✗ 未コミットの変更があります。コミットまたは退避するか、--allow-dirty を指定してください。" >&2
+    exit 1
+  fi
 fi
 
 echo "▶ ${REMOTE} から ${MAIN}/${RELEASE} を取得..."

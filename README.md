@@ -27,3 +27,10 @@ scripts/release.sh
 `release` ブランチの CI が成功すると、検証済みの同一コミットが Fly.io へ
 デプロイされます。スクリプトは未コミットの変更、`origin/main` と一致しない
 ローカル `main`、fast-forward できない `release` を検出すると中断します。
+未コミットの変更を残したまま、コミット済みの `main` だけをリリースする場合は
+`--allow-dirty` を指定します。`--dry-run` と併用できます。
+
+```sh
+scripts/release.sh --dry-run --allow-dirty
+scripts/release.sh --allow-dirty
+```
