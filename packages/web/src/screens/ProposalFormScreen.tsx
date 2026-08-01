@@ -23,7 +23,7 @@ import { Callout } from '../components/Callout';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { YellowCardModal } from '../components/YellowCardModal';
 import { PushOfferDialog } from '../components/PushOfferDialog';
-import type { PushOfferResult } from '../push/client';
+import type { PushOfferKind, PushOfferResult } from '../push/client';
 import { PROPOSE_RULE_LABEL } from '../messages';
 import type { ProposalApi } from '../proposal/client';
 import { ProposalApiError } from '../proposal/client';
@@ -66,7 +66,7 @@ export function ProposalFormScreen({
   onLogin?: () => void;
   notification?: ReactNode;
   pushOffer?: {
-    shouldOffer: () => Promise<boolean>;
+    offer: () => Promise<PushOfferKind | null>;
     subscribe: () => Promise<PushOfferResult>;
     decline: () => void;
   };
@@ -87,7 +87,9 @@ export function ProposalFormScreen({
   const [slotHolder, setSlotHolder] = useState<ProposalListItem | null>(null);
   const [slotChecked, setSlotChecked] = useState(registered);
   const [slotLimited, setSlotLimited] = useState(false);
-  const [showPushOffer, setShowPushOffer] = useState(false);
+  const [pushOfferKind, setPushOfferKind] = useState<PushOfferKind | null>(
+    null,
+  );
   const shownCardIds = useRef(new Set<number>());
   const previousCardSummary = useRef<YellowCardSummary | null>(null);
 
@@ -212,7 +214,7 @@ export function ProposalFormScreen({
       setAccepted(response.proposal);
       if (registered && pushOffer) {
         try {
-          if (await pushOffer.shouldOffer()) setShowPushOffer(true);
+          setPushOfferKind(await pushOffer.offer());
         } catch {
           // Push の照会失敗で提案成功を失敗扱いにしない。
         }
@@ -459,11 +461,12 @@ export function ProposalFormScreen({
           }
         />
       )}
-      {showPushOffer && pushOffer && (
+      {pushOfferKind && pushOffer && (
         <PushOfferDialog
+          kind={pushOfferKind}
           subscribe={pushOffer.subscribe}
           decline={pushOffer.decline}
-          onClose={() => setShowPushOffer(false)}
+          onClose={() => setPushOfferKind(null)}
         />
       )}
     </div>

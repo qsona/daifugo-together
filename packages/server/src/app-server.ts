@@ -75,7 +75,12 @@ export interface AppServerOptions {
   >;
   push?: Pick<
     PushService,
-    'config' | 'subscribe' | 'unsubscribe' | 'getPreferences' | 'setPreferences'
+    | 'config'
+    | 'subscribe'
+    | 'unsubscribe'
+    | 'getPreferences'
+    | 'setPreferences'
+    | 'markInstalled'
   >;
   adminScreening?: {
     token: string;
@@ -974,7 +979,10 @@ export function createAppServer(options: AppServerOptions): AppServer {
     const isConfig = pathname === '/api/push/config';
     const isSubscriptions = pathname === '/api/push/subscriptions';
     const isPreferences = pathname === '/api/push/preferences';
-    if (!isConfig && !isSubscriptions && !isPreferences) return false;
+    const isInstalled = pathname === '/api/push/installed';
+    if (!isConfig && !isSubscriptions && !isPreferences && !isInstalled) {
+      return false;
+    }
     if (isConfig) {
       if (request.method !== 'GET') {
         response.setHeader('allow', 'GET');
@@ -990,6 +998,22 @@ export function createAppServer(options: AppServerOptions): AppServer {
     }
     if (!options.push) {
       writeJson(response, 503, { error: 'push_unavailable' });
+      return true;
+    }
+    if (isInstalled) {
+      if (request.method !== 'POST') {
+        response.setHeader('allow', 'POST');
+        writeJson(response, 405, { error: 'method_not_allowed' });
+        return true;
+      }
+      const marked = options.push.markInstalled(bearerToken(request));
+      if (marked.status === 204) {
+        response.statusCode = 204;
+        response.setHeader('cache-control', 'no-store');
+        response.end();
+      } else {
+        writeJson(response, marked.status, marked.body);
+      }
       return true;
     }
     const allowed = isSubscriptions ? 'POST, DELETE' : 'GET, PUT';

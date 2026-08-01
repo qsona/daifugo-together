@@ -1,4 +1,5 @@
 import { getSafeLocalStorage } from '../browser-storage';
+import { installRequired, standalone } from './install';
 
 const TOKEN_KEY = 'daifugo.userToken';
 const DECLINED_KEY = 'daifugo.pushOfferDeclined';
@@ -15,6 +16,11 @@ export type PushOfferResult =
   | 'unsupported'
   | 'ios_install_required'
   | 'denied';
+/**
+ * 提案送信直後に出す提示の種類。
+ * iOS のタブでは Push API 自体が無いので、購読ではなくホーム画面追加の案内になる。
+ */
+export type PushOfferKind = 'push' | 'install';
 
 function applicationServerKey(value: string): Uint8Array<ArrayBuffer> {
   const padding = '='.repeat((4 - (value.length % 4)) % 4);
@@ -29,24 +35,11 @@ function applicationServerKey(value: string): Uint8Array<ArrayBuffer> {
   return bytes;
 }
 
-function iosDevice(): boolean {
-  return (
-    /iPad|iPhone|iPod/u.test(navigator.userAgent) ||
-    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
-  );
-}
-
-function standalone(): boolean {
-  return (
-    window.matchMedia('(display-mode: standalone)').matches ||
-    (navigator as Navigator & { standalone?: boolean }).standalone === true
-  );
-}
-
 export class PushClient {
   readonly #baseUrl: string;
   readonly #storage: Pick<Storage, 'getItem' | 'setItem'>;
   readonly #fetch: typeof fetch;
+  #installReported = false;
 
   constructor(
     baseUrl: string,
@@ -66,14 +59,21 @@ export class PushClient {
     );
   }
 
-  async shouldOffer(): Promise<boolean> {
-    if (!this.supported() || Notification.permission === 'denied') return false;
-    if (this.#storage.getItem(DECLINED_KEY) === '1') return false;
+  /**
+   * 何を提示すべきか。`supported()` を先に見ると iOS のタブでは常に何も出せなくなるため、
+   * ホーム画面追加の判定を先に置く(E17 §2.2)。
+   */
+  async offer(): Promise<PushOfferKind | null> {
+    if (this.#storage.getItem(DECLINED_KEY) === '1') return null;
     const config = await this.config();
-    if (!config.available) return false;
+    if (!config.available) return null;
+    if (installRequired()) return 'install';
+    if (!this.supported() || Notification.permission === 'denied') return null;
     const registration = await navigator.serviceWorker.getRegistration('/');
-    if (!registration) return false;
-    return (await registration.pushManager.getSubscription()) === null;
+    if (!registration) return null;
+    return (await registration.pushManager.getSubscription()) === null
+      ? 'push'
+      : null;
   }
 
   declineOffer(): void {
@@ -81,8 +81,10 @@ export class PushClient {
   }
 
   async subscribeProposalResults(): Promise<PushOfferResult> {
+    // iOS のタブでは Notification/PushManager が存在しないため、
+    // supported() より先に判定しないと「非対応」と誤って伝えてしまう。
+    if (installRequired()) return 'ios_install_required';
     if (!this.supported()) return 'unsupported';
-    if (iosDevice() && !standalone()) return 'ios_install_required';
     // WebKit を含むブラウザの user activation を失わないよう、
     // クリックから最初の非同期処理として許諾を要求する。
     const permission = await Notification.requestPermission();
@@ -107,6 +109,22 @@ export class PushClient {
       Object.fromEntries(PROPOSAL_PUSH_TYPES.map((type) => [type, true])),
     );
     return 'subscribed';
+  }
+
+  /**
+   * ホーム画面アプリとして起動していることを 1 セッションに 1 回だけ記録する(E17 §2.7)。
+   * 計測が落ちてもアプリの動作には影響させない。
+   */
+  async reportInstalled(): Promise<void> {
+    if (this.#installReported || !standalone()) return;
+    this.#installReported = true;
+    try {
+      const config = await this.config();
+      if (!config.available) return;
+      await this.#request('/api/push/installed', { method: 'POST' });
+    } catch {
+      // 計測のみ。失敗は無視する。
+    }
   }
 
   async preferences(): Promise<PushPreferences> {

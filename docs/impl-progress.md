@@ -30,6 +30,16 @@
 - 検証: `CI=true pnpm verify` で format / lint / design lint / typecheck / **134 files・965 tests** / 全 build が成功。さらに通知/Push/パイプライン/通知画面の対象テストと、実 HTTP + Socket.IO 30 テストを個別実行して成功
 - 375×812 実画面: メニューのベル、空状態、未読通知カード、通知設定、通知タップ遷移、図鑑のベル、待機/対局中のベル非表示を確認。確認画面は `innerWidth = scrollWidth = 375`、ブラウザ警告/エラー 0。センタータップは `opened_via=center`、Push 深いリンクは `opened_via=push` と URL パラメータ除去を実 DB で確認
 
+## E17 ホーム画面追加(A2HS)の促進(2026-08-02)
+
+- 背景: iOS では Push はホーム画面 Web App 限定だが、iOS のタブには `Notification` / `PushManager` が存在しない。旧実装は対応判定(`supported()`)を先に見ていたため、**iPhone の Safari では提案送信後の提示が出ず、設定画面から押しても「この端末では設定できません」と誤って伝えていた**(`ios_install_required` へ到達しない)
+- 修正: `installRequired()`(iOS かつ非 standalone)を対応判定より先に評価する。`PushClient.shouldOffer()` は `offer(): 'push' | 'install' | null` に置き換え、iOS のタブではホーム画面追加の案内を出す
+- 案内 `InstallGuide`: iOS Safari / iOS のその他ブラウザ / アプリ内ブラウザ(LINE・X 等)/ Chromium 系 / それ以外で分岐。共有アイコンの図と番号付き手順、アプリ内ブラウザには「Safari で開く」+ リンクのコピー、Chromium 系には `beforeinstallprompt` を保持した 1 タップの「アプリとして追加」。ホーム画面アプリはブラウザとストレージを共有せず**再ログインが要る**ことを明記した。通知設定画面からは常時たどれる
+- 計測: `users.standalone_seen_at` を追加し、接続確立後に standalone なら `POST /api/push/installed` を 1 セッション 1 回だけ呼ぶ(匿名でも記録。新テーブル・新運用物なし)。集計 SQL は E17 §2.7
+- 裁定: decision-log G-23。せがまない方針(WP-D3)は維持し、断った端末には追加案内も出さない
+- 検証: `pnpm typecheck` / `pnpm lint` / `pnpm lint:design` / `pnpm format:check` / `pnpm test`(**136 files・998 tests**)が成功。375×812 の通知設定で、通常ブラウザ表示と iPhone UA での手順表示(共有アイコン・3 手順・再ログイン注記)、ブラウザ警告/エラー 0 を確認
+- 残: iOS 実機での「追加 → 再ログイン → 購読」通しは WP-T2(VAPID 設定)後の受入で確認する
+
 ## インゲーム演出改善(2026-07-30)
 
 - 状態: 初回独立完了レビューの Important 2件と Minor 1件を修正。再レビューは要件 `PASS` / 品質 `APPROVED`。disabledの公開契約に関する指摘は下記裁定により現仕様を維持

@@ -28,6 +28,23 @@ export class PushRepository {
     return row?.google_sub !== null && row?.google_sub !== undefined;
   }
 
+  /** ホーム画面アプリからの初回起動時刻。A2HS 施策の効果測定用(E17 §2.7)。 */
+  markInstalled(userId: string, now: number): void {
+    this.#sqlite
+      .prepare(
+        `UPDATE users SET standalone_seen_at = COALESCE(standalone_seen_at, ?)
+         WHERE user_id = ?`,
+      )
+      .run(now, userId);
+  }
+
+  installedAt(userId: string): number | null {
+    const row = this.#sqlite
+      .prepare('SELECT standalone_seen_at FROM users WHERE user_id = ?')
+      .get(userId) as { standalone_seen_at: number | null } | undefined;
+    return row?.standalone_seen_at ?? null;
+  }
+
   upsert(
     userId: string,
     subscription: StoredPushSubscription,

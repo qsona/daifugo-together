@@ -81,6 +81,16 @@ E16 NotificationService.publish()
 - **Service Worker**: `packages/web/` に SW ソースを新設(Vite のビルドに組み込む。プラグイン選定は実装時。自前の小さな SW で足りる想定 — プリキャッシュはせず、`push` / `notificationclick` ハンドラ + 最小の fetch フォールバックのみ)。**アプリ本体のオフラインキャッシュは本 Epic ではやらない**(キャッシュ起因の「更新が届かない」事故は Push の価値を損なう。§5)。
 - **iOS(WP-T1 確認済み: 2026-08-01)**: WebKit の公式情報で、iOS/iPadOS 16.4 以降は**ホーム画面に追加した Web App**が Web Push を使え、許諾要求はボタン操作などの直接的なユーザー操作から行う必要があることを確認した。実装は standalone 判定で「ホーム画面に追加」案内に分岐し、提案送信後の「通知を受け取る」操作だけが `Notification.requestPermission()` を呼ぶ。Safari 18.4 の Declarative Web Push は任意の新方式であるため、初期実装は幅広い互換性を優先し Push API + Service Worker を維持する。出典: [WebKit: Web Push for Web Apps on iOS and iPadOS](https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/), [Apple: Sending web push notifications](https://developer.apple.com/documentation/usernotifications/sending-web-push-notifications-in-web-apps-and-browsers), [WebKit: Meet Declarative Web Push](https://webkit.org/blog/16535/meet-declarative-web-push/)。
 
+#### ホーム画面追加(A2HS)の促進(2026-08-02 追加。G-23)
+
+Push の受け皿は「ホーム画面に追加されていること」であり、iOS ではそれが**必須**になる。判定と案内の設計は次のとおり。
+
+- **判定順**: iOS のタブでは `Notification` / `PushManager` がそもそも存在しない。したがって「Push 対応か」を先に見ると iOS では常に「非対応」に落ちてしまう。`PushClient.offer()` / `subscribeProposalResults()` は**ホーム画面追加が必要かどうかを対応判定より先に**評価し、`install` 種別の提示・`ios_install_required` を返す(`packages/web/src/push/install.ts` の `installRequired()`)。
+- **自動プロンプトは無い**: iOS には `beforeinstallprompt` に相当する API が無く、共有シートからの手動操作しかない。Chromium 系だけは `beforeinstallprompt` を起動時に保持し(`watchInstallPrompt`)、1 タップの「アプリとして追加」を出す。
+- **案内の中身**(`InstallGuide`): ブラウザ種別で分岐する。iOS Safari は画面下・iOS Chrome 等は画面上の共有ボタンを**図(共有アイコン)付き**で示し、「ホーム画面に追加」までを番号付きの手順にする。LINE・X・Instagram などのアプリ内ブラウザからは追加できないため、「Safari で開く」案内とリンクのコピーに分岐する。
+- **正直に伝える制約**: iOS のホーム画面 Web App はブラウザとストレージ(cookie / localStorage)を共有しないため、追加後は匿名の新規ユーザーとして起動し、**もう一度 Google ログインが必要**になる。案内の末尾でこれを明示する(黙って追加させると「提案が消えた」ように見える)。実機での確認は WP-T2 の受入項目に含める。
+- **せがまない(WP-D3 の維持)**: 提示は提案送信直後の 1 回のみ。「今後は出さない」を選んだ端末には追加案内も出さない。手順は通知設定画面から常時たどれるため、閉じても失われない。
+
 ### 2.3 データモデル
 
 ```sql
@@ -110,6 +120,7 @@ CREATE TABLE IF NOT EXISTS push_preferences (
 - 1 ユーザー n 端末 = n 購読行。端末の区別はしない(endpoint が事実上の端末 ID)。
 - `push_preferences` に行が無い種別は**既定 OFF**。オプトイン(WP-D3)で承諾した場合に「自分の提案の結果」系(`proposal_released` / `proposal_rejected` / `proposal_failed`)を ON にする。それ以外の種別(予約種別含む)は設定画面で明示的に ON にしたときだけ送る(施策提案 §2 のオプトイン設計)。
 - 既存の起動時マイグレーション方式(`persistence.ts`)に従う。E16 の `notifications` とは独立したテーブルで、E16 側への変更はない。
+- A2HS 計測のため `users.standalone_seen_at INTEGER`(初回のホーム画面起動時刻。NULL=未観測)を追加する(2026-08-02。§2.7)。テーブルは増やさない。
 
 ### 2.4 購読 API と対象者ゲート
 
@@ -121,6 +132,7 @@ CREATE TABLE IF NOT EXISTS push_preferences (
 | `POST /api/push/subscriptions` | 購読登録。body = PushSubscription JSON(endpoint + keys)。**登録済みユーザー(`google_sub IS NOT NULL`)でなければ 403 `registration_required`**(E15 §2.6 の提案 API ゲートと同じエラー語彙)。同一 endpoint の再登録は upsert(冪等) |
 | `DELETE /api/push/subscriptions` | body の endpoint の購読を失効(`revoked_at`)。ブラウザ側の購読解除と対で呼ぶ |
 | `GET /api/push/preferences` / `PUT /api/push/preferences` | 種別ごとの ON/OFF の取得・更新(センター+Push チャネルの種別のみ受け付ける) |
+| `POST /api/push/installed` | ホーム画面アプリからの起動を記録(§2.7)。**購読と違い匿名ユーザーでも 204** — 追加直後はログアウト状態になるため、その層こそ観測したい。未知トークンは 401、VAPID 未設定は 503 |
 
 - 匿名ユーザーにはクライアント側で購読導線自体を出さない(WP-D2)。API の 403 は防御の二重化。
 - E15 のログアウト(トークン破棄→新規匿名化)時は、クライアントがブラウザ購読を解除し DELETE を呼ぶ(共有端末で他人に通知が届き続けることを防ぐ。§2.9 エッジケース)。
@@ -141,6 +153,9 @@ CREATE TABLE IF NOT EXISTS push_preferences (
 ### 2.7 計測
 
 - Push 経由の再訪 = SW の `notificationclick` で開く URL に **`?src=push` と `nid=<notificationId>` の両方**を付与する(SW はペイロードの `notificationId` を URL に転写する。開いたページは SW のペイロードを直接参照できないため、URL パラメータだけで `POST /api/notifications/:id/opened` を打てることが要件)。クライアントは起動時に `src=push` と `nid` を検出して opened を記録し、パラメータを URL から除去する。センター内タップと同じ `opened_at` に集約され、**流入元(センター/Push)は URL パラメータ経由で区別して記録**する(`notifications` に `opened_via` 列を足すか、opened API の body で渡す — 実装時に軽い方を選ぶ。E16 §2.6 の集計 SQL がチャネル別に切れることが要件)。
+- **A2HS 計測(2026-08-02 追加)**: ホーム画面アプリからの起動を `users.standalone_seen_at`(初回のみ記録)に残す。クライアントは接続確立後に standalone 判定が真なら `POST /api/push/installed` を 1 セッション 1 回だけ呼ぶ。新テーブル・新運用物は増やさない。
+  - 追加した人数: `SELECT COUNT(*) FROM users WHERE standalone_seen_at IS NOT NULL;`
+  - 追加したが購読していない人数(案内の次の落ち口): `standalone_seen_at IS NOT NULL` かつ `push_subscriptions` に有効行が無いユーザー。
 - 観測したい指標: Push 許諾率(オプトイン提示→承諾)、Push 送信数/開封数(種別別)、Push 経由セッションの提案者 7 日再訪率への寄与(施策提案 §2 の期待効果)。当面 SQL 直読み(E10 の流儀)。
 
 ### 2.8 設定・シークレット
@@ -163,7 +178,8 @@ CREATE TABLE IF NOT EXISTS push_preferences (
 | 別端末ログイン(E15 分岐 2) | 端末 A・B それぞれの購読が同一ユーザーに並ぶ(正常)。両端末に届く |
 | 匿名ユーザーが購読 API を直叩き | 403 `registration_required`(§2.4) |
 | VAPID 未設定環境 | 導線非表示。config は 200 + `available: false`、購読系 API は 503 `push_unavailable`(§2.8) |
-| iOS で PWA 未追加 | Push 購読不可(前提)。オプトイン導線がホーム画面追加の案内に分岐(§2.2。WP-T1 の確認結果で確定) |
+| iOS で PWA 未追加 | Push 購読不可(前提)。提示は「非対応」ではなく**ホーム画面追加の手順案内**に分岐する(§2.2)。判定は対応判定より先に行う |
+| アプリ内ブラウザ(LINE・X 等)から開いている | ホーム画面に追加できないため、「Safari で開く」案内とリンクのコピーに分岐する(§2.2) |
 | 送信時にプロセス再起動 | 送り漏れはあり得る(fire-and-forget)。センターが正なので許容(§2.1) |
 
 ### 2.10 テスト戦略

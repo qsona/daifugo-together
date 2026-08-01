@@ -209,4 +209,35 @@ describe('E17 Web Push', () => {
     });
     persistence.close();
   });
+
+  it('ホーム画面アプリからの起動は匿名でも記録し、初回時刻を保つ', () => {
+    const persistence = new SqlitePersistence(':memory:');
+    const anonymous = persistence.sessions.resolve(undefined);
+    let now = 100;
+    const service = new PushService(persistence.push, {
+      publicKey: 'public',
+      now: () => now,
+    });
+    const seenAt = () => persistence.push.installedAt(anonymous.userId);
+
+    expect(service.markInstalled(anonymous.userToken)).toMatchObject({
+      status: 204,
+    });
+    expect(seenAt()).toBe(100);
+    now = 200;
+    expect(service.markInstalled(anonymous.userToken)).toMatchObject({
+      status: 204,
+    });
+    expect(seenAt()).toBe(100);
+    expect(service.markInstalled('unknown-token')).toMatchObject({
+      status: 401,
+      body: { error: 'unauthorized' },
+    });
+    expect(
+      new PushService(persistence.push, { available: false }).markInstalled(
+        anonymous.userToken,
+      ),
+    ).toMatchObject({ status: 503, body: { error: 'push_unavailable' } });
+    persistence.close();
+  });
 });

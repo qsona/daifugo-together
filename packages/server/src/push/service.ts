@@ -121,6 +121,26 @@ export class PushService {
     return { status: 204 as const };
   }
 
+  /**
+   * ホーム画面アプリからの起動を記録する。
+   * 購読と違い匿名ユーザーでも記録する — 追加直後はログアウト状態になるため、
+   * 「追加したが登録していない」層こそ観測したい(E17 §2.7)。
+   */
+  markInstalled(token: string | null) {
+    if (!this.#publicKey) {
+      return {
+        status: 503 as const,
+        body: { error: 'push_unavailable' as const },
+      };
+    }
+    const userId = token ? this.#repository.userIdForToken(token) : null;
+    if (!userId) {
+      return { status: 401 as const, body: { error: 'unauthorized' as const } };
+    }
+    this.#repository.markInstalled(userId, this.#now());
+    return { status: 204 as const };
+  }
+
   getPreferences(token: string | null) {
     const gated = this.#registeredUser(token);
     if ('error' in gated) return gated;

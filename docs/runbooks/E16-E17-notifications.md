@@ -63,6 +63,13 @@ curl -fsSI https://daifugo-together.fly.dev/service-worker.js
 
 iOS/iPadOS 16.4 以降を使う。Safari の共有メニューからホーム画面に追加し、追加したアプリから上記手順を行う。Safari タブのままでは「ホーム画面に追加」案内になり、ブラウザ許諾を直接出さないことを確認する。
 
+追加の確認項目(2026-08-02 の A2HS 促進。E17 §2.2):
+
+1. Safari タブで提案を送信すると、「非対応」ではなく共有ボタンの図つきの追加手順が出る。通知設定からも同じ手順にたどれる。
+2. **ホーム画面に追加したアプリを開いたとき、Safari のログイン状態が引き継がれず匿名になる**ことを実機で確かめる(案内の「もう一度 Google でログイン」の記述が実態と合っているか)。挙動が違えば E17 §2.2 の記述を実機結果へ合わせる。
+3. 追加後に再ログインして提案 → 購読まで通せることを確認する。`SELECT COUNT(*) FROM users WHERE standalone_seen_at IS NOT NULL;` が増えることも合わせて見る。
+4. LINE や X のアプリ内ブラウザで開くと、「Safari で開く」案内とリンクのコピーが出る。
+
 ## 6. 計測 SQL
 
 本番 DB は `docs/runbooks/E13-production.md` の手順で readonly 接続する。以下は SQLite で実行する。日付は JST にそろえる。

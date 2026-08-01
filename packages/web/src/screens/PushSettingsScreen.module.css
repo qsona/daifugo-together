@@ -22,6 +22,25 @@
   min-height: 44px;
 }
 
+.install {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  text-align: left;
+}
+
+.installTitle {
+  margin: 0;
+  font-size: var(--font-size-title-s);
+  line-height: var(--line-height-heading);
+}
+
+.installLead {
+  margin: 0;
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+}
+
 .preference input {
   width: 24px;
   height: 24px;

@@ -1,0 +1,46 @@
+/* ホーム画面追加の手順。手順は左揃えで読ませ、注意書きは地の説明として淡く置く。 */
+
+.guide {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-3);
+  text-align: left;
+}
+
+.lead {
+  margin: 0;
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+}
+
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-6);
+  background: var(--color-bg-subtle);
+  border: var(--border-control) solid var(--color-border-subtle);
+  border-radius: var(--radius-m);
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+}
+
+.steps li::marker {
+  font-weight: var(--font-weight-heavy);
+  color: var(--color-text-secondary);
+}
+
+.icon {
+  vertical-align: text-bottom;
+  margin: 0 var(--space-1);
+  color: var(--color-action-primary);
+}
+
+.note {
+  margin: 0;
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-caption);
+  color: var(--color-text-secondary);
+}

@@ -227,6 +227,7 @@ export class SqlitePersistence implements RoomPersistencePort {
         proposals_seen_at INTEGER,
         notifications_seeded_at INTEGER,
         notifications_seeded_rule_id TEXT,
+        standalone_seen_at INTEGER,
         created_at INTEGER NOT NULL
       );
       CREATE TABLE IF NOT EXISTS replay_records (
@@ -339,6 +340,11 @@ export class SqlitePersistence implements RoomPersistencePort {
     ) {
       this.#sqlite.exec(
         'ALTER TABLE users ADD COLUMN notifications_seeded_rule_id TEXT',
+      );
+    }
+    if (!userColumns.some(({ name }) => name === 'standalone_seen_at')) {
+      this.#sqlite.exec(
+        'ALTER TABLE users ADD COLUMN standalone_seen_at INTEGER',
       );
     }
     const notificationColumns = this.#sqlite

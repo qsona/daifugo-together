@@ -1,6 +1,6 @@
-import { render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { PushSettingsScreen } from './PushSettingsScreen';
 
@@ -23,7 +23,32 @@ function api(available: boolean) {
   };
 }
 
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
+
 describe('PushSettingsScreen', () => {
+  it('iOSのタブでは購読ボタンではなく追加手順を出す', async () => {
+    vi.stubGlobal('navigator', {
+      userAgent:
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) Version/17.5 Mobile/15E148 Safari/604.1',
+      platform: 'iPhone',
+      maxTouchPoints: 5,
+    });
+    const available = api(true);
+    render(<PushSettingsScreen api={available} onBack={() => undefined} />);
+    expect(
+      await screen.findByText(
+        'iPhone・iPadでは、ホーム画面に追加したアプリだけが通知を受け取れます。',
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText('「ホーム画面に追加」')).toBeTruthy();
+    expect(
+      screen.queryByRole('button', { name: 'この端末で通知を受け取る' }),
+    ).toBeNull();
+  });
+
   it('VAPID未設定環境では購読導線を出さない', async () => {
     const unavailable = api(false);
     render(<PushSettingsScreen api={unavailable} onBack={() => undefined} />);

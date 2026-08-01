@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 
 import { AppBar } from '../components/AppBar';
 import { Button } from '../components/Button';
+import { InstallGuide } from '../components/InstallGuide';
+import { detectInstallEnvironment } from '../push/install';
 import {
   PROPOSAL_PUSH_TYPES,
   type PushClient,
@@ -36,11 +38,14 @@ export function PushSettingsScreen({
   const [message, setMessage] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [available, setAvailable] = useState(false);
+  const [environment] = useState(() => detectInstallEnvironment());
+  // iOS のタブでは購読自体ができないため、購読ボタンではなく追加手順を出す(E17 §2.2)。
+  const installRequired = environment.ios && !environment.standalone;
 
   const subscriptionMessage = (result: PushOfferResult): string => {
     if (result === 'subscribed') return 'この端末への通知を設定しました。';
     if (result === 'ios_install_required') {
-      return 'iPhone・iPadでは、ホーム画面に追加したアプリから設定してください。';
+      return 'iPhone・iPadでは、ホーム画面に追加したアプリだけが通知を受け取れます。下の手順で追加してください。';
     }
     if (result === 'denied') return '端末で通知が許可されませんでした。';
     return 'この端末ではPush通知を設定できません。';
@@ -103,7 +108,18 @@ export function PushSettingsScreen({
             ))}
           </fieldset>
         )}
-        {available && (
+        {!environment.standalone && (
+          <section className={styles.install}>
+            <h2 className={styles.installTitle}>ホーム画面に追加する</h2>
+            {installRequired && (
+              <p className={styles.installLead}>
+                iPhone・iPadでは、ホーム画面に追加したアプリだけが通知を受け取れます。
+              </p>
+            )}
+            <InstallGuide environment={environment} />
+          </section>
+        )}
+        {available && !installRequired && (
           <Button
             variant="primary"
             size="small"

@@ -788,6 +788,12 @@ function ConnectedApp({
     });
   }, [notificationApi, state.connection]);
 
+  // ホーム画面アプリとしての起動を記録する(A2HS 施策の効果測定。E17 §2.7)。
+  useEffect(() => {
+    if (state.connection !== 'ready') return;
+    void pushApi.reportInstalled();
+  }, [pushApi, state.connection]);
+
   useEffect(() => {
     const restoreOverlayFromUrl = () => {
       const route = parseRoomRoute(window.location.pathname);
@@ -1617,7 +1623,7 @@ function ConnectedApp({
         onLogin={beginLogin}
         notification={notificationBell}
         pushOffer={{
-          shouldOffer: () => pushApi.shouldOffer(),
+          offer: () => pushApi.offer(),
           subscribe: () => pushApi.subscribeProposalResults(),
           decline: () => pushApi.declineOffer(),
         }}
