@@ -13,3 +13,17 @@ corepack enable
 pnpm install --frozen-lockfile
 pnpm verify
 ```
+
+## 本番リリース
+
+`main` への push では本番デプロイされません。`main` のリリース対象を確認し、
+次のスクリプトで `release` ブランチへ fast-forward push します。
+
+```sh
+scripts/release.sh --dry-run
+scripts/release.sh
+```
+
+`release` ブランチの CI が成功すると、検証済みの同一コミットが Fly.io へ
+デプロイされます。スクリプトは未コミットの変更、`origin/main` と一致しない
+ローカル `main`、fast-forward できない `release` を検出すると中断します。
