@@ -1,5 +1,6 @@
 import type { PipelineJob, PipelineRepository } from './repository.js';
 import type { ProposalRepository } from '../proposal/repository.js';
+import type { NotificationService } from '../notification/service.js';
 
 type JsonObject = Record<string, unknown>;
 
@@ -49,15 +50,19 @@ export class PipelineJobService {
   readonly #pipeline: PipelineRepository;
   readonly #proposals: ProposalRepository;
   readonly #now: () => number;
+  readonly #notifications:
+    Pick<NotificationService, 'publishProposal'> | undefined;
 
   constructor(
     pipeline: PipelineRepository,
     proposals: ProposalRepository,
     now: () => number = Date.now,
+    notifications?: Pick<NotificationService, 'publishProposal'>,
   ) {
     this.#pipeline = pipeline;
     this.#proposals = proposals;
     this.#now = now;
+    this.#notifications = notifications;
   }
 
   next() {
@@ -260,7 +265,7 @@ export class PipelineJobService {
       return { status: 'conflict', error: 'stale_job_phase' };
     }
     const now = this.#now();
-    return this.#pipeline.transaction(() => {
+    const result = this.#pipeline.transaction(() => {
       const job = this.#pipeline.transitionJob(
         jobId,
         from as PipelineJob['phase'],
@@ -285,5 +290,12 @@ export class PipelineJobService {
       }
       return { status: 'failed', job } as const;
     });
+    if (result.status === 'failed') {
+      const proposal = this.#proposals.findById(result.job.proposalId);
+      if (proposal) {
+        this.#notifications?.publishProposal('proposal_failed', proposal);
+      }
+    }
+    return result;
   }
 }

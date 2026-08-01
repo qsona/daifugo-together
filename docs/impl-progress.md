@@ -20,6 +20,16 @@
 - **フェーズ 2 / E11 RV-01・RV-02 プロセス2完了・完了再レビューGO**: 待機/対局画面の固定ルール一覧と公開ルール図鑑を接続。方向性レビューのImportant 2件と初回完了レビューのImportant 1件を反映し、待機中のregistry変更追従、最終API契約、詳細・再試行・競合fetch・公開API保護、実DB境界、375×812実画面まで仕上げた
 - E1〜E3 の実装記録は本書末尾の「並行進行」節、E13 は「E13」節。E4 の未解消の開発者判断は「詰まっている点」に残っている(1〜4・7・8・11)
 
+## E16 通知センター / E17 Web Push(2026-08-01)
+
+- 状態: E16 NC-01〜03、E17 WP-01〜03 のコード実装済み。VAPID 本番設定とデスクトップ/iOS 実 Push 受入は [E16/E17 通知・Web Push 受入 runbook](runbooks/E16-E17-notifications.md) の実施待ち
+- 進行裁定: 開発者が E17 の当初ゲート(E15 リリース + E16 計測レビュー)を今回明示的に上書きし、E16 → E17 全体の順で実装した。ゲートの計測方法は効果検証用に残した
+- E16: 5 種レジストリ、SQLite の冪等通知、`rule_debut` 遅延実体化、Bearer API、ベル/一覧/既読、Socket.IO 同期・新着、`opened_via` 計測を追加。通知失敗は提案状態遷移に影響させない
+- E17: キャッシュしない PWA 基盤、登録済みユーザーのみの文脈付き購読、種別設定/再試行/端末停止、共通文面の Web Push、21:00〜7:00 JST 抑止、404/410 失効、Push 流入記録、ログアウト解除を追加
+- WP-T1: WebKit / Apple の公式情報で iOS/iPadOS 16.4+ のホーム画面 Web App 要件と直接操作からの許諾要求を確認。Safari 18.4 の Declarative Web Push は任意のため、初期は Push API + Service Worker を採用
+- 検証: `CI=true pnpm verify` で format / lint / design lint / typecheck / **134 files・965 tests** / 全 build が成功。さらに通知/Push/パイプライン/通知画面の対象テストと、実 HTTP + Socket.IO 30 テストを個別実行して成功
+- 375×812 実画面: メニューのベル、空状態、未読通知カード、通知設定、通知タップ遷移、図鑑のベル、待機/対局中のベル非表示を確認。確認画面は `innerWidth = scrollWidth = 375`、ブラウザ警告/エラー 0。センタータップは `opened_via=center`、Push 深いリンクは `opened_via=push` と URL パラメータ除去を実 DB で確認
+
 ## インゲーム演出改善(2026-07-30)
 
 - 状態: 初回独立完了レビューの Important 2件と Minor 1件を修正。再レビューは要件 `PASS` / 品質 `APPROVED`。disabledの公開契約に関する指摘は下記裁定により現仕様を維持

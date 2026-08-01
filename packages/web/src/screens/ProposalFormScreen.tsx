@@ -9,13 +9,21 @@ import {
   type ProposalValidationError,
   type YellowCardSummary,
 } from '@daifugo/core';
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from 'react';
 
 import { AppBar } from '../components/AppBar';
 import { Button } from '../components/Button';
 import { Callout } from '../components/Callout';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { YellowCardModal } from '../components/YellowCardModal';
+import { PushOfferDialog } from '../components/PushOfferDialog';
+import type { PushOfferResult } from '../push/client';
 import { PROPOSE_RULE_LABEL } from '../messages';
 import type { ProposalApi } from '../proposal/client';
 import { ProposalApiError } from '../proposal/client';
@@ -49,11 +57,19 @@ export function ProposalFormScreen({
   onBack,
   registered = true,
   onLogin,
+  notification,
+  pushOffer,
 }: {
   api: ProposalApi;
   onBack: () => void;
   registered?: boolean;
   onLogin?: () => void;
+  notification?: ReactNode;
+  pushOffer?: {
+    shouldOffer: () => Promise<boolean>;
+    subscribe: () => Promise<PushOfferResult>;
+    decline: () => void;
+  };
 }) {
   const [kind, setKind] = useState<'local' | 'original'>('local');
   const [prefectureCode, setPrefectureCode] = useState('');
@@ -71,6 +87,7 @@ export function ProposalFormScreen({
   const [slotHolder, setSlotHolder] = useState<ProposalListItem | null>(null);
   const [slotChecked, setSlotChecked] = useState(registered);
   const [slotLimited, setSlotLimited] = useState(false);
+  const [showPushOffer, setShowPushOffer] = useState(false);
   const shownCardIds = useRef(new Set<number>());
   const previousCardSummary = useRef<YellowCardSummary | null>(null);
 
@@ -193,6 +210,13 @@ export function ProposalFormScreen({
     try {
       const response = await api.submit(request);
       setAccepted(response.proposal);
+      if (registered && pushOffer) {
+        try {
+          if (await pushOffer.shouldOffer()) setShowPushOffer(true);
+        } catch {
+          // Push の照会失敗で提案成功を失敗扱いにしない。
+        }
+      }
     } catch (error) {
       if (error instanceof ProposalApiError) {
         if (error.status === 403 && error.code === 'anonymous_inflight_limit') {
@@ -226,7 +250,11 @@ export function ProposalFormScreen({
   ) {
     return (
       <div className={screen.screen}>
-        <AppBar title={PROPOSE_RULE_LABEL} onBack={onBack} />
+        <AppBar
+          title={PROPOSE_RULE_LABEL}
+          onBack={onBack}
+          notification={notification}
+        />
         <main className={screen.body}>
           {slotHolder && (
             <div className={styles.accepted} role="status">
@@ -254,7 +282,11 @@ export function ProposalFormScreen({
 
   return (
     <div className={screen.screen}>
-      <AppBar title={PROPOSE_RULE_LABEL} onBack={onBack} />
+      <AppBar
+        title={PROPOSE_RULE_LABEL}
+        onBack={onBack}
+        notification={notification}
+      />
       <main className={screen.body}>
         {cardSummary?.active === 1 && !cardSummary.suspension && (
           <div className={styles.warning} role="status">
@@ -425,6 +457,13 @@ export function ProposalFormScreen({
           onClose={
             animateSuspension ? () => setAnimateSuspension(false) : onBack
           }
+        />
+      )}
+      {showPushOffer && pushOffer && (
+        <PushOfferDialog
+          subscribe={pushOffer.subscribe}
+          decline={pushOffer.decline}
+          onClose={() => setShowPushOffer(false)}
         />
       )}
     </div>

@@ -1,7 +1,7 @@
 # E16: アプリ内通知センター
 
 - 作成日: 2026-07-29
-- 状態: 提案(方向性は 2026-07-29 に開発者承認済み。詳細レビュー待ち)
+- 状態: 実装済み(2026-08-01。NC-01〜03。本番受入は runbook の実施待ち)
 - 一次情報源: `docs/リテンション施策提案.md`(§1.2・§2 施策A段階1)/ `docs/epics/E05-rule-proposal.md`(§3.3 通知方式の比較検討)/ `docs/epics/E12-tech-stack.md`(単一プロセス・SQLite・Socket.IO)/ `docs/epics/E03-multiplayer.md`(Socket.IO 接続・匿名トークン)
 
 > **注意(実装済みコードとの関係)**: 提案の状態機械・案 A の未読バッジ(`users.proposals_seen_at`)・Socket.IO 接続基盤は本書の作成時点で**実装済み**である。本書は新規機能(通知センター)の設計と、**実装済みコードへの差分**(§4)を分けて書く。実装エージェントは §4 を作業リストとして使うこと。
@@ -117,7 +117,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_dedupe
 - `dedupe_key` はイベント固有 ID(提案系 = `proposalId`、`rule_debut` = `ruleId`)。パイプラインの at-least-once 再実行(E05 §2.2 の `noop` 設計)で同じ通知が二重に積まれない。
 - 既存の起動時マイグレーション方式(`persistence.ts` の `CREATE TABLE IF NOT EXISTS` + `PRAGMA table_info` による列追加)に従う。
 - **個人宛(audience=user)**: イベント発生時に対象ユーザーの行を 1 件 INSERT(fan-out on write)。対象は常に 1 人(提案者)なので書き込みは増えない。
-- **全ユーザー宛(audience=broadcast、現状 `rule_debut` のみ)**: 全 `users` 行への一斉 INSERT は行わない(一見客の匿名行を含め無際限に膨らむ)。代わりに**取得時の遅延実体化**とする: 通知一覧の取得または Socket.IO 接続時に、そのユーザーの `users.notifications_seeded_at`(新設列。NULL=未実体化)以降に**初回有効化**されたルールを `rules` から引き、`rule_debut` 行を最大 10 件 INSERT してカーソルを進める。「有効化時点」の基準列は **`rules.activated_at`**(実装済み: 初回有効化時に `COALESCE(activated_at, now)` で 1 回だけ書かれ、以後更新されない — 2026-07-29 に `rules/repository.ts` で確認)。したがって disable→再 enable・ロールバック復帰では `activated_at` が動かず**再 debut しない**(冪等キー = `ruleId` も二重発行を防ぐ)。初回実体化はその時点から(過去のルールで新規ユーザーを埋めない)。自分の提案のルールは除外(`proposal_released` と重複するため)。なお `activated_at` のバックフィルは `status='active'` 行のみのため、移行前から disabled の旧ルールは NULL のまま残り、後日再 enable されるとその時刻で debut 扱いになりうる — 発生条件は極めて狭く、「再登場のおしらせ」として実害もないため許容する。これにより行数は「実際に再訪したユーザー × 直近のルール」に自然に絞られる。
+- **全ユーザー宛(audience=broadcast、現状 `rule_debut` のみ)**: 全 `users` 行への一斉 INSERT は行わない(一見客の匿名行を含め無際限に膨らむ)。代わりに**取得時の遅延実体化**とする: 通知一覧の取得または Socket.IO 接続時に、そのユーザーの `users.notifications_seeded_at`(新設列。NULL=未実体化)以降に**初回有効化**されたルールを `rules` から引き、`rule_debut` 行を最大 10 件 INSERT してカーソルを進める。同一ミリ秒に 10 件を超えて有効化されても漏らさないよう、実装上のカーソルは `notifications_seeded_at` + `notifications_seeded_rule_id` の複合とする。「有効化時点」の基準列は **`rules.activated_at`**(実装済み: 初回有効化時に `COALESCE(activated_at, now)` で 1 回だけ書かれ、以後更新されない — 2026-07-29 に `rules/repository.ts` で確認)。したがって disable→再 enable・ロールバック復帰では `activated_at` が動かず**再 debut しない**(冪等キー = `ruleId` も二重発行を防ぐ)。初回実体化はその時点から(過去のルールで新規ユーザーを埋めない)。自分の提案のルールは除外(`proposal_released` と重複するため)。なお `activated_at` のバックフィルは `status='active'` 行のみのため、移行前から disabled の旧ルールは NULL のまま残り、後日再 enable されるとその時刻で debut 扱いになりうる — 発生条件は極めて狭く、「再登場のおしらせ」として実害もないため許容する。これにより行数は「実際に再訪したユーザー × 直近のルール」に自然に絞られる。
 - 保持期間: 初期は無制限(行は小さい)。将来の削除は E10 の CLI 流儀で(§5)。
 
 ### 2.4 イベントソース(実コード上の発火点)

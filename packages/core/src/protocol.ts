@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import type { Card, Suit } from './cards/card.js';
+import type { NotificationView } from './notification.js';
 import type { Play } from './play/play.js';
 import type { Standing, Title } from './game/types.js';
 
@@ -334,6 +335,8 @@ export interface ServerToClientEvents {
   'room:state': (payload: PlayerRoomView) => void;
   'room:closed': (payload: { reason: RoomCloseReason }) => void;
   'session:superseded': (payload: Record<string, never>) => void;
+  'notification:sync': (payload: { unreadCount: number }) => void;
+  'notification:new': (payload: { item: NotificationView }) => void;
 }
 
 export type InterServerEvents = Record<never, never>;

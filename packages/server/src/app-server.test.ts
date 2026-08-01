@@ -10,7 +10,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createAppServer, type AppServer } from './app-server.js';
 import { FakeAuthProvider } from './auth/provider.js';
 import { AuthService } from './auth/service.js';
+import { NotificationService } from './notification/service.js';
 import { SqlitePersistence } from './persistence.js';
+import { PushService } from './push/service.js';
 
 const apps: AppServer[] = [];
 const directories: string[] = [];
@@ -50,6 +52,83 @@ function fetchText(url: string): Promise<{
 }
 
 describe('production app server', () => {
+  it('通知・Push APIとWeb App Manifestを同一originで提供する', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'daifugo-web-dist-'));
+    directories.push(directory);
+    writeFileSync(join(directory, 'index.html'), '<h1>app</h1>');
+    writeFileSync(join(directory, 'manifest.webmanifest'), '{}');
+    const persistence = new SqlitePersistence(':memory:', {
+      createUserId: () => 'notification-user',
+      createToken: () => 'notification-token-valid',
+    });
+    persistenceInstances.push(persistence);
+    const session = persistence.sessions.resolve(undefined);
+    persistence.auth.complete(session.userId, 'google-notification', 1);
+    const created = persistence.notifications.create({
+      userId: session.userId,
+      type: 'proposal_released',
+      payload: { proposalId: 'p1', proposalName: '革命' },
+      dedupeKey: 'p1',
+      now: 2,
+    }).item;
+    const app = createAppServer({
+      webDistDir: directory,
+      notifications: new NotificationService(persistence.notifications, {
+        now: () => 3,
+      }),
+      push: new PushService(persistence.push, { publicKey: 'vapid-public' }),
+    });
+    apps.push(app);
+    const port = await app.listen(0, '127.0.0.1');
+    const baseUrl = `http://127.0.0.1:${String(port)}`;
+    const authorization = { authorization: `Bearer ${session.userToken}` };
+
+    const manifest = await fetchText(`${baseUrl}/manifest.webmanifest`);
+    expect(manifest.contentType).toBe(
+      'application/manifest+json; charset=utf-8',
+    );
+    const config = await fetch(`${baseUrl}/api/push/config`);
+    await expect(config.json()).resolves.toEqual({
+      vapidPublicKey: 'vapid-public',
+      available: true,
+    });
+    const listed = await fetch(`${baseUrl}/api/notifications`, {
+      headers: authorization,
+    });
+    expect(listed.status).toBe(200);
+    await expect(listed.json()).resolves.toMatchObject({
+      unreadCount: 1,
+      items: [{ id: created.id, type: 'proposal_released' }],
+    });
+    const opened = await fetch(
+      `${baseUrl}/api/notifications/${String(created.id)}/opened`,
+      {
+        method: 'POST',
+        headers: { ...authorization, 'content-type': 'application/json' },
+        body: JSON.stringify({ via: 'push' }),
+      },
+    );
+    expect(opened.status).toBe(204);
+    const subscribed = await fetch(`${baseUrl}/api/push/subscriptions`, {
+      method: 'POST',
+      headers: { ...authorization, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        endpoint: 'https://push.example.test/device',
+        keys: { p256dh: 'key', auth: 'auth' },
+      }),
+    });
+    expect(subscribed.status).toBe(204);
+    const preferences = await fetch(`${baseUrl}/api/push/preferences`, {
+      method: 'PUT',
+      headers: { ...authorization, 'content-type': 'application/json' },
+      body: JSON.stringify({ preferences: { proposal_released: true } }),
+    });
+    expect(preferences.status).toBe(200);
+    await expect(preferences.json()).resolves.toMatchObject({
+      preferences: { proposal_released: true },
+    });
+  });
+
   it('OAuth開始・callback・ott引換を同一originで提供する', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'daifugo-web-dist-'));
     directories.push(directory);

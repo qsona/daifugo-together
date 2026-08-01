@@ -1,5 +1,7 @@
 import { BrandHero, HillDivider } from '../components/BrandHero';
 import { Button } from '../components/Button';
+import type { ReactNode } from 'react';
+
 import { PROPOSE_RULE_LABEL } from '../messages';
 
 import styles from './MenuScreen.module.css';
@@ -16,6 +18,7 @@ type MenuScreenProps = {
   authPending?: boolean;
   authMessage?: string | null;
   unreadProposalCount?: number;
+  notification?: ReactNode;
 };
 
 /**
@@ -36,10 +39,14 @@ export function MenuScreen({
   authPending = false,
   authMessage = null,
   unreadProposalCount = 0,
+  notification,
 }: MenuScreenProps) {
   return (
     <div className={screen.screen}>
       <main className={screen.body}>
+        {notification && (
+          <div className={styles.notification}>{notification}</div>
+        )}
         <BrandHero />
         <Button variant="primary" block onClick={onPlay}>
           あそぶ

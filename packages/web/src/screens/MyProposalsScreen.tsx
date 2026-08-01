@@ -3,7 +3,7 @@ import type {
   ProposalListItem,
   ProposalStatus,
 } from '@daifugo/core';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 
 import { AppBar } from '../components/AppBar';
 import {
@@ -86,10 +86,12 @@ export function MyProposalsScreen({
   api,
   onBack,
   onUnreadCountChange,
+  notification,
 }: {
   api: ProposalApi;
   onBack: () => void;
   onUnreadCountChange?: (count: number) => void;
+  notification?: ReactNode;
 }) {
   const [items, setItems] = useState<ProposalListItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -135,7 +137,7 @@ export function MyProposalsScreen({
 
   return (
     <div className={screen.screen}>
-      <AppBar title="マイ提案" onBack={onBack} />
+      <AppBar title="マイ提案" onBack={onBack} notification={notification} />
       <main className={screen.body}>
         {error && <p role="alert">{error}</p>}
         {seenError && <p role="alert">{seenError}</p>}
