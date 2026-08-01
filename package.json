@@ -11,6 +11,8 @@
     "build": "pnpm --recursive --if-present run build",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "hooks:check": "scripts/install-git-hooks.sh --check",
+    "hooks:install": "scripts/install-git-hooks.sh",
     "lint": "eslint . --max-warnings 0 && node scripts/check-ai-boundaries.mjs",
     "lint:design": "node scripts/check-design-tokens.mjs && node scripts/check-key-visual.mjs && node scripts/outline-key-visual.mjs --check",
     "ops": "pnpm --filter @daifugo/server ops:dev",

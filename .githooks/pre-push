@@ -1,0 +1,53 @@
+#!/bin/sh
+
+set -eu
+
+remote_name=${1:-unknown}
+current_branch=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)
+zero_oid=0000000000000000000000000000000000000000
+
+reject_main_push() {
+  reason=$1
+  cat >&2 <<EOF
+[main-push-guard] main への push を拒否しました: ${reason}
+
+main を更新するときは、main の worktree で次の順に実行してください。
+  1. 作業ブランチをローカル main へ merge する
+  2. 必要な検証を行う
+  3. git push ${remote_name} main
+
+HEAD:main や作業ブランチ:main は使用できません。
+EOF
+  exit 1
+}
+
+while read -r local_ref local_oid remote_ref remote_oid; do
+  [ -n "${local_ref:-}" ] || continue
+  [ "$remote_ref" = refs/heads/main ] || continue
+
+  if [ "$local_ref" != refs/heads/main ]; then
+    reject_main_push "push元がローカル main ではありません (${local_ref})"
+  fi
+
+  if [ "$current_branch" != main ]; then
+    branch_label=${current_branch:-detached-HEAD}
+    reject_main_push "現在のworktreeが main ではありません (${branch_label})"
+  fi
+
+  main_oid=$(git rev-parse refs/heads/main)
+  head_oid=$(git rev-parse HEAD)
+  if [ "$local_oid" != "$main_oid" ] || [ "$local_oid" != "$head_oid" ]; then
+    reject_main_push "push対象が現在checkout中のローカル main と一致しません"
+  fi
+
+  if [ "$remote_oid" != "$zero_oid" ]; then
+    if ! git cat-file -e "${remote_oid}^{commit}" 2>/dev/null; then
+      reject_main_push "リモート main の現在位置をローカルで確認できません"
+    fi
+    if ! git merge-base --is-ancestor "$remote_oid" "$local_oid"; then
+      reject_main_push "fast-forwardではありません。先にリモート main を取り込んでください"
+    fi
+  fi
+done
+
+exit 0

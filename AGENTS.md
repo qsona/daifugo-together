@@ -14,6 +14,12 @@ PR を作成するのは、原則としてルール実装のワークフロー�
 
 ただし、ユーザーがマージまたは push しないよう明示した場合、未解決の重要な問題や失敗した必要なテストがある場合、または個別のワークフローで PR や人間によるマージが明示的に必要とされている場合は、その指示を優先する。ブランチ保護など、リポジトリで強制される制約も回避しない。
 
+## `main` push guard
+
+- cloneごとに一度`pnpm hooks:install`を実行し、リポジトリ管理の`pre-push` hookを有効にする。状態は`pnpm hooks:check`で確認する
+- `main`へのpushは、`main`をcheckoutしているworktreeから`git push origin main`で行う。`HEAD:main`、作業ブランチからの`branch:main`、作業ブランチのworktreeからの`git push origin main`は禁止する
+- `--no-verify`でhookを回避してはならない。hookが拒否した場合は、ローカル`main`への取り込みと実行worktreeを修正する
+
 ## ファイル名の言語
 
 新規に作成するファイル・ディレクトリの名前には日本語を使わず、英語(ASCII)で命名する。ドキュメントの本文は日本語でよい。既存の日本語名ファイル(`docs/企画書.md` など)は、明示的な指示がない限りリネームしない。
