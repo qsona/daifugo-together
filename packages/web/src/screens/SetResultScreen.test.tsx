@@ -171,7 +171,7 @@ describe('SetResultScreen phase boundary', () => {
       name: 'もう1セットあそぶ',
     });
     const community = screen.getByRole('button', {
-      name: 'みんなのルールで あそんでみる',
+      name: 'みんなのルールであそんでみる',
     });
     expect(again.parentElement).toBe(community.parentElement);
     expect(
@@ -210,7 +210,7 @@ describe('SetResultScreen phase boundary', () => {
 
     expect(
       screen.queryByRole('button', {
-        name: 'みんなのルールで あそんでみる',
+        name: 'みんなのルールであそんでみる',
       }),
     ).toBeNull();
   });
@@ -228,13 +228,13 @@ describe('SetResultScreen phase boundary', () => {
         onHome={() => undefined}
         showEvaluation={false}
         actionPending
-        actionError="みんなのルールへ進めませんでした。もう一度ためしてください"
+        actionError="みんなのルールへ進めませんでした。もう一度ためしてください。"
       />,
     );
 
     for (const name of [
       'もう1セットあそぶ',
-      'みんなのルールで あそんでみる',
+      'みんなのルールであそんでみる',
       'ホームへ',
     ]) {
       expect(
@@ -270,7 +270,7 @@ describe('SetResultScreen phase boundary', () => {
     expect(
       screen
         .getByRole('button', {
-          name: 'みんなのルールで あそんでみる',
+          name: 'みんなのルールであそんでみる',
         })
         .hasAttribute('disabled'),
     ).toBe(false);
@@ -292,7 +292,7 @@ describe('SetResultScreen phase boundary', () => {
         onRegister={onRegister}
       />,
     );
-    await user.click(screen.getByRole('button', { name: 'きろくをのこす' }));
+    await user.click(screen.getByRole('button', { name: '記録を残す' }));
     expect(onRegister).toHaveBeenCalledOnce();
   });
 });

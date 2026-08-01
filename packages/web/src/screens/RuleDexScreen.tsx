@@ -119,13 +119,11 @@ export function RuleDexScreen({
             >
               <option value="">すべて</option>
               <option value="active">有効</option>
-              {features.elimination && (
-                <option value="removed">排除済み</option>
-              )}
+              {features.elimination && <option value="removed">引退</option>}
             </select>
           </label>
           <label className={styles.filter}>
-            区分
+            種類
             <select
               value={kind}
               onChange={(event) =>
@@ -158,9 +156,7 @@ export function RuleDexScreen({
         {result && (
           <>
             <p className={styles.summary}>
-              実装済みルール {result.summary.implemented} 件（有効{' '}
-              {result.summary.active}・排除済み {result.summary.removed}） /
-              都道府県カバー {result.summary.prefectureCoverage}
+              {`登場したルール ${String(result.summary.implemented)}件(有効 ${String(result.summary.active)}・引退 ${String(result.summary.removed)}) / 都道府県カバー ${String(result.summary.prefectureCoverage)}`}
             </p>
             <p className={styles.note}>
               「報告: 〜県」は、提案した人がその土地で遊んでいたという記録です。
@@ -177,7 +173,7 @@ export function RuleDexScreen({
         )}
         {error !== 'initial' && result?.items.length === 0 && (
           <EmptyState
-            title="まだ実装されたルールはありません"
+            title="まだ登場したルールはありません"
             description="提案が採用されるとここに載ります。"
           />
         )}
@@ -188,7 +184,7 @@ export function RuleDexScreen({
               const origin = ruleOriginLabel(rule.kind, rule.prefecture);
               const listDescription =
                 rule.status === 'removed'
-                  ? '低評価が集まったため排除'
+                  ? '低評価が集まって引退'
                   : (origin.sentence ?? rule.description);
               return (
                 <div key={rule.id}>
@@ -228,17 +224,15 @@ export function RuleDexScreen({
                     >
                       <p>{rule.description ?? '説明はありません。'}</p>
                       <dl>
-                        <dt>区分</dt>
+                        <dt>種類</dt>
                         <dd>{origin.badge}</dd>
                         <dt>状態</dt>
-                        <dd>
-                          {rule.status === 'removed' ? '排除済み' : '有効'}
-                        </dd>
-                        <dt>実装日</dt>
+                        <dd>{rule.status === 'removed' ? '引退' : '有効'}</dd>
+                        <dt>登場日</dt>
                         <dd>{formatDate(rule.implementedAt)}</dd>
                         {rule.removedAt && (
                           <>
-                            <dt>排除日</dt>
+                            <dt>引退日</dt>
                             <dd>{formatDate(rule.removedAt)}</dd>
                           </>
                         )}
@@ -256,7 +250,7 @@ export function RuleDexScreen({
         )}
         {remaining > 0 && (
           <Button block disabled={loading} onClick={() => load(shown, true)}>
-            {loading ? '読み込み中…' : `…ほか ${String(remaining)} 件`}
+            {loading ? '読み込み中…' : `…ほか ${String(remaining)}件`}
           </Button>
         )}
       </main>

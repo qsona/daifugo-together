@@ -24,11 +24,11 @@ export function ActiveRulesModal({
       align="start"
       onClose={onClose}
     >
-      <p>{String(rules.length)} 件・すべての卓に適用（変更不可）</p>
+      <p>{String(rules.length)}件・すべての卓に適用</p>
       {rules.length === 0 ? (
         <EmptyState
           title="追加ルールはありません"
-          description="この対局は基本ルールだけで遊びます。"
+          description="この対局は基本ルールだけであそびます。"
         />
       ) : (
         <RuleNameList rules={rules} onSelect={onSelectRule} />

@@ -70,7 +70,7 @@ describe('RuleDexScreen', () => {
     expect(await screen.findByText('県ありルール')).toBeTruthy();
     expect(screen.getByText('報告: 埼玉県')).toBeTruthy();
     expect(screen.getByText('埼玉県で遊ばれていた報告')).toBeTruthy();
-    expect(screen.getAllByText('排除済み')).toHaveLength(2);
+    expect(screen.getAllByText('引退')).toHaveLength(2);
     expect(container.textContent).not.toMatch(/埼玉県のルール|人気|優先/u);
   });
 
@@ -87,7 +87,7 @@ describe('RuleDexScreen', () => {
     fireEvent.change(screen.getByLabelText('状態'), {
       target: { value: 'removed' },
     });
-    fireEvent.change(screen.getByLabelText('区分'), {
+    fireEvent.change(screen.getByLabelText('種類'), {
       target: { value: 'local' },
     });
 
@@ -139,7 +139,7 @@ describe('RuleDexScreen', () => {
     render(
       <RuleDexScreen api={{ list }} onBack={vi.fn()} features={features} />,
     );
-    fireEvent.change(screen.getByLabelText('区分'), {
+    fireEvent.change(screen.getByLabelText('種類'), {
       target: { value: 'local' },
     });
     await waitFor(() => expect(list).toHaveBeenCalledTimes(2));
@@ -186,6 +186,6 @@ describe('RuleDexScreen', () => {
     );
     expect(await screen.findByText('県ありルール')).toBeTruthy();
     expect(screen.queryByText('昔のルール')).toBeNull();
-    expect(screen.queryByRole('option', { name: '排除済み' })).toBeNull();
+    expect(screen.queryByRole('option', { name: '引退' })).toBeNull();
   });
 });

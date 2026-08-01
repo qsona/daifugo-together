@@ -103,7 +103,7 @@ function AppealControl({
       setAppealing(false);
     } catch {
       setAppealError(
-        '異議を送信できませんでした。時間をおいてお試しください。',
+        '異議を送れませんでした。時間をおいて、もう一度ためしてください。',
       );
     }
   };
@@ -111,12 +111,12 @@ function AppealControl({
     <div className={styles.appealCard}>
       {appealSent || card.appealStatus ? (
         <DialogSubText>
-          {prefix}申し立て済みです。審判が72時間以内を目安に確認します。
+          {prefix}異議を送りました。審判が72時間以内を目安に確認します。
         </DialogSubText>
       ) : appealing ? (
         <div className={styles.appeal}>
           <label className={styles.appealLabel}>
-            {prefix}審判へのコメント（任意・200字まで）
+            {prefix}審判へのコメント(任意・200字まで)
             <textarea
               aria-label={`${prefix}審判へのコメント`}
               value={comment}
@@ -130,7 +130,7 @@ function AppealControl({
             </p>
           )}
           <Button size="small" onClick={() => void submitAppeal()}>
-            {card.label ? `異議を送る（${card.label}）` : '異議を送る'}
+            {card.label ? `異議を送る(${card.label})` : '異議を送る'}
           </Button>
         </div>
       ) : onAppeal ? (
@@ -139,7 +139,7 @@ function AppealControl({
           className={styles.appealLink}
           onClick={() => setAppealing(true)}
         >
-          {prefix}誤検出だと思う場合は審判に異議を申し立てる
+          {prefix}間違いだと思ったら、審判に異議を送る
         </button>
       ) : null}
     </div>

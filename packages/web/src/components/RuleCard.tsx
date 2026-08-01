@@ -9,7 +9,7 @@ import styles from './RuleCard.module.css';
 /** 図鑑行が表示する内容だけを持つ view-model(エンジンの型は写さない)。 */
 export type RuleCardView = {
   name: string;
-  /** 有効ルールの優先度。排除済みなど順位を持たないときは null。 */
+  /** 有効ルールの優先度。引退済みなど順位を持たないときは null。 */
   priority: number | null;
   category: 'local' | 'original';
   /** ローカル区分でも未入力があるので任意。 */
@@ -35,7 +35,7 @@ export function RuleCard({ rule }: { rule: RuleCardView }) {
         <h3 className={styles.name}>
           {rule.name}
           <Tag variant={isRemoved ? 'removed' : 'active'}>
-            {isRemoved ? '排除済み' : '有効'}
+            {isRemoved ? '引退' : '有効'}
           </Tag>
         </h3>
         {rule.description && (

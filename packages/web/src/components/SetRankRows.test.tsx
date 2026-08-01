@@ -53,6 +53,7 @@ describe('SetRankRows', () => {
       />,
     );
 
+    expect(screen.getByText('2位')).toBeTruthy();
     expect(screen.getByText('10点')).toBeTruthy();
     expect(view.container.querySelectorAll(`.${styles.you}`)).toHaveLength(1);
     expect(

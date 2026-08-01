@@ -49,7 +49,7 @@ export function SetRankRows({ ranks }: { ranks: readonly SetRankView[] }) {
             key={rank.name}
             className={cx(styles.row, rank.isYou && styles.you)}
           >
-            <span className={styles.place}>{rank.place}</span>
+            <span className={styles.place}>{rank.place}位</span>
             <span className={styles.name}>{rank.name}</span>
             {rank.title && <span className={styles.title}>{rank.title}</span>}
             {/* 合計点。数字だけで足りるので「合計」の見出し語は置かない。 */}

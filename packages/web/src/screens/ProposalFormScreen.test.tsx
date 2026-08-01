@@ -48,7 +48,7 @@ describe('ProposalFormScreen', () => {
 
     expect(await screen.findByLabelText('ルール名')).toBeTruthy();
     expect(
-      screen.getByText(/とうろくしなくても 1 つずつ ていあんできるよ/),
+      screen.getByText(/登録しなくても、1つずつ提案できます/),
     ).toBeTruthy();
   });
 
@@ -69,9 +69,7 @@ describe('ProposalFormScreen', () => {
 
     expect(await screen.findByText('8切り')).toBeTruthy();
     expect(screen.getByText('確認中')).toBeTruthy();
-    expect(
-      screen.getByText(/けっかが出たら、つぎの ていあんが できるよ/),
-    ).toBeTruthy();
+    expect(screen.getByText(/結果が出たら次の提案ができ/)).toBeTruthy();
     expect(screen.queryByLabelText('ルール名')).toBeNull();
     await user.click(screen.getByRole('button', { name: 'Googleでログイン' }));
     expect(onLogin).toHaveBeenCalledOnce();
@@ -103,9 +101,7 @@ describe('ProposalFormScreen', () => {
     );
     await user.click(screen.getByRole('button', { name: '提案を送信する' }));
 
-    expect(
-      await screen.findByText(/けっかが出たら、つぎの ていあんが できるよ/),
-    ).toBeTruthy();
+    expect(await screen.findByText(/結果が出たら次の提案ができ/)).toBeTruthy();
     expect(screen.queryByLabelText('ルール名')).toBeNull();
   });
 
@@ -120,7 +116,7 @@ describe('ProposalFormScreen', () => {
     );
     expect(screen.getByLabelText('ルール名')).toBeTruthy();
     expect(mine).not.toHaveBeenCalled();
-    expect(screen.queryByText(/とうろくしなくても 1 つずつ/)).toBeNull();
+    expect(screen.queryByText(/登録しなくても、1つずつ/)).toBeNull();
   });
 
   it('区分と任意の都道府県を選んで提案し、確認中の結果を表示する', async () => {
@@ -148,7 +144,7 @@ describe('ProposalFormScreen', () => {
     render(<ProposalFormScreen api={{ submit }} onBack={() => undefined} />);
 
     await user.selectOptions(
-      screen.getByLabelText('遊んでいた都道府県（任意）'),
+      screen.getByLabelText('あそんでいた都道府県(任意)'),
       '11',
     );
     await user.type(screen.getByLabelText('ルール名'), '8切り');
@@ -193,7 +189,7 @@ describe('ProposalFormScreen', () => {
 
     await user.click(screen.getByRole('radio', { name: 'オリジナルルール' }));
 
-    expect(screen.queryByLabelText('遊んでいた都道府県（任意）')).toBeNull();
+    expect(screen.queryByLabelText('あそんでいた都道府県(任意)')).toBeNull();
     await user.type(screen.getByLabelText('ルール名'), '階段革命');
     await user.type(
       screen.getByLabelText('ルールの内容'),
@@ -472,20 +468,16 @@ describe('ProposalFormScreen', () => {
 
     await user.click(
       await screen.findByRole('button', {
-        name: /1枚目: 誤検出だと思う場合/,
+        name: /1枚目: 間違いだと思ったら/,
       }),
     );
-    await user.click(
-      screen.getByRole('button', { name: '異議を送る（1枚目）' }),
-    );
+    await user.click(screen.getByRole('button', { name: '異議を送る(1枚目)' }));
     await user.click(
       screen.getByRole('button', {
-        name: /2枚目: 誤検出だと思う場合/,
+        name: /2枚目: 間違いだと思ったら/,
       }),
     );
-    await user.click(
-      screen.getByRole('button', { name: '異議を送る（2枚目）' }),
-    );
+    await user.click(screen.getByRole('button', { name: '異議を送る(2枚目)' }));
 
     expect(appealYellowCard).toHaveBeenNthCalledWith(1, 7, null);
     expect(appealYellowCard).toHaveBeenNthCalledWith(2, 8, null);
@@ -527,13 +519,13 @@ describe('ProposalFormScreen', () => {
     );
     await user.click(
       await screen.findByRole('button', {
-        name: '誤検出だと思う場合は審判に異議を申し立てる',
+        name: '間違いだと思ったら、審判に異議を送る',
       }),
     );
     await user.type(screen.getByLabelText('審判へのコメント'), 'ゲーム内です');
     await user.click(screen.getByRole('button', { name: '異議を送る' }));
 
     expect(appealYellowCard).toHaveBeenCalledWith(7, 'ゲーム内です');
-    expect(await screen.findByText(/申し立て済みです/)).toBeDefined();
+    expect(await screen.findByText(/異議を送りました/)).toBeDefined();
   });
 });
