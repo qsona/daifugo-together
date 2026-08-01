@@ -91,7 +91,6 @@ export class PushSender {
     if (NOTIFICATION_TYPE_REGISTRY[item.type].channel !== 'center_push') return;
     const now = this.#now();
     if (isNightInJapan(now)) return;
-    if (!this.#repository.preference(userId, item.type)) return;
     const payload = JSON.stringify({
       type: item.type,
       title: item.title,

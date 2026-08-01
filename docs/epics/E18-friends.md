@@ -168,7 +168,7 @@ E16 §2.2 の拡張点仕様に従い、種別レジストリへ次を登録す�
 
 - 冪等キー(E16 §2.3 `dedupe_key`): `friend_invite` = `roomInviteId`、`friend_request`/`friend_accepted` = `friendshipId`。
 - payload は表示名以外の個人情報を含めない(E16 §2.2 のペイロード規律。Push 文面と共通)。**拒否・ブロック・解除の通知種別は作らない**(§2.1-5)。
-- Push(E17)側: `friend_invite` の `push_preferences` は既定 OFF(E17 §2.3)。**フレンドが初めて成立したとき**に「フレンドの誘いを通知で受け取る?」の個別確認を 1 回だけ出し、承諾なら ON にする(施策提案 §2 のオプトイン設計。E17 未実装の間はこの確認自体を出さない)。
+- Push(E17)側: 種別ごとの設定は持たない。E18 で `friend_invite` を `center_push` としてレジストリへ登録すると、Push 購読済みの端末は自動的に送信対象になる。追加の Push API・設定 UI・個別確認は作らない(E17 §2.3 の 2026-08-02 改訂)。
 - 発行は誘い・申請・承認の各 API ハンドラ内から `NotificationService.publish()`(E16)を呼ぶだけで、センター保存・Socket.IO 配信・(E17 後の)Push 送信は E16/E17 の基盤に乗る。
 
 ### 2.6 オンライン表示

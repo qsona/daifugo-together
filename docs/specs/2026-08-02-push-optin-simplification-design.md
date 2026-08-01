@@ -1,7 +1,7 @@
 # 設計: Push オプトイン簡素化(E17 改訂の差分実装)
 
 - 作成日: 2026-08-02
-- 状態: 実装待ち
+- 状態: 実装済み(2026-08-02)
 - 一次情報源: `docs/epics/E17-web-push.md`(2026-08-02 改訂ノート・WP-D3/WP-D4・§2.3〜2.5)/ `docs/epics/E16-notification-center.md`(§2.2 種別レジストリ = チャネル属性の正)/ `docs/epics/E15-auth-account.md`(§2.7 ログイン完了フロー)/ `docs/specs/2026-07-30-anonymous-trial-proposal-design.md`(匿名おためし提案枠)
 - 関連決定: decision-log G-24(Push オプトイン簡素化)。G-23(A2HS の「提示は 1 回のみ」)を再提示ポリシーの点のみ改める
 - 前提: E16・E17 は 2026-08-01 に実装済み(本番リリース直前、**購読者ゼロ**)。本書はその実装済みコードからの**差分**を作業リストとして書く
@@ -103,15 +103,15 @@ E15 のログインはフルページ遷移(form POST → Google → callback �
 
 ## 4. 受け入れ条件
 
-- [ ] `push_preferences` がスキーマ(起動後の DB)・サーバーコード・クライアントコードのどこにも存在しない。既存 DB でも起動時に DROP される
-- [ ] 購読済みユーザーには、preferences 行なしで終端結果 3 種(`proposal_released` / `proposal_rejected` / `proposal_failed`)の Push が届き、`proposal_implementing` / `rule_debut` は届かない(センターには従来どおり全種別が積まれる)
-- [ ] `GET`/`PUT /api/push/preferences` が 404 相当(ルート不存在)になり、残りの push API(config / subscriptions / installed)の挙動は不変
-- [ ] 通知設定画面にトグルがなく、「この端末で通知を受け取る」「この端末への通知を止める」+ A2HS 案内だけがある
-- [ ] 登録済みユーザーが提案を送るたび、未購読かつ「受け取らない」未選択ならオファーが再提示される。「受け取らない」を選んだ端末には以後出ない
-- [ ] 匿名ユーザーのおためし提案送信成功直後に登録促しが出て、Google ログイン完了の戻り(メニュー)で Push オファーが継続表示される。ログイン失敗時は出ず、フラグも残らない
-- [ ] 匿名ユーザーに購読 UI が出ず、購読 API は 403 `registration_required` のまま(WP-D2)
-- [ ] 夜間抑止(21:00〜7:00 JST)・Push=センター複製・初回訪問時に許諾 UI を出さない、の各原則が変更されていない
-- [ ] `pnpm` の lint / typecheck / test が全パッケージで通る
+- [x] `push_preferences` がスキーマ(起動後の DB)・サーバーコード・クライアントコードのどこにも存在しない。既存 DB でも起動時に DROP される
+- [x] 購読済みユーザーには、preferences 行なしで終端結果 3 種(`proposal_released` / `proposal_rejected` / `proposal_failed`)の Push が届き、`proposal_implementing` / `rule_debut` は届かない(センターには従来どおり全種別が積まれる)
+- [x] `GET`/`PUT /api/push/preferences` が 404 相当(ルート不存在)になり、残りの push API(config / subscriptions / installed)の挙動は不変
+- [x] 通知設定画面にトグルがなく、「この端末で通知を受け取る」「この端末への通知を止める」+ A2HS 案内だけがある
+- [x] 登録済みユーザーが提案を送るたび、未購読かつ「受け取らない」未選択ならオファーが再提示される。「受け取らない」を選んだ端末には以後出ない
+- [x] 匿名ユーザーのおためし提案送信成功直後に登録促しが出て、Google ログイン完了の戻り(メニュー)で Push オファーが継続表示される。ログイン失敗時は出ず、フラグも残らない
+- [x] 匿名ユーザーに購読 UI が出ず、購読 API は 403 `registration_required` のまま(WP-D2)
+- [x] 夜間抑止(21:00〜7:00 JST)・Push=センター複製・初回訪問時に許諾 UI を出さない、の各原則が変更されていない
+- [x] `pnpm` の lint / typecheck / test が全パッケージで通る
 
 ## 5. テスト観点
 

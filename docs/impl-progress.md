@@ -40,6 +40,17 @@
 - 検証: `pnpm typecheck` / `pnpm lint` / `pnpm lint:design` / `pnpm format:check` / `pnpm test`(**136 files・998 tests**)が成功。375×812 の通知設定で、通常ブラウザ表示と iPhone UA での手順表示(共有アイコン・3 手順・再ログイン注記)、ブラウザ警告/エラー 0 を確認
 - 残: iOS 実機での「追加 → 再ログイン → 購読」通しは WP-T2(VAPID 設定)後の受入で確認する
 
+## E17 Push オプトイン簡素化(2026-08-02)
+
+- 状態: [差分設計](specs/2026-08-02-push-optin-simplification-design.md)の実装・全体検証完了
+- 購読を端末単位のオプトイン全体とし、`push_preferences` のテーブル・API・サーバー/クライアント処理・設定トグルを撤去した。既存 DB は起動時の冪等マイグレーションで同テーブルだけを DROP する
+- Push 対象は E16 種別レジストリの `center_push` を正とし、現時点では終端結果 3 種(`proposal_released` / `proposal_rejected` / `proposal_failed`)だけを送る。夜間抑止、410 失効、センターとの文面共有は維持した
+- 匿名ユーザーには購読 UI を出さず、提案送信成功後に Google 引き継ぎを促す。ログイン開始前に継続フラグを保存し、成功時だけメニュー上の Push オファーへ戻す。失敗時はフラグを消費する
+- 明示的に「受け取らない」を選んでいない未購読端末には、提案送信のたびにオファーを再提示できる。通知設定画面は購読開始・ホーム画面追加案内・この端末の購読解除だけに整理した
+- ドキュメント整合: E18 の `friend_invite` も廃止した種別設定を前提にせず、レジストリで `center_push` に登録すれば購読済み端末へ送る契約へ更新した
+- 検証: `pnpm verify` 成功。Prettier / ESLint / AI boundary / design lint / TypeScript / **136 files・1008 tests** / 全 package build が成功。API 結合 16 tests、変更対象 131 tests も個別成功
+- 実画面確認: ローカルサーバーは正常起動したが、Codex のアプリ内ブラウザと Chrome 操作経路の双方がローカルアドレスを遮断したため未実施。画面・アプリ統合はコンポーネントテストで固定済み。iOS/desktop の実 Push 通しは従来どおり受入 runbook で確認する
+
 ## インゲーム演出改善(2026-07-30)
 
 - 状態: 初回独立完了レビューの Important 2件と Minor 1件を修正。再レビューは要件 `PASS` / 品質 `APPROVED`。disabledの公開契約に関する指摘は下記裁定により現仕様を維持

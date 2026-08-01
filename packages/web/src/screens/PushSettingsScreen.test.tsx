@@ -10,14 +10,6 @@ function api(available: boolean) {
       available,
       vapidPublicKey: available ? 'public' : null,
     })),
-    preferences: vi.fn(async () => ({
-      proposal_released: false,
-      proposal_rejected: false,
-      proposal_failed: false,
-    })),
-    setPreferences: vi.fn(
-      async (preferences: Record<string, boolean>) => preferences,
-    ),
     disableThisDevice: vi.fn(async () => undefined),
     subscribeProposalResults: vi.fn(async () => 'subscribed' as const),
   };
@@ -37,7 +29,14 @@ describe('PushSettingsScreen', () => {
       maxTouchPoints: 5,
     });
     const available = api(true);
-    render(<PushSettingsScreen api={available} onBack={() => undefined} />);
+    render(
+      <PushSettingsScreen
+        api={available}
+        onBack={() => undefined}
+        registered
+        onLogin={() => undefined}
+      />,
+    );
     expect(
       await screen.findByText(
         'iPhone・iPadでは、ホーム画面に追加したアプリだけが通知を受け取れます。',
@@ -51,10 +50,17 @@ describe('PushSettingsScreen', () => {
 
   it('VAPID未設定環境では購読導線を出さない', async () => {
     const unavailable = api(false);
-    render(<PushSettingsScreen api={unavailable} onBack={() => undefined} />);
+    render(
+      <PushSettingsScreen
+        api={unavailable}
+        onBack={() => undefined}
+        registered
+        onLogin={() => undefined}
+      />,
+    );
     expect(
       await screen.findByText(
-        'Push通知は、アプリ内のおしらせと同じ内容だけをこの端末へ届けます。',
+        '提案の結果が出たとき、アプリ内のおしらせと同じ内容をこの端末へ届けます。',
       ),
     ).toBeTruthy();
     expect(
@@ -66,7 +72,14 @@ describe('PushSettingsScreen', () => {
 
   it('設定画面から購読を再試行できる', async () => {
     const available = api(true);
-    render(<PushSettingsScreen api={available} onBack={() => undefined} />);
+    render(
+      <PushSettingsScreen
+        api={available}
+        onBack={() => undefined}
+        registered
+        onLogin={() => undefined}
+      />,
+    );
     const enable = await screen.findByRole('button', {
       name: 'この端末で通知を受け取る',
     });
@@ -75,5 +88,44 @@ describe('PushSettingsScreen', () => {
     expect(
       await screen.findByText('この端末への通知を設定しました。'),
     ).toBeTruthy();
+  });
+
+  it('未登録なら購読APIを呼ばずGoogle引き継ぎ導線だけを出す', async () => {
+    const available = api(true);
+    const onLogin = vi.fn();
+    render(
+      <PushSettingsScreen
+        api={available}
+        onBack={() => undefined}
+        registered={false}
+        onLogin={onLogin}
+      />,
+    );
+
+    expect(
+      screen.queryByRole('button', { name: 'この端末で通知を受け取る' }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'この端末への通知を止める' }),
+    ).toBeNull();
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Googleで引き継ぐ' }),
+    );
+    expect(onLogin).toHaveBeenCalledOnce();
+    expect(available.config).not.toHaveBeenCalled();
+  });
+
+  it('種別選択トグルを表示しない', () => {
+    const available = api(true);
+    render(
+      <PushSettingsScreen
+        api={available}
+        onBack={() => undefined}
+        registered
+        onLogin={() => undefined}
+      />,
+    );
+    expect(screen.queryByRole('checkbox')).toBeNull();
+    expect(screen.queryByText('受け取る内容')).toBeNull();
   });
 });

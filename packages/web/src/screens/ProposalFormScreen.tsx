@@ -59,6 +59,7 @@ export function ProposalFormScreen({
   onLogin,
   notification,
   pushOffer,
+  pushRegistration,
 }: {
   api: ProposalApi;
   onBack: () => void;
@@ -69,6 +70,10 @@ export function ProposalFormScreen({
     offer: () => Promise<PushOfferKind | null>;
     subscribe: () => Promise<PushOfferResult>;
     decline: () => void;
+  };
+  pushRegistration?: {
+    declined: () => boolean;
+    begin: () => void;
   };
 }) {
   const [kind, setKind] = useState<'local' | 'original'>('local');
@@ -396,10 +401,25 @@ export function ProposalFormScreen({
             </p>
           )}
           {accepted && (
-            <div className={styles.accepted} role="status">
-              <span className={styles.acceptedName}>{accepted.name}</span>
-              <span className={styles.status}>確認中</span>
-            </div>
+            <>
+              <div className={styles.accepted} role="status">
+                <span className={styles.acceptedName}>{accepted.name}</span>
+                <span className={styles.status}>確認中</span>
+              </div>
+              {!registered &&
+                pushRegistration &&
+                !pushRegistration.declined() && (
+                  <Callout
+                    action={
+                      <Button size="small" onClick={pushRegistration.begin}>
+                        Googleで引き継ぐ
+                      </Button>
+                    }
+                  >
+                    提案の結果が出たら、この端末へお知らせできます。Googleで引き継ぐと、通知を受け取れます。
+                  </Callout>
+                )}
+            </>
           )}
           {!accepted && !cardSummary?.suspension && (
             <Button

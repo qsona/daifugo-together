@@ -1,4 +1,3 @@
-import type { NotificationType } from '@daifugo/core';
 import type Database from 'better-sqlite3';
 
 export interface StoredPushSubscription {
@@ -114,42 +113,5 @@ export class PushRepository {
         'UPDATE push_subscriptions SET last_sent_at = ? WHERE endpoint = ?',
       )
       .run(now, endpoint);
-  }
-
-  preference(userId: string, type: NotificationType): boolean {
-    const row = this.#sqlite
-      .prepare(
-        `SELECT enabled FROM push_preferences
-         WHERE user_id = ? AND type = ?`,
-      )
-      .get(userId, type) as { enabled: number } | undefined;
-    return row?.enabled === 1;
-  }
-
-  preferences(
-    userId: string,
-    types: readonly NotificationType[],
-  ): Record<string, boolean> {
-    const result: Record<string, boolean> = {};
-    for (const type of types) result[type] = this.preference(userId, type);
-    return result;
-  }
-
-  setPreferences(
-    userId: string,
-    preferences: Readonly<Record<string, boolean>>,
-    now: number,
-  ): void {
-    const statement = this.#sqlite.prepare(
-      `INSERT INTO push_preferences (user_id, type, enabled, updated_at)
-       VALUES (?, ?, ?, ?)
-       ON CONFLICT(user_id, type) DO UPDATE SET
-         enabled = excluded.enabled, updated_at = excluded.updated_at`,
-    );
-    this.#sqlite.transaction(() => {
-      for (const [type, enabled] of Object.entries(preferences)) {
-        statement.run(userId, type, enabled ? 1 : 0, now);
-      }
-    })();
   }
 }

@@ -3,13 +3,7 @@ import { installRequired, standalone } from './install';
 
 const TOKEN_KEY = 'daifugo.userToken';
 const DECLINED_KEY = 'daifugo.pushOfferDeclined';
-export const PROPOSAL_PUSH_TYPES = [
-  'proposal_released',
-  'proposal_rejected',
-  'proposal_failed',
-] as const;
-
-export type PushPreferences = Record<string, boolean>;
+const OFFER_AFTER_LOGIN_KEY = 'daifugo.pushOfferAfterLogin';
 export type PushOfferResult =
   | 'subscribed'
   | 'unavailable'
@@ -37,13 +31,15 @@ function applicationServerKey(value: string): Uint8Array<ArrayBuffer> {
 
 export class PushClient {
   readonly #baseUrl: string;
-  readonly #storage: Pick<Storage, 'getItem' | 'setItem'>;
+  readonly #storage: Pick<Storage, 'getItem' | 'setItem'> &
+    Partial<Pick<Storage, 'removeItem'>>;
   readonly #fetch: typeof fetch;
   #installReported = false;
 
   constructor(
     baseUrl: string,
-    storage: Pick<Storage, 'getItem' | 'setItem'>,
+    storage: Pick<Storage, 'getItem' | 'setItem'> &
+      Partial<Pick<Storage, 'removeItem'>>,
     fetcher: typeof fetch = fetch,
   ) {
     this.#baseUrl = baseUrl;
@@ -80,6 +76,24 @@ export class PushClient {
     this.#storage.setItem(DECLINED_KEY, '1');
   }
 
+  offerDeclined(): boolean {
+    return this.#storage.getItem(DECLINED_KEY) === '1';
+  }
+
+  markOfferAfterLogin(): void {
+    this.#storage.setItem(OFFER_AFTER_LOGIN_KEY, '1');
+  }
+
+  consumeOfferAfterLogin(): boolean {
+    const marked = this.#storage.getItem(OFFER_AFTER_LOGIN_KEY) === '1';
+    if (this.#storage.removeItem) {
+      this.#storage.removeItem(OFFER_AFTER_LOGIN_KEY);
+    } else {
+      this.#storage.setItem(OFFER_AFTER_LOGIN_KEY, '');
+    }
+    return marked;
+  }
+
   async subscribeProposalResults(): Promise<PushOfferResult> {
     // iOS のタブでは Notification/PushManager が存在しないため、
     // supported() より先に判定しないと「非対応」と誤って伝えてしまう。
@@ -105,9 +119,6 @@ export class PushClient {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(current.toJSON()),
     });
-    await this.setPreferences(
-      Object.fromEntries(PROPOSAL_PUSH_TYPES.map((type) => [type, true])),
-    );
     return 'subscribed';
   }
 
@@ -125,22 +136,6 @@ export class PushClient {
     } catch {
       // 計測のみ。失敗は無視する。
     }
-  }
-
-  async preferences(): Promise<PushPreferences> {
-    const response = await this.#request('/api/push/preferences');
-    return ((await response.json()) as { preferences: PushPreferences })
-      .preferences;
-  }
-
-  async setPreferences(preferences: PushPreferences): Promise<PushPreferences> {
-    const response = await this.#request('/api/push/preferences', {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ preferences }),
-    });
-    return ((await response.json()) as { preferences: PushPreferences })
-      .preferences;
   }
 
   async disableThisDevice(): Promise<void> {

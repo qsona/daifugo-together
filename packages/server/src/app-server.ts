@@ -75,12 +75,7 @@ export interface AppServerOptions {
   >;
   push?: Pick<
     PushService,
-    | 'config'
-    | 'subscribe'
-    | 'unsubscribe'
-    | 'getPreferences'
-    | 'setPreferences'
-    | 'markInstalled'
+    'config' | 'subscribe' | 'unsubscribe' | 'markInstalled'
   >;
   adminScreening?: {
     token: string;
@@ -137,11 +132,6 @@ function createStaticHandler(webDistDir: string) {
     request: IncomingMessage,
     response: ServerResponse,
   ): Promise<void> => {
-    if (request.method !== 'GET' && request.method !== 'HEAD') {
-      response.statusCode = 405;
-      response.end();
-      return;
-    }
     let pathname: string;
     try {
       pathname = decodeURIComponent(
@@ -149,6 +139,17 @@ function createStaticHandler(webDistDir: string) {
       );
     } catch {
       response.statusCode = 400;
+      response.end();
+      return;
+    }
+    // 未知のAPIをSPAのindex.htmlや静的配信の405へ落とさない。
+    if (pathname.startsWith('/api/')) {
+      response.statusCode = 404;
+      response.end('Not found');
+      return;
+    }
+    if (request.method !== 'GET' && request.method !== 'HEAD') {
+      response.statusCode = 405;
       response.end();
       return;
     }
@@ -978,9 +979,8 @@ export function createAppServer(options: AppServerOptions): AppServer {
     const pathname = new URL(request.url ?? '/', 'http://localhost').pathname;
     const isConfig = pathname === '/api/push/config';
     const isSubscriptions = pathname === '/api/push/subscriptions';
-    const isPreferences = pathname === '/api/push/preferences';
     const isInstalled = pathname === '/api/push/installed';
-    if (!isConfig && !isSubscriptions && !isPreferences && !isInstalled) {
+    if (!isConfig && !isSubscriptions && !isInstalled) {
       return false;
     }
     if (isConfig) {
@@ -1016,37 +1016,25 @@ export function createAppServer(options: AppServerOptions): AppServer {
       }
       return true;
     }
-    const allowed = isSubscriptions ? 'POST, DELETE' : 'GET, PUT';
-    if (
-      (isSubscriptions &&
-        request.method !== 'POST' &&
-        request.method !== 'DELETE') ||
-      (isPreferences && request.method !== 'GET' && request.method !== 'PUT')
-    ) {
-      response.setHeader('allow', allowed);
+    if (request.method !== 'POST' && request.method !== 'DELETE') {
+      response.setHeader('allow', 'POST, DELETE');
       writeJson(response, 405, { error: 'method_not_allowed' });
       return true;
     }
-    let result;
-    if (isPreferences && request.method === 'GET') {
-      result = options.push.getPreferences(bearerToken(request));
-    } else {
-      let body: unknown;
-      try {
-        body = await readJsonBody(request);
-      } catch (error) {
-        writeJson(response, error instanceof SyntaxError ? 400 : 413, {
-          error:
-            error instanceof SyntaxError ? 'invalid_json' : 'request_too_large',
-        });
-        return true;
-      }
-      result = isSubscriptions
-        ? request.method === 'POST'
-          ? options.push.subscribe(bearerToken(request), body)
-          : options.push.unsubscribe(bearerToken(request), body)
-        : options.push.setPreferences(bearerToken(request), body);
+    let body: unknown;
+    try {
+      body = await readJsonBody(request);
+    } catch (error) {
+      writeJson(response, error instanceof SyntaxError ? 400 : 413, {
+        error:
+          error instanceof SyntaxError ? 'invalid_json' : 'request_too_large',
+      });
+      return true;
     }
+    const result =
+      request.method === 'POST'
+        ? options.push.subscribe(bearerToken(request), body)
+        : options.push.unsubscribe(bearerToken(request), body);
     if (result.status === 204) {
       response.statusCode = 204;
       response.setHeader('cache-control', 'no-store');

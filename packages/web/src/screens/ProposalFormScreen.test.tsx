@@ -52,6 +52,70 @@ describe('ProposalFormScreen', () => {
     ).toBeTruthy();
   });
 
+  it('匿名提案の送信後にGoogle引き継ぎから通知へ続く導線を出す', async () => {
+    const begin = vi.fn();
+    const submit = vi.fn<ProposalApi['submit']>().mockResolvedValue({
+      outcome: 'accepted',
+      proposal: slotHolder,
+    });
+    render(
+      <ProposalFormScreen
+        api={{
+          submit,
+          mine: vi.fn().mockResolvedValue({ items: [], unreadCount: 0 }),
+        }}
+        onBack={() => undefined}
+        registered={false}
+        pushRegistration={{ declined: () => false, begin }}
+      />,
+    );
+
+    const user = userEvent.setup();
+    await user.type(await screen.findByLabelText('ルール名'), '8切り');
+    await user.type(
+      screen.getByLabelText('ルールの内容'),
+      '8を出すと場が流れる。',
+    );
+    await user.click(screen.getByRole('button', { name: '提案を送信する' }));
+
+    expect(
+      await screen.findByText(/提案の結果が出たら、この端末へお知らせできます/),
+    ).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Googleで引き継ぐ' }));
+    expect(begin).toHaveBeenCalledOnce();
+  });
+
+  it('通知を受け取らないと決めた端末では匿名提案後の通知訴求を出さない', async () => {
+    const submit = vi.fn<ProposalApi['submit']>().mockResolvedValue({
+      outcome: 'accepted',
+      proposal: slotHolder,
+    });
+    render(
+      <ProposalFormScreen
+        api={{
+          submit,
+          mine: vi.fn().mockResolvedValue({ items: [], unreadCount: 0 }),
+        }}
+        onBack={() => undefined}
+        registered={false}
+        pushRegistration={{ declined: () => true, begin: vi.fn() }}
+      />,
+    );
+
+    const user = userEvent.setup();
+    await user.type(await screen.findByLabelText('ルール名'), '8切り');
+    await user.type(
+      screen.getByLabelText('ルールの内容'),
+      '8を出すと場が流れる。',
+    );
+    await user.click(screen.getByRole('button', { name: '提案を送信する' }));
+
+    expect(await screen.findByText('8切り')).toBeTruthy();
+    expect(
+      screen.queryByText(/提案の結果が出たら、この端末へお知らせできます/),
+    ).toBeNull();
+  });
+
   it('未登録で枠が埋まっていれば進行中の提案とログイン導線を出す', async () => {
     const onLogin = vi.fn();
     const user = userEvent.setup();

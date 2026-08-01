@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App, reconcileSelectedCardIds } from './App';
 import buttonStyles from './components/Button.module.css';
 import type { MultiplayerClient, MultiplayerState } from './multiplayer/client';
+import type { PushClient } from './push/client';
 import { useScreenStore } from './store/screen';
 import { GRADUATION_STORAGE_KEY } from './tutorial/graduation';
 import { PLAYED_BEFORE_STORAGE_KEY } from './tutorial/played-before';
@@ -2529,6 +2530,135 @@ describe('AU-01: 認証完了のアプリ統合', () => {
     );
     expect(window.location.hash).toBe('');
     expect(screen.getByRole('status').textContent).toBe('おかえり!');
+  });
+
+  it('匿名提案からのログイン完了後だけPushオファーをメニューで再開する', async () => {
+    useScreenStore.setState({ current: 'title' });
+    window.history.replaceState(null, '', '/menu#/auth/result');
+    const state: MultiplayerState = {
+      connection: 'ready',
+      registered: false,
+      displayName: 'ゲスト',
+      room: null,
+      roomClosedReason: null,
+      error: null,
+    };
+    const switchSession = vi.fn();
+    const client = {
+      subscribe: () => () => undefined,
+      snapshot: () => state,
+      switchSession,
+    } as unknown as MultiplayerClient;
+    const auth = {
+      begin: vi.fn(),
+      complete: vi.fn(),
+      takeResult: vi.fn(() => ({
+        outcome: 'linked' as const,
+        userToken: 'registered-token',
+        displayName: 'ゲスト',
+      })),
+    };
+    const push = {
+      reportInstalled: vi.fn(async () => undefined),
+      consumeOfferAfterLogin: vi.fn(() => true),
+      offer: vi.fn(async () => 'push' as const),
+      subscribeProposalResults: vi.fn(async () => 'subscribed' as const),
+      declineOffer: vi.fn(),
+      disableThisDevice: vi.fn(async () => undefined),
+      offerDeclined: vi.fn(() => false),
+      markOfferAfterLogin: vi.fn(),
+    } as unknown as PushClient;
+
+    render(<App client={client} auth={auth} push={push} />);
+
+    expect(
+      await screen.findByRole('dialog', { name: '結果が出たら知らせる？' }),
+    ).toBeTruthy();
+    expect(push.consumeOfferAfterLogin).toHaveBeenCalledOnce();
+    expect(push.offer).toHaveBeenCalledOnce();
+  });
+
+  it('認証結果を取得できない場合もPush継続フラグを消してオファーを出さない', async () => {
+    useScreenStore.setState({ current: 'title' });
+    window.history.replaceState(null, '', '/menu#/auth/result');
+    const state: MultiplayerState = {
+      connection: 'ready',
+      registered: false,
+      displayName: 'ゲスト',
+      room: null,
+      roomClosedReason: null,
+      error: null,
+    };
+    const client = {
+      subscribe: () => () => undefined,
+      snapshot: () => state,
+    } as unknown as MultiplayerClient;
+    const push = {
+      reportInstalled: vi.fn(async () => undefined),
+      consumeOfferAfterLogin: vi.fn(() => true),
+      offer: vi.fn(async () => 'push' as const),
+    } as unknown as PushClient;
+
+    render(
+      <App
+        client={client}
+        auth={{ begin: vi.fn(), complete: vi.fn(), takeResult: () => null }}
+        push={push}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(push.consumeOfferAfterLogin).toHaveBeenCalledOnce(),
+    );
+    expect(push.offer).not.toHaveBeenCalled();
+    expect(
+      screen.queryByRole('dialog', { name: '結果が出たら知らせる？' }),
+    ).toBeNull();
+  });
+
+  it('通知設定からのログイン開始に失敗したらPush継続フラグをその場で消す', async () => {
+    const user = userEvent.setup();
+    useScreenStore.setState({ current: 'pushSettings' });
+    window.history.replaceState(null, '', '/notifications/settings');
+    const state: MultiplayerState = {
+      connection: 'ready',
+      registered: false,
+      displayName: 'ゲスト',
+      room: null,
+      roomClosedReason: null,
+      error: null,
+    };
+    const client = {
+      subscribe: () => () => undefined,
+      snapshot: () => state,
+      currentUserToken: () => 'anonymous-token',
+    } as unknown as MultiplayerClient;
+    const auth = {
+      begin: vi.fn(() => {
+        throw new Error('login unavailable');
+      }),
+      complete: vi.fn(),
+      takeResult: vi.fn(),
+    };
+    const push = {
+      reportInstalled: vi.fn(async () => undefined),
+      markOfferAfterLogin: vi.fn(),
+      consumeOfferAfterLogin: vi.fn(() => true),
+      offerDeclined: vi.fn(() => false),
+      config: vi.fn(),
+      disableThisDevice: vi.fn(async () => undefined),
+      subscribeProposalResults: vi.fn(async () => 'subscribed' as const),
+    } as unknown as PushClient;
+
+    render(<App client={client} auth={auth} push={push} />);
+    await user.click(screen.getByRole('button', { name: 'Googleで引き継ぐ' }));
+
+    expect(push.markOfferAfterLogin).toHaveBeenCalledOnce();
+    expect(auth.begin).toHaveBeenCalledWith('anonymous-token');
+    expect(push.consumeOfferAfterLogin).toHaveBeenCalledOnce();
+    expect(screen.getByRole('status').textContent).toBe(
+      'うまくいきませんでした。もう一度ためしてください。',
+    );
   });
 
   it('ログイン開始にはstorageではなく現在のsocket session tokenを渡す', async () => {

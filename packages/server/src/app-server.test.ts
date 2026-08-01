@@ -118,15 +118,16 @@ describe('production app server', () => {
       }),
     });
     expect(subscribed.status).toBe(204);
-    const preferences = await fetch(`${baseUrl}/api/push/preferences`, {
+    const preferencesGet = await fetch(`${baseUrl}/api/push/preferences`, {
+      headers: authorization,
+    });
+    expect(preferencesGet.status).toBe(404);
+    const preferencesPut = await fetch(`${baseUrl}/api/push/preferences`, {
       method: 'PUT',
       headers: { ...authorization, 'content-type': 'application/json' },
       body: JSON.stringify({ preferences: { proposal_released: true } }),
     });
-    expect(preferences.status).toBe(200);
-    await expect(preferences.json()).resolves.toMatchObject({
-      preferences: { proposal_released: true },
-    });
+    expect(preferencesPut.status).toBe(404);
   });
 
   it('OAuth開始・callback・ott引換を同一originで提供する', async () => {

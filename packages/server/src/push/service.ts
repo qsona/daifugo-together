@@ -1,12 +1,10 @@
-import { PUSH_NOTIFICATION_TYPES } from '../notification/registry.js';
 import { PushRepository, type StoredPushSubscription } from './repository.js';
 
 type PushError =
   | 'unauthorized'
   | 'registration_required'
   | 'push_unavailable'
-  | 'invalid_subscription'
-  | 'invalid_preferences';
+  | 'invalid_subscription';
 
 function subscription(value: unknown): StoredPushSubscription | null {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
@@ -35,30 +33,6 @@ function subscription(value: unknown): StoredPushSubscription | null {
     return null;
   }
   return { endpoint, p256dh: keys.p256dh, auth: keys.auth };
-}
-
-function preferenceInput(value: unknown): Record<string, boolean> | null {
-  if (
-    typeof value !== 'object' ||
-    value === null ||
-    Array.isArray(value) ||
-    !('preferences' in value) ||
-    typeof value.preferences !== 'object' ||
-    value.preferences === null ||
-    Array.isArray(value.preferences)
-  ) {
-    return null;
-  }
-  const entries = Object.entries(value.preferences);
-  const allowed = new Set<string>(PUSH_NOTIFICATION_TYPES);
-  if (
-    entries.some(
-      ([type, enabled]) => !allowed.has(type) || typeof enabled !== 'boolean',
-    )
-  ) {
-    return null;
-  }
-  return Object.fromEntries(entries) as Record<string, boolean>;
 }
 
 export class PushService {
@@ -139,41 +113,6 @@ export class PushService {
     }
     this.#repository.markInstalled(userId, this.#now());
     return { status: 204 as const };
-  }
-
-  getPreferences(token: string | null) {
-    const gated = this.#registeredUser(token);
-    if ('error' in gated) return gated;
-    return {
-      status: 200 as const,
-      body: {
-        preferences: this.#repository.preferences(
-          gated.userId,
-          PUSH_NOTIFICATION_TYPES,
-        ),
-      },
-    };
-  }
-
-  setPreferences(token: string | null, body: unknown) {
-    const gated = this.#registeredUser(token);
-    if ('error' in gated) return gated;
-    const parsed = preferenceInput(body);
-    if (!parsed)
-      return {
-        status: 400 as const,
-        body: { error: 'invalid_preferences' as const },
-      };
-    this.#repository.setPreferences(gated.userId, parsed, this.#now());
-    return {
-      status: 200 as const,
-      body: {
-        preferences: this.#repository.preferences(
-          gated.userId,
-          PUSH_NOTIFICATION_TYPES,
-        ),
-      },
-    };
   }
 
   #registeredUser(

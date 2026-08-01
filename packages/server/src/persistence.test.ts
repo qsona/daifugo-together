@@ -81,6 +81,38 @@ describe('SQLite persistence', () => {
     migrated.close();
   });
 
+  it('廃止したpush_preferencesだけを既存DBから冪等に削除する', () => {
+    const path = databasePath();
+    const legacy = new Database(path);
+    legacy.exec(`
+      CREATE TABLE push_preferences (
+        user_id TEXT NOT NULL,
+        type TEXT NOT NULL,
+        enabled INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (user_id, type)
+      );
+      CREATE TABLE migration_sentinel (value TEXT NOT NULL);
+      INSERT INTO migration_sentinel (value) VALUES ('kept');
+    `);
+    legacy.close();
+
+    new SqlitePersistence(path).close();
+    new SqlitePersistence(path).close();
+
+    const verified = new Database(path, { readonly: true });
+    const removed = verified
+      .prepare(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'push_preferences'",
+      )
+      .get();
+    expect(removed).toBeUndefined();
+    expect(
+      verified.prepare('SELECT value FROM migration_sentinel').get(),
+    ).toEqual({ value: 'kept' });
+    verified.close();
+  });
+
   it('セット開始時に固定ルールchainを保存し、終了前の評価は開かない', () => {
     const persistence = new SqlitePersistence(':memory:');
     const session = persistence.sessions.resolve(undefined);

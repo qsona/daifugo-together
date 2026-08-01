@@ -31,7 +31,7 @@ describe('E17 Web Push', () => {
     expect(isNightInJapan(Date.UTC(2026, 7, 1, 22, 0))).toBe(false); // 07:00
   });
 
-  it('登録済みユーザーのON種別だけを送り、センターと同じ文面・opened URLを使う', async () => {
+  it('購読済みユーザーへ終端結果3種だけを送り、センターと同じ文面・opened URLを使う', async () => {
     const persistence = new SqlitePersistence(':memory:');
     const session = persistence.sessions.resolve(undefined);
     persistence.auth.complete(session.userId, 'google-push', 1);
@@ -40,19 +40,23 @@ describe('E17 Web Push', () => {
       { endpoint: 'https://push.example.test/1', p256dh: 'key', auth: 'auth' },
       2,
     );
-    persistence.push.setPreferences(
-      session.userId,
-      { proposal_released: true },
-      2,
-    );
     const transport = new FakePushTransport();
     const sender = new PushSender(persistence.push, {
       transport,
       now: () => Date.UTC(2026, 7, 1, 3, 0), // JST 12:00
     });
     await sender.send(session.userId, item('proposal_released'));
+    await sender.send(session.userId, item('proposal_rejected'));
+    await sender.send(session.userId, item('proposal_failed'));
     await sender.send(session.userId, item('proposal_implementing'));
-    expect(transport.sent).toHaveLength(1);
+    await sender.send(session.userId, item('rule_debut'));
+    expect(transport.sent).toHaveLength(3);
+    expect(
+      transport.sent.map(
+        ({ payload }) =>
+          (JSON.parse(payload) as { type: NotificationView['type'] }).type,
+      ),
+    ).toEqual(['proposal_released', 'proposal_rejected', 'proposal_failed']);
     expect(JSON.parse(transport.sent[0]!.payload)).toEqual({
       type: 'proposal_released',
       title: '提案がルールになったよ！',
@@ -91,11 +95,6 @@ describe('E17 Web Push', () => {
       },
       2,
     );
-    persistence.push.setPreferences(
-      session.userId,
-      { proposal_released: true },
-      2,
-    );
     const transport = new FakePushTransport();
     const notifications = new NotificationService(persistence.notifications, {
       now: () => 3,
@@ -121,7 +120,7 @@ describe('E17 Web Push', () => {
     persistence.close();
   });
 
-  it('夜間と設定OFFでは送らず、購読と初期設定を冪等に扱う', async () => {
+  it('夜間は送らず、購読を冪等に扱う', async () => {
     const persistence = new SqlitePersistence(':memory:');
     const session = persistence.sessions.resolve(undefined);
     persistence.auth.complete(session.userId, 'google-gates', 1);
@@ -139,23 +138,7 @@ describe('E17 Web Push', () => {
     expect(persistence.push.active(session.userId)).toEqual([
       { ...subscription, p256dh: 'updated-key' },
     ]);
-    expect(
-      persistence.push.preferences(session.userId, [
-        'proposal_released',
-        'proposal_failed',
-      ]),
-    ).toEqual({ proposal_released: false, proposal_failed: false });
     const transport = new FakePushTransport();
-    const daySender = new PushSender(persistence.push, {
-      transport,
-      now: () => Date.UTC(2026, 7, 1, 3, 0),
-    });
-    await daySender.send(session.userId, item('proposal_released'));
-    persistence.push.setPreferences(
-      session.userId,
-      { proposal_released: true },
-      3,
-    );
     const nightSender = new PushSender(persistence.push, {
       transport,
       now: () => Date.UTC(2026, 7, 1, 12, 0),
@@ -179,11 +162,6 @@ describe('E17 Web Push', () => {
       },
       2,
     );
-    persistence.push.setPreferences(
-      registered.userId,
-      { proposal_released: true },
-      2,
-    );
     const transport = new FakePushTransport();
     transport.error = { statusCode: 410 };
     const sender = new PushSender(persistence.push, {
@@ -203,10 +181,12 @@ describe('E17 Web Push', () => {
       }),
     ).toMatchObject({ status: 403, body: { error: 'registration_required' } });
     const unavailable = new PushService(persistence.push, { available: false });
-    expect(unavailable.getPreferences(registered.userToken)).toMatchObject({
-      status: 503,
-      body: { error: 'push_unavailable' },
-    });
+    expect(
+      unavailable.subscribe(registered.userToken, {
+        endpoint: 'https://push.example.test/unavailable',
+        keys: { p256dh: 'key', auth: 'auth' },
+      }),
+    ).toMatchObject({ status: 503, body: { error: 'push_unavailable' } });
     persistence.close();
   });
 

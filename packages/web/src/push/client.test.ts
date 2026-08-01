@@ -7,7 +7,7 @@ afterEach(() => {
 });
 
 describe('PushClient', () => {
-  it('ユーザー操作を保って許諾を先に要求し、購読と初期設定を保存する', async () => {
+  it('ユーザー操作を保って許諾を先に要求し、端末の購読だけを保存する', async () => {
     const order: string[] = [];
     const subscription = {
       toJSON: () => ({
@@ -44,18 +44,6 @@ describe('PushClient', () => {
           { status: 200 },
         );
       }
-      if (url.endsWith('/api/push/preferences')) {
-        return new Response(
-          JSON.stringify({
-            preferences: {
-              proposal_released: true,
-              proposal_rejected: true,
-              proposal_failed: true,
-            },
-          }),
-          { status: 200 },
-        );
-      }
       return new Response(null, { status: 204 });
     });
     const client = new PushClient(
@@ -67,7 +55,61 @@ describe('PushClient', () => {
     await expect(client.subscribeProposalResults()).resolves.toBe('subscribed');
     expect(order).toEqual(['permission', 'config']);
     expect(pushManager.subscribe).toHaveBeenCalledOnce();
-    expect(fetcher).toHaveBeenCalledTimes(3);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(
+      fetcher.mock.calls.some(([input]) =>
+        String(input).endsWith('/api/push/preferences'),
+      ),
+    ).toBe(false);
+  });
+
+  it('明示的に断らない限り未購読端末へオファーを再提示する', async () => {
+    const values = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => values.set(key, value),
+    };
+    const pushManager = {
+      getSubscription: vi.fn(async () => null),
+    };
+    vi.stubGlobal('navigator', {
+      userAgent: 'desktop-test',
+      platform: 'test',
+      maxTouchPoints: 0,
+      serviceWorker: {
+        getRegistration: vi.fn(async () => ({ pushManager })),
+      },
+    });
+    vi.stubGlobal('PushManager', class PushManager {});
+    vi.stubGlobal('Notification', { permission: 'default' });
+    const fetcher = vi.fn<typeof fetch>(async () =>
+      Promise.resolve(
+        new Response(JSON.stringify({ available: true, vapidPublicKey: 'AQ' })),
+      ),
+    );
+    const client = new PushClient(
+      'https://game.example.test',
+      storage,
+      fetcher,
+    );
+
+    await expect(client.offer()).resolves.toBe('push');
+    await expect(client.offer()).resolves.toBe('push');
+    client.declineOffer();
+    await expect(client.offer()).resolves.toBeNull();
+  });
+
+  it('ログイン後オファーの継続フラグを一度だけ消費する', () => {
+    const values = new Map<string, string>();
+    const client = new PushClient('https://game.example.test', {
+      getItem: (key) => values.get(key) ?? null,
+      setItem: (key, value) => values.set(key, value),
+      removeItem: (key) => values.delete(key),
+    });
+
+    client.markOfferAfterLogin();
+    expect(client.consumeOfferAfterLogin()).toBe(true);
+    expect(client.consumeOfferAfterLogin()).toBe(false);
   });
 
   it('iOSのタブではPush非対応ではなくホーム画面追加を案内する', async () => {

@@ -308,13 +308,7 @@ export class SqlitePersistence implements RoomPersistencePort {
       );
       CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user
         ON push_subscriptions(user_id);
-      CREATE TABLE IF NOT EXISTS push_preferences (
-        user_id TEXT NOT NULL REFERENCES users(user_id),
-        type TEXT NOT NULL,
-        enabled INTEGER NOT NULL CHECK (enabled IN (0, 1)),
-        updated_at INTEGER NOT NULL,
-        PRIMARY KEY (user_id, type)
-      );
+      DROP TABLE IF EXISTS push_preferences;
     `);
     const userColumns = this.#sqlite
       .prepare("PRAGMA table_info('users')")

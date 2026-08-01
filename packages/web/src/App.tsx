@@ -16,6 +16,7 @@ import { FinalPlayReveal } from './components/FinalPlayReveal';
 import { RuleCutIn, type RuleActivation } from './components/RuleCutIn';
 import { EmptyState } from './components/EmptyState';
 import { NotificationBell } from './components/NotificationBell';
+import { PushOfferDialog } from './components/PushOfferDialog';
 import { ActiveRulesModal } from './components/ActiveRulesModal';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { RuleDetailModal } from './components/RuleDetailModal';
@@ -80,7 +81,11 @@ import {
 import { getBrowserAuthClient, type AuthApi } from './auth/client';
 import { FEATURES } from './features';
 import { getBrowserNotificationClient } from './notification/client';
-import { getBrowserPushClient } from './push/client';
+import {
+  getBrowserPushClient,
+  type PushClient,
+  type PushOfferKind,
+} from './push/client';
 import {
   getBrowserEvaluationClient,
   type EvaluationApi,
@@ -621,11 +626,13 @@ function ConnectedApp({
   storage,
   evaluationApi,
   auth,
+  pushApi,
 }: {
   client: MultiplayerClient;
   storage: PlayedBeforeStorage | undefined;
   evaluationApi: EvaluationApi;
   auth: AuthApi;
+  pushApi: PushClient;
 }) {
   const current = useScreenStore((state) => state.current);
   const go = useScreenStore((state) => state.go);
@@ -658,9 +665,10 @@ function ConnectedApp({
   const [authPending, setAuthPending] = useState(false);
   const [authMessage, setAuthMessage] = useState<string | null>(null);
   const [showResultAuthPrompt, setShowResultAuthPrompt] = useState(false);
+  const [menuPushOfferKind, setMenuPushOfferKind] =
+    useState<PushOfferKind | null>(null);
   const proposalApi = getBrowserProposalClient();
   const notificationApi = getBrowserNotificationClient();
-  const pushApi = getBrowserPushClient();
   const ruleEventRoomId = useRef<string | null>(null);
   const lastRuleEventSeq = useRef(0);
   const seenRuleIds = useRef(new Set<string>());
@@ -705,31 +713,39 @@ function ConnectedApp({
     />
   );
   const finalPlayReveal = useFinalPlayReveal(room);
-  const beginLogin = useCallback(() => {
+  const beginLogin = useCallback((): boolean => {
     if (
       state.registered &&
       !window.confirm(
         '別のアカウントでログインすると、この端末はそのアカウントに切り替わります',
       )
     ) {
-      return;
+      return false;
     }
     const userToken = client.currentUserToken();
     if (state.connection !== 'ready' || !userToken) {
       setAuthMessage(
         '接続を確認しています。少し待ってから、もう一度ためしてください。',
       );
-      return;
+      return false;
     }
     setAuthPending(true);
     setAuthMessage(null);
     try {
       auth.begin(userToken);
+      return true;
     } catch {
       setAuthPending(false);
       setAuthMessage(RETRY_GENERIC_ERROR);
+      return false;
     }
   }, [auth, client, state.connection, state.registered]);
+  const beginPushLogin = useCallback((): boolean => {
+    pushApi.markOfferAfterLogin();
+    const started = beginLogin();
+    if (!started) pushApi.consumeOfferAfterLogin();
+    return started;
+  }, [beginLogin, pushApi]);
   const routeAtRender =
     typeof window === 'undefined'
       ? null
@@ -1058,6 +1074,7 @@ function ConnectedApp({
     if (hash === '#/auth/result') {
       window.history.replaceState(null, '', '/menu');
       go('menu');
+      const continueToPush = pushApi.consumeOfferAfterLogin();
       const result = auth.takeResult();
       if (!result) {
         setAuthMessage(RETRY_GENERIC_ERROR);
@@ -1067,6 +1084,12 @@ function ConnectedApp({
       setAuthMessage(
         result.outcome === 'linked' ? '引き継ぎ登録しました' : 'おかえり!',
       );
+      if (continueToPush) {
+        void pushApi
+          .offer()
+          .then((kind) => setMenuPushOfferKind(kind))
+          .catch(() => undefined);
+      }
       return;
     }
     if (!hash.startsWith('#/auth/complete')) return;
@@ -1091,7 +1114,7 @@ function ConnectedApp({
       setAuthPending(false);
       setAuthMessage(RETRY_GENERIC_ERROR);
     }
-  }, [auth, client, go]);
+  }, [auth, client, go, pushApi]);
 
   useEffect(() => {
     if (guideSessionKey.current === tutorialSessionKey) return;
@@ -1627,6 +1650,10 @@ function ConnectedApp({
           subscribe: () => pushApi.subscribeProposalResults(),
           decline: () => pushApi.declineOffer(),
         }}
+        pushRegistration={{
+          declined: () => pushApi.offerDeclined(),
+          begin: beginPushLogin,
+        }}
       />,
     );
   }
@@ -1662,7 +1689,12 @@ function ConnectedApp({
   }
   if (!sharedInviteCode && current === 'pushSettings') {
     return show(
-      <PushSettingsScreen api={pushApi} onBack={() => go('notifications')} />,
+      <PushSettingsScreen
+        api={pushApi}
+        onBack={() => go('notifications')}
+        registered={state.registered}
+        onLogin={beginPushLogin}
+      />,
     );
   }
   if (!sharedInviteCode && current === 'ruleDex') {
@@ -1741,6 +1773,14 @@ function ConnectedApp({
           error={playSheetError ?? friendlyError(state.error)}
         />
       )}
+      {menuPushOfferKind && (
+        <PushOfferDialog
+          kind={menuPushOfferKind}
+          subscribe={() => pushApi.subscribeProposalResults()}
+          decline={() => pushApi.declineOffer()}
+          onClose={() => setMenuPushOfferKind(null)}
+        />
+      )}
     </>,
   );
 }
@@ -1764,11 +1804,13 @@ export function App({
   storage,
   evaluationApi,
   auth,
+  push,
 }: {
   client?: MultiplayerClient | null;
   storage?: PlayedBeforeStorage;
   evaluationApi?: EvaluationApi;
   auth?: AuthApi;
+  push?: PushClient;
 } = {}) {
   useEffect(() => {
     const restoreScreenFromUrl = () => {
@@ -1830,12 +1872,14 @@ export function App({
           takeResult: () => null,
         }
       : getBrowserAuthClient());
+  const effectivePush = push ?? getBrowserPushClient();
   return effectiveClient ? (
     <ConnectedApp
       client={effectiveClient}
       storage={effectiveStorage}
       evaluationApi={effectiveEvaluationApi}
       auth={effectiveAuth}
+      pushApi={effectivePush}
     />
   ) : (
     <DemoApp />
