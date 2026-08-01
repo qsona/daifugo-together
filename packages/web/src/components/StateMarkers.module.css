@@ -109,14 +109,13 @@
   white-space: nowrap;
 }
 
-/* スートの字は札と同じ色の規律(♥♦ は赤、♠♣ は紺)。 */
+/*
+ * スートは札と同じ図形・同じ 4 色の規律(SuitMark)。
+ * 図形は 1em 角なので、寸法はここの font-size で決まる。
+ * チップの文字(micro 11px)より一回り大きくして、♠/♣ の差を潰さない。
+ */
 .suit {
-  font-size: var(--font-size-caption);
-  font-weight: var(--font-weight-heavy);
-}
-
-.redSuit {
-  color: var(--color-red-500);
+  font-size: 13px;
 }
 
 /* 登場は 1 回だけ弾む。以後は静止する(常時ループ禁止)。 */

@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FieldStateChips, StateRibbons } from './StateMarkers';
 import type { GameStatusMarker } from './StateMarkers';
 import styles from './StateMarkers.module.css';
+import suitStyles from './SuitMark.module.css';
 
 const ENTERING_CLASS = styles.entering;
 const EXITING_CLASS = styles.exiting;
@@ -38,16 +39,24 @@ describe('継続状態のマーカー', () => {
     expect(ribbon.textContent).toBe('革命');
   });
 
-  it('場チップにスート字を先頭から並べ、赤スートだけ色を分ける', () => {
+  it('場チップにスートの図形を先頭から並べ、スートごとに色を分ける', () => {
     render(<FieldStateChips statuses={[BINDING]} />);
 
     const chip = screen.getByRole('button', {
       name: 'スペード・ハートのしばり — 継続中。タップで説明',
     });
-    expect(chip.textContent).toBe('♠♥しばり');
-    const redSuits = chip.querySelectorAll(`.${String(styles.redSuit)}`);
-    expect(redSuits.length).toBe(1);
-    expect(redSuits[0]?.textContent).toBe('♥');
+    // スートは図形(SuitMark)なので、読み上げ文字列は名前だけになる。
+    expect(chip.textContent).toBe('しばり');
+
+    const marks = chip.querySelectorAll('svg');
+    expect(marks.length).toBe(2);
+    // 図形は装飾なので読み上げには出さない(名前は aria-label が持つ)。
+    for (const mark of marks) {
+      expect(mark.getAttribute('aria-hidden')).toBe('true');
+    }
+    // 4 色デッキの色は札と同じ規律。♠ と ♥ が別の色クラスになる。
+    expect(marks[0]?.classList.contains(String(suitStyles.spade))).toBe(true);
+    expect(marks[1]?.classList.contains(String(suitStyles.heart))).toBe(true);
   });
 
   it('タップでそのルールの詳細導線を呼ぶ', async () => {

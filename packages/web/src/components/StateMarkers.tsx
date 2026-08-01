@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 
-import type { GameStatusView, Suit } from '@daifugo/core';
+import type { GameStatusView } from '@daifugo/core';
 
 import { cx } from '../lib/cx';
+
+import { SUIT_NAME, SuitMark, suitColorClass } from './SuitMark';
 
 import styles from './StateMarkers.module.css';
 
@@ -18,20 +20,6 @@ const EXIT_MS = 320;
 
 /** 局リボンを段重ねする上限。これを超えた分は「+N」にまとめる。 */
 const MAX_RIBBONS = 2;
-
-const SUIT_GLYPH: Record<Suit, string> = {
-  spade: '♠',
-  heart: '♥',
-  diamond: '♦',
-  club: '♣',
-};
-
-const SUIT_NAME: Record<Suit, string> = {
-  spade: 'スペード',
-  heart: 'ハート',
-  diamond: 'ダイヤ',
-  club: 'クラブ',
-};
 
 const NO_STATUSES: readonly GameStatusMarker[] = [];
 
@@ -145,17 +133,12 @@ export function FieldStateChips({
         >
           <span className={styles.chip}>
             {status.suits?.map((suit, index) => (
-              <span
+              <SuitMark
                 // 同じスートが複数入りうるので、位置も鍵に混ぜる。
                 key={`${suit}:${String(index)}`}
-                className={cx(
-                  styles.suit,
-                  (suit === 'heart' || suit === 'diamond') && styles.redSuit,
-                )}
-                aria-hidden="true"
-              >
-                {SUIT_GLYPH[suit]}
-              </span>
+                suit={suit}
+                className={cx(styles.suit, suitColorClass(suit))}
+              />
             ))}
             {status.name}
           </span>

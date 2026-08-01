@@ -17,17 +17,34 @@
   font-family: inherit;
   font-weight: var(--font-weight-heavy);
   line-height: 1;
+  /* スート付きの札は .index が色を上書きする。ここは JOKER の既定色。 */
+  color: var(--color-text-primary);
   cursor: default;
 }
 
-/* 左上の隅にランクとスートを縦に積む。重なっても読める帯。 */
+/*
+ * 左上の隅にランクとスートを縦に積む。重なっても読める帯。
+ *
+ * 帯の幅は手札の重なり(HandTray)で決まり、375px 幅で
+ * 4 人戦 13 枚なら 22.7px、3 人戦 18 枚なら 16.0px しかない。
+ * 次の札はこの帯の右端に太輪郭(2px)を重ねてくるので、
+ * 帯からはみ出した分は必ず欠ける。
+ *
+ * そこで index は「幅の決まった 1 本の柱」にする。中身が何であっても
+ * 札の端から 4〜18px に収まるので、
+ * ・単数字は 18 枚でも欠けない(帯 16px に対し右端 16.2px)
+ * ・スートの横位置がランクによってずれない
+ * の 2 つが同時に成り立つ。可変幅にすると幅広のランク(10)が
+ * 柱を押し広げ、スートまで右へ動いて一緒に欠けていた。
+ */
 .index {
   position: absolute;
   top: 3px;
-  left: 5px;
+  left: 2px;
   display: flex;
   flex-direction: column;
   align-items: center;
+  width: 14px;
   line-height: 0.95;
 }
 
@@ -35,8 +52,23 @@
   font-size: var(--font-size-title-s);
 }
 
+/*
+ * 2 文字のランク(10)だけ横に詰める。16px のままだと 20.9px あり、
+ * どの枚数でも柱からはみ出して「1」しか見えなかった。
+ * 字を小さくせず横だけ詰めるのは、高さ(= ランクの視覚的な強さ)を
+ * 他のランクと揃えたままにするため。トランプの 10 の組み方と同じ。
+ */
+.wideRank {
+  transform: scaleX(0.67);
+}
+
+/*
+ * スートは 14px。12px では ♣ の 3 つの丸のあいだが読めず ♠ と同じ塊に見えた。
+ * SuitMark の図形は 1em 角なので、寸法はここの font-size で決まる。
+ */
 .suit {
-  font-size: var(--font-size-caption);
+  font-size: 14px;
+  margin-top: 2px;
 }
 
 /* ============================================================
@@ -124,15 +156,6 @@
 .small .jokerFaceStar {
   width: 21px;
   height: 21px;
-}
-
-/* ♥♦ は KV のブランド赤、♠♣ は共通アウトラインの紺。 */
-.red {
-  color: var(--color-red-500);
-}
-
-.black {
-  color: var(--color-navy-800);
 }
 
 .selectable {

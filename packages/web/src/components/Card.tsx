@@ -1,8 +1,11 @@
 import { cx } from '../lib/cx';
 
+import { SUIT_NAME, SuitMark, suitColorClass } from './SuitMark';
+import type { Suit } from './SuitMark';
+
 import styles from './Card.module.css';
 
-export type Suit = 'spade' | 'heart' | 'diamond' | 'club';
+export type { Suit };
 
 /** 1 枚の札が表示する内容だけを持つ view-model(エンジンの Card 型は写さない)。 */
 export type CardView = {
@@ -16,20 +19,6 @@ export type CardView = {
    * ジョーカー 2 枚を支援技術で区別するために使う(例:「ジョーカー1」)。
    */
   label?: string;
-};
-
-const suitGlyph: Record<Suit, string> = {
-  spade: '♠',
-  heart: '♥',
-  diamond: '♦',
-  club: '♣',
-};
-
-const suitName: Record<Suit, string> = {
-  spade: 'スペード',
-  heart: 'ハート',
-  diamond: 'ダイヤ',
-  club: 'クラブ',
 };
 
 /**
@@ -69,13 +58,11 @@ export function Card({
   onToggle,
   onDimmedTap,
 }: CardProps) {
-  const isRed = card.suit === 'heart' || card.suit === 'diamond';
   const label =
     card.label ??
-    (card.suit ? `${suitName[card.suit]}の${card.rank}` : 'ジョーカー');
+    (card.suit ? `${SUIT_NAME[card.suit]}の${card.rank}` : 'ジョーカー');
   const className = cx(
     styles.card,
-    isRed ? styles.red : styles.black,
     size === 'small' && styles.small,
     onToggle && styles.selectable,
     selected && styles.selected,
@@ -88,14 +75,24 @@ export function Card({
    * 扇状に重なっていても全部の札が読める(カードゲーム UI の定石)。
    */
   const index = card.suit ? (
-    <span className={styles.index} aria-hidden="true">
-      <span className={styles.rank}>{card.rank}</span>
-      <span className={styles.suit}>{suitGlyph[card.suit]}</span>
+    /* 色は帯ごと(ランクも記号も)スートの色にする。既存の「♥♦ は赤い札」の
+       規律を 4 色へ広げた形で、色の載せ方そのものは変えていない。 */
+    <span
+      className={cx(styles.index, suitColorClass(card.suit))}
+      aria-hidden="true"
+    >
+      {/* 2 文字なのは 10 だけだが、判定は文字数で持つ(ランク語彙が増えても効く)。 */}
+      <span
+        className={cx(styles.rank, card.rank.length > 1 && styles.wideRank)}
+      >
+        {card.rank}
+      </span>
+      <SuitMark suit={card.suit} className={styles.suit} />
     </span>
   ) : (
     /*
      * ジョーカーの左端の帯は星 1 つだけにする。文字を縦に積むと帯の幅
-     * (重ねた札で 15px 前後)で潰れて読めなくなるが、記号なら潰れない。
+     * (重ねた札で 14px 前後)で潰れて読めなくなるが、記号なら潰れない。
      */
     <span className={cx(styles.index, styles.jokerIndex)} aria-hidden="true">
       <JokerStar className={styles.jokerIndexStar} />
