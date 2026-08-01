@@ -2,6 +2,7 @@ import { AppBar } from '../components/AppBar';
 import { CountdownButton } from '../components/CountdownButton';
 import { GameRankRows } from '../components/GameRankRows';
 import type { GameRankView } from '../components/GameRankRows';
+import { QUIT_GAME_LABEL } from '../messages';
 
 import screen from './screen.module.css';
 
@@ -18,6 +19,12 @@ type GameResultScreenProps = {
   autoAdvanceAt: number;
   waitingForOthers: boolean;
   onNext: () => void;
+  /**
+   * 対局を途中でやめる。確認は呼び出し側が挟む。
+   * 省略すると「やめる」を出さない(セット最終戦の結果表示など、
+   * 直後にセット結果へ抜ける場面で使う)。
+   */
+  onQuit?: () => void;
 };
 
 /**
@@ -33,10 +40,17 @@ export function GameResultScreen({
   autoAdvanceAt,
   waitingForOthers,
   onNext,
+  onQuit,
 }: GameResultScreenProps) {
   return (
     <div className={screen.screen}>
-      <AppBar title={title} action={{ label: progressLabel }} />
+      <AppBar
+        title={title}
+        {...(onQuit
+          ? { leading: { label: QUIT_GAME_LABEL, onClick: onQuit } }
+          : {})}
+        action={{ label: progressLabel }}
+      />
       <main className={screen.body}>
         {/*
          * 見出しは AppBar と重複するので置かない。

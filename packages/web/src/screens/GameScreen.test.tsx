@@ -45,6 +45,7 @@ function game(finishes: readonly SeatFinish[]) {
       selectedCardIds={[]}
       isMyTurn={false}
       onViewRules={() => undefined}
+      onQuit={() => undefined}
       onOpenActivation={() => undefined}
       onToggleCard={() => undefined}
       onPlay={() => undefined}
@@ -124,6 +125,7 @@ describe('contract v2 choice UI', () => {
         playLabel="えらんだ2枚を捨てる"
         actionPrompt="10捨て: カードを2枚選んでください"
         onViewRules={() => undefined}
+        onQuit={() => undefined}
         onOpenActivation={() => undefined}
         onToggleCard={() => undefined}
         onPlay={() => undefined}
@@ -301,7 +303,8 @@ describe('継続状態の常設表示', () => {
     const chip = within(table).getByRole('button', {
       name: 'スペードのしばり — 継続中。タップで説明',
     });
-    expect(chip.textContent).toBe('♠しばり');
+    // スートは図形(SuitMark)なので、チップの文字はルール名だけ。
+    expect(chip.textContent).toBe('しばり');
 
     await user.click(ribbon);
     await user.click(chip);

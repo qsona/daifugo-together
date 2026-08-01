@@ -2598,3 +2598,151 @@ describe('AU-01: 認証完了のアプリ統合', () => {
     );
   });
 });
+
+describe('対局を途中でやめる', () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  function quitClient(mode: 'basic' | 'community'): {
+    client: MultiplayerClient;
+    leaveRoom: ReturnType<typeof vi.fn>;
+  } {
+    const state: MultiplayerState = {
+      connection: 'ready',
+      registered: false,
+      displayName: 'ホスト',
+      room: tutorialHintRoom(mode, []),
+      roomClosedReason: null,
+      error: null,
+    };
+    const leaveRoom = vi.fn(async () => undefined);
+    return {
+      client: {
+        subscribe: () => () => undefined,
+        snapshot: () => state,
+        leaveRoom,
+      } as unknown as MultiplayerClient,
+      leaveRoom,
+    };
+  }
+
+  it('対局中の「やめる」は確認を挟み、承認して初めて退室する', async () => {
+    const user = userEvent.setup();
+    const { client, leaveRoom } = quitClient('community');
+
+    render(<App client={client} />);
+    await user.click(screen.getByRole('button', { name: 'やめる' }));
+
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText('対局をやめますか?')).toBeTruthy();
+    expect(leaveRoom).not.toHaveBeenCalled();
+
+    await user.click(within(dialog).getByRole('button', { name: 'やめる' }));
+    await waitFor(() => expect(leaveRoom).toHaveBeenCalledOnce());
+  });
+
+  it('確認で「もどる」を押すと退室せず対局に戻る', async () => {
+    const user = userEvent.setup();
+    const { client, leaveRoom } = quitClient('community');
+
+    render(<App client={client} />);
+    await user.click(screen.getByRole('button', { name: 'やめる' }));
+    await user.click(
+      within(screen.getByRole('dialog')).getByRole('button', {
+        name: 'もどる',
+      }),
+    );
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(leaveRoom).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'やめる' })).toBeTruthy();
+  });
+
+  it('AI代行の注記はcommunityだけに出す', async () => {
+    const user = userEvent.setup();
+
+    const community = quitClient('community');
+    render(<App client={community.client} />);
+    await user.click(screen.getByRole('button', { name: 'やめる' }));
+    expect(
+      within(screen.getByRole('dialog')).getByText(/AIが引きつぎます/),
+    ).toBeTruthy();
+    cleanup();
+
+    const basic = quitClient('basic');
+    render(<App client={basic.client} />);
+    await user.click(screen.getByRole('button', { name: 'やめる' }));
+    expect(
+      within(screen.getByRole('dialog')).queryByText(/AIが引きつぎます/),
+    ).toBeNull();
+  });
+
+  it('退室に失敗したらダイアログを閉じずに案内を出す', async () => {
+    const user = userEvent.setup();
+    const state: MultiplayerState = {
+      connection: 'ready',
+      registered: false,
+      displayName: 'ホスト',
+      room: tutorialHintRoom('community', []),
+      roomClosedReason: null,
+      error: null,
+    };
+    const client = {
+      subscribe: () => () => undefined,
+      snapshot: () => state,
+      leaveRoom: vi.fn(async () => {
+        throw new Error('network');
+      }),
+    } as unknown as MultiplayerClient;
+
+    render(<App client={client} />);
+    await user.click(screen.getByRole('button', { name: 'やめる' }));
+    await user.click(
+      within(screen.getByRole('dialog')).getByRole('button', {
+        name: 'やめる',
+      }),
+    );
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert').textContent).toContain(
+        'もう一度ためしてください',
+      ),
+    );
+    expect(screen.getByRole('dialog')).toBeTruthy();
+  });
+
+  it('待機画面の退室確認もダイアログで行う', async () => {
+    const user = userEvent.setup();
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const room: PlayerRoomView = {
+      ...tutorialHintRoom('community', []),
+      phase: 'waiting',
+      game: null,
+    };
+    const state: MultiplayerState = {
+      connection: 'ready',
+      registered: false,
+      displayName: 'ホスト',
+      room,
+      roomClosedReason: null,
+      error: null,
+    };
+    const leaveRoom = vi.fn(async () => undefined);
+    const client = {
+      subscribe: () => () => undefined,
+      snapshot: () => state,
+      leaveRoom,
+    } as unknown as MultiplayerClient;
+
+    render(<App client={client} />);
+    await user.click(screen.getByRole('button', { name: 'もどる' }));
+
+    expect(confirm).not.toHaveBeenCalled();
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText('部屋から出ますか?')).toBeTruthy();
+
+    await user.click(within(dialog).getByRole('button', { name: '出る' }));
+    await waitFor(() => expect(leaveRoom).toHaveBeenCalledOnce());
+  });
+});

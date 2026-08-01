@@ -17,6 +17,7 @@ import { RuleCutIn, type RuleActivation } from './components/RuleCutIn';
 import { EmptyState } from './components/EmptyState';
 import { NotificationBell } from './components/NotificationBell';
 import { ActiveRulesModal } from './components/ActiveRulesModal';
+import { ConfirmDialog } from './components/ConfirmDialog';
 import { RuleDetailModal } from './components/RuleDetailModal';
 import type { RuleVote, SetFunRating } from './screens/SetResultScreen';
 import {
@@ -97,7 +98,16 @@ import {
   reduceGraduationState,
   writeGraduationState,
 } from './tutorial/graduation';
-import { RATING_SUBMIT_ERROR, RETRY_GENERIC_ERROR } from './messages';
+import {
+  CONFIRM_BACK_LABEL,
+  LEAVE_ROOM_CONFIRM_LABEL,
+  LEAVE_ROOM_TITLE,
+  QUIT_GAME_LABEL,
+  QUIT_GAME_MULTI_DESCRIPTION,
+  QUIT_GAME_TITLE,
+  RATING_SUBMIT_ERROR,
+  RETRY_GENERIC_ERROR,
+} from './messages';
 
 const GRADUATION_ERROR =
   'みんなのルールへ進めませんでした。もう一度ためしてください。';
@@ -371,6 +381,9 @@ function DemoApp() {
             setActiveRulesReturn('game');
             go('activeRules');
           }}
+          onQuit={() => {
+            go('menu');
+          }}
           onToggleCard={toggleCard}
           onPlay={() => {
             setSelectedCardIds([]);
@@ -395,6 +408,9 @@ function DemoApp() {
           waitingForOthers={false}
           onNext={() => {
             go('setResult');
+          }}
+          onQuit={() => {
+            go('menu');
           }}
         />
       );
@@ -675,6 +691,11 @@ function ConnectedApp({
   const [graduationError, setGraduationError] = useState<string | null>(null);
   const [playSheetError, setPlaySheetError] = useState<string | null>(null);
   const [roomOverlay, setRoomOverlay] = useState<RoomOverlay>(null);
+  /** 部屋を離れる確認ダイアログ。待機中と対局中で文言が変わる。 */
+  const [leaveConfirm, setLeaveConfirm] = useState<'waiting' | 'game' | null>(
+    null,
+  );
+  const [leaveError, setLeaveError] = useState<string | null>(null);
   const ruleCatalogApi = getBrowserRuleCatalogClient();
   const room = state.room;
   const notificationBell = (
@@ -1099,6 +1120,14 @@ function ConnectedApp({
     setGuideCue(null);
   }, [guideCue, room?.game?.turn?.turnSeq]);
 
+  const roomPhase = room?.phase ?? null;
+  // 部屋の局面が変わったら確認は取り下げる。
+  // (セット結果へ抜けたあと、次のセットで開きっぱなしに見えるのを防ぐ)
+  useEffect(() => {
+    setLeaveConfirm(null);
+    setLeaveError(null);
+  }, [roomPhase]);
+
   const invoke = (operation: Promise<unknown>) => {
     void operation.catch(() => undefined);
   };
@@ -1182,6 +1211,44 @@ function ConnectedApp({
     navigate(roomPath(room), 'replace');
     setRoomOverlay(null);
   };
+  const cancelLeave = () => {
+    setLeaveConfirm(null);
+    setLeaveError(null);
+  };
+  /**
+   * 部屋を離れる。playing 中でも席は残り、AI が引きつぐ(E03 §2.4)。
+   * 失敗したときはダイアログを開いたまま案内を出す。
+   */
+  const confirmLeave = () => {
+    setLeaveError(null);
+    void client.leaveRoom().then(
+      () => {
+        setLeaveConfirm(null);
+        go('menu');
+      },
+      () => {
+        setLeaveError(RETRY_GENERIC_ERROR);
+      },
+    );
+  };
+  const leaveDialog =
+    leaveConfirm === null ? null : (
+      <ConfirmDialog
+        title={leaveConfirm === 'waiting' ? LEAVE_ROOM_TITLE : QUIT_GAME_TITLE}
+        {...(leaveConfirm === 'game' && room?.mode === 'community'
+          ? { description: QUIT_GAME_MULTI_DESCRIPTION }
+          : {})}
+        confirmLabel={
+          leaveConfirm === 'waiting'
+            ? LEAVE_ROOM_CONFIRM_LABEL
+            : QUIT_GAME_LABEL
+        }
+        cancelLabel={CONFIRM_BACK_LABEL}
+        onConfirm={confirmLeave}
+        onCancel={cancelLeave}
+        error={leaveError}
+      />
+    );
   const rulesOverlay =
     room && visibleRoomOverlay?.kind === 'activeRules' ? (
       visibleRoomOverlay.ruleId ? (
@@ -1250,12 +1317,7 @@ function ConnectedApp({
           inviteUrl={inviteUrl}
           activeRuleCount={room.activeRules.length}
           onBack={() => {
-            if (!window.confirm('部屋から出ますか?')) return;
-            invoke(
-              client.leaveRoom().then(() => {
-                go('menu');
-              }),
-            );
+            setLeaveConfirm('waiting');
           }}
           onCopyInvite={() => {
             if (!navigator.clipboard) {
@@ -1273,6 +1335,7 @@ function ConnectedApp({
           showInvite={room.mode !== 'basic'}
         />
         {rulesOverlay}
+        {leaveDialog}
       </>,
     );
   }
@@ -1390,8 +1453,12 @@ function ConnectedApp({
             if (!game.turn) return;
             invoke(client.pass(game.turn.turnSeq));
           }}
+          onQuit={() => {
+            setLeaveConfirm('game');
+          }}
         />
         {rulesOverlay}
+        {leaveDialog}
       </>,
     );
   }
@@ -1400,18 +1467,24 @@ function ConnectedApp({
     const nextGame = room.game.gameNo + 1;
     const intermission = room.game.intermission;
     return show(
-      <GameResultScreen
-        title={`第${String(room.game.gameNo)}戦 おわり`}
-        progressLabel={`セット ${String(room.game.gameNo)} / 3 戦`}
-        ranks={gameRanks(room)}
-        nextLabel={`第${String(nextGame)}戦へ`}
-        autoAdvanceMs={intermission?.durationMs ?? 15_000}
-        autoAdvanceAt={intermission?.endsAt ?? Date.now() + 15_000}
-        waitingForOthers={intermission?.ready ?? false}
-        onNext={() => {
-          invoke(client.readyNextGame());
-        }}
-      />,
+      <>
+        <GameResultScreen
+          title={`第${String(room.game.gameNo)}戦 おわり`}
+          progressLabel={`セット ${String(room.game.gameNo)} / 3 戦`}
+          ranks={gameRanks(room)}
+          nextLabel={`第${String(nextGame)}戦へ`}
+          autoAdvanceMs={intermission?.durationMs ?? 15_000}
+          autoAdvanceAt={intermission?.endsAt ?? Date.now() + 15_000}
+          waitingForOthers={intermission?.ready ?? false}
+          onNext={() => {
+            invoke(client.readyNextGame());
+          }}
+          onQuit={() => {
+            setLeaveConfirm('game');
+          }}
+        />
+        {leaveDialog}
+      </>,
     );
   }
 

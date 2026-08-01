@@ -15,6 +15,7 @@ import type { TableSeat } from '../components/Table';
 import { Toast } from '../components/Toast';
 import type { CardHint } from '../game/hints';
 import type { GuideCue } from '../game/guide';
+import { QUIT_GAME_LABEL } from '../messages';
 
 import styles from './GameScreen.module.css';
 import screen from './screen.module.css';
@@ -85,6 +86,8 @@ type GameScreenProps = {
   actionPrompt?: string | null;
   turnDeadlineAt?: number | null;
   onViewRules: () => void;
+  /** 対局を途中でやめる。押した先で確認を挟むのは呼び出し側の責務。 */
+  onQuit: () => void;
   onOpenActivation: (ruleId: string) => void;
   onToggleCard: (id: string) => void;
   onDimmedCardTap?: (id: string) => void;
@@ -125,6 +128,7 @@ export function GameScreen({
   actionPrompt = null,
   turnDeadlineAt,
   onViewRules,
+  onQuit,
   onOpenActivation,
   onToggleCard,
   onDimmedCardTap,
@@ -146,6 +150,7 @@ export function GameScreen({
     <div className={screen.screen}>
       <AppBar
         title={gameLabel}
+        leading={{ label: QUIT_GAME_LABEL, onClick: onQuit }}
         action={{
           label: `有効ルール ${String(activeRuleCount)}`,
           onClick: onViewRules,

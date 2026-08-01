@@ -28,6 +28,26 @@
   flex-shrink: 0;
 }
 
+/* 「←」と同じピル。中身が文字なので幅だけ内容に合わせる。 */
+.leading {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  margin: -4px 0;
+  padding: 0 var(--space-2);
+  border: var(--border-control) solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--color-bg-surface);
+  color: inherit;
+  font-family: inherit;
+  font-size: var(--font-size-micro);
+  font-weight: var(--font-weight-bold);
+  white-space: nowrap;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
 .title {
   font-size: var(--font-size-title-s);
   font-weight: var(--font-weight-heavy);

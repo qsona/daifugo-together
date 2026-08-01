@@ -16,3 +16,23 @@ export const PROPOSAL_LIST_LOAD_ERROR = '提案一覧を取得できませんで
 export const PROPOSE_RULE_LABEL = 'ルールを提案する';
 
 export const JOIN_FRIEND_ROOM_LABEL = '友だちの部屋にはいる';
+
+/** 対局中の「やめる」。アプリバーのボタンと確認ダイアログの実行側に同じ語を使う。 */
+export const QUIT_GAME_LABEL = 'やめる';
+
+export const QUIT_GAME_TITLE = '対局をやめますか?';
+
+/**
+ * みんなのルール(community)だけに出す注記。
+ * 席が AI に引き継がれることと、戻れないことは画面から読み取れないので書く。
+ * ひとり練習は自分が抜ければ部屋ごと終わるだけなので、注記を置かない。
+ */
+export const QUIT_GAME_MULTI_DESCRIPTION =
+  'あなたの席はAIが引きつぎます。この対局にはもどれません。';
+
+/** 確認ダイアログの取り消し側。押すと元の画面に戻る。 */
+export const CONFIRM_BACK_LABEL = 'もどる';
+
+export const LEAVE_ROOM_TITLE = '部屋から出ますか?';
+
+export const LEAVE_ROOM_CONFIRM_LABEL = '出る';
