@@ -8,6 +8,7 @@ import type {
 } from '@daifugo/core';
 
 import { getSafeLocalStorage } from '../browser-storage';
+import { PROPOSAL_LIST_LOAD_ERROR } from '../messages';
 
 const TOKEN_KEY = 'daifugo.userToken';
 
@@ -86,7 +87,7 @@ export class ProposalClient implements ProposalApi {
           validation_failed: '入力内容をたしかめてください',
           unauthorized: '接続し直してから、もう一度ためしてください',
           anonymous_inflight_limit:
-            'ていあんは 1 つずつ。けっかが出たら つぎを ていあんできるよ',
+            '提案は1つずつです。結果が出たら、次の提案ができます。',
           proposal_suspended: 'いまはルールを提案できません',
         }[body.error ?? ''] ?? '提案を送信できませんでした';
       throw new ProposalApiError(
@@ -108,7 +109,7 @@ export class ProposalClient implements ProposalApi {
     const response = await this.#authenticatedFetch(
       '/api/proposals/mine',
       {},
-      '提案一覧を取得できませんでした',
+      PROPOSAL_LIST_LOAD_ERROR,
     );
     return (await response.json()) as MyProposalsResponse;
   }
@@ -162,7 +163,7 @@ export class ProposalClient implements ProposalApi {
     if (!response.ok) {
       throw new ProposalApiError(
         response.status,
-        response.status === 409 ? 'すでに異議を申し立てています' : errorMessage,
+        response.status === 409 ? 'すでに異議を送っています' : errorMessage,
       );
     }
     return response;

@@ -81,7 +81,7 @@ describe('DS-01: 開始画面でキービジュアルに迎えられる', () => 
 
     expect(screen.queryByRole('button', { name: 'あそぶ' })).toBeNull();
     expect(
-      screen.queryByRole('button', { name: 'ルールをていあんする' }),
+      screen.queryByRole('button', { name: 'ルールを提案する' }),
     ).toBeNull();
     expect(screen.queryByRole('button', { name: 'ルール図鑑' })).toBeNull();
   });
@@ -153,7 +153,7 @@ describe('DS-02: フェーズ 1 の主要画面が 1 本の導線でつながる
         /まもなく次の戦がはじまります/,
         /評価はセットの最後/,
         /よかったルールには高評価/,
-        /低評価が集まったルールは排除されます/,
+        /低評価が集まったルールは引退します/,
       ]) {
         expect(screen.queryByText(prose)).toBeNull();
       }
@@ -426,9 +426,7 @@ describe('画面のURLとリロード復帰', () => {
     await user.click(screen.getByRole('button', { name: /はじめる/ }));
     expect(window.location.pathname).toBe('/menu');
 
-    await user.click(
-      screen.getByRole('button', { name: 'ルールをていあんする' }),
-    );
+    await user.click(screen.getByRole('button', { name: 'ルールを提案する' }));
     expect(window.location.pathname).toBe('/proposals/new');
   });
 
@@ -610,12 +608,10 @@ describe('RP-01: メニューからルール提案へ進む', () => {
     render(<App />);
 
     await user.click(screen.getByRole('button', { name: /はじめる/ }));
-    await user.click(
-      screen.getByRole('button', { name: 'ルールをていあんする' }),
-    );
+    await user.click(screen.getByRole('button', { name: 'ルールを提案する' }));
 
     expect(
-      screen.getByRole('heading', { name: 'ルールをていあんする' }),
+      screen.getByRole('heading', { name: 'ルールを提案する' }),
     ).toBeTruthy();
     expect(
       screen
@@ -1513,7 +1509,7 @@ describe('CX-06: 実ルール発動イベントの演出', () => {
     await user.click(screen.getByRole('button', { name: /低評価/ }));
     await waitFor(() =>
       expect(
-        screen.getByText('評価を送れませんでした。もう一度ためしてください'),
+        screen.getByText('評価を送れませんでした。もう一度ためしてください。'),
       ).toBeTruthy(),
     );
     expect(
@@ -1749,7 +1745,7 @@ describe('TU-04: みんなのルールへの卒業導線', () => {
     render(<App client={client} />);
     await user.click(
       screen.getByRole('button', {
-        name: 'みんなのルールで あそんでみる',
+        name: 'みんなのルールであそんでみる',
       }),
     );
 
@@ -1801,7 +1797,7 @@ describe('TU-04: みんなのルールへの卒業導線', () => {
 
     expect(
       screen.queryByRole('button', {
-        name: 'みんなのルールで あそんでみる',
+        name: 'みんなのルールであそんでみる',
       }),
     ).toBeNull();
   });
@@ -1839,7 +1835,7 @@ describe('TU-04: みんなのルールへの卒業導線', () => {
     expect(
       screen
         .getByRole('button', {
-          name: 'みんなのルールで あそんでみる',
+          name: 'みんなのルールであそんでみる',
         })
         .classList.contains(buttonStyles.primary!),
     ).toBe(true);
@@ -1855,7 +1851,7 @@ describe('TU-04: みんなのルールへの卒業導線', () => {
     expect(
       screen
         .getByRole('button', {
-          name: 'みんなのルールで あそんでみる',
+          name: 'みんなのルールであそんでみる',
         })
         .classList.contains(buttonStyles.primary!),
     ).toBe(true);
@@ -1866,7 +1862,7 @@ describe('TU-04: みんなのルールへの卒業導線', () => {
     expect(
       screen
         .getByRole('button', {
-          name: 'みんなのルールで あそんでみる',
+          name: 'みんなのルールであそんでみる',
         })
         .classList.contains(buttonStyles.primary!),
     ).toBe(false);
@@ -1882,7 +1878,7 @@ describe('TU-04: みんなのルールへの卒業導線', () => {
     expect(
       screen
         .getByRole('button', {
-          name: 'みんなのルールで あそんでみる',
+          name: 'みんなのルールであそんでみる',
         })
         .classList.contains(buttonStyles.primary!),
     ).toBe(false);
@@ -1920,7 +1916,7 @@ describe('TU-04: みんなのルールへの卒業導線', () => {
       expect(
         screen
           .getByRole('button', {
-            name: 'みんなのルールで あそんでみる',
+            name: 'みんなのルールであそんでみる',
           })
           .classList.contains(buttonStyles.primary!),
       ).toBe(true),
@@ -1956,7 +1952,7 @@ describe('TU-04: みんなのルールへの卒業導線', () => {
 
     await user.click(
       screen.getByRole('button', {
-        name: 'みんなのルールで あそんでみる',
+        name: 'みんなのルールであそんでみる',
       }),
     );
 
@@ -1968,7 +1964,7 @@ describe('TU-04: みんなのルールへの卒業導線', () => {
     expect(
       screen
         .getByRole('button', {
-          name: 'みんなのルールで あそんでみる',
+          name: 'みんなのルールであそんでみる',
         })
         .hasAttribute('disabled'),
     ).toBe(false);
@@ -2009,7 +2005,7 @@ describe('TU-04: みんなのルールへの卒業導線', () => {
 
     await user.click(
       screen.getByRole('button', {
-        name: 'みんなのルールで あそんでみる',
+        name: 'みんなのルールであそんでみる',
       }),
     );
 
@@ -2062,7 +2058,7 @@ describe('TU-04: みんなのルールへの卒業導線', () => {
     render(<App client={client} />);
 
     const graduation = screen.getByRole('button', {
-      name: 'みんなのルールで あそんでみる',
+      name: 'みんなのルールであそんでみる',
     });
     await user.click(graduation);
     await user.click(graduation);
@@ -2074,7 +2070,7 @@ describe('TU-04: みんなのルールへの卒業導線', () => {
     expect(createRoom).not.toHaveBeenCalled();
     for (const name of [
       'もう1セットあそぶ',
-      'みんなのルールで あそんでみる',
+      'みんなのルールであそんでみる',
       'ホームへ',
     ]) {
       expect(
@@ -2480,6 +2476,8 @@ describe('AU-01: 認証完了のアプリ統合', () => {
     );
 
     expect(auth.begin).not.toHaveBeenCalled();
-    expect(screen.getByRole('status').textContent).toContain('接続を確認中');
+    expect(screen.getByRole('status').textContent).toContain(
+      '接続を確認しています',
+    );
   });
 });

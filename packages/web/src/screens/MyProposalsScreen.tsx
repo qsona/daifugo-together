@@ -10,6 +10,7 @@ import {
   ProposalStepper,
   type ProposalStep,
 } from '../components/ProposalStepper';
+import { PROPOSAL_LIST_LOAD_ERROR } from '../messages';
 import type { ProposalApi } from '../proposal/client';
 import { STATUS_LABELS } from '../proposal/status-labels';
 
@@ -17,20 +18,20 @@ import styles from './MyProposalsScreen.module.css';
 import screen from './screen.module.css';
 
 const REASON_LABELS: Record<string, string> = {
-  infeasible_technical: '現在のしくみでは実装できませんでした。',
-  breaks_game: 'ゲームの成立を損なうため実装できませんでした。',
+  infeasible_technical: '今のしくみでは開発できませんでした。',
+  breaks_game: 'ゲームが成り立たなくなるため、開発できませんでした。',
   inappropriate: '安全に扱えない内容が含まれていました。',
   duplicate_rule: '似たルールが既にあります。',
   out_of_scope: 'ルールとして解釈できませんでした。',
   implementation_failed:
-    'ルールの実装を完了できませんでした。内容を見直して再提案できます。',
+    'ルールの開発を完了できませんでした。内容を見直して再提案できます。',
 };
 
 function kindLabel(item: ProposalListItem): string {
   if (item.kind === 'original') return 'オリジナル';
   return item.prefectureName
-    ? `ローカル（報告: ${item.prefectureName}）`
-    : 'ローカル（県の記載なし）';
+    ? `ローカル(報告: ${item.prefectureName})`
+    : 'ローカル(県の記載なし)';
 }
 
 function reasonLabel(item: ProposalListItem): string | null {
@@ -100,14 +101,14 @@ export function MyProposalsScreen({
     let active = true;
     const load = async () => {
       if (!api.mine || !api.markProposalsSeen) {
-        setError('提案一覧を取得できませんでした');
+        setError(PROPOSAL_LIST_LOAD_ERROR);
         return;
       }
       let response: MyProposalsResponse;
       try {
         response = await api.mine();
       } catch {
-        if (active) setError('提案一覧を取得できませんでした');
+        if (active) setError(PROPOSAL_LIST_LOAD_ERROR);
         return;
       }
       if (!active) return;

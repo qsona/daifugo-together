@@ -126,14 +126,14 @@ export function SetResultScreen({
           </>
         )}
         {/*
-         * 「低評価が集まると排除される」の置き場は図鑑の「排除済み」行とあそびかた。
+         * 「低評価が集まると引退する」の置き場は図鑑の「引退」行とあそびかた。
          * まだ起きていない結果をここで予告しない(原則 4)。
          */}
 
         <div className={screen.footer}>
           {onRegister && (
             <Button size="small" onClick={onRegister}>
-              きろくをのこす
+              記録を残す
             </Button>
           )}
           {waitingFor && waitingFor.length > 0 && (
@@ -159,7 +159,7 @@ export function SetResultScreen({
               aria-busy={actionPending}
               onClick={onPlayCommunity}
             >
-              みんなのルールで あそんでみる
+              みんなのルールであそんでみる
             </Button>
           )}
           {actionError && (

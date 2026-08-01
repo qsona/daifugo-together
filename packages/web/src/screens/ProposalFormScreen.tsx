@@ -24,6 +24,7 @@ import { SegmentedControl } from '../components/SegmentedControl';
 import { YellowCardModal } from '../components/YellowCardModal';
 import { PushOfferDialog } from '../components/PushOfferDialog';
 import type { PushOfferResult } from '../push/client';
+import { PROPOSE_RULE_LABEL } from '../messages';
 import type { ProposalApi } from '../proposal/client';
 import { ProposalApiError } from '../proposal/client';
 import { STATUS_LABELS } from '../proposal/status-labels';
@@ -34,10 +35,18 @@ import screen from './screen.module.css';
 const ERROR_MESSAGES: Record<ProposalValidationError['code'], string> = {
   required: '入力してください',
   invalid: '正しい値を選んでください',
-  too_long: '文字数の上限を超えています',
+  too_long: '文字が多すぎます',
   not_allowed: 'オリジナルルールには都道府県を指定できません',
   newline_not_allowed: 'ルール名は1行で入力してください',
 };
+
+const RULE_KIND_LABEL = 'ルールの種類';
+const RULE_NAME_LABEL = 'ルール名';
+const RULE_BODY_LABEL = 'ルールの内容';
+const REGISTERED_SLOT_HINT =
+  '提案は1つずつです。結果が出たら次の提案ができ、Googleで登録するといくつでも提案できます。';
+const ANONYMOUS_SLOT_HINT =
+  '登録しなくても、1つずつ提案できます。Googleで登録すると、いくつでも提案できます。';
 
 function clampCodePoints(value: string, maximum: number): string {
   return Array.from(value.normalize('NFC')).slice(0, maximum).join('');
@@ -242,7 +251,7 @@ export function ProposalFormScreen({
     return (
       <div className={screen.screen}>
         <AppBar
-          title="ルールをていあんする"
+          title={PROPOSE_RULE_LABEL}
           onBack={onBack}
           notification={notification}
         />
@@ -264,8 +273,7 @@ export function ProposalFormScreen({
               ) : undefined
             }
           >
-            ていあんは 1 つずつ。けっかが出たら、つぎの ていあんが
-            できるよ。Google とうろくすると いくつでも ていあんできるよ。
+            {REGISTERED_SLOT_HINT}
           </Callout>
         </main>
       </div>
@@ -275,7 +283,7 @@ export function ProposalFormScreen({
   return (
     <div className={screen.screen}>
       <AppBar
-        title="ルールをていあんする"
+        title={PROPOSE_RULE_LABEL}
         onBack={onBack}
         notification={notification}
       />
@@ -292,9 +300,9 @@ export function ProposalFormScreen({
         )}
         <form className={styles.form} onSubmit={(event) => void submit(event)}>
           <div className={styles.field}>
-            <span className={styles.label}>ルールの区分</span>
+            <span className={styles.label}>{RULE_KIND_LABEL}</span>
             <SegmentedControl
-              label="ルールの区分"
+              label={RULE_KIND_LABEL}
               options={[
                 { value: 'local', label: 'ローカルルール' },
                 { value: 'original', label: 'オリジナルルール' },
@@ -309,13 +317,13 @@ export function ProposalFormScreen({
 
           {kind === 'local' && (
             <label className={styles.field}>
-              <span className={styles.label}>遊んでいた都道府県（任意）</span>
+              <span className={styles.label}>あそんでいた都道府県(任意)</span>
               <select
                 className={styles.control}
                 value={prefectureCode}
                 onChange={(event) => setPrefectureCode(event.target.value)}
               >
-                <option value="">選択しない</option>
+                <option value="">えらばない</option>
                 {PREFECTURES.map((prefecture) => (
                   <option key={prefecture.code} value={prefecture.code}>
                     {prefecture.name}
@@ -332,14 +340,14 @@ export function ProposalFormScreen({
 
           <label className={styles.field}>
             <span className={styles.labelRow}>
-              <span className={styles.label}>ルール名</span>
+              <span className={styles.label}>{RULE_NAME_LABEL}</span>
               <span className={styles.counter}>
                 {countCodePoints(name)} / {PROPOSAL_NAME_MAX_LENGTH}
               </span>
             </span>
             <input
               className={styles.control}
-              aria-label="ルール名"
+              aria-label={RULE_NAME_LABEL}
               value={name}
               placeholder="例: 8切り"
               maxLength={PROPOSAL_NAME_MAX_LENGTH * 2}
@@ -357,14 +365,14 @@ export function ProposalFormScreen({
 
           <label className={styles.field}>
             <span className={styles.labelRow}>
-              <span className={styles.label}>ルールの内容</span>
+              <span className={styles.label}>{RULE_BODY_LABEL}</span>
               <span className={styles.counter}>
                 {countCodePoints(body)} / {PROPOSAL_BODY_MAX_LENGTH}
               </span>
             </span>
             <textarea
               className={`${styles.control} ${styles.textarea}`}
-              aria-label="ルールの内容"
+              aria-label={RULE_BODY_LABEL}
               value={body}
               placeholder="例: 8を出すと場が流れて、出した人からもう一度はじまる。"
               maxLength={PROPOSAL_BODY_MAX_LENGTH * 2}
@@ -401,12 +409,7 @@ export function ProposalFormScreen({
               {submitting ? '送信中…' : '提案を送信する'}
             </Button>
           )}
-          {!registered && (
-            <Callout>
-              とうろくしなくても 1 つずつ ていあんできるよ。Google
-              とうろくすると いくつでも ていあんできるよ。
-            </Callout>
-          )}
+          {!registered && <Callout>{ANONYMOUS_SLOT_HINT}</Callout>}
           <Callout>
             提案はAIが確認します。不正な命令はイエローカードの対象です。都道府県は遊んでいた記録として残ります。
           </Callout>

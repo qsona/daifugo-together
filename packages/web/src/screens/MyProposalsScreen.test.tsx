@@ -69,7 +69,7 @@ describe('MyProposalsScreen', () => {
     );
 
     expect(await screen.findByText('公開ルール')).toBeTruthy();
-    expect(screen.getByText('ローカル（報告: 埼玉県）')).toBeTruthy();
+    expect(screen.getByText('ローカル(報告: 埼玉県)')).toBeTruthy();
     expect(screen.getByText('ルール図鑑: r0001-release')).toBeTruthy();
     expect(screen.getByText('実装を完了できませんでした')).toBeTruthy();
     expect(screen.getAllByText('未読')).toHaveLength(2);
@@ -178,15 +178,15 @@ describe('MyProposalsScreen', () => {
 
   it('C-6の全理由codeを固定文言または詳細理由へ変換する', async () => {
     const reasons = [
-      ['infeasible_technical', '現在のしくみでは実装できませんでした。'],
-      ['breaks_game', 'ゲームの成立を損なうため実装できませんでした。'],
+      ['infeasible_technical', '今のしくみでは開発できませんでした。'],
+      ['breaks_game', 'ゲームが成り立たなくなるため、開発できませんでした。'],
       ['inappropriate', '安全に扱えない内容が含まれていました。'],
       ['duplicate_rule', '似たルールが既にあります。'],
       ['out_of_scope', 'ルールとして解釈できませんでした。'],
       ['other', '個別に説明するための長い理由'.repeat(30)],
       [
         'implementation_failed',
-        'ルールの実装を完了できませんでした。内容を見直して再提案できます。',
+        'ルールの開発を完了できませんでした。内容を見直して再提案できます。',
       ],
     ] as const;
     const items: ProposalListItem[] = reasons.map(

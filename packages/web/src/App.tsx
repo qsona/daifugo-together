@@ -97,9 +97,10 @@ import {
   reduceGraduationState,
   writeGraduationState,
 } from './tutorial/graduation';
+import { RATING_SUBMIT_ERROR, RETRY_GENERIC_ERROR } from './messages';
 
 const GRADUATION_ERROR =
-  'みんなのルールへ進めませんでした。もう一度ためしてください';
+  'みんなのルールへ進めませんでした。もう一度ためしてください。';
 const AUTH_RESULT_PROMPT_KEY = 'daifugo.authResultPromptShown';
 
 /**
@@ -695,7 +696,9 @@ function ConnectedApp({
     }
     const userToken = client.currentUserToken();
     if (state.connection !== 'ready' || !userToken) {
-      setAuthMessage('接続を確認中です。少し待ってからもう一度ためしてね');
+      setAuthMessage(
+        '接続を確認しています。少し待ってから、もう一度ためしてください。',
+      );
       return;
     }
     setAuthPending(true);
@@ -704,7 +707,7 @@ function ConnectedApp({
       auth.begin(userToken);
     } catch {
       setAuthPending(false);
-      setAuthMessage('うまくいかなかったみたい。もういちどためしてね');
+      setAuthMessage(RETRY_GENERIC_ERROR);
     }
   }, [auth, client, state.connection, state.registered]);
   const routeAtRender =
@@ -864,9 +867,7 @@ function ConnectedApp({
           revision === ratingRevision.current
         ) {
           setFunRating(confirmedRating.current);
-          setEvaluationError(
-            '評価を送れませんでした。もう一度ためしてください',
-          );
+          setEvaluationError(RATING_SUBMIT_ERROR);
         }
       },
     );
@@ -907,9 +908,7 @@ function ConnectedApp({
           revision === votesRevision.current
         ) {
           setRuleVotes(confirmedVotes.current);
-          setEvaluationError(
-            '評価を送れませんでした。もう一度ためしてください',
-          );
+          setEvaluationError(RATING_SUBMIT_ERROR);
         }
       },
     );
@@ -1035,12 +1034,12 @@ function ConnectedApp({
       go('menu');
       const result = auth.takeResult();
       if (!result) {
-        setAuthMessage('うまくいかなかったみたい。もういちどためしてね');
+        setAuthMessage(RETRY_GENERIC_ERROR);
         return;
       }
       client.switchSession(result.userToken);
       setAuthMessage(
-        result.outcome === 'linked' ? '引き継ぎ登録したよ' : 'おかえり!',
+        result.outcome === 'linked' ? '引き継ぎ登録しました' : 'おかえり!',
       );
       return;
     }
@@ -1051,12 +1050,12 @@ function ConnectedApp({
     window.history.replaceState(null, '', '/menu');
     go('menu');
     if (error) {
-      setAuthMessage('うまくいかなかったみたい。もういちどためしてね');
+      setAuthMessage(RETRY_GENERIC_ERROR);
       return;
     }
     const ott = parameters.get('ott');
     if (!ott) {
-      setAuthMessage('うまくいかなかったみたい。もういちどためしてね');
+      setAuthMessage(RETRY_GENERIC_ERROR);
       return;
     }
     setAuthPending(true);
@@ -1064,7 +1063,7 @@ function ConnectedApp({
       auth.complete(ott);
     } catch {
       setAuthPending(false);
-      setAuthMessage('うまくいかなかったみたい。もういちどためしてね');
+      setAuthMessage(RETRY_GENERIC_ERROR);
     }
   }, [auth, client, go]);
 
@@ -1358,7 +1357,7 @@ function ConnectedApp({
           actionPrompt={
             pendingChoice
               ? (pendingChoice.message ??
-                `カードを${String(pendingChoice.count)}枚選んでください`)
+                `カードを${String(pendingChoice.count)}枚えらんでください`)
               : null
           }
           turnDeadlineAt={game.turn?.deadlineAt ?? null}

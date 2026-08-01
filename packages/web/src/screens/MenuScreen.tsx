@@ -2,6 +2,8 @@ import { BrandHero, HillDivider } from '../components/BrandHero';
 import { Button } from '../components/Button';
 import type { ReactNode } from 'react';
 
+import { PROPOSE_RULE_LABEL } from '../messages';
+
 import styles from './MenuScreen.module.css';
 import screen from './screen.module.css';
 
@@ -50,7 +52,7 @@ export function MenuScreen({
           あそぶ
         </Button>
         <Button block onClick={onPropose}>
-          ルールをていあんする
+          {PROPOSE_RULE_LABEL}
         </Button>
         <Button block onClick={onEncyclopedia}>
           ルール図鑑
