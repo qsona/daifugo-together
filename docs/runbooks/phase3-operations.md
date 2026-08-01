@@ -21,7 +21,7 @@ DATABASE_PATH=/absolute/path/to/daifugo.sqlite pnpm ops metrics --since 2026-07-
 1. 過去30日と直近7日の `metrics` を保存する。日付だけの `--since` は JST 00:00 として扱われる。
 2. `daily` で `funRate`、`boringRate`、`averageActiveRules` の同時推移を見る。
 3. `byRuleBand` で、高ルール数帯だけ `funRate` が低下していないかを見る。
-4. `rules` の released / active / removed / reinstated と日次推移、`prefectureCoverage` を見る。
+4. `rules` の released / active / removed / reinstated と日次推移を見る。
 5. `completedSets` と `partialSets` を確認する。3戦未満の打ち切りセットも評価率へ含めるが、件数は `partialSets` として必ず別に読む。
 6. 評価母数が少ない帯は率だけで判断しない。最低でも該当帯の `evaluations` と日次の継続傾向を併記する。
 

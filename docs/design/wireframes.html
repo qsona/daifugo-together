@@ -205,7 +205,6 @@
     <tr><td>ルールの閲覧(適用ルールは全体共有で変更不可・対局中はラフ表示・ルール図鑑)</td><td>§4.5</td><td>画面2b(件数のみの軽い表示)、画面4: 有効ルール一覧(ルール名のみ)、画面8: ルール図鑑</td></tr>
     <tr><td>インジェクション検出をイエローカードとして演出</td><td>§5.1 / §5.2</td><td>画面9a/9b: イエローカード演出(1 枚目警告 / 2 枚目でルール提案機能を停止)</td></tr>
     <tr><td>ポップなキービジュアル(縦長 9:16 をタイトルに)</td><td>§6</td><td>画面1a: タイトル(縦長キービジュアル全面)、画面1b: メニュー(領域のみ確保)</td></tr>
-    <tr><td>ローカルルールの地域性の資産化(都道府県カバー)</td><td>§4.1 / §11</td><td>画面8: ルール図鑑(都道府県表示・フィルタ)</td></tr>
   </table>
   </div>
 
@@ -610,25 +609,23 @@
 
   <!-- 8. ルール図鑑 -->
   <div class="cell">
-    <h3>画面8. ルール図鑑 <span class="chip">企画書 §4.1・§4.3・§4.4・§4.5・§11</span></h3>
+    <h3>画面8. ルール図鑑 <span class="chip">企画書 §4.3・§4.4・§4.5・§11</span></h3>
     <div class="frame">
       <div class="statusbar"><span>9:41</span><span class="icons"><i></i><i></i><i></i></span></div>
       <div class="appbar"><span class="back">←</span> ルール図鑑</div>
       <div class="body">
         <div class="row">
-          <div class="select" style="font-size:11px;"><span>都道府県: すべて</span><span>▼</span></div>
           <div class="select" style="font-size:11px;"><span>状態: すべて</span><span>▼</span></div>
+          <div class="select" style="font-size:11px;"><span>区分: すべて</span><span>▼</span></div>
         </div>
         <div class="row">
-          <div class="select" style="font-size:11px;"><span>区分: すべて</span><span>▼</span></div>
           <div class="select" style="font-size:11px;"><span>並び順: 人気度</span><span>▼</span></div>
         </div>
-        <div class="cap">実装済みルール 34 件(有効 31・排除済み 3)/ 都道府県カバー 14 <span class="mk">1</span></div>
-        <div class="cap">「報告: 〜県」は、提案した人がその土地で遊んでいたという記録(§4.1)。<span class="mk">3</span></div>
-        <div class="rul"><div class="rank">1<small>優先</small></div><div class="main"><div class="nm">8切り <span class="tag dark">有効</span></div><div class="desc">埼玉県で遊ばれていた報告</div><div class="pop"><span class="tag">報告: 埼玉県</span><span class="bar"><i style="width:87%"></i></span><span>人気度 87</span></div></div></div>
-        <div class="rul"><div class="rank">2<small>優先</small></div><div class="main"><div class="nm">都落ち <span class="tag dark">有効</span></div><div class="desc">福岡県で遊ばれていた報告</div><div class="pop"><span class="tag">報告: 福岡県</span><span class="bar"><i style="width:81%"></i></span><span>人気度 81</span></div></div></div>
+        <div class="cap">実装済みルール 34 件(有効 31・排除済み 3)</div>
+        <div class="rul"><div class="rank">1<small>優先</small></div><div class="main"><div class="nm">8切り <span class="tag dark">有効</span></div><div class="desc">8を出すと場が流れます</div><div class="pop"><span class="tag">ローカル</span><span class="bar"><i style="width:87%"></i></span><span>人気度 87</span></div></div></div>
+        <div class="rul"><div class="rank">2<small>優先</small></div><div class="main"><div class="nm">都落ち <span class="tag dark">有効</span></div><div class="desc">大富豪が最下位になると引退します</div><div class="pop"><span class="tag">ローカル</span><span class="bar"><i style="width:81%"></i></span><span>人気度 81</span></div></div></div>
         <div class="rul"><div class="rank">3<small>優先</small></div><div class="main"><div class="nm">革命返し <span class="tag dark">有効</span></div><div class="pop"><span class="tag">オリジナル</span><span class="bar"><i style="width:74%"></i></span><span>人気度 74</span></div></div></div>
-        <div class="rul"><div class="rank">4<small>優先</small></div><div class="main"><div class="nm">5スキップ <span class="tag dark">有効</span></div><div class="pop"><span class="tag">ローカル(県の記載なし)</span><span class="bar"><i style="width:66%"></i></span><span>人気度 66</span></div></div></div>
+        <div class="rul"><div class="rank">4<small>優先</small></div><div class="main"><div class="nm">5スキップ <span class="tag dark">有効</span></div><div class="pop"><span class="tag">ローカル</span><span class="bar"><i style="width:66%"></i></span><span>人気度 66</span></div></div></div>
         <div class="rul dead"><div class="rank">—</div><div class="main"><div class="nm">手札全シャッフル <span class="tag">排除済み</span> <span class="mk">2</span></div><div class="pop"><span class="tag">オリジナル</span><span class="bar"><i style="width:12%"></i></span><span>人気度 12</span></div><div class="desc">低評価が集まったため排除(§4.4)</div></div></div>
         <div class="ph" style="height:44px;"><span>…ほか 29 件(スクロール)</span></div>
       </div>
@@ -636,9 +633,7 @@
     <div class="notes">
       <div class="nt">注記(この画面で満たす要件)</div>
       <ul>
-        <li>実装済みルールの一覧に<b>人気度・優先度・都道府県・状態(有効/排除済み)</b>を併記(§4.1・§4.3・§4.4・§4.5)。ラフ表示(画面4)と違い、ちゃんと確認したい人向けの詳細側。</li>
-        <li><span class="mk">1</span> 都道府県カバー数は成功指標(§11)。都道府県フィルタで「この地方で遊ばれていた報告」を掘れるようにし、地域性を資産として見せる。</li>
-        <li><span class="mk">3</span> 都道府県は「〜で遊ばれていた報告」(提案者の出自の記録)というニュアンスで表示し、「〜県のルール」と断定しない(§4.1)。入力は任意のため「県の記載なし」のローカルルールもありうる。</li>
+        <li>実装済みルールの一覧に<b>人気度・優先度・区分・状態(有効/排除済み)</b>を併記(§4.3・§4.4・§4.5)。ラフ表示(画面4)と違い、ちゃんと確認したい人向けの詳細側。</li>
         <li><span class="mk">2</span> 排除済みルールも図鑑には残し、淘汰が機能していること(§11)を見えるようにする(復活の有無は未確定 §9-2)。</li>
       </ul>
     </div>

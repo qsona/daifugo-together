@@ -3,7 +3,6 @@ import type {
   RuleCatalogResponse,
   RuleCatalogStatus,
 } from '@daifugo/core';
-import { PREFECTURES } from '@daifugo/core';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { AppBar } from '../components/AppBar';
@@ -12,7 +11,6 @@ import { EmptyState } from '../components/EmptyState';
 import { RuleCard } from '../components/RuleCard';
 import { FEATURES, type FeatureFlags } from '../features';
 import type { RuleCatalogApi } from '../rules/client';
-import { ruleOriginLabel } from '../rules/origin';
 
 import styles from './RuleDexScreen.module.css';
 import screen from './screen.module.css';
@@ -28,7 +26,6 @@ export function RuleDexScreen({
   onBack: () => void;
   features?: FeatureFlags;
 }) {
-  const [prefecture, setPrefecture] = useState('');
   const [status, setStatus] = useState<'' | RuleCatalogStatus>('');
   const [kind, setKind] = useState<'' | RuleCatalogKind>('');
   const [sort, setSort] = useState<'recent' | 'priority' | 'popularity'>(
@@ -47,7 +44,6 @@ export function RuleDexScreen({
       setError(null);
       void api
         .list({
-          ...(prefecture ? { prefecture } : {}),
           ...(status ? { status } : {}),
           ...(kind ? { kind } : {}),
           sort,
@@ -72,7 +68,7 @@ export function RuleDexScreen({
           if (requestId === requestSequence.current) setLoading(false);
         });
     },
-    [api, kind, prefecture, sort, status],
+    [api, kind, sort, status],
   );
 
   useEffect(() => {
@@ -94,21 +90,6 @@ export function RuleDexScreen({
       <AppBar title="ルール図鑑" onBack={onBack} />
       <main className={screen.body}>
         <div className={styles.filters}>
-          <label className={styles.filter}>
-            都道府県
-            <select
-              value={prefecture}
-              onChange={(event) => setPrefecture(event.target.value)}
-            >
-              <option value="">すべて</option>
-              <option value="none">県の記載なし</option>
-              {PREFECTURES.map(({ code, name }) => (
-                <option key={code} value={name}>
-                  {name}
-                </option>
-              ))}
-            </select>
-          </label>
           <label className={styles.filter}>
             状態
             <select
@@ -154,14 +135,9 @@ export function RuleDexScreen({
           </label>
         </div>
         {result && (
-          <>
-            <p className={styles.summary}>
-              {`登場したルール ${String(result.summary.implemented)}件(有効 ${String(result.summary.active)}・引退 ${String(result.summary.removed)}) / 都道府県カバー ${String(result.summary.prefectureCoverage)}`}
-            </p>
-            <p className={styles.note}>
-              「報告: 〜県」は、提案した人がその土地で遊んでいたという記録です。
-            </p>
-          </>
+          <p className={styles.summary}>
+            {`登場したルール ${String(result.summary.implemented)}件(有効 ${String(result.summary.active)}・引退 ${String(result.summary.removed)})`}
+          </p>
         )}
         {error === 'initial' && (
           <p role="alert" className={styles.error}>
@@ -181,11 +157,10 @@ export function RuleDexScreen({
           {result?.items
             .filter((rule) => features.elimination || rule.status === 'active')
             .map((rule) => {
-              const origin = ruleOriginLabel(rule.kind, rule.prefecture);
               const listDescription =
                 rule.status === 'removed'
                   ? '低評価が集まって引退'
-                  : (origin.sentence ?? rule.description);
+                  : rule.description;
               return (
                 <div key={rule.id}>
                   <button
@@ -203,10 +178,6 @@ export function RuleDexScreen({
                         name: rule.name,
                         priority: features.priority ? rule.priority : null,
                         category: rule.kind,
-                        ...(rule.prefecture
-                          ? { prefecture: rule.prefecture }
-                          : {}),
-                        originLabel: origin.badge,
                         ...(listDescription
                           ? { description: listDescription }
                           : {}),
@@ -225,7 +196,9 @@ export function RuleDexScreen({
                       <p>{rule.description ?? '説明はありません。'}</p>
                       <dl>
                         <dt>種類</dt>
-                        <dd>{origin.badge}</dd>
+                        <dd>
+                          {rule.kind === 'local' ? 'ローカル' : 'オリジナル'}
+                        </dd>
                         <dt>状態</dt>
                         <dd>{rule.status === 'removed' ? '引退' : '有効'}</dd>
                         <dt>登場日</dt>

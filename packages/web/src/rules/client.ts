@@ -1,7 +1,6 @@
 import type { RuleCatalogItem, RuleCatalogResponse } from '@daifugo/core';
 
 export interface RuleCatalogFilters {
-  prefecture?: string;
   status?: 'active' | 'removed';
   kind?: 'local' | 'original';
   limit?: number;

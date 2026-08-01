@@ -71,7 +71,6 @@ describe('RuleRepository catalog', () => {
       implemented: 31,
       active: 30,
       removed: 1,
-      prefectureCoverage: 1,
     });
     expect(first.total).toBe(31);
     expect(first.items).toHaveLength(30);
@@ -85,34 +84,6 @@ describe('RuleRepository catalog', () => {
         offset: 30,
       }).items,
     ).toHaveLength(1);
-
-    expect(
-      persistence.rules
-        .catalog({
-          includeRemoved: true,
-          prefecture: 'none',
-          kind: 'local',
-          status: 'active',
-          sort: 'recent',
-          order: 'desc',
-          limit: 100,
-          offset: 0,
-        })
-        .items.every(
-          (rule) => rule.kind === 'local' && rule.prefecture === null,
-        ),
-    ).toBe(true);
-    expect(
-      persistence.rules.catalog({
-        includeRemoved: true,
-        prefecture: '埼玉県',
-        kind: 'original',
-        sort: 'recent',
-        order: 'desc',
-        limit: 100,
-        offset: 0,
-      }).total,
-    ).toBe(0);
 
     const activeOnly = persistence.rules.catalog({
       includeRemoved: false,

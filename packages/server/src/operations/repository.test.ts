@@ -501,7 +501,7 @@ describe('OperationsRepository', () => {
     ).toBe(funnel.byStatus.failed);
   });
 
-  test('ルール数帯ごとの評価率と途中打ち切りを分け、実装到達した都道府県を数える', () => {
+  test('ルール数帯ごとの評価率と途中打ち切りを分ける', () => {
     const { persistence, raw } = fixture();
     raw
       .prepare(
@@ -622,14 +622,6 @@ describe('OperationsRepository', () => {
       endedAt - 10_000,
       endedAt + 10_000,
     );
-    const catalog = persistence.rules.catalog({
-      includeRemoved: true,
-      sort: 'recent',
-      order: 'desc',
-      limit: 30,
-      offset: 0,
-    });
-
     expect(metrics.byRuleBand).toEqual([
       {
         band: '00-10',
@@ -651,10 +643,8 @@ describe('OperationsRepository', () => {
         removed: 0,
         reinstated: 0,
       },
-      prefectureCoverage: 1,
       completedSets: 1,
       partialSets: 1,
     });
-    expect(metrics.prefectureCoverage).toBe(catalog.summary.prefectureCoverage);
   });
 });

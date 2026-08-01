@@ -2,11 +2,9 @@ import type { RuleCatalogItem } from '@daifugo/core';
 import { useEffect, useRef, useState } from 'react';
 
 import type { RuleCatalogApi } from '../rules/client';
-import { ruleOriginLabel } from '../rules/origin';
 
 import { Button } from './Button';
 import { Dialog } from './Dialog';
-import { Tag } from './Tag';
 import styles from './RuleDetailModal.module.css';
 
 /**
@@ -48,16 +46,8 @@ export function RuleDetailModal({
     };
   }, [api, attempt, ruleId]);
 
-  const origin = rule ? ruleOriginLabel(rule.kind, rule.prefecture) : null;
   return (
     <Dialog title={name} align="start" onClose={onClose}>
-      {origin && (
-        <p className={styles.meta}>
-          <Tag variant={rule?.prefecture ? 'pref' : (rule?.kind ?? 'local')}>
-            {origin.badge}
-          </Tag>
-        </p>
-      )}
       {effectLabel && <p className={styles.effect}>{effectLabel}</p>}
       {rule?.description && (
         <p className={styles.description}>{rule.description}</p>

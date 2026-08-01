@@ -396,7 +396,6 @@ describe('production app server', () => {
               implemented: 1,
               active: 1,
               removed: 0,
-              prefectureCoverage: 0,
             },
             page: { total: 1, limit: 30, offset: 0 },
             items: [
@@ -468,7 +467,6 @@ describe('production app server', () => {
               implemented: 0,
               active: 0,
               removed: 0,
-              prefectureCoverage: 0,
             },
             page: { total: 0, limit: 30, offset: 0 },
             items: [],

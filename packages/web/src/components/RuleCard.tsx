@@ -12,9 +12,6 @@ export type RuleCardView = {
   /** 有効ルールの優先度。引退済みなど順位を持たないときは null。 */
   priority: number | null;
   category: 'local' | 'original';
-  /** ローカル区分でも未入力があるので任意。 */
-  prefecture?: string;
-  originLabel?: string;
   description?: string;
   popularity: number | null;
   status: 'active' | 'removed';
@@ -42,11 +39,8 @@ export function RuleCard({ rule }: { rule: RuleCardView }) {
           <p className={styles.description}>{rule.description}</p>
         )}
         <div className={styles.meta}>
-          <Tag variant={rule.prefecture ? 'pref' : rule.category}>
-            {rule.originLabel ??
-              (rule.category === 'local'
-                ? 'ローカル(県の記載なし)'
-                : 'オリジナル')}
+          <Tag variant={rule.category}>
+            {rule.category === 'local' ? 'ローカル' : 'オリジナル'}
           </Tag>
         </div>
         {rule.popularity !== null && (
@@ -58,7 +52,7 @@ export function RuleCard({ rule }: { rule: RuleCardView }) {
 }
 
 /**
- * 対局・待機画面用のルール行。名称のみで、人気度・都道府県・優先度の数値は出さない
+ * 対局・待機画面用のルール行。名称のみで、人気度・優先度の数値は出さない
  * (企画書 §4.5「ラフな体験」)。
  * onSelect を渡すと行がボタンになり、詳細を開く導線になる。
  */

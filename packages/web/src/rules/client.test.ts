@@ -12,7 +12,6 @@ describe('RuleCatalogClient', () => {
             implemented: 0,
             active: 0,
             removed: 0,
-            prefectureCoverage: 0,
           },
           page: { total: 0, limit: 30, offset: 0 },
           items: [],

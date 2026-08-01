@@ -23,7 +23,6 @@
 }
 
 .summary,
-.note,
 .error {
   margin: 0;
   font-size: var(--font-size-micro);

@@ -1,7 +1,5 @@
 import type Database from 'better-sqlite3';
 
-import { rulePrefectureCoverage } from '../rules/coverage.js';
-
 const PROPOSAL_STATUSES = [
   'screening',
   'implementing',
@@ -128,7 +126,6 @@ export interface OperationsMetrics {
     releasedDaily: Array<{ date: string; count: number }>;
     eliminatedDaily: Array<{ date: string; count: number }>;
   };
-  prefectureCoverage: number;
   completedSets: number;
   partialSets: number;
 }
@@ -444,7 +441,6 @@ export class OperationsRepository {
         releasedDaily,
         eliminatedDaily,
       },
-      prefectureCoverage: rulePrefectureCoverage(this.#sqlite, true),
       completedSets: ruleCounts.completed_sets,
       partialSets: ruleCounts.partial_sets,
     };

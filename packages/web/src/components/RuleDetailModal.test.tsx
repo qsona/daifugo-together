@@ -35,6 +35,7 @@ describe('RuleDetailModal', () => {
     await waitFor(() => {
       expect(screen.getByText(/場を流し/)).toBeTruthy();
     });
+    expect(screen.queryByText(/埼玉県|都道府県/u)).toBeNull();
     expect(get).toHaveBeenCalledWith('r0001-eight-cut');
   });
 

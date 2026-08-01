@@ -1,6 +1,6 @@
 import type { PendingCxJudgement } from '@daifugo/server';
 
-export const CX01_PROMPT_VERSION = 'cx01-v8';
+export const CX01_PROMPT_VERSION = 'cx01-v9';
 
 const CONTRACT = `
 契約 v1/v2 のフック:
@@ -82,7 +82,6 @@ ${JSON.stringify(item.existingRules)}
 <proposal-data>
 ${JSON.stringify({
   kind: item.proposal.kind,
-  prefectureCode: item.proposal.prefectureCode,
   name: item.proposal.name,
   body: item.proposal.body,
 })}

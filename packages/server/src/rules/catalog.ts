@@ -55,7 +55,6 @@ export class RuleCatalogService {
   }
 
   list(parameters: URLSearchParams): CatalogHttpResult {
-    const prefecture = single(parameters, 'prefecture');
     const status = single(parameters, 'status');
     const kind = single(parameters, 'kind');
     const sort = single(parameters, 'sort');
@@ -63,27 +62,24 @@ export class RuleCatalogService {
     const limit = integer(single(parameters, 'limit') ?? undefined, 30);
     const offset = integer(single(parameters, 'offset') ?? undefined, 0);
     const invalidField =
-      prefecture === null
-        ? 'prefecture'
-        : status === null ||
-            (status !== undefined &&
-              !['active', 'removed', 'all'].includes(status))
-          ? 'status'
-          : kind === null ||
-              (kind !== undefined && !['local', 'original'].includes(kind))
-            ? 'kind'
-            : sort === null ||
-                (sort !== undefined &&
-                  !['recent', 'priority', 'popularity'].includes(sort))
-              ? 'sort'
-              : order === null ||
-                  (order !== undefined && !['asc', 'desc'].includes(order))
-                ? 'order'
-                : limit === null || limit < 1 || limit > 100
-                  ? 'limit'
-                  : offset === null || offset < 0
-                    ? 'offset'
-                    : null;
+      status === null ||
+      (status !== undefined && !['active', 'removed', 'all'].includes(status))
+        ? 'status'
+        : kind === null ||
+            (kind !== undefined && !['local', 'original'].includes(kind))
+          ? 'kind'
+          : sort === null ||
+              (sort !== undefined &&
+                !['recent', 'priority', 'popularity'].includes(sort))
+            ? 'sort'
+            : order === null ||
+                (order !== undefined && !['asc', 'desc'].includes(order))
+              ? 'order'
+              : limit === null || limit < 1 || limit > 100
+                ? 'limit'
+                : offset === null || offset < 0
+                  ? 'offset'
+                  : null;
     if (invalidField) {
       return {
         status: 400,
@@ -101,7 +97,6 @@ export class RuleCatalogService {
     }
     const result = this.#rules.catalog({
       includeRemoved: this.#eliminationEnabled,
-      ...(prefecture ? { prefecture } : {}),
       ...(status && status !== 'all'
         ? { status: status as 'active' | 'removed' }
         : {}),

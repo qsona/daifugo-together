@@ -20,7 +20,6 @@ function response() {
       implemented: 2,
       active: 1,
       removed: 1,
-      prefectureCoverage: 1,
     },
     page: { total: 2, limit: 30, offset: 0 },
     items: [
@@ -60,7 +59,7 @@ describe('RuleDexScreen', () => {
     ruleDex: true,
   } as const;
 
-  it('出自・状態を表示し、未実装の人気度・優先度を表示しない', async () => {
+  it('種類・状態・説明を表示し、都道府県と未実装指標を表示しない', async () => {
     const api: Pick<RuleCatalogApi, 'list'> = {
       list: vi.fn(async () => response()),
     };
@@ -68,22 +67,19 @@ describe('RuleDexScreen', () => {
       <RuleDexScreen api={api} onBack={vi.fn()} features={features} />,
     );
     expect(await screen.findByText('県ありルール')).toBeTruthy();
-    expect(screen.getByText('報告: 埼玉県')).toBeTruthy();
-    expect(screen.getByText('埼玉県で遊ばれていた報告')).toBeTruthy();
+    expect(screen.getAllByText('ローカル')).toHaveLength(2);
+    expect(screen.getByText('説明')).toBeTruthy();
     expect(screen.getAllByText('引退')).toHaveLength(2);
-    expect(container.textContent).not.toMatch(/埼玉県のルール|人気|優先/u);
+    expect(container.textContent).not.toMatch(/埼玉県|都道府県|人気|優先/u);
   });
 
-  it('都道府県・状態・区分をAND条件として再取得する', async () => {
+  it('状態・区分をAND条件として再取得する', async () => {
     const list = vi.fn(async () => response());
     render(
       <RuleDexScreen api={{ list }} onBack={vi.fn()} features={features} />,
     );
     await screen.findByText('県ありルール');
 
-    fireEvent.change(screen.getByLabelText('都道府県'), {
-      target: { value: 'none' },
-    });
     fireEvent.change(screen.getByLabelText('状態'), {
       target: { value: 'removed' },
     });
@@ -93,7 +89,6 @@ describe('RuleDexScreen', () => {
 
     await waitFor(() =>
       expect(list).toHaveBeenLastCalledWith({
-        prefecture: 'none',
         status: 'removed',
         kind: 'local',
         sort: 'recent',

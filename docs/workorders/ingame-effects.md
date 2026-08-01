@@ -295,7 +295,7 @@ pnpm vitest run packages/server/src/rules/catalog.test.ts
 
 ```ts
 const emptyCatalogBody = {
-  summary: { implemented: 0, active: 0, removed: 0, prefectureCoverage: 0 },
+  summary: { implemented: 0, active: 0, removed: 0 },
   page: { total: 0, limit: 30, offset: 0 },
   items: [],
 };

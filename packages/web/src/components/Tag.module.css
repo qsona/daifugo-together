@@ -13,12 +13,6 @@
   line-height: 1.5;
 }
 
-.pref {
-  background: var(--color-bg-surface);
-  border-color: var(--color-border-control);
-  color: var(--color-text-secondary);
-}
-
 .local {
   background: var(--color-category-local-bg);
   border-color: var(--color-category-local-text);

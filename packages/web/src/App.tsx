@@ -160,7 +160,6 @@ const DEMO_RULE_CATALOG_API: RuleCatalogApi = {
       implemented: DEMO_RULES.length,
       active: DEMO_RULES.length,
       removed: 0,
-      prefectureCoverage: 1,
     },
     page: {
       total: DEMO_RULES.length,

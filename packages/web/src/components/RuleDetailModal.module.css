@@ -1,9 +1,5 @@
 /* インゲームのルール詳細モーダル。卓の上に重ねるので情報量を絞る。 */
 
-.meta {
-  margin: 0;
-}
-
 .effect {
   margin: 0;
   font-size: var(--font-size-caption);

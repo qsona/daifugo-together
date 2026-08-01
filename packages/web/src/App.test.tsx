@@ -915,7 +915,7 @@ describe('E11: ルール閲覧の実App導線', () => {
     expect(screen.getByRole('heading', { name: 'ルール図鑑' })).toBeTruthy();
     expect(
       await screen.findAllByText('対局にひとひねり加えるルールです。'),
-    ).toHaveLength(2);
+    ).toHaveLength(3);
     await user.click(screen.getByRole('button', { name: 'もどる' }));
     expect(screen.getByRole('button', { name: 'あそぶ' })).toBeTruthy();
   });

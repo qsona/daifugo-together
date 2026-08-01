@@ -1,7 +1,5 @@
 import type Database from 'better-sqlite3';
 
-import { rulePrefectureCoverage } from './coverage.js';
-
 export const RULE_STATUSES = ['active', 'disabled', 'removed'] as const;
 export type RuleStatus = (typeof RULE_STATUSES)[number];
 
@@ -84,7 +82,6 @@ export interface RuleLifecycleTransition {
 
 export interface RuleCatalogQuery {
   includeRemoved: boolean;
-  prefecture?: string | 'none';
   status?: 'active' | 'removed';
   kind?: 'local' | 'original';
   sort: 'recent' | 'priority' | 'popularity';
@@ -98,7 +95,6 @@ export interface RuleCatalogResult {
     implemented: number;
     active: number;
     removed: number;
-    prefectureCoverage: number;
   };
   total: number;
   items: Array<StoredRule & { priorityRank: number | null }>;
@@ -375,13 +371,6 @@ export class RuleRepository {
       conditions.push('kind = ?');
       parameters.push(query.kind);
     }
-    if (query.prefecture === 'none') {
-      conditions.push("kind = 'local'");
-      conditions.push('prefecture IS NULL');
-    } else if (query.prefecture) {
-      conditions.push('prefecture = ?');
-      parameters.push(query.prefecture);
-    }
     const where = conditions.join(' AND ');
     const summary = this.#sqlite
       .prepare(
@@ -423,10 +412,6 @@ export class RuleRepository {
         implemented: summary.implemented,
         active: summary.active ?? 0,
         removed: summary.removed ?? 0,
-        prefectureCoverage: rulePrefectureCoverage(
-          this.#sqlite,
-          query.includeRemoved,
-        ),
       },
       total,
       items: rows.map((row) => {

@@ -32,7 +32,6 @@ describe('RuleCatalogService', () => {
         implemented: 3,
         active: 2,
         removed: 1,
-        prefectureCoverage: 2,
       },
       total: 1,
       items: [
@@ -65,7 +64,6 @@ describe('RuleCatalogService', () => {
     expect(
       service.list(
         new URLSearchParams({
-          prefecture: '埼玉県',
           status: 'removed',
           kind: 'local',
           sort: 'recent',
@@ -81,7 +79,6 @@ describe('RuleCatalogService', () => {
           implemented: 3,
           active: 2,
           removed: 1,
-          prefectureCoverage: 2,
         },
         page: { total: 1, limit: 10, offset: 20 },
         items: [
@@ -102,7 +99,6 @@ describe('RuleCatalogService', () => {
     });
     expect(catalog).toHaveBeenCalledWith({
       includeRemoved: true,
-      prefecture: '埼玉県',
       status: 'removed',
       kind: 'local',
       sort: 'recent',
@@ -133,7 +129,6 @@ describe('RuleCatalogService', () => {
         implemented: 0,
         active: 0,
         removed: 0,
-        prefectureCoverage: 0,
       },
       total: 0,
       items: [],

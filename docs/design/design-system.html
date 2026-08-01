@@ -332,7 +332,6 @@ table.spec th { background: var(--color-bg-subtle); white-space: nowrap; }
   border-radius: var(--radius-s); padding: 2px 8px; white-space: nowrap;
   border: var(--border-control) solid transparent; line-height: 1.5;
 }
-.c-tag.-pref { background: var(--color-bg-surface); border-color: var(--color-border-control); color: var(--color-text-secondary); }
 .c-tag.-local { background: var(--color-category-local-bg); border-color: var(--color-category-local-text); color: var(--color-category-local-text); }
 .c-tag.-original { background: var(--color-category-original-bg); border-color: var(--color-category-original-text); color: var(--color-category-original-text); }
 .c-tag.-active { background: var(--color-status-active-bg); border-color: var(--color-status-active-bg); color: var(--color-status-active-text); }
@@ -964,7 +963,7 @@ table.spec th { background: var(--color-bg-subtle); white-space: nowrap; }
       <div class="type-row"><div class="meta">title-s / 16px / bold / lh 1.4</div><div style="font-size:16px; font-weight:700; line-height:1.4;">タップしてはじめる</div></div>
       <div class="type-row"><div class="meta">body / 14px / regular / lh 1.6</div><div style="font-size:14px; line-height:1.6;">はじめは基本ルールだけの「素の大富豪」。みんなの提案で、ルールはどんどん増えていく。</div></div>
       <div class="type-row"><div class="meta">caption / 12px / regular / lh 1.5</div><div style="font-size:12px; line-height:1.5; color:var(--color-text-secondary);">入力は任意。あとから変えられます。</div></div>
-      <div class="type-row"><div class="meta">micro / 11px / bold / lh 1.5</div><div style="font-size:11px; font-weight:700; line-height:1.5;">報告: 埼玉県</div></div>
+      <div class="type-row"><div class="meta">micro / 11px / bold / lh 1.5</div><div style="font-size:11px; font-weight:700; line-height:1.5;">ローカル</div></div>
       <div class="note"><b>文言規則(企画書 §6 確定)</b>: UI 文言に分かち書きの全角スペースを入れない(「タップしてはじめる」)。micro(11px)はタグ・バッジ内の太字専用で、本文には使わない。</div>
     </div>
   </section>
@@ -1124,16 +1123,14 @@ table.spec th { background: var(--color-bg-subtle); white-space: nowrap; }
     <h3>5-5. タグ</h3>
     <div class="panel">
       <div class="specimen">
-        <span class="c-tag -pref">報告: 埼玉県</span>
         <span class="c-tag -local">ローカル</span>
-        <span class="c-tag -local">ローカル(県の記載なし)</span>
         <span class="c-tag -original">オリジナル</span>
         <span class="c-tag -active">有効</span>
         <span class="c-tag -removed">排除済み</span>
         <span class="c-tag -human">人間</span>
         <span class="c-tag -ai">AI</span>
       </div>
-      <div class="note"><b>都道府県は非断定表現をコンポーネント仕様に焼き込む</b>: 県タグの文言は「報告: ◯◯県」固定。文章では「◯◯県で遊ばれていた報告」「◯◯発」を使い、「◯◯県のルール」という断定形はどの画面でも使わない(企画書 §4.1)。ローカル=緑 / オリジナル=金は KV 手札のルールカード(LOCAL RULE=緑・NEW RULE=金)の継承。</div>
+      <div class="note">図鑑の区分タグはローカル / オリジナルだけを表示する。ローカル=緑 / オリジナル=金は KV 手札のルールカード(LOCAL RULE=緑・NEW RULE=金)の継承。</div>
     </div>
 
     <h3>5-6. 人気度バー</h3>
@@ -1150,8 +1147,8 @@ table.spec th { background: var(--color-bg-subtle); white-space: nowrap; }
         <div class="rank"><b>1</b><small>優先</small></div>
         <div class="main">
           <div class="nm">8切り <span class="c-tag -active">有効</span></div>
-          <div class="desc">埼玉県で遊ばれていた報告</div>
-          <div class="meta"><span class="c-tag -pref">報告: 埼玉県</span><span class="c-tag -local">ローカル</span></div>
+          <div class="desc">8を出すと場が流れます</div>
+          <div class="meta"><span class="c-tag -local">ローカル</span></div>
           <div class="c-pop"><span class="bar"><i style="width:87%"></i></span><span class="val">人気度 87</span></div>
         </div>
       </div>
@@ -1172,7 +1169,7 @@ table.spec th { background: var(--color-bg-subtle); white-space: nowrap; }
           <div class="c-pop"><span class="bar"><i style="width:12%"></i></span><span class="val">人気度 12</span></div>
         </div>
       </div>
-      <div class="note">人気度・優先度・都道府県(報告)・状態を併記する詳細側(企画書 §4.5)。排除済みは打ち消し線+淡色面で図鑑に残す。優先バッジは「n 優先」の枠付き数字。</div>
+      <div class="note">人気度・優先度・区分・状態を併記する詳細側(企画書 §4.5)。排除済みは打ち消し線+淡色面で図鑑に残す。優先バッジは「n 優先」の枠付き数字。</div>
     </div>
 
     <h3>5-8. ルール行(対局用シンプル)</h3>
@@ -1180,7 +1177,7 @@ table.spec th { background: var(--color-bg-subtle); white-space: nowrap; }
       <div class="c-rule-slim">8切り</div>
       <div class="c-rule-slim">都落ち</div>
       <div class="c-rule-slim">革命返し</div>
-      <div class="note">待機画面・対局中の有効ルール一覧はルール名だけ(§4.5「ラフな体験」)。人気度・都道府県・優先度の数値はこの形態では出さず、図鑑への導線を添える。</div>
+      <div class="note">待機画面・対局中の有効ルール一覧はルール名だけ(§4.5「ラフな体験」)。人気度・優先度の数値はこの形態では出さず、図鑑への導線を添える。</div>
     </div>
 
     <h3>5-9. 提案ステータスのステッパー</h3>
@@ -1557,20 +1554,19 @@ table.spec th { background: var(--color-bg-subtle); white-space: nowrap; }
           </div>
           <div class="scr-body">
             <div class="row">
-              <div class="c-select zk-select"><span>都道府県: すべて</span><span class="arrow">▼</span></div>
               <div class="c-select zk-select"><span>状態: すべて</span><span class="arrow">▼</span></div>
             </div>
             <div class="row">
               <div class="c-select zk-select"><span>区分: すべて</span><span class="arrow">▼</span></div>
               <div class="c-select zk-select"><span>並び順: 人気度</span><span class="arrow">▼</span></div>
             </div>
-            <div class="zk-stats">実装済みルール 34件(有効 31・排除済み 3)/ 都道府県カバー 14<br>「報告: 〜県」は、提案した人がその土地で遊んでいたという記録です。</div>
+            <div class="zk-stats">実装済みルール 34件(有効 31・排除済み 3)</div>
             <div class="c-rule">
               <div class="rank"><b>1</b><small>優先</small></div>
               <div class="main">
                 <div class="nm">8切り <span class="c-tag -active">有効</span></div>
-                <div class="desc">埼玉県で遊ばれていた報告</div>
-                <div class="meta"><span class="c-tag -pref">報告: 埼玉県</span><span class="c-tag -local">ローカル</span></div>
+                <div class="desc">8を出すと場が流れます</div>
+                <div class="meta"><span class="c-tag -local">ローカル</span></div>
                 <div class="c-pop"><span class="bar"><i style="width:87%"></i></span><span class="val">人気度 87</span></div>
               </div>
             </div>
@@ -1578,8 +1574,8 @@ table.spec th { background: var(--color-bg-subtle); white-space: nowrap; }
               <div class="rank"><b>2</b><small>優先</small></div>
               <div class="main">
                 <div class="nm">都落ち <span class="c-tag -active">有効</span></div>
-                <div class="desc">福岡県で遊ばれていた報告</div>
-                <div class="meta"><span class="c-tag -pref">報告: 福岡県</span><span class="c-tag -local">ローカル</span></div>
+                <div class="desc">大富豪が最下位になると引退します</div>
+                <div class="meta"><span class="c-tag -local">ローカル</span></div>
                 <div class="c-pop"><span class="bar"><i style="width:81%"></i></span><span class="val">人気度 81</span></div>
               </div>
             </div>
@@ -1595,7 +1591,7 @@ table.spec th { background: var(--color-bg-subtle); white-space: nowrap; }
               <div class="rank"><b>4</b><small>優先</small></div>
               <div class="main">
                 <div class="nm">5スキップ <span class="c-tag -active">有効</span></div>
-                <div class="meta"><span class="c-tag -local">ローカル(県の記載なし)</span></div>
+                <div class="meta"><span class="c-tag -local">ローカル</span></div>
                 <div class="c-pop"><span class="bar"><i style="width:66%"></i></span><span class="val">人気度 66</span></div>
               </div>
             </div>

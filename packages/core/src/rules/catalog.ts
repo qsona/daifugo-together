@@ -18,7 +18,6 @@ export interface RuleCatalogSummary {
   implemented: number;
   active: number;
   removed: number;
-  prefectureCoverage: number;
 }
 
 export interface RuleCatalogResponse {
