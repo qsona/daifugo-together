@@ -33,7 +33,6 @@ type SetResultScreenProps = {
   onHome: () => void;
   showEvaluation?: boolean;
   waitingFor?: readonly string[] | null;
-  onRegister?: () => void;
 };
 
 /**
@@ -55,7 +54,6 @@ export function SetResultScreen({
   onHome,
   showEvaluation = true,
   waitingFor = null,
-  onRegister,
 }: SetResultScreenProps) {
   return (
     <div className={screen.screen}>
@@ -131,11 +129,6 @@ export function SetResultScreen({
          */}
 
         <div className={screen.footer}>
-          {onRegister && (
-            <Button size="small" onClick={onRegister}>
-              記録を残す
-            </Button>
-          )}
           {waitingFor && waitingFor.length > 0 && (
             <p role="status">{waitingFor.join('、')} を待っています…</p>
           )}

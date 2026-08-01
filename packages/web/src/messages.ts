@@ -7,6 +7,9 @@
 
 export const RETRY_GENERIC_ERROR =
   'うまくいきませんでした。もう一度ためしてください。';
+export const RETRY_REQUEST = 'もう一度ためしてください。';
+export const GOOGLE_CONNECT_LABEL = 'Googleでつなぐ';
+export const SIGN_OUT_LABEL = 'サインアウト';
 
 export const RATING_SUBMIT_ERROR =
   '評価を送れませんでした。もう一度ためしてください。';

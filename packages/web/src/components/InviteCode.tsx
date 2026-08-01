@@ -48,9 +48,7 @@ export function InviteCode({ code, inviteUrl, onCopy }: InviteCodeProps) {
           </Button>
         )}
       </div>
-      <p className={styles.note}>
-        このリンクを送ると、ログインしていない友だちも参加できます
-      </p>
+      <p className={styles.note}>このリンクを送れば、だれでも参加できます</p>
       {copyState === 'failed' && (
         <p className={styles.copyError} role="alert">
           リンクを長押ししてコピーしてください

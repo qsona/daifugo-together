@@ -1,9 +1,10 @@
-import { clientPayloadSchemas, type RoomMode } from '@daifugo/core';
+import type { RoomMode } from '@daifugo/core';
 import { useId, useState } from 'react';
 
 import { Button } from '../components/Button';
 import { ChoiceSheet } from '../components/ChoiceSheet';
 import { InputField } from '../components/Field';
+import { NameField, validateDisplayName } from '../components/NameField';
 import { JOIN_FRIEND_ROOM_LABEL } from '../messages';
 
 import styles from './PlaySheet.module.css';
@@ -71,16 +72,10 @@ export function PlaySheet({
   const isJoining = step === 'join';
   const asksDisplayName = anonymousDisplayName !== undefined;
   const parsedDisplayName = asksDisplayName
-    ? clientPayloadSchemas['user:rename'].safeParse({ displayName })
+    ? validateDisplayName(displayName)
     : null;
   const normalizedDisplayName =
-    parsedDisplayName?.success === true
-      ? parsedDisplayName.data.displayName
-      : undefined;
-  const displayNameError =
-    asksDisplayName && displayName.length > 0 && !normalizedDisplayName
-      ? 'なまえは1〜10文字で、改行なしで入力してください'
-      : undefined;
+    parsedDisplayName?.ok === true ? parsedDisplayName.displayName : undefined;
 
   return (
     <ChoiceSheet
@@ -110,17 +105,11 @@ export function PlaySheet({
             }}
           />
           {asksDisplayName && (
-            <InputField
-              label="あなたのなまえ"
-              caption="友だちに見えるなまえ・10文字まで"
-              {...(displayNameError ? { error: displayNameError } : {})}
-              placeholder="例: たろう"
+            <NameField
+              label="なまえ"
+              caption="友だちに見えるなまえ"
               value={displayName}
-              type="text"
-              autoComplete="nickname"
-              onChange={(event) => {
-                setDisplayName(event.target.value);
-              }}
+              onChange={setDisplayName}
             />
           )}
           <Button

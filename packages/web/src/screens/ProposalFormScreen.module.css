@@ -92,3 +92,16 @@
   font-size: var(--font-size-caption);
   font-weight: var(--font-weight-heavy);
 }
+
+.acceptedButton {
+  width: 100%;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.caption {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-caption);
+}

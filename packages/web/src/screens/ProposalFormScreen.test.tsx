@@ -47,9 +47,8 @@ describe('ProposalFormScreen', () => {
     );
 
     expect(await screen.findByLabelText('ルール名')).toBeTruthy();
-    expect(
-      screen.getByText(/登録しなくても、1つずつ提案できます/),
-    ).toBeTruthy();
+    expect(screen.getAllByText(/提案はAIが確認します/)).toHaveLength(1);
+    expect(screen.getByText('あそんでいた記録として残ります')).toBeTruthy();
   });
 
   it('匿名提案の送信後にGoogle引き継ぎから通知へ続く導線を出す', async () => {
@@ -81,7 +80,7 @@ describe('ProposalFormScreen', () => {
     expect(
       await screen.findByText(/提案の結果が出たら、この端末へお知らせできます/),
     ).toBeTruthy();
-    await user.click(screen.getByRole('button', { name: 'Googleで引き継ぐ' }));
+    await user.click(screen.getByRole('button', { name: 'Googleでつなぐ' }));
     expect(begin).toHaveBeenCalledOnce();
   });
 
@@ -135,7 +134,7 @@ describe('ProposalFormScreen', () => {
     expect(screen.getByText('確認中')).toBeTruthy();
     expect(screen.getByText(/結果が出たら次の提案ができ/)).toBeTruthy();
     expect(screen.queryByLabelText('ルール名')).toBeNull();
-    await user.click(screen.getByRole('button', { name: 'Googleでログイン' }));
+    await user.click(screen.getByRole('button', { name: 'Googleでつなぐ' }));
     expect(onLogin).toHaveBeenCalledOnce();
   });
 

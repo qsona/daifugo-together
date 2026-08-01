@@ -7,85 +7,58 @@ export interface AuthCompleteResponse {
 }
 
 export interface AuthApi {
-  begin(userToken: string): void;
-  complete(ott: string): void;
-  takeResult(): AuthCompleteResponse | null;
+  begin(userToken: string): Promise<void>;
+  complete(ott: string): Promise<AuthCompleteResponse>;
 }
 
-const AUTH_RESULT_COOKIE = '__Secure-daifugo-auth-result';
-const AUTH_RESULT_COOKIE_CLEAR_ATTRIBUTES =
-  'Max-Age=0; Path=/menu; Secure; SameSite=Strict';
+export class AuthApiError extends Error {
+  readonly status: number;
+
+  constructor(status: number) {
+    super(`auth_api_${String(status)}`);
+    this.name = 'AuthApiError';
+    this.status = status;
+  }
+}
 
 export class AuthClient implements AuthApi {
   readonly #baseUrl: string;
-  readonly #document: Document;
+  readonly #fetch: typeof fetch;
+  readonly #navigate: (url: string) => void;
 
-  constructor(baseUrl: string, documentRef: Document = document) {
+  constructor(
+    baseUrl: string,
+    fetcher: typeof fetch = fetch,
+    navigate: (url: string) => void = (url) => {
+      window.location.href = url;
+    },
+  ) {
     this.#baseUrl = baseUrl;
-    this.#document = documentRef;
+    this.#fetch = (...args) => fetcher(...args);
+    this.#navigate = navigate;
   }
 
-  begin(userToken: string): void {
-    this.#submit('/auth/google/begin', 'userToken', userToken);
+  async begin(userToken: string): Promise<void> {
+    const response = await this.#fetch(`${this.#baseUrl}/api/auth/begin`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { authorization: `Bearer ${userToken}` },
+    });
+    if (!response.ok) throw new AuthApiError(response.status);
+    const body = (await response.json()) as { authUrl?: unknown };
+    if (typeof body.authUrl !== 'string') throw new AuthApiError(500);
+    this.#navigate(body.authUrl);
   }
 
-  complete(ott: string): void {
-    this.#submit('/auth/google/complete', 'ott', ott);
-  }
-
-  takeResult(): AuthCompleteResponse | null {
-    let encoded: string | undefined;
-    try {
-      encoded = this.#document.cookie
-        .split(';')
-        .map((part) => part.trim())
-        .find((part) => part.startsWith(`${AUTH_RESULT_COOKIE}=`))
-        ?.slice(AUTH_RESULT_COOKIE.length + 1);
-      if (!encoded) return null;
-      const parsed = JSON.parse(decodeURIComponent(encoded)) as unknown;
-      if (
-        typeof parsed !== 'object' ||
-        parsed === null ||
-        !('outcome' in parsed) ||
-        !['linked', 'switched', 'already'].includes(String(parsed.outcome)) ||
-        !('userToken' in parsed) ||
-        typeof parsed.userToken !== 'string' ||
-        !('displayName' in parsed) ||
-        typeof parsed.displayName !== 'string'
-      ) {
-        return null;
-      }
-      return parsed as AuthCompleteResponse;
-    } catch {
-      return null;
-    } finally {
-      try {
-        this.#document.cookie = `${AUTH_RESULT_COOKIE}=; ${AUTH_RESULT_COOKIE_CLEAR_ATTRIBUTES}`;
-      } catch {
-        // The result is still consumed from the current page when cookie writes
-        // are unavailable.
-      }
-    }
-  }
-
-  #submit(path: string, field: string, value: string): void {
-    const form = this.#document.createElement('form');
-    form.method = 'POST';
-    form.action = `${this.#baseUrl}${path}`;
-    form.hidden = true;
-
-    const input = this.#document.createElement('input');
-    input.type = 'hidden';
-    input.name = field;
-    input.value = value;
-    form.append(input);
-
-    this.#document.body.append(form);
-    try {
-      form.submit();
-    } finally {
-      form.remove();
-    }
+  async complete(ott: string): Promise<AuthCompleteResponse> {
+    const response = await this.#fetch(`${this.#baseUrl}/api/auth/complete`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ott }),
+    });
+    if (!response.ok) throw new AuthApiError(response.status);
+    return (await response.json()) as AuthCompleteResponse;
   }
 }
 

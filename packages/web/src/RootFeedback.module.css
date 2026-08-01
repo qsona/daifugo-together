@@ -1,0 +1,9 @@
+.toastLayer {
+  position: fixed;
+  left: 50%;
+  bottom: max(var(--space-5), env(safe-area-inset-bottom));
+  z-index: 20;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100vw - var(--space-5) * 2);
+}

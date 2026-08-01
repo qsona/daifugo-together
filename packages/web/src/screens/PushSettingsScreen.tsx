@@ -5,6 +5,7 @@ import { Button } from '../components/Button';
 import { Callout } from '../components/Callout';
 import { InstallGuide } from '../components/InstallGuide';
 import { RETRY_GENERIC_ERROR } from '../messages';
+import { GOOGLE_CONNECT_LABEL } from '../messages';
 import { detectInstallEnvironment } from '../push/install';
 import type { PushClient, PushOfferResult } from '../push/client';
 
@@ -73,11 +74,11 @@ export function PushSettingsScreen({
                   if (onLogin() === false) setMessage(RETRY_GENERIC_ERROR);
                 }}
               >
-                Googleで引き継ぐ
+                {GOOGLE_CONNECT_LABEL}
               </Button>
             }
           >
-            Push通知を受け取るには、Googleで引き継いでください。
+            Push通知を受け取るには、Googleでつないでください。
           </Callout>
         )}
         {registered && !environment.standalone && (

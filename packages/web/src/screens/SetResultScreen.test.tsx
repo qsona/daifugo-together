@@ -276,9 +276,7 @@ describe('SetResultScreen phase boundary', () => {
     ).toBe(false);
   });
 
-  it('未登録者向けの控えめな引き継ぎ導線を任意表示する', async () => {
-    const user = userEvent.setup();
-    const onRegister = vi.fn();
+  it('セットリザルトには登録導線を出さない', () => {
     render(
       <SetResultScreen
         ranks={[]}
@@ -289,10 +287,8 @@ describe('SetResultScreen phase boundary', () => {
         onPlayAgain={() => undefined}
         onHome={() => undefined}
         showEvaluation={false}
-        onRegister={onRegister}
       />,
     );
-    await user.click(screen.getByRole('button', { name: '記録を残す' }));
-    expect(onRegister).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('button', { name: '記録を残す' })).toBeNull();
   });
 });

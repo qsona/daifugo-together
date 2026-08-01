@@ -135,9 +135,7 @@ describe('TU-01: あそぶ導線の選択', () => {
     await user.click(
       screen.getByRole('button', { name: '友だちの部屋にはいる' }),
     );
-    const nameInput = screen.getByLabelText(
-      'あなたのなまえ',
-    ) as HTMLInputElement;
+    const nameInput = screen.getByLabelText('なまえ') as HTMLInputElement;
     expect(nameInput.value).toBe('ゲスト000001');
 
     await user.clear(nameInput);
@@ -165,9 +163,9 @@ describe('TU-01: あそぶ導線の選択', () => {
     expect(
       (screen.getByLabelText('招待コード') as HTMLInputElement).value,
     ).toBe('01234');
-    expect(
-      (screen.getByLabelText('あなたのなまえ') as HTMLInputElement).value,
-    ).toBe('ゲスト000001');
+    expect((screen.getByLabelText('なまえ') as HTMLInputElement).value).toBe(
+      'ゲスト000001',
+    );
   });
 
   it('匿名ユーザーのなまえはサーバーと同じ制約で検証する', async () => {
@@ -191,10 +189,11 @@ describe('TU-01: あそぶ導線の選択', () => {
     const join = screen.getByRole('button', { name: 'はいる' });
     expect(join.hasAttribute('disabled')).toBe(true);
 
-    const nameInput = screen.getByLabelText('あなたのなまえ');
+    const nameInput = screen.getByLabelText('なまえ') as HTMLInputElement;
     await user.type(nameInput, '12345678901');
-    expect(screen.getByText(/1〜10文字/)).toBeTruthy();
-    expect(join.hasAttribute('disabled')).toBe(true);
+    expect(nameInput.value).toBe('1234567890');
+    expect(screen.getByText('10 / 10')).toBeTruthy();
+    expect(join.hasAttribute('disabled')).toBe(false);
 
     await user.clear(nameInput);
     await user.type(nameInput, '😀😀😀😀😀😀😀😀😀😀');

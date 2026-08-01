@@ -209,8 +209,7 @@ export function GameScreen({
         <div className={styles.noticeLayer}>
           {finishNotice ? (
             <Toast variant="warn">
-              {finishNotice.isSelf ? 'あなた' : finishNotice.name}が
-              {finishNotice.rank}位であがり!
+              {finishNotice.name}が{finishNotice.rank}位であがり!
             </Toast>
           ) : guideCue ? (
             <Toast variant="guide">

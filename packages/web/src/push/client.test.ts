@@ -211,4 +211,25 @@ describe('PushClient', () => {
     );
     await expect(client.disableThisDevice()).resolves.toBeUndefined();
   });
+
+  it('端末の購読を変更せず現在状態だけを問い合わせる', async () => {
+    const subscription = { endpoint: 'https://push.example.test/client' };
+    const pushManager = {
+      getSubscription: vi.fn(async () => subscription),
+      subscribe: vi.fn(),
+    };
+    vi.stubGlobal('navigator', {
+      serviceWorker: {
+        getRegistration: vi.fn(async () => ({ pushManager })),
+      },
+    });
+    const client = new PushClient(
+      'https://game.example.test',
+      { getItem: () => 'user-token', setItem: () => undefined },
+      vi.fn<typeof fetch>(),
+    );
+
+    await expect(client.hasActiveSubscription()).resolves.toBe(true);
+    expect(pushManager.subscribe).not.toHaveBeenCalled();
+  });
 });

@@ -9,6 +9,8 @@ import { navigate, screenFromPathname, screenPath } from '../routing';
 export type ScreenId =
   | 'title'
   | 'menu'
+  | 'account'
+  | 'name'
   | 'proposal'
   | 'myProposals'
   | 'notifications'

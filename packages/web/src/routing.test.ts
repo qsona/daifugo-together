@@ -23,6 +23,10 @@ describe('画面ルーティング', () => {
     expect(screenPath('menu')).toBe('/menu');
     expect(screenPath('proposal')).toBe('/proposals/new');
     expect(screenPath('myProposals')).toBe('/proposals/mine');
+    expect(screenPath('account')).toBe('/account');
+    expect(screenPath('name')).toBe('/account/name');
+    expect(screenFromPathname('/account')).toBe('account');
+    expect(screenFromPathname('/account/name')).toBe('name');
     expect(screenFromPathname('/rules')).toBe('ruleDex');
     expect(screenFromPathname('/proposals/new/')).toBe('proposal');
   });

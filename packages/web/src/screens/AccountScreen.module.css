@@ -1,0 +1,52 @@
+.identity {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.identity strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--font-size-title-l);
+  font-weight: var(--font-weight-heavy);
+}
+
+.summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: var(--border-control) solid var(--color-border-subtle);
+  border-radius: var(--radius-m);
+  background: var(--color-bg-surface);
+}
+
+.summaryRow {
+  min-height: var(--size-control-s);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-weight: var(--font-weight-bold);
+}
+
+.state {
+  display: flex;
+  justify-content: center;
+}
+
+.accountActions {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-top: var(--space-5);
+}
+
+.connection {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-caption);
+  text-align: center;
+}

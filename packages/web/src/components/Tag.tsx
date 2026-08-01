@@ -5,7 +5,14 @@ import { cx } from '../lib/cx';
 import styles from './Tag.module.css';
 
 export type TagVariant =
-  'local' | 'original' | 'active' | 'removed' | 'human' | 'ai';
+  | 'local'
+  | 'original'
+  | 'active'
+  | 'removed'
+  | 'human'
+  | 'ai'
+  | 'account'
+  | 'accountActive';
 
 type TagProps = {
   variant: TagVariant;

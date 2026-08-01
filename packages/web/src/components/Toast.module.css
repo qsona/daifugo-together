@@ -11,6 +11,14 @@
   font-size: var(--font-size-body);
   font-weight: var(--font-weight-bold);
   box-shadow: var(--shadow-soft);
+  transition:
+    opacity var(--duration-normal) var(--easing-standard),
+    transform var(--duration-normal) var(--easing-standard);
+}
+
+.leaving {
+  opacity: 0;
+  transform: translateY(var(--space-2));
 }
 
 .icon {
@@ -34,4 +42,14 @@
 
 .guide {
   background: var(--color-gold-400);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    transition: none;
+  }
+
+  .leaving {
+    transform: none;
+  }
 }

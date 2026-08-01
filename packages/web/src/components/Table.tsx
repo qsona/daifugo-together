@@ -102,7 +102,7 @@ export function Table({
           // 場に見せるのは最新のプレイ 1 回分だけ。前のプレイは新しいプレイで置き換える
           // (複数枚同時出しは 1 プレイなので、その全カードを見せる)。
           const cards = seat.plays.at(-1) ?? [];
-          const displayName = seat.isSelf ? 'あなた' : seat.name;
+          const displayName = seat.name;
           const isFinished = seat.finishedRank != null;
           // あがった席はもう手番も回らないので、考え中・パスの状態は出さない。
           const states = isFinished

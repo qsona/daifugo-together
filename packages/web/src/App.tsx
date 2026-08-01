@@ -19,6 +19,10 @@ import { NotificationBell } from './components/NotificationBell';
 import { PushOfferDialog } from './components/PushOfferDialog';
 import { ActiveRulesModal } from './components/ActiveRulesModal';
 import { ConfirmDialog } from './components/ConfirmDialog';
+import { ConnectDialog } from './components/ConnectDialog';
+import { Button } from './components/Button';
+import { Dialog, DialogBody } from './components/Dialog';
+import { Toast } from './components/Toast';
 import { RuleDetailModal } from './components/RuleDetailModal';
 import type { RuleVote, SetFunRating } from './screens/SetResultScreen';
 import {
@@ -43,6 +47,8 @@ import { NotificationsScreen } from './screens/NotificationsScreen';
 import { PushSettingsScreen } from './screens/PushSettingsScreen';
 import { ActiveRulesScreen } from './screens/ActiveRulesScreen';
 import { RuleDexScreen } from './screens/RuleDexScreen';
+import { AccountScreen } from './screens/AccountScreen';
+import { NameScreen } from './screens/NameScreen';
 import {
   getBrowserMultiplayerClient,
   type MultiplayerClient,
@@ -75,10 +81,16 @@ import {
   finalPlay,
   pendingFieldClearPlayIndex,
   seatFinishes,
+  seatDisplayName,
   tableSeats,
   type FinalPlay,
 } from './game/table';
-import { getBrowserAuthClient, type AuthApi } from './auth/client';
+import {
+  AuthApiError,
+  getBrowserAuthClient,
+  type AuthApi,
+  type AuthCompleteResponse,
+} from './auth/client';
 import { FEATURES } from './features';
 import { getBrowserNotificationClient } from './notification/client';
 import {
@@ -113,10 +125,101 @@ import {
   RATING_SUBMIT_ERROR,
   RETRY_GENERIC_ERROR,
 } from './messages';
+import feedbackStyles from './RootFeedback.module.css';
 
 const GRADUATION_ERROR =
   'みんなのルールへ進めませんでした。もう一度ためしてください。';
-const AUTH_RESULT_PROMPT_KEY = 'daifugo.authResultPromptShown';
+const AUTH_STARTED_REGISTERED_KEY = 'daifugo.authStartedRegistered';
+const AUTH_COMPLETED_SET_COUNT_KEY = 'daifugo.authCompletedSetCount';
+const AUTH_LAST_COUNTED_SET_KEY = 'daifugo.authLastCountedSet';
+const AUTH_MENU_PROMPT_LAST_COUNT_KEY = 'daifugo.authMenuPromptLastCount';
+const AUTH_MENU_PROMPT_FREQUENCY = 3;
+
+type AuthResultDialog =
+  | { kind: 'switched'; registeredBefore: boolean; displayName: string }
+  | { kind: 'expired' }
+  | { kind: 'unavailable' };
+
+function safeSessionGet(key: string): string | null {
+  try {
+    return window.sessionStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeSessionSet(key: string, value: string): void {
+  try {
+    window.sessionStorage.setItem(key, value);
+  } catch {
+    // 認証自体は保存領域が使えない環境でも続ける。
+  }
+}
+
+function storageNumber(
+  storage: PlayedBeforeStorage | undefined,
+  key: string,
+): number {
+  try {
+    const value = Number(storage?.getItem(key));
+    return Number.isFinite(value) && value >= 0 ? value : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function storageValue(
+  storage: PlayedBeforeStorage | undefined,
+  key: string,
+): string | null {
+  try {
+    return storage?.getItem(key) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function storageWrite(
+  storage: PlayedBeforeStorage | undefined,
+  key: string,
+  value: string,
+): void {
+  try {
+    storage?.setItem(key, value);
+  } catch {
+    // 誘いの頻度管理が失敗しても対局と認証は止めない。
+  }
+}
+
+function waitForReadySession(client: MultiplayerClient): Promise<string> {
+  const current = client.snapshot();
+  const currentToken = client.currentUserToken();
+  if (current.connection === 'ready' && currentToken) {
+    return Promise.resolve(currentToken);
+  }
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let unsubscribe: () => void = () => undefined;
+    const finish = (token: string) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timeout);
+      unsubscribe();
+      resolve(token);
+    };
+    const timeout = window.setTimeout(() => {
+      settled = true;
+      unsubscribe();
+      reject(new Error('session_refresh_timeout'));
+    }, 8_000);
+    unsubscribe = client.subscribe(() => {
+      const token = client.currentUserToken();
+      if (client.snapshot().connection !== 'ready' || !token) return;
+      finish(token);
+    });
+    if (settled) unsubscribe();
+  });
+}
 
 /**
  * 最終戦リザルトを見せる時間。
@@ -229,6 +332,7 @@ function DemoApp() {
   const [selectedCardIds, setSelectedCardIds] = useState<readonly string[]>([]);
   const [funRating, setFunRating] = useState<SetFunRating | null>(null);
   const [ruleVotes, setRuleVotes] = useState(DEMO_FIRED_RULES);
+  const [demoDisplayName, setDemoDisplayName] = useState('ゲスト000001');
   /** 見本のカットインを順に再生するための位置。null は再生していない状態。 */
   const [isChoosingRoom, setIsChoosingRoom] = useState(false);
   const [volleyIndex, setVolleyIndex] = useState<number | null>(null);
@@ -289,6 +393,9 @@ function DemoApp() {
             onPropose={() => go('proposal')}
             onEncyclopedia={() => go('ruleDex')}
             onMyProposals={() => go('myProposals')}
+            displayName={demoDisplayName}
+            accountState="anonymous"
+            onOpenAccount={() => go('account')}
           />
           {isChoosingRoom && (
             <PlaySheet
@@ -306,6 +413,32 @@ function DemoApp() {
             />
           )}
         </>
+      );
+
+    case 'account':
+      return (
+        <AccountScreen
+          api={DEMO_PROPOSAL_API}
+          displayName={demoDisplayName}
+          registered={false}
+          connection="ready"
+          onBack={() => go('menu')}
+          onRename={() => go('name')}
+          onOpenProposals={() => go('myProposals')}
+          onConnect={() => undefined}
+          onSwitch={() => undefined}
+          onSignOut={() => undefined}
+        />
+      );
+
+    case 'name':
+      return (
+        <NameScreen
+          displayName={demoDisplayName}
+          connection="ready"
+          rename={async (displayName) => setDemoDisplayName(displayName)}
+          onBack={() => go('account')}
+        />
       );
 
     case 'proposal':
@@ -445,10 +578,10 @@ function waitingMembers(room: PlayerRoomView): MemberListView[] {
       ? { kind: 'ai', name: member.displayName }
       : {
           kind: 'human',
-          name:
-            member.memberId === room.you.memberId
-              ? 'あなた'
-              : member.displayName,
+          name: seatDisplayName(
+            member.displayName,
+            member.memberId === room.you.memberId,
+          ),
           ...(member.isHost ? { role: 'ホスト' } : {}),
           ...(!member.connected ? { status: '切断中' } : {}),
         },
@@ -482,10 +615,10 @@ function gameRanks(room: PlayerRoomView): GameRankView[] {
       const member = bySeat.get(standing.seat);
       return {
         place: standing.rank,
-        name:
-          member?.memberId === room.you.memberId
-            ? 'あなた'
-            : (member?.displayName ?? `席${String(standing.seat + 1)}`),
+        name: seatDisplayName(
+          member?.displayName ?? `席${String(standing.seat + 1)}`,
+          member?.memberId === room.you.memberId,
+        ),
         kind: member?.isAI ? ('ai' as const) : ('human' as const),
         title: standing.title,
         gainedPoints: standing.points,
@@ -518,10 +651,10 @@ function finalGameRanks(room: PlayerRoomView): GameRankView[] {
       const member = bySeat.get(standing.seat);
       return {
         place: standing.rank,
-        name:
-          member?.memberId === room.you.memberId
-            ? 'あなた'
-            : (member?.displayName ?? `席${String(standing.seat + 1)}`),
+        name: seatDisplayName(
+          member?.displayName ?? `席${String(standing.seat + 1)}`,
+          member?.memberId === room.you.memberId,
+        ),
         kind: member?.isAI ? ('ai' as const) : ('human' as const),
         title: standing.title,
         gainedPoints: standing.points,
@@ -542,10 +675,10 @@ function setRanks(room: PlayerRoomView): SetRankView[] {
       );
       return {
         place: standing.totalRank,
-        name:
-          standing.memberId === room.you.memberId
-            ? 'あなた'
-            : (member?.displayName ?? 'プレイヤー'),
+        name: seatDisplayName(
+          member?.displayName ?? 'プレイヤー',
+          standing.memberId === room.you.memberId,
+        ),
         kind: member?.isAI ? ('ai' as const) : ('human' as const),
         title: standing.title,
         totalPoints: standing.points,
@@ -600,10 +733,10 @@ function useFinalPlayReveal(
       (candidate) => candidate.seatId === play.seat,
     );
     setReveal({
-      playerName:
-        member?.memberId === room.you.memberId
-          ? 'あなた'
-          : (member?.displayName ?? `席${String(play.seat + 1)}`),
+      playerName: seatDisplayName(
+        member?.displayName ?? `席${String(play.seat + 1)}`,
+        member?.memberId === room.you.memberId,
+      ),
       cards: play.cards,
     });
   }, [playKey, room]);
@@ -663,8 +796,23 @@ function ConnectedApp({
   const finalResultDeadline = useRef<{ key: string; at: number } | null>(null);
   const [unreadProposalCount, setUnreadProposalCount] = useState(0);
   const [authPending, setAuthPending] = useState(false);
-  const [authMessage, setAuthMessage] = useState<string | null>(null);
-  const [showResultAuthPrompt, setShowResultAuthPrompt] = useState(false);
+  const [connectDialog, setConnectDialog] = useState<{
+    continueToPush: boolean;
+  } | null>(null);
+  const [accountDialog, setAccountDialog] = useState<
+    'switch' | 'signOut' | null
+  >(null);
+  const [signOutHasSubscription, setSignOutHasSubscription] = useState(false);
+  const [authResultDialog, setAuthResultDialog] =
+    useState<AuthResultDialog | null>(null);
+  const [rootToast, setRootToast] = useState<string | null>(null);
+  const [completedSetCount, setCompletedSetCount] = useState(() =>
+    storageNumber(storage, AUTH_COMPLETED_SET_COUNT_KEY),
+  );
+  const countedSetId = useRef<string | null>(
+    storageValue(storage, AUTH_LAST_COUNTED_SET_KEY),
+  );
+  const [showMenuConnectPrompt, setShowMenuConnectPrompt] = useState(false);
   const [menuPushOfferKind, setMenuPushOfferKind] =
     useState<PushOfferKind | null>(null);
   const proposalApi = getBrowserProposalClient();
@@ -713,39 +861,74 @@ function ConnectedApp({
     />
   );
   const finalPlayReveal = useFinalPlayReveal(room);
-  const beginLogin = useCallback((): boolean => {
-    if (
-      state.registered &&
-      !window.confirm(
-        '別のアカウントでログインすると、この端末はそのアカウントに切り替わります',
-      )
-    ) {
-      return false;
-    }
+  const openConnectDialog = useCallback(
+    (continueToPush = false) => {
+      if (continueToPush) pushApi.markOfferAfterLogin();
+      setConnectDialog({ continueToPush });
+    },
+    [pushApi],
+  );
+  const closeConnectDialog = useCallback(() => {
+    setConnectDialog((current) => {
+      if (current?.continueToPush) pushApi.consumeOfferAfterLogin();
+      return null;
+    });
+  }, [pushApi]);
+  const beginLogin = useCallback(async (): Promise<void> => {
     const userToken = client.currentUserToken();
     if (state.connection !== 'ready' || !userToken) {
-      setAuthMessage(
-        '接続を確認しています。少し待ってから、もう一度ためしてください。',
-      );
-      return false;
+      return;
     }
+    safeSessionSet(AUTH_STARTED_REGISTERED_KEY, String(state.registered));
     setAuthPending(true);
-    setAuthMessage(null);
     try {
-      auth.begin(userToken);
-      return true;
-    } catch {
+      try {
+        await auth.begin(userToken);
+      } catch (error) {
+        if (!(error instanceof AuthApiError) || error.status !== 401)
+          throw error;
+        client.switchSession(null);
+        await auth.begin(await waitForReadySession(client));
+      }
+    } catch (error) {
       setAuthPending(false);
-      setAuthMessage(RETRY_GENERIC_ERROR);
-      return false;
+      if (connectDialog?.continueToPush) pushApi.consumeOfferAfterLogin();
+      setConnectDialog(null);
+      setAccountDialog(null);
+      setAuthResultDialog(
+        error instanceof AuthApiError && error.status === 503
+          ? { kind: 'unavailable' }
+          : { kind: 'expired' },
+      );
     }
-  }, [auth, client, state.connection, state.registered]);
-  const beginPushLogin = useCallback((): boolean => {
-    pushApi.markOfferAfterLogin();
-    const started = beginLogin();
-    if (!started) pushApi.consumeOfferAfterLogin();
-    return started;
-  }, [beginLogin, pushApi]);
+  }, [
+    auth,
+    client,
+    connectDialog,
+    pushApi,
+    state.connection,
+    state.registered,
+  ]);
+  const beginPushLogin = useCallback(() => {
+    openConnectDialog(true);
+  }, [openConnectDialog]);
+  const offerMenuPromptAfterCompletedSet = useCallback(() => {
+    if (state.registered) return;
+    const lastShown = storageNumber(storage, AUTH_MENU_PROMPT_LAST_COUNT_KEY);
+    if (
+      completedSetCount === 1 ||
+      completedSetCount - lastShown >= AUTH_MENU_PROMPT_FREQUENCY
+    ) {
+      setShowMenuConnectPrompt(true);
+    }
+  }, [completedSetCount, state.registered, storage]);
+  const markMenuPromptShown = useCallback(() => {
+    storageWrite(
+      storage,
+      AUTH_MENU_PROMPT_LAST_COUNT_KEY,
+      String(completedSetCount),
+    );
+  }, [completedSetCount, storage]);
   const routeAtRender =
     typeof window === 'undefined'
       ? null
@@ -1056,64 +1239,72 @@ function ConnectedApp({
   }, [playedBefore, room, storage]);
 
   useEffect(() => {
-    if (room?.phase !== 'setResult' || state.registered) {
-      setShowResultAuthPrompt(false);
-      return;
+    const setId = room?.phase === 'setResult' ? room.setResult?.setId : null;
+    if (!setId) return;
+    if (countedSetId.current === setId) return;
+    const next = completedSetCount + 1;
+    countedSetId.current = setId;
+    setCompletedSetCount(next);
+    storageWrite(storage, AUTH_COMPLETED_SET_COUNT_KEY, String(next));
+    storageWrite(storage, AUTH_LAST_COUNTED_SET_KEY, setId);
+  }, [completedSetCount, room?.phase, room?.setResult?.setId, storage]);
+
+  useEffect(() => {
+    if (current !== 'menu' || state.registered) {
+      setShowMenuConnectPrompt(false);
     }
-    try {
-      if (storage?.getItem(AUTH_RESULT_PROMPT_KEY) === 'true') return;
-      storage?.setItem(AUTH_RESULT_PROMPT_KEY, 'true');
-    } catch {
-      // Storage unavailable: showing the small prompt is still safe.
-    }
-    setShowResultAuthPrompt(true);
-  }, [room?.phase, room?.roomId, state.registered, storage]);
+  }, [current, state.registered]);
 
   useEffect(() => {
     const hash = window.location.hash;
-    if (hash === '#/auth/result') {
-      window.history.replaceState(null, '', '/menu');
-      go('menu');
-      const continueToPush = pushApi.consumeOfferAfterLogin();
-      const result = auth.takeResult();
-      if (!result) {
-        setAuthMessage(RETRY_GENERIC_ERROR);
-        return;
-      }
-      client.switchSession(result.userToken);
-      setAuthMessage(
-        result.outcome === 'linked' ? '引き継ぎ登録しました' : 'おかえり!',
-      );
-      if (continueToPush) {
-        void pushApi
-          .offer()
-          .then((kind) => setMenuPushOfferKind(kind))
-          .catch(() => undefined);
-      }
-      return;
-    }
     if (!hash.startsWith('#/auth/complete')) return;
     const query = hash.includes('?') ? hash.slice(hash.indexOf('?') + 1) : '';
     const parameters = new URLSearchParams(query);
     const error = parameters.get('error');
     window.history.replaceState(null, '', '/menu');
     go('menu');
+    const continueToPush = pushApi.consumeOfferAfterLogin();
+    if (error === 'denied') {
+      return;
+    }
     if (error) {
-      setAuthMessage(RETRY_GENERIC_ERROR);
+      setAuthResultDialog({ kind: 'expired' });
       return;
     }
     const ott = parameters.get('ott');
     if (!ott) {
-      setAuthMessage(RETRY_GENERIC_ERROR);
+      setAuthResultDialog({ kind: 'expired' });
       return;
     }
     setAuthPending(true);
-    try {
-      auth.complete(ott);
-    } catch {
-      setAuthPending(false);
-      setAuthMessage(RETRY_GENERIC_ERROR);
-    }
+    void auth.complete(ott).then(
+      (result: AuthCompleteResponse) => {
+        client.switchSession(result.userToken);
+        if (result.outcome === 'linked') {
+          setRootToast('Googleでつなぎました');
+        } else if (result.outcome === 'already') {
+          setRootToast('すでにつないであります');
+        } else {
+          setAuthResultDialog({
+            kind: 'switched',
+            registeredBefore:
+              safeSessionGet(AUTH_STARTED_REGISTERED_KEY) === 'true',
+            displayName: result.displayName,
+          });
+        }
+        if (continueToPush) {
+          void pushApi
+            .offer()
+            .then((kind) => setMenuPushOfferKind(kind))
+            .catch(() => undefined);
+        }
+        setAuthPending(false);
+      },
+      () => {
+        setAuthPending(false);
+        setAuthResultDialog({ kind: 'expired' });
+      },
+    );
   }, [auth, client, go, pushApi]);
 
   useEffect(() => {
@@ -1217,11 +1408,136 @@ function ConnectedApp({
       window.clearTimeout(timer);
     };
   }, [heldPlayWasSuperseded, isFlushingField]);
+  const openSignOutDialog = () => {
+    setSignOutHasSubscription(false);
+    setAccountDialog('signOut');
+    void pushApi
+      .hasActiveSubscription()
+      .then(setSignOutHasSubscription)
+      .catch(() => undefined);
+  };
+  const confirmSignOut = () => {
+    void pushApi.disableThisDevice().finally(() => {
+      client.switchSession(null);
+      setAccountDialog(null);
+      go('menu');
+      setRootToast('サインアウトしました');
+    });
+  };
+  const rootFeedback = (
+    <>
+      {connectDialog && (
+        <ConnectDialog
+          displayName={state.displayName}
+          connectionReady={state.connection === 'ready'}
+          pending={authPending}
+          rename={(displayName) => client.rename(displayName)}
+          onProceed={() => void beginLogin()}
+          onBack={closeConnectDialog}
+        />
+      )}
+      {accountDialog === 'switch' && (
+        <ConfirmDialog
+          title="別のアカウントにしますか?"
+          description={`この端末は、えらんだGoogleアカウントの記録に切り替わります。今の「${state.displayName ?? '—'}」の記録は消えず、また同じGoogleでつなげばもどってきます。`}
+          confirmLabel="Googleへ進む"
+          cancelLabel={CONFIRM_BACK_LABEL}
+          onConfirm={() => {
+            setAccountDialog(null);
+            void beginLogin();
+          }}
+          onCancel={() => setAccountDialog(null)}
+        />
+      )}
+      {accountDialog === 'signOut' && (
+        <Dialog
+          title="サインアウトしますか?"
+          onClose={() => setAccountDialog(null)}
+          actions={
+            <>
+              <Button onClick={confirmSignOut}>サインアウトする</Button>
+              <Button variant="primary" onClick={() => setAccountDialog(null)}>
+                {CONFIRM_BACK_LABEL}
+              </Button>
+            </>
+          }
+        >
+          <DialogBody>
+            この端末から記録が離れて、新しいゲストになります。記録は消えず、またGoogleでつなげばもどってきます。
+          </DialogBody>
+          {signOutHasSubscription && (
+            <DialogBody>この端末のおしらせも届かなくなります。</DialogBody>
+          )}
+        </Dialog>
+      )}
+      {authResultDialog?.kind === 'switched' && (
+        <Dialog
+          title={
+            authResultDialog.registeredBefore
+              ? '別のアカウントに切り替わりました'
+              : `おかえりなさい、${authResultDialog.displayName}さん`
+          }
+          actions={
+            <Button variant="primary" onClick={() => setAuthResultDialog(null)}>
+              閉じる
+            </Button>
+          }
+        >
+          <DialogBody>
+            {authResultDialog.registeredBefore
+              ? `今は「${authResultDialog.displayName}」の記録であそんでいます。`
+              : 'この端末で前にあそんでいた記録は、もう見られません。'}
+          </DialogBody>
+        </Dialog>
+      )}
+      {authResultDialog?.kind === 'expired' && (
+        <Dialog
+          title="途中で時間がすぎました"
+          actions={
+            <>
+              <Button
+                variant="primary"
+                onClick={() => {
+                  setAuthResultDialog(null);
+                  openConnectDialog();
+                }}
+              >
+                もう一度ためす
+              </Button>
+              <Button onClick={() => setAuthResultDialog(null)}>閉じる</Button>
+            </>
+          }
+        >
+          <DialogBody>もう一度ためせば大丈夫です。</DialogBody>
+        </Dialog>
+      )}
+      {authResultDialog?.kind === 'unavailable' && (
+        <Dialog
+          title="今はつなげません"
+          actions={
+            <Button variant="primary" onClick={() => setAuthResultDialog(null)}>
+              閉じる
+            </Button>
+          }
+        >
+          <DialogBody>時間をおいてから、もう一度ためしてください。</DialogBody>
+        </Dialog>
+      )}
+      {rootToast && (
+        <div className={feedbackStyles.toastLayer}>
+          <Toast duration={3_000} onDismiss={() => setRootToast(null)}>
+            {rootToast}
+          </Toast>
+        </div>
+      )}
+    </>
+  );
   const show = (content: ReactNode) => (
     <>
       <ConnectionStatus state={state}>{content}</ConnectionStatus>
       <RuleCutIn activations={activations} onDone={finishRuleCutIn} />
       {finalPlayReveal && <FinalPlayReveal {...finalPlayReveal} />}
+      {rootFeedback}
     </>
   );
   const visibleSetResultRoom =
@@ -1421,9 +1737,10 @@ function ConnectedApp({
           discardNotices={cardDiscardNotices(room)}
           leadSeatName={
             leadMember
-              ? leadMember.memberId === room.you.memberId
-                ? 'あなた'
-                : leadMember.displayName
+              ? seatDisplayName(
+                  leadMember.displayName,
+                  leadMember.memberId === room.you.memberId,
+                )
               : null
           }
           activations={[]}
@@ -1622,6 +1939,7 @@ function ConnectedApp({
           invoke(
             client.leaveRoom().then(() => {
               go('menu');
+              offerMenuPromptAfterCompletedSet();
             }),
           );
         }}
@@ -1629,7 +1947,6 @@ function ConnectedApp({
         showEvaluation
         waitingFor={waitingFor}
         actionPending={isGraduating}
-        {...(showResultAuthPrompt ? { onRegister: beginLogin } : {})}
       />,
     );
   }
@@ -1643,7 +1960,8 @@ function ConnectedApp({
         api={getBrowserProposalClient()}
         onBack={() => go('menu')}
         registered={state.registered}
-        onLogin={beginLogin}
+        onLogin={() => openConnectDialog()}
+        onOpenMyProposals={() => go('myProposals')}
         notification={notificationBell}
         pushOffer={{
           offer: () => pushApi.offer(),
@@ -1654,6 +1972,32 @@ function ConnectedApp({
           declined: () => pushApi.offerDeclined(),
           begin: beginPushLogin,
         }}
+      />,
+    );
+  }
+  if (!sharedInviteCode && current === 'account') {
+    return show(
+      <AccountScreen
+        api={proposalApi}
+        displayName={state.displayName}
+        registered={state.registered}
+        connection={state.connection}
+        onBack={() => go('menu')}
+        onRename={() => go('name')}
+        onOpenProposals={() => go('myProposals')}
+        onConnect={() => openConnectDialog()}
+        onSwitch={() => setAccountDialog('switch')}
+        onSignOut={openSignOutDialog}
+      />,
+    );
+  }
+  if (!sharedInviteCode && current === 'name') {
+    return show(
+      <NameScreen
+        displayName={state.displayName}
+        connection={state.connection}
+        rename={(displayName) => client.rename(displayName)}
+        onBack={() => go('account')}
       />,
     );
   }
@@ -1716,16 +2060,20 @@ function ConnectedApp({
         onPropose={() => go('proposal')}
         onEncyclopedia={() => go('ruleDex')}
         onMyProposals={() => go('myProposals')}
-        registered={state.registered}
-        onLogin={beginLogin}
-        onLogout={() => {
-          void pushApi.disableThisDevice().finally(() => {
-            client.switchSession(null);
-            setAuthMessage('ログアウトしました');
-          });
-        }}
-        authPending={authPending}
-        authMessage={authMessage}
+        displayName={state.displayName}
+        accountState={
+          state.connection !== 'ready'
+            ? 'connecting'
+            : authPending
+              ? 'pending'
+              : state.registered
+                ? 'registered'
+                : 'anonymous'
+        }
+        onOpenAccount={() => go('account')}
+        showConnectPrompt={showMenuConnectPrompt && !state.registered}
+        onConnect={() => openConnectDialog()}
+        onConnectPromptShown={markMenuPromptShown}
         unreadProposalCount={unreadProposalCount}
         notification={notificationBell}
       />
@@ -1864,12 +2212,11 @@ export function App({
     (typeof window === 'undefined'
       ? {
           begin: () => {
-            throw new Error('auth_unavailable');
+            return Promise.reject(new Error('auth_unavailable'));
           },
           complete: () => {
-            throw new Error('auth_unavailable');
+            return Promise.reject(new Error('auth_unavailable'));
           },
-          takeResult: () => null,
         }
       : getBrowserAuthClient());
   const effectivePush = push ?? getBrowserPushClient();

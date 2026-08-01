@@ -8,6 +8,13 @@ import type { CardView } from '../components/Card';
 import type { TableSeat } from '../components/Table';
 import type { CardDiscardNotice, SeatFinish } from '../screens/GameScreen';
 
+/** 自席名の表示規則。Q-7 の裁定後も変更点をここだけに保つ。 */
+export const SELF_DISPLAY_NAME = 'あなた';
+
+export function seatDisplayName(name: string, isSelf: boolean): string {
+  return isSelf ? SELF_DISPLAY_NAME : name;
+}
+
 export function cards(
   cards: PlayerRoomView['game'] extends null
     ? never
@@ -57,10 +64,10 @@ export function cardDiscardNotices(room: PlayerRoomView): CardDiscardNotice[] {
       {
         id: `${String(game.gameNo)}:${String(index)}`,
         ruleName: ruleName.get(event.ruleId) ?? 'カード効果',
-        playerName:
-          member?.memberId === room.you.memberId
-            ? 'あなた'
-            : (member?.displayName ?? `席${String(event.fromSeat + 1)}`),
+        playerName: seatDisplayName(
+          member?.displayName ?? `席${String(event.fromSeat + 1)}`,
+          member?.memberId === room.you.memberId,
+        ),
         cards: cards(event.cards),
       },
     ];
@@ -118,10 +125,10 @@ export function seatFinishes(room: PlayerRoomView): SeatFinish[] {
       const member = bySeat.get(event.seat);
       finishes.push({
         seat: event.seat,
-        name:
-          member?.memberId === room.you.memberId
-            ? 'あなた'
-            : (member?.displayName ?? `席${String(event.seat + 1)}`),
+        name: seatDisplayName(
+          member?.displayName ?? `席${String(event.seat + 1)}`,
+          member?.memberId === room.you.memberId,
+        ),
         isSelf: member?.memberId === room.you.memberId,
         rank: event.rank,
         title: event.title,
@@ -217,10 +224,10 @@ export function tableSeats(
           ? '切断中(AI代行)'
           : undefined;
     return {
-      name:
-        member?.memberId === room.you.memberId
-          ? 'あなた'
-          : (member?.displayName ?? `席${String(seat + 1)}`),
+      name: seatDisplayName(
+        member?.displayName ?? `席${String(seat + 1)}`,
+        member?.memberId === room.you.memberId,
+      ),
       isSelf: member?.memberId === room.you.memberId,
       handCount: member?.handCount ?? 0,
       isCurrentTurn: game.turn?.seat === seat,

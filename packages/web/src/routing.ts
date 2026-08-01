@@ -5,6 +5,8 @@ import type { ScreenId } from './store/screen';
 const SCREEN_PATHS: Record<ScreenId, string> = {
   title: '/',
   menu: '/menu',
+  account: '/account',
+  name: '/account/name',
   proposal: '/proposals/new',
   myProposals: '/proposals/mine',
   notifications: '/notifications',

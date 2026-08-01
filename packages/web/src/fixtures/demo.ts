@@ -13,9 +13,10 @@ import type { GameStatusMarker } from '../components/StateMarkers';
 import type { TableSeat } from '../components/Table';
 import type { SeatFinish } from '../screens/GameScreen';
 import type { FiredRuleVote } from '../screens/SetResultScreen';
+import { SELF_DISPLAY_NAME } from '../game/table';
 
 export const DEMO_MEMBERS: readonly MemberView[] = [
-  { kind: 'human', name: 'あなた', role: 'ホスト' },
+  { kind: 'human', name: SELF_DISPLAY_NAME, role: 'ホスト' },
   { kind: 'human', name: 'プレイヤーB' },
   { kind: 'empty' },
   { kind: 'empty' },
@@ -30,7 +31,7 @@ export const DEMO_ACTIVE_RULE_COUNT = 31;
  */
 export const DEMO_SEATS: readonly TableSeat[] = [
   {
-    name: 'あなた',
+    name: SELF_DISPLAY_NAME,
     isSelf: true,
     handCount: 10,
     isCurrentTurn: false,
@@ -107,7 +108,7 @@ export const DEMO_HAND: readonly CardView[] = [
 export const DEMO_GAME_RANKS: readonly GameRankView[] = [
   {
     place: 1,
-    name: 'あなた',
+    name: SELF_DISPLAY_NAME,
     kind: 'human',
     title: '大富豪',
     gainedPoints: 5,
@@ -143,7 +144,7 @@ export const DEMO_GAME_RANKS: readonly GameRankView[] = [
 export const DEMO_SET_RANKS: readonly SetRankView[] = [
   {
     place: 1,
-    name: 'あなた',
+    name: SELF_DISPLAY_NAME,
     kind: 'human',
     title: '大富豪',
     totalPoints: 13,

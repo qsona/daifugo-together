@@ -12,6 +12,7 @@ import styles from './Field.module.css';
 
 type FieldShellProps = {
   label: string;
+  labelSuffix?: ReactNode;
   /** 任意項目はラベル末尾に「(任意)」を付ける。 */
   optional?: boolean;
   /** 補足説明。エラーがあるときはエラー文言が優先して読み上げられる。 */
@@ -22,6 +23,7 @@ type FieldShellProps = {
 
 function FieldShell({
   label,
+  labelSuffix,
   optional = false,
   caption,
   error,
@@ -37,9 +39,14 @@ function FieldShell({
 
   return (
     <div className={styles.field}>
-      <label className={styles.label} htmlFor={controlId}>
-        {label}
-        {optional && <span className={styles.optional}> (任意)</span>}
+      <label className={styles.labelRow} htmlFor={controlId}>
+        <span className={styles.label}>
+          {label}
+          {optional && <span className={styles.optional}> (任意)</span>}
+        </span>
+        {labelSuffix && (
+          <span className={styles.labelSuffix}>{labelSuffix}</span>
+        )}
       </label>
       {children({ controlId, ...(describedBy ? { describedBy } : {}) })}
       {error && (
@@ -60,6 +67,7 @@ type ControlProps = Omit<FieldShellProps, 'children'>;
 
 export function InputField({
   label,
+  labelSuffix,
   optional,
   caption,
   error,
@@ -68,6 +76,7 @@ export function InputField({
   return (
     <FieldShell
       label={label}
+      {...(labelSuffix === undefined ? {} : { labelSuffix })}
       {...(optional === undefined ? {} : { optional })}
       {...(caption === undefined ? {} : { caption })}
       {...(error === undefined ? {} : { error })}
@@ -87,6 +96,7 @@ export function InputField({
 
 export function TextareaField({
   label,
+  labelSuffix,
   optional,
   caption,
   error,
@@ -96,6 +106,7 @@ export function TextareaField({
   return (
     <FieldShell
       label={label}
+      {...(labelSuffix === undefined ? {} : { labelSuffix })}
       {...(optional === undefined ? {} : { optional })}
       {...(caption === undefined ? {} : { caption })}
       {...(error === undefined ? {} : { error })}
@@ -119,6 +130,7 @@ export function TextareaField({
 
 export function SelectField({
   label,
+  labelSuffix,
   optional,
   caption,
   error,
@@ -131,6 +143,7 @@ export function SelectField({
   return (
     <FieldShell
       label={label}
+      {...(labelSuffix === undefined ? {} : { labelSuffix })}
       {...(optional === undefined ? {} : { optional })}
       {...(caption === undefined ? {} : { caption })}
       {...(error === undefined ? {} : { error })}

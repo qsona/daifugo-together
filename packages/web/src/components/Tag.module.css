@@ -48,3 +48,15 @@
   border-color: var(--color-border-control);
   color: var(--color-text-secondary);
 }
+
+.account {
+  background: var(--color-bg-surface);
+  border-color: var(--color-border-control);
+  color: var(--color-text-secondary);
+}
+
+.accountActive {
+  background: var(--color-status-active-bg);
+  border-color: var(--color-status-active-bg);
+  color: var(--color-status-active-text);
+}

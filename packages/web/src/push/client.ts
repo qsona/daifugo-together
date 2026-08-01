@@ -155,6 +155,13 @@ export class PushClient {
     }
   }
 
+  async hasActiveSubscription(): Promise<boolean> {
+    if (!('serviceWorker' in navigator)) return false;
+    const registration = await navigator.serviceWorker.getRegistration('/');
+    if (!registration) return false;
+    return (await registration.pushManager.getSubscription()) !== null;
+  }
+
   async config(): Promise<{
     vapidPublicKey: string | null;
     available: boolean;

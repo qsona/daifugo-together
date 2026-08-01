@@ -11,6 +11,19 @@
   font-weight: var(--font-weight-bold);
 }
 
+.labelRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.labelSuffix {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-micro);
+  font-weight: var(--font-weight-bold);
+}
+
 /* 必須マークは使わず、任意側に印を付ける。 */
 .optional {
   font-weight: var(--font-weight-regular);

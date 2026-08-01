@@ -1,8 +1,14 @@
 import { BrandHero, HillDivider } from '../components/BrandHero';
 import { Button } from '../components/Button';
-import type { ReactNode } from 'react';
+import {
+  AccountRow,
+  isDefaultDisplayName,
+  type AccountState,
+} from '../components/AccountRow';
+import { Callout } from '../components/Callout';
+import { useEffect, type ReactNode } from 'react';
 
-import { PROPOSE_RULE_LABEL } from '../messages';
+import { GOOGLE_CONNECT_LABEL, PROPOSE_RULE_LABEL } from '../messages';
 
 import styles from './MenuScreen.module.css';
 import screen from './screen.module.css';
@@ -12,11 +18,12 @@ type MenuScreenProps = {
   onPropose: () => void;
   onEncyclopedia: () => void;
   onMyProposals: () => void;
-  registered?: boolean;
-  onLogin?: () => void;
-  onLogout?: () => void;
-  authPending?: boolean;
-  authMessage?: string | null;
+  displayName: string | null;
+  accountState: AccountState;
+  onOpenAccount: () => void;
+  showConnectPrompt?: boolean;
+  onConnect?: () => void;
+  onConnectPromptShown?: () => void;
   unreadProposalCount?: number;
   notification?: ReactNode;
 };
@@ -33,20 +40,27 @@ export function MenuScreen({
   onPropose,
   onEncyclopedia,
   onMyProposals,
-  registered = false,
-  onLogin,
-  onLogout,
-  authPending = false,
-  authMessage = null,
+  displayName,
+  accountState,
+  onOpenAccount,
+  showConnectPrompt = false,
+  onConnect,
+  onConnectPromptShown,
   unreadProposalCount = 0,
   notification,
 }: MenuScreenProps) {
   return (
     <div className={screen.screen}>
       <main className={screen.body}>
-        {notification && (
-          <div className={styles.notification}>{notification}</div>
-        )}
+        <div className={styles.accountBar}>
+          <AccountRow
+            displayName={displayName}
+            state={accountState}
+            isDefaultName={isDefaultDisplayName(displayName)}
+            onOpen={onOpenAccount}
+          />
+          {notification}
+        </div>
         <BrandHero />
         <Button variant="primary" block onClick={onPlay}>
           あそぶ
@@ -67,18 +81,35 @@ export function MenuScreen({
             )}
           </Button>
         </div>
-        {onLogin && onLogout && (
-          <Button
-            size="small"
-            disabled={authPending}
-            onClick={registered ? onLogout : onLogin}
-          >
-            {registered ? '登録済み・ログアウト' : '引き継ぎ・ログイン'}
-          </Button>
+        {showConnectPrompt && onConnect && (
+          <ConnectPrompt
+            onConnect={onConnect}
+            {...(onConnectPromptShown ? { onShown: onConnectPromptShown } : {})}
+          />
         )}
-        {authMessage && <p role="status">{authMessage}</p>}
         <HillDivider />
       </main>
     </div>
+  );
+}
+
+function ConnectPrompt({
+  onConnect,
+  onShown,
+}: {
+  onConnect: () => void;
+  onShown?: () => void;
+}) {
+  useEffect(() => onShown?.(), [onShown]);
+  return (
+    <Callout
+      action={
+        <Button size="small" onClick={onConnect}>
+          {GOOGLE_CONNECT_LABEL}
+        </Button>
+      }
+    >
+      今日の記録は、この端末だけに残っています。Googleでつなぐと、ほかの端末でも続きをあそべます。
+    </Callout>
   );
 }

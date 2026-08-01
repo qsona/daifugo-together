@@ -13,6 +13,9 @@ describe('MenuScreen', () => {
       onPropose: vi.fn(),
       onEncyclopedia: vi.fn(),
       onMyProposals: vi.fn(),
+      displayName: 'ゲスト000001',
+      accountState: 'anonymous' as const,
+      onOpenAccount: vi.fn(),
     };
     const { rerender } = render(
       <MenuScreen {...props} unreadProposalCount={3} />,
@@ -23,29 +26,21 @@ describe('MenuScreen', () => {
     expect(screen.getByLabelText('未読提案').textContent).toBe('99+');
   });
 
-  it('未登録はログイン、登録済みはログアウトの導線を出す', async () => {
+  it('アカウント行は操作せず記録画面を開く', async () => {
     const user = userEvent.setup();
-    const onLogin = vi.fn();
-    const onLogout = vi.fn();
+    const onOpenAccount = vi.fn();
     const props = {
       onPlay: vi.fn(),
       onPropose: vi.fn(),
       onEncyclopedia: vi.fn(),
       onMyProposals: vi.fn(),
-      onHowToPlay: vi.fn(),
-      onLogin,
-      onLogout,
+      displayName: 'ゲスト000001',
+      accountState: 'anonymous' as const,
+      onOpenAccount,
     };
-    const view = render(<MenuScreen {...props} />);
-    await user.click(
-      screen.getByRole('button', { name: '引き継ぎ・ログイン' }),
-    );
-    expect(onLogin).toHaveBeenCalledOnce();
-
-    view.rerender(<MenuScreen {...props} registered />);
-    await user.click(
-      screen.getByRole('button', { name: '登録済み・ログアウト' }),
-    );
-    expect(onLogout).toHaveBeenCalledOnce();
+    render(<MenuScreen {...props} />);
+    await user.click(screen.getByRole('button', { name: /記録を開く/ }));
+    expect(onOpenAccount).toHaveBeenCalledOnce();
+    expect(screen.queryByText('引き継ぎ・ログイン')).toBeNull();
   });
 });

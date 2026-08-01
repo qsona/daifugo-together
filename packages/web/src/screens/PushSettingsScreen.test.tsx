@@ -109,7 +109,7 @@ describe('PushSettingsScreen', () => {
       screen.queryByRole('button', { name: 'この端末への通知を止める' }),
     ).toBeNull();
     await userEvent.click(
-      screen.getByRole('button', { name: 'Googleで引き継ぐ' }),
+      screen.getByRole('button', { name: 'Googleでつなぐ' }),
     );
     expect(onLogin).toHaveBeenCalledOnce();
     expect(available.config).not.toHaveBeenCalled();

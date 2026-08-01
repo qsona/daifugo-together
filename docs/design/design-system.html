@@ -338,6 +338,8 @@ table.spec th { background: var(--color-bg-subtle); white-space: nowrap; }
 .c-tag.-removed { background: var(--color-status-removed-bg); border-color: var(--color-navy-200); color: var(--color-status-removed-text); }
 .c-tag.-human { background: var(--color-status-active-bg); border-color: var(--color-status-active-bg); color: var(--color-status-active-text); }
 .c-tag.-ai { background: var(--color-bg-surface); border-color: var(--color-border-control); color: var(--color-text-secondary); }
+.c-tag.-account { background: var(--color-bg-surface); border-color: var(--color-border-control); color: var(--color-text-secondary); }
+.c-tag.-account-active { background: var(--color-status-active-bg); border-color: var(--color-status-active-bg); color: var(--color-status-active-text); }
 
 /* 人気度バー */
 .c-pop { display: flex; align-items: center; gap: var(--space-2); font-size: var(--font-size-micro); color: var(--color-text-secondary); }
@@ -1129,8 +1131,10 @@ table.spec th { background: var(--color-bg-subtle); white-space: nowrap; }
         <span class="c-tag -removed">排除済み</span>
         <span class="c-tag -human">人間</span>
         <span class="c-tag -ai">AI</span>
+        <span class="c-tag -account">この端末だけ</span>
+        <span class="c-tag -account-active">どの端末でも</span>
       </div>
-      <div class="note">図鑑の区分タグはローカル / オリジナルだけを表示する。ローカル=緑 / オリジナル=金は KV 手札のルールカード(LOCAL RULE=緑・NEW RULE=金)の継承。</div>
+      <div class="note">図鑑の区分タグはローカル / オリジナルだけを表示する。ローカル=緑 / オリジナル=金は KV 手札のルールカード(LOCAL RULE=緑・NEW RULE=金)の継承。アカウント状態は中立の「この端末だけ」と塗りの「どの端末でも」を使う。</div>
     </div>
 
     <h3>5-6. 人気度バー</h3>

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { cx } from '../lib/cx';
 
@@ -8,15 +8,43 @@ type ToastProps = {
   /** ok=完了通知 / warn=注意・強調 / guide=初戦の一言。 */
   variant?: 'ok' | 'warn' | 'guide';
   children: ReactNode;
+  /** 指定時だけ自動で退場する。既存の演出用途は無期限のまま。 */
+  duration?: number;
+  onDismiss?: () => void;
 };
 
 /**
  * design-system.html §5-13。画面下部に 1 件だけ出す。
  * エラーはトーストにせず、その場のフォームエラーかモーダルで返す。
  */
-export function Toast({ variant = 'ok', children }: ToastProps) {
+export function Toast({
+  variant = 'ok',
+  children,
+  duration,
+  onDismiss,
+}: ToastProps) {
+  const [leaving, setLeaving] = useState(false);
+  const onDismissRef = useRef(onDismiss);
+
+  useEffect(() => {
+    onDismissRef.current = onDismiss;
+  }, [onDismiss]);
+
+  useEffect(() => {
+    if (duration === undefined) return;
+    const leaveAt = window.setTimeout(() => setLeaving(true), duration);
+    const dismissAt = window.setTimeout(
+      () => onDismissRef.current?.(),
+      duration + 180,
+    );
+    return () => {
+      window.clearTimeout(leaveAt);
+      window.clearTimeout(dismissAt);
+    };
+  }, [duration]);
+
   return (
-    <p className={styles.toast} role="status">
+    <p className={cx(styles.toast, leaving && styles.leaving)} role="status">
       <span className={cx(styles.icon, styles[variant])} aria-hidden="true">
         {variant === 'ok' && (
           <svg
