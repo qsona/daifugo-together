@@ -55,7 +55,7 @@ export interface RuleChainEntry {
 - `Play.repRank: CardRank | 'joker'`。
 - 意味論 (旧 BR-4 = E01 の確定仕様どおり):
   - 単体のジョーカーは **最強** (`repRank: 'joker'`)。ranking の反転 (革命・イレブンバック) の影響を受けず最強のまま。JK 単騎対 JK 単騎は `compareRanks = 0` で TOO_WEAK (乗せられない)。場の JK 単騎に 2 などの自然カードは出せない (例外はスペ3返し等のルールが `modifyLegality` で base の TOO_WEAK を legal に上書きして表現する。契約変更不要)。
-  - set / sequence では任意カードの代用 (ワイルドカード)。set の枚数範囲は従来どおり 2..4 (ジョーカー込みでも 5 枚組は生成しない)。repRank は代用を含む実効ランク。ジョーカー 2 枚のみのペアは `repRank: 'joker'` で最強のペア。sequence は自然カード 1 枚以上を要求 (JK は 2 枚しかないため 3 枚下限からも自動排除)。
+  - set / sequence では任意カードの代用 (ワイルドカード)。set は自然カード 1 枚以上と同一ランクの自然カードすべてに、手札のジョーカーを組み合わせられる (2 枚から最大 6 枚)。repRank は代用を含む実効ランク。ジョーカー 2 枚のみのペアは `repRank: 'joker'` で最強のペア。sequence は自然カード 1 枚以上を要求 (JK は 2 枚しかないため 3 枚下限からも自動排除)し、5 枚以上でも生成する。
   - `compareRanks` は `'joker'` を全ランクより強い (+∞) として扱う。`StrengthOrder` の shape (`{ ranking }`) は変えない (safe-port の検証・既存 modifyStrength ルールへの互換のため)。E01 §2.2 が予約していた `jokerSingleTop: boolean` は採用しない (ジョーカー最強はエンジン固定とし、可変性は modifyLegality で表現する)。E01 §2.2 の当該予約は本設計に合わせて改訂する。
   - **候補の重複除去**: 同一 (kind, count, repRank, 自然カード ID 集合, ジョーカー使用枚数) の候補は 1 つに正規化する (使用するジョーカーは ID 昇順で選ぶ)。同じカード ID 集合でも repRank や kind が異なる解釈は別候補として保持する。
 - `CardSelector.byRank` はジョーカーを選択できない (既存の制約のまま)。ジョーカーを対象にする moveCards が必要になった時点で selector 語彙を拡張する。

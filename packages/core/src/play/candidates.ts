@@ -63,7 +63,8 @@ function generateSets(hand: readonly Card[]): Play[] {
   const byRank = Map.groupBy(naturalsOf(hand), (card) => card.rank);
   const sets: Play[] = [];
   for (const [rank, cards] of byRank) {
-    for (let count = 2; count <= 4; count += 1) {
+    const maxCount = cards.length + jokers.length;
+    for (let count = 2; count <= maxCount; count += 1) {
       const maxJokers = Math.min(jokers.length, count - 1);
       for (let jokerCount = 0; jokerCount <= maxJokers; jokerCount += 1) {
         const naturalCount = count - jokerCount;

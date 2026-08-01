@@ -154,6 +154,36 @@ describe('sequence candidate generation', () => {
     expect(wrap).toHaveLength(0);
   });
 
+  it('5枚以上の階段も生成する', () => {
+    const hand = (
+      [
+        '3',
+        '4',
+        '5',
+        '6',
+        '7',
+        '8',
+        '9',
+        '10',
+        'J',
+        'Q',
+        'K',
+        'A',
+        '2',
+      ] as const
+    ).map((rank) => nat('spade', rank));
+    const found = sequences(generateCandidates(hand, ['sequence']));
+
+    expect(
+      found.some(
+        (candidate) =>
+          candidate.count === 13 &&
+          candidate.repRank === '2' &&
+          idSet(candidate) === idSet(play('sequence', hand, '2')),
+      ),
+    ).toBe(true);
+  });
+
   it('engineFeatures 未指定では sequence を生成しない (従来生成器のみ)', () => {
     const hand = [nat('spade', '3'), nat('spade', '4'), nat('spade', '5')];
     const candidates = generateCandidates(hand);
@@ -180,9 +210,16 @@ describe('joker candidate generation', () => {
     expect(jokerSingles[0]?.cards[0]?.id).toBe('JK0');
   });
 
-  it('set のワイルド代用は 2..4 枚で自然1枚以上、JK2枚のみのペアは repRank joker', () => {
+  it('set のワイルド代用は自然札4枚とJoker2枚まで使え、JK2枚のみのペアは repRank joker', () => {
     const candidates = generateCandidates(
-      [nat('spade', '7'), nat('heart', '7'), joker(0), joker(1)],
+      [
+        nat('spade', '7'),
+        nat('heart', '7'),
+        nat('diamond', '7'),
+        nat('club', '7'),
+        joker(0),
+        joker(1),
+      ],
       ['jokers'],
     );
     const sets = candidates.filter((candidate) => candidate.kind === 'set');
@@ -197,16 +234,23 @@ describe('joker candidate generation', () => {
     expect(
       sets.some(
         (candidate) =>
-          candidate.count === 4 &&
+          candidate.count === 5 &&
           candidate.repRank === '7' &&
-          idSet(candidate) === 'H07,JK0,JK1,S07',
+          idSet(candidate) === 'C07,D07,H07,JK0,S07',
+      ),
+    ).toBe(true);
+    expect(
+      sets.some(
+        (candidate) =>
+          candidate.count === 6 &&
+          candidate.repRank === '7' &&
+          idSet(candidate) === 'C07,D07,H07,JK0,JK1,S07',
       ),
     ).toBe(true);
     const jokerPair = sets.filter((candidate) => candidate.repRank === 'joker');
     expect(jokerPair).toHaveLength(1);
     expect(jokerPair[0]).toMatchObject({ count: 2 });
-    // 5枚組は生成しない
-    expect(sets.every((candidate) => candidate.count <= 4)).toBe(true);
+    expect(sets.every((candidate) => candidate.count <= 6)).toBe(true);
     // 同一 (kind, count, repRank, 自然ID集合, JK枚数) は1候補
     const keys = sets.map(
       (candidate) =>

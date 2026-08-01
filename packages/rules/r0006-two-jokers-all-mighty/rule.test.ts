@@ -74,13 +74,24 @@ describe('ジョーカー2枚・オールマイティ', () => {
     expect(compareRanks('joker', '3', revolution)).toBeGreaterThan(0);
   });
 
-  it('ジョーカーを同一ランクのペア・3枚組へ代用できる', () => {
+  it('ジョーカーを同一ランクのペア・3枚組・5枚以上の組へ代用できる', () => {
     const pair = generateCandidates(
       [natural('heart', '7'), joker(0)],
       rule.meta.engineFeatures,
     );
     const triple = generateCandidates(
       [natural('heart', '7'), natural('spade', '7'), joker(1)],
+      rule.meta.engineFeatures,
+    );
+    const sixCardSet = generateCandidates(
+      [
+        natural('spade', '7'),
+        natural('heart', '7'),
+        natural('diamond', '7'),
+        natural('club', '7'),
+        joker(0),
+        joker(1),
+      ],
       rule.meta.engineFeatures,
     );
 
@@ -100,6 +111,14 @@ describe('ジョーカー2枚・オールマイティ', () => {
           candidate.repRank === '7',
       ),
     ).toBe(true);
+    expect(
+      sixCardSet.some(
+        (candidate) =>
+          candidate.kind === 'set' &&
+          candidate.count === 6 &&
+          candidate.repRank === '7',
+      ),
+    ).toBe(true);
   });
 
   it('同一スートの連番の欠けをジョーカーで補って階段にできる', () => {
@@ -113,6 +132,29 @@ describe('ジョーカー2枚・オールマイティ', () => {
         (candidate) =>
           candidate.kind === 'sequence' &&
           candidate.count === 3 &&
+          candidate.cards.some((card) => card.kind === 'joker'),
+      ),
+    ).toBe(true);
+  });
+
+  it('Jokerを含む5枚以上の階段にできる', () => {
+    const candidates = generateCandidates(
+      [
+        natural('heart', '4'),
+        natural('heart', '5'),
+        natural('heart', '7'),
+        natural('heart', '8'),
+        joker(0),
+      ],
+      rule.meta.engineFeatures,
+    );
+
+    expect(
+      candidates.some(
+        (candidate) =>
+          candidate.kind === 'sequence' &&
+          candidate.count === 5 &&
+          candidate.repRank === '8' &&
           candidate.cards.some((card) => card.kind === 'joker'),
       ),
     ).toBe(true);
