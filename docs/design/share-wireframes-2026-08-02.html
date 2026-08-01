@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>シェア・支援導線ワイヤー</title>
+<style>
+  :root{
+    --navy:#1d2a50; --cream:#fff6e0; --paper:#fffdf5; --red:#c7402e;
+    --yellow:#f3c33f; --green:#2e8b62; --blue:#2b6fc2; --muted:#8a8672;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{font-family:"Hiragino Maru Gothic ProN","Hiragino Sans","Noto Sans JP",sans-serif;
+    background:#e9e6da; padding:24px; color:var(--navy);}
+  h1{font-size:20px; margin-bottom:4px;}
+  .sub{font-size:13px; color:#555; margin-bottom:20px;}
+  .row{display:flex; gap:28px; overflow-x:auto; padding-bottom:24px; align-items:flex-start;}
+  .col{flex:0 0 auto; width:390px;}
+  .frame{width:390px; background:var(--cream); border:3px solid var(--navy);
+    border-radius:28px; overflow:hidden;}
+  .titlebar{background:var(--paper); border-bottom:3px solid var(--navy);
+    padding:14px 18px; font-weight:800; font-size:18px; display:flex; align-items:center; gap:10px;}
+  .back{width:30px;height:30px;border:2.5px solid var(--navy);border-radius:50%;
+    display:inline-flex;align-items:center;justify-content:center;font-weight:800;}
+  .body{padding:18px;}
+  .card{background:#fff; border:3px solid var(--navy); border-radius:20px; padding:16px; margin-bottom:14px;}
+  .btn{display:block; width:100%; text-align:center; font-weight:800; font-size:17px;
+    border:3px solid var(--navy); border-radius:999px; padding:13px 0; margin-top:12px; background:#fff;}
+  .btn.primary{background:var(--red); color:#fff;}
+  .btn.small{font-size:14px; padding:9px 0;}
+  .btn.ghost{background:transparent; border-width:2px; font-size:14px; padding:8px 0; color:var(--navy);}
+  .chip{display:inline-block; border:2px solid var(--green); color:var(--green);
+    border-radius:10px; padding:2px 10px; font-size:13px; font-weight:700;}
+  .badge{display:inline-block; background:var(--navy); color:#fff; border-radius:10px;
+    padding:2px 10px; font-size:13px; font-weight:700;}
+  .qr{width:150px;height:150px;border:3px solid var(--navy);border-radius:12px;margin:0 auto 12px;
+    display:flex;align-items:center;justify-content:center;background:
+    repeating-conic-gradient(#1d2a50 0% 25%, #fff 0% 50%) 0 0/22px 22px; color:transparent;}
+  .linkbox{display:flex; gap:8px; margin-top:10px;}
+  .linkbox input{flex:1; border:2.5px solid var(--navy); border-radius:12px; padding:9px 10px;
+    font-size:13px; background:#fff; color:#555;}
+  .copy{border:2.5px solid var(--navy); border-radius:12px; padding:0 14px; font-weight:800; background:var(--paper);}
+  .rank{display:flex; align-items:center; gap:12px; padding:10px 4px; border-bottom:2px dashed #d8d2ba; font-size:16px;}
+  .rank:last-child{border-bottom:none;}
+  .rank .no{width:36px;height:36px;border:2.5px solid var(--navy);border-radius:10px;
+    display:flex;align-items:center;justify-content:center;font-weight:800;background:var(--paper);}
+  .rank .who{flex:1; font-weight:700;}
+  .rank .title{font-weight:800;}
+  .gold{background:var(--yellow) !important;}
+  .support{display:block; text-align:center; margin-top:14px; font-size:14px; color:var(--muted);
+    text-decoration:underline;}
+  .pr{display:flex; gap:12px;}
+  .pr .num{width:52px;height:64px;border:2.5px solid var(--navy);border-radius:12px;background:var(--paper);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:800;}
+  .pr .num small{font-size:11px;font-weight:700;}
+  .bar{height:14px;border:2px solid var(--navy);border-radius:999px;background:#efe8cf;overflow:hidden;margin-top:10px;}
+  .bar i{display:block;height:100%;width:52%;background:var(--yellow);}
+  .noti{display:flex;flex-direction:column;gap:6px;}
+  .noti strong{font-size:15px;}
+  .noti span{font-size:13px;color:#666;}
+  .menu-btn{display:block;width:100%;text-align:center;font-weight:800;font-size:18px;
+    border:3px solid var(--navy);border-radius:999px;padding:15px 0;margin-bottom:12px;background:#fff;}
+  footer.applinks{margin-top:26px;padding-top:14px;border-top:2px dashed #d8d2ba;
+    display:flex;justify-content:center;gap:18px;font-size:14px;color:var(--muted);}
+  footer.applinks a{color:var(--muted);text-decoration:underline;}
+  .note{background:#fff;border:2px dashed var(--blue);border-radius:14px;padding:12px 14px;
+    font-size:13px;line-height:1.7;margin-top:12px;color:#234;}
+  .note b{color:var(--blue);}
+  .tw{background:#f4f8ff;border:2px solid var(--blue);border-radius:12px;padding:10px 12px;
+    font-size:13px;line-height:1.65;margin-top:8px;white-space:pre-wrap;color:#1a3a66;}
+  .new{outline:4px solid var(--blue); outline-offset:3px; border-radius:999px;}
+  .newcard{outline:4px solid var(--blue); outline-offset:3px;}
+  .cap{font-weight:800;margin:0 0 8px 2px;font-size:15px;}
+</style>
+</head>
+<body>
+<h1>シェア・招待・支援導線ワイヤー(2026-08-02)</h1>
+<p class="sub">青い枠 = 今日追加する要素。青点線ボックス = 実装メモ。青塗りボックス = Xのcomposerに入る初期文面(ユーザーが自由に編集して投稿)。</p>
+
+<div class="row">
+
+  <!-- A: 招待 -->
+  <div class="col">
+    <p class="cap">A. 招待画面(優先1)</p>
+    <div class="frame">
+      <div class="titlebar"><span class="back">←</span> ともだちをまねく</div>
+      <div class="body">
+        <div class="card" style="text-align:center;">
+          <div class="qr">QR</div>
+          <div style="font-weight:800;font-size:15px;">部屋コード: 48213</div>
+          <button class="btn primary new">📤 リンクを共有する</button>
+        </div>
+      </div>
+    </div>
+    <div class="note"><b>実装:</b> 常設のURL欄+コピーボタンは<b>廃止</b>、ボタン1本に統合。navigator.share対応なら共有シート(コピー含む)、非対応(PCのFirefox等)なら<b>同じボタンが「リンクをコピー」</b>に変わる+トースト。<br>
+    PCの主役はQR(ホストがPC・友達はスマホでその場読み取り)。部屋コード表示は手入力用に残す。</div>
+    <div class="tw">大富豪しよう。この部屋に入って:
+https://daifugo-together.fly.dev/join/48213</div>
+  </div>
+
+  <!-- B: セット結果 -->
+  <div class="col">
+    <p class="cap">B. セット総合結果(優先2+支援)</p>
+    <div class="frame">
+      <div class="titlebar">総合結果</div>
+      <div class="body">
+        <div class="card">
+          <div class="rank"><span class="no gold">1</span><span class="who">あなた</span><span class="title">大富豪</span></div>
+          <div class="rank"><span class="no">2</span><span class="who">AIプレイヤーB</span><span class="title">富豪</span></div>
+          <div class="rank"><span class="no">3</span><span class="who">AIプレイヤーA</span><span class="title">貧民</span></div>
+          <div class="rank"><span class="no">4</span><span class="who">AIプレイヤーC</span><span class="title">大貧民</span></div>
+        </div>
+        <button class="btn primary">もういちど あそぶ</button>
+        <button class="btn">ホームへ</button>
+        <button class="btn ghost new">𝕏 でシェアする</button>
+        <a class="support new" style="border-radius:8px;">☕ 楽しかったら開発を支援する</a>
+      </div>
+    </div>
+    <div class="note"><b>実装:</b> x.com/intent/post。文面は総合順位で1行だけ切替、composer上で編集自由。<br>
+    支援リンクは jinro と同じ SUPPORT_URL(空文字で非表示)。ボタン序列: あそぶ &gt; ホーム &gt; シェア &gt; 支援。</div>
+    <div class="tw">大富豪になりました
+https://daifugo-together.fly.dev/?from=share</div>
+  </div>
+
+  <!-- C: 図鑑 -->
+  <div class="col">
+    <p class="cap">C. ルール図鑑カード(優先3)</p>
+    <div class="frame">
+      <div class="titlebar"><span class="back">←</span> ルール図鑑</div>
+      <div class="body">
+        <div class="card">
+          <div class="pr">
+            <div class="num">1<small>優先</small></div>
+            <div style="flex:1;">
+              <div style="font-size:19px;font-weight:800;">8切り <span class="badge">有効</span></div>
+              <div style="font-size:13px;color:#666;margin-top:4px;">8を含む手を出すと場を流し、そのプレイヤーが次の場…</div>
+            </div>
+          </div>
+          <span class="chip" style="margin-top:10px;">ローカル(県の記載なし)</span>
+          <div class="bar"><i></i></div>
+          <div style="text-align:right;font-weight:800;font-size:13px;margin-top:4px;">人気度 50</div>
+          <button class="btn ghost small new" style="width:auto;padding:6px 18px;margin-left:auto;display:block;">𝕏 このルールをシェア</button>
+        </div>
+      </div>
+    </div>
+    <div class="note"><b>実装:</b> 各カード右下に小さめのゴーストボタン。文面に<b>ルール名+説明の先頭(40字)</b>を入れる(図鑑エントリの自慢として成立させる)。都道府県の報告があれば1行足す。URLは /rules 固定でよい。</div>
+    <div class="tw">ルール図鑑「8切り」
+8を含む手を出すと場を流し、そのプレイヤーが次の場を始める。
+https://daifugo-together.fly.dev/rules?from=share</div>
+    <div class="tw">ルール図鑑「10捨て」(東京都で遊ばれていた報告)
+10を出すと、出した枚数だけ手札を捨てられる。
+https://daifugo-together.fly.dev/rules?from=share</div>
+  </div>
+
+  <!-- D: 通知 -->
+  <div class="col">
+    <p class="cap">D. おしらせ・採用通知(優先5)</p>
+    <div class="frame">
+      <div class="titlebar"><span class="back">←</span> おしらせ</div>
+      <div class="body">
+        <div class="card newcard">
+          <div class="noti">
+            <strong>🎉 あなたの提案「ジャックバック」が実装されました!</strong>
+            <span>みんなの卓で遊べるようになりました。ルール図鑑にも載っています。</span>
+          </div>
+          <button class="btn ghost small new" style="width:auto;padding:6px 18px;margin-left:auto;display:block;">𝕏 じまんする</button>
+        </div>
+        <div class="card">
+          <div class="noti">
+            <strong>提案「クイーンボンバー」は見送りになりました</strong>
+            <span>理由: 既存ルールと競合するため…</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="note"><b>実装:</b> type が <b>proposal_released</b> の項目にだけシェアボタンを出す(rejected には出さない)。ボタン文言は「じまんする」を第一候補(このゲームのトーンに合う。硬めにするなら「Xでシェア」)。通知payloadにルール名が無ければ追加する。</div>
+    <div class="tw">提案したルール「ジャックバック」が、みんなでつくろう大富豪に実装されました
+https://daifugo-together.fly.dev/rules?from=share</div>
+    <div class="note"><b>追加(優先6):</b> イエローカードのモーダルにも同型の「𝕏 じまんする」を置く(異議申立てボタンより下・控えめに)。文面: <br>「みんなでつくろう大富豪で、イエローカードをもらいました🟨」+URL</div>
+  </div>
+
+  <!-- E: メニュー -->
+  <div class="col">
+    <p class="cap">E. メニューフッター(優先4)</p>
+    <div class="frame">
+      <div class="titlebar">みんなでつくろう 大富豪</div>
+      <div class="body">
+        <button class="menu-btn">あそぶ</button>
+        <button class="menu-btn">ルールをていあんする</button>
+        <button class="menu-btn">ルール図鑑</button>
+        <button class="menu-btn">おしらせ</button>
+        <footer class="applinks new" style="border-radius:12px;">
+          <a>☕ 開発を支援する</a>
+          <a>開発者X</a>
+        </footer>
+      </div>
+    </div>
+    <div class="note"><b>実装:</b> jinro-ai-app の Home.tsx フッターと同型。SUPPORT_URL="https://ofuse.me/qsona"、空文字で非表示。<br>
+    <b>置かない場所:</b> 対局中、提案フォーム、きほんモード(子供が主対象の画面に金銭導線を出さない)。</div>
+  </div>
+
+</div>
+</body>
+</html>

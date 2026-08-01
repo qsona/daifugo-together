@@ -2,7 +2,7 @@
 
 2026-08-02、リリース前の約2時間で実装する分のスペック。マーケ側の意図と優先順位を含む。実装は技術セッションで行う。**全部入らなくてよい。上から順に、時間が来たら切る。**
 
-関連: [x-launch-plan-2026-08-02.md](x-launch-plan-2026-08-02.md) §4-1.5(投稿構成)、jinro-ai-app の `web/src/links.ts` パターン(流用元)。ワイヤーフレーム: セッションscratchpadの `share-wireframes.html`(A=招待 / B=セット結果 / C=図鑑 / D=採用通知 / E=メニューフッター)。
+関連: [x-launch-plan-2026-08-02.md](x-launch-plan-2026-08-02.md) §4-1.5(投稿構成)、jinro-ai-app の `web/src/links.ts` パターン(流用元)。ワイヤーフレーム: [design/share-wireframes-2026-08-02.html](design/share-wireframes-2026-08-02.html)(A=招待 / B=セット結果 / C=図鑑 / D=採用通知 / E=メニューフッター)。
 
 ## 実装の共通基盤(最初に作る)
 
