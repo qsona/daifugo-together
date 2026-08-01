@@ -1,5 +1,6 @@
 import { createServer, type Server as HttpServer } from 'node:http';
 
+import type { AiPlayer } from '@daifugo/ai';
 import {
   createDeck,
   createInProcessRuleChainPort,
@@ -84,7 +85,13 @@ async function createHarness(
   gatewayOptions: Partial<
     Pick<
       RoomSocketGatewayOptions,
-      'rooms' | 'decideTurn' | 'timers' | 'joinRateLimit' | 'rulePortForSet'
+      | 'rooms'
+      | 'decideTurn'
+      | 'timers'
+      | 'joinRateLimit'
+      | 'rulePortForSet'
+      | 'ai'
+      | 'onAiLog'
     >
   > = {},
 ): Promise<Harness> {
@@ -311,6 +318,88 @@ describe('Socket.IO room gateway', () => {
       'H02',
       'D02',
     ]);
+  });
+
+  it('ルームAIの探索予算と調査用contextをログ境界へ渡す', async () => {
+    let observedInput: Parameters<AiPlayer['decideMove']>[0] | undefined;
+    const ai: AiPlayer = {
+      async decideMove(input) {
+        observedInput = input;
+        return {
+          play: input.legalPlays[0]!,
+          usedFallback: 'none',
+          stats: { playouts: 3, candidates: [], workerThread: true },
+        };
+      },
+      close: async () => {},
+    };
+    let resolveLog!: (
+      log: Parameters<NonNullable<RoomSocketGatewayOptions['onAiLog']>>[0],
+    ) => void;
+    const logged = new Promise<
+      Parameters<NonNullable<RoomSocketGatewayOptions['onAiLog']>>[0]
+    >((resolve) => {
+      resolveLog = resolve;
+    });
+    const harness = await createHarness({
+      ai,
+      onAiLog: resolveLog,
+      timers: {
+        aiDelayMinMs: 0,
+        aiDelayMaxMs: 0,
+        basicAiDelayMinMs: 0,
+        basicAiDelayMaxMs: 0,
+      },
+    });
+    const owner = await connect(harness);
+    const created = await emitAck<
+      'room:create',
+      { roomId: string; inviteCode: string }
+    >(owner.client, 'room:create', { mode: 'community' });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+
+    const startedState = once<PlayerRoomView>((resolve) =>
+      owner.client.once('room:state', (view) => {
+        if (view.phase === 'playing') resolve(view);
+      }),
+    );
+    await emitAck<'room:start', Record<string, never>>(
+      owner.client,
+      'room:start',
+      {},
+    );
+    const view = await startedState;
+    const humanMove = view.game?.legalMoves?.[0];
+    if (humanMove && view.game?.turn) {
+      await emitAck<'game:play', Record<string, never>>(
+        owner.client,
+        'game:play',
+        {
+          turnSeq: view.game.turn.turnSeq,
+          cards: humanMove.cards.map((card) => card.id),
+        },
+      );
+    }
+
+    const log = await logged;
+    expect(observedInput?.budget).toEqual({
+      softMs: 50,
+      hardMs: 150,
+      maxPlayouts: 3,
+      sliceMs: 10,
+    });
+    expect(log).toMatchObject({
+      event: 'ai_move',
+      fallback: 'none',
+      playouts: 3,
+      roomId: created.value.roomId,
+      setId: `${created.value.roomId}:set:1`,
+      gameIndex: 0,
+      mode: 'community',
+    });
+    expect(log.turnSeq).toBeGreaterThanOrEqual(0);
+    expect(log.memberId).toBeTruthy();
   });
 
   it('create→join→startを実ソケットで直列化し、受信者以外の手札を漏らさない', async () => {

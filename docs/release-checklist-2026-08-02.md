@@ -490,9 +490,9 @@ db.close();
 ### 初週-1. AI worker の飽和を観測する
 
 - **現状**: worker は **1 本固定**。`packages/ai/src/worker-pool.ts:25` — `readonly size = 1`。`packages/ai/src/ai-player.test.ts:185-188` —「B-7 の仮値として worker pool を 1 本に固定する」。`docs/decision-log.md:31` — B-7(プール本数と予算の実測調整)は**未決**。
-- **過負荷時の挙動は degrade であってハングではない**: `packages/server/src/ai-turn.ts:10` — `AI_WATCHDOG_MS = 1_000`。1 秒で応答が無ければ `packages/server/src/room/socket-gateway.ts:330` の `fallbackPlay: () => legalPlays[0]!` で最初の合法手を打ち、`bin.ts:189-193` が `ai_fallback` をログする。`packages/server/src/room/socket-gateway.ts:322-325` — 探索予算は `maxPlayouts: 16`(既定 2000 から大きく絞ってある。`packages/ai/src/types.ts:92-97`)。
+- **過負荷時の挙動は degrade であってハングではない**: `packages/server/src/ai-turn.ts` のwatchdogで応答不能時も最初の合法手へ進み、通常完了以外は`ai_fallback`へ記録する。ルームAIの探索予算は`hardMs: 150`、`maxPlayouts: 3`。時間内に途中結果があれば`partial-search`、探索開始前にキュー期限へ達した場合などは`heuristic`へ段階的に退避する。
 - **つまり**: 同時卓が増えると AI が弱くなるだけで、対局は止まらない。設計として妥当。
-- **観測**: `fly logs --app daifugo-together | grep ai_fallback` の頻度。常時出るようになったら B-7 を決めてプール本数か予算を調整する。CPU が 1 コアなので**プールを増やしても効果は薄い**点に注意(増やすべきは worker 数ではなく予算かマシンサイズ)。
+- **観測**: `ai_fallback`の個別記録に加え、`ai_turn_summary`の1分ごとの手番数、fallback内訳、wall time・playout数のP95/最大を見る。fallbackが常時増えるようになったら予算かマシンサイズを調整する。CPU が1コアなので**プールを増やしても効果は薄い**。
 
 ### 初週-2. Volume 使用量を毎日見る
 

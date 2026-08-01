@@ -91,9 +91,24 @@ export interface RoomSocketGatewayOptions {
   };
   sweepIntervalMs?: number;
   onError?: (error: unknown) => void;
-  onAiLog?: (log: AiTurnLog) => void;
+  onAiLog?: (log: RoomAiTurnLog) => void;
   onAiMetric?: (metric: AiTurnMetric) => void;
 }
+
+export interface RoomAiTurnLog extends AiTurnLog {
+  roomId: string;
+  setId: string;
+  gameIndex: number;
+  turnSeq: number;
+  memberId: string;
+  mode: RoomState['mode'];
+}
+
+export const ROOM_AI_THINK_BUDGET = {
+  ...DEFAULT_THINK_BUDGET,
+  hardMs: 150,
+  maxPlayouts: 3,
+} as const;
 
 export interface RoomSocketGateway {
   rooms: RoomManager;
@@ -326,17 +341,27 @@ export function attachRoomSocketGateway(
           input: {
             view,
             legalPlays,
-            budget: {
-              ...DEFAULT_THINK_BUDGET,
-              maxPlayouts: 16,
-            },
+            budget: ROOM_AI_THINK_BUDGET,
             seed: `${engine.setSeed}:room:${gameIndex}:${state.turnSeq}:${memberId}`,
             difficulty: NORMAL_DIFFICULTY,
             ruleContext,
           },
           fallbackPlay: () => legalPlays[0]!,
           animationDelay: { minMs: 0, maxMs: 0 },
-          ...(options.onAiLog ? { onLog: options.onAiLog } : {}),
+          ...(options.onAiLog
+            ? {
+                onLog: (log: AiTurnLog) =>
+                  options.onAiLog?.({
+                    ...log,
+                    roomId: state.roomId,
+                    setId: engine.setId,
+                    gameIndex,
+                    turnSeq: state.turnSeq,
+                    memberId,
+                    mode: state.mode,
+                  }),
+              }
+            : {}),
           ...(options.onAiMetric ? { onMetric: options.onAiMetric } : {}),
         });
         return result.decision.play.cards.map((card) => card.id);

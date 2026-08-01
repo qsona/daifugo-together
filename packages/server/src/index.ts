@@ -1,4 +1,5 @@
 export * from './ai-turn.js';
+export * from './ai-observability.js';
 export * from './app-server.js';
 export * from './injection/detector.js';
 export * from './injection/app-server-judge.js';

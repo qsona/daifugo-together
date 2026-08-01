@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { loadRuleCodeBundles } from '@daifugo/rules';
 
 import { createAppServer } from './app-server.js';
+import { AiTurnLogAggregator } from './ai-observability.js';
 import { EvaluationService } from './evaluation/service.js';
 import { InjectionStaticAnalyzer } from './injection/detector.js';
 import { LocalScreeningService } from './injection/local-screening.js';
@@ -56,6 +57,13 @@ if (adminPipelineToken !== undefined && adminPipelineToken.length < 32) {
 }
 const publicOrigin =
   process.env.PUBLIC_ORIGIN ?? `http://localhost:${String(port)}`;
+const aiTurnLogs = new AiTurnLogAggregator();
+const flushAiTurnLogs = (): void => {
+  const summary = aiTurnLogs.flush();
+  if (summary) writeLog('info', 'ai_turn_summary', { ...summary });
+};
+const aiTurnLogTimer = setInterval(flushAiTurnLogs, 60_000);
+aiTurnLogTimer.unref();
 let authProvider;
 try {
   authProvider = await createGoogleAuthProvider({
@@ -187,8 +195,21 @@ const app = createAppServer({
       writeLog('error', 'socket_internal_error', errorFields(error));
     },
     onAiLog: (log) => {
+      aiTurnLogs.record(log);
       if (log.fallback !== 'none') {
-        writeLog('info', 'ai_fallback', { ...log });
+        writeLog('info', 'ai_fallback', {
+          fallback: log.fallback,
+          watchdog: log.watchdog,
+          wallMs: log.wallMs,
+          playouts: log.playouts,
+          animationDelayMs: log.animationDelayMs,
+          roomId: log.roomId,
+          setId: log.setId,
+          gameIndex: log.gameIndex,
+          turnSeq: log.turnSeq,
+          memberId: log.memberId,
+          mode: log.mode,
+        });
       }
     },
   },
@@ -207,6 +228,8 @@ const shutdown = async (): Promise<void> => {
   try {
     await app.beginDrain();
     await app.close();
+    clearInterval(aiTurnLogTimer);
+    flushAiTurnLogs();
     persistence.close();
     writeLog('info', 'server_drain_completed');
     process.exitCode = 0;
