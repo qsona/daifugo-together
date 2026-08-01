@@ -169,17 +169,44 @@ describe('RoomManager indexes', () => {
     ]);
   });
 
+  it('きほんの部屋へのjoinはROOM_SOLO_ONLYで拒否し、みんなのルールは受け入れる', () => {
+    const basic = createModeRoom('basic');
+    expect(
+      basic.rooms.join(basic.created.value.room.inviteCode, {
+        userId: 'mode-user-2',
+        displayName: '参加者',
+      }),
+    ).toEqual({ ok: false, code: 'ROOM_SOLO_ONLY' });
+    expect(
+      basic.rooms.get(basic.created.value.room.roomId)?.members,
+    ).toHaveLength(1);
+    expect(basic.rooms.findByUser('mode-user-2')).toBeUndefined();
+
+    const community = createModeRoom('community');
+    const joined = community.rooms.join(
+      community.created.value.room.inviteCode,
+      { userId: 'mode-user-2', displayName: '参加者' },
+    );
+    expect(joined.ok).toBe(true);
+  });
+
   it.each(['continue', 'leave', 'expireSetResult'] as const)(
     '%sで2セット目へ進んでも、きほんの部屋はみんなのルールに化けない',
     (path) => {
       const { rooms, created, availableRules } = createModeRoom('basic');
-      const joined = rooms.join(created.value.room.inviteCode, {
-        userId: 'mode-user-2',
-        displayName: '参加者',
-      });
-      expect(joined.ok).toBe(true);
-      if (!joined.ok) return;
       const roomId = created.value.room.roomId;
+      // RoomManager.joinはbasicを拒否するため、過去に人間が複数いたbasic部屋を
+      // reducer経由で再現する
+      const joined = rooms.apply(roomId, {
+        type: 'join',
+        member: {
+          memberId: 'mode-member-guest',
+          userId: 'mode-user-2',
+          displayName: '参加者',
+        },
+        now: 1_500,
+      });
+      expect(joined?.accepted).toBe(true);
       const started = rooms.apply(roomId, {
         type: 'start',
         memberId: created.value.member.memberId,
@@ -202,14 +229,14 @@ describe('RoomManager indexes', () => {
       if (path === 'continue') {
         rooms.apply(roomId, {
           type: 'continue',
-          memberId: joined.value.member.memberId,
+          memberId: 'mode-member-guest',
           now: 50_001,
           setSeed: 'basic-continue-second',
         });
       } else if (path === 'leave') {
         rooms.apply(roomId, {
           type: 'leave',
-          memberId: joined.value.member.memberId,
+          memberId: 'mode-member-guest',
           now: 50_001,
           setSeed: 'basic-leave-second',
         });

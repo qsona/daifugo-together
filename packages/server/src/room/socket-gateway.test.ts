@@ -412,7 +412,7 @@ describe('Socket.IO room gateway', () => {
     const created = await emitAck<
       'room:create',
       { roomId: string; inviteCode: string }
-    >(owner.client, 'room:create', { mode: 'basic' });
+    >(owner.client, 'room:create', { mode: 'community' });
     expect(created.ok).toBe(true);
     if (!created.ok) return;
 
@@ -451,8 +451,8 @@ describe('Socket.IO room gateway', () => {
     ]);
     expect(ownerView.phase).toBe('playing');
     expect(guestView.phase).toBe('playing');
-    expect(ownerView.mode).toBe('basic');
-    expect(guestView.mode).toBe('basic');
+    expect(ownerView.mode).toBe('community');
+    expect(guestView.mode).toBe('community');
 
     const authority = harness.gateway.rooms.get(created.value.roomId)!;
     for (const view of [ownerView, guestView]) {
@@ -466,6 +466,47 @@ describe('Socket.IO room gateway', () => {
         }
       }
     }
+  });
+
+  it('きほんの部屋へのjoinはROOM_SOLO_ONLYで拒否し、みんなのルールは受け入れる', async () => {
+    const harness = await createHarness();
+    const owner = await connect(harness);
+    const guest = await connect(harness);
+
+    const basic = await emitAck<
+      'room:create',
+      { roomId: string; inviteCode: string }
+    >(owner.client, 'room:create', { mode: 'basic' });
+    expect(basic.ok).toBe(true);
+    if (!basic.ok) return;
+
+    const rejected = await emitAck<'room:join', { roomId: string }>(
+      guest.client,
+      'room:join',
+      { inviteCode: basic.value.inviteCode },
+    );
+    expect(rejected).toEqual({ ok: false, code: 'ROOM_SOLO_ONLY' });
+    expect(harness.gateway.rooms.get(basic.value.roomId)?.members).toHaveLength(
+      1,
+    );
+
+    const owner2 = await connect(harness);
+    const community = await emitAck<
+      'room:create',
+      { roomId: string; inviteCode: string }
+    >(owner2.client, 'room:create', { mode: 'community' });
+    expect(community.ok).toBe(true);
+    if (!community.ok) return;
+
+    const joined = await emitAck<'room:join', { roomId: string }>(
+      guest.client,
+      'room:join',
+      { inviteCode: community.value.inviteCode },
+    );
+    expect(joined).toEqual({
+      ok: true,
+      value: { roomId: community.value.roomId },
+    });
   });
 
   it('旧クライアントのモード未指定はcommunityとして扱う', async () => {

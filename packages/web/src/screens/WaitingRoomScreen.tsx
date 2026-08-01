@@ -17,6 +17,8 @@ type WaitingRoomScreenProps = {
   onViewRules: () => void;
   onStart: () => void;
   canStart?: boolean;
+  /** 招待コードを出すか。ひとりで練習する部屋には呼ぶ相手がいないので出さない。 */
+  showInvite?: boolean;
 };
 
 /**
@@ -33,6 +35,7 @@ export function WaitingRoomScreen({
   onViewRules,
   onStart,
   canStart = true,
+  showInvite = true,
 }: WaitingRoomScreenProps) {
   const humanCount = members.filter((member) => member.kind === 'human').length;
 
@@ -50,11 +53,13 @@ export function WaitingRoomScreen({
          * (UI文言ガイド 原則 2・3)。
          */}
         <MemberList members={members} />
-        <InviteCode
-          code={inviteCode}
-          inviteUrl={inviteUrl}
-          onCopy={onCopyInvite}
-        />
+        {showInvite && (
+          <InviteCode
+            code={inviteCode}
+            inviteUrl={inviteUrl}
+            onCopy={onCopyInvite}
+          />
+        )}
         {/*
          * ルールセットは選べないので「変更不可」は書かない。対局画面と同じ語彙にする。
          * 主導線は「はじめる」なので、脇道であることが分かる大きさに留める。

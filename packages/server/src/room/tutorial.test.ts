@@ -31,6 +31,7 @@ describe('TU-03: 教材seedの発動境界', () => {
     const fallback = vi.fn(() => 'fallback-seed');
     const secondSet = { ...room('basic'), setNo: 1 };
     const community = room('community');
+    // basicへの新規joinはRoomManagerが拒否するため、この形は過去の部屋にだけ残る
     const basicMulti = room('basic');
     basicMulti.members.push({
       memberId: 'member-2',

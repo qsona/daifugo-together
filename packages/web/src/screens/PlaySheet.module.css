@@ -32,6 +32,21 @@
   stroke-linecap: round;
 }
 
+.modeStack {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+}
+
+.modeCaption {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--font-size-caption);
+  font-weight: normal;
+  color: var(--color-text-secondary);
+}
+
 .back {
   display: flex;
   justify-content: center;

@@ -25,6 +25,7 @@ export type ErrorCode =
   | RoomErrorCode
   | 'ROOM_NOT_FOUND'
   | 'ROOM_IN_GAME'
+  | 'ROOM_SOLO_ONLY'
   | 'INVITE_SPACE_EXHAUSTED'
   | 'BAD_PAYLOAD'
   | 'RATE_LIMITED'

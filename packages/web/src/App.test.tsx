@@ -103,15 +103,16 @@ describe('DS-02: フェーズ 1 の主要画面が 1 本の導線でつながる
     await user.click(screen.getByRole('button', { name: /はじめる/ }));
     await user.click(screen.getByRole('button', { name: 'あそぶ' }));
 
-    // 「あそぶ」はモードを選び、そのまま部屋を作る。
+    // 「あそぶ」はまず だれとあそぶか を聞き、みんなのルールなら部屋を立てる。
     expect(
       screen.getByRole('dialog', {
         name: 'あそびかたをえらぶ',
       }),
     ).toBeTruthy();
     await user.click(
-      screen.getByRole('button', { name: 'きほんルールであそぶ' }),
+      screen.getByRole('button', { name: 'みんなのルールであそぶ' }),
     );
+    await user.click(screen.getByRole('button', { name: '部屋を立てる' }));
 
     // 画面 2b: 招待コードと有効ルール件数。
     expect(screen.getByText('01234')).toBeTruthy();
@@ -2009,9 +2010,10 @@ describe('TU-04: みんなのルールへの卒業導線', () => {
       }),
     );
 
+    // 再試行はみんなのルールの2段目から始め、もう一度モードを選ばせない。
     expect(
       await screen.findByRole('dialog', {
-        name: 'あそびかたをえらぶ',
+        name: 'みんなのルールであそぶ',
       }),
     ).toBeTruthy();
     expect(screen.getByRole('alert').textContent).toContain(
@@ -2020,9 +2022,7 @@ describe('TU-04: みんなのルールへの卒業導線', () => {
     expect(leaveRoom).toHaveBeenCalledOnce();
     expect(createRoom).toHaveBeenNthCalledWith(1, 'community');
 
-    await user.click(
-      screen.getByRole('button', { name: 'みんなのルールであそぶ' }),
-    );
+    await user.click(screen.getByRole('button', { name: '部屋を立てる' }));
     await waitFor(() => expect(createRoom).toHaveBeenCalledTimes(2));
     expect(createRoom).toHaveBeenNthCalledWith(2, 'community');
     expect(leaveRoom).toHaveBeenCalledOnce();
@@ -2080,6 +2080,123 @@ describe('TU-04: みんなのルールへの卒業導線', () => {
 
     await act(async () => resolveLeave());
     await waitFor(() => expect(createRoom).toHaveBeenCalledWith('community'));
+  });
+});
+
+describe('TU-05: ひとりで練習する部屋は待機室を挟まない', () => {
+  beforeEach(() => {
+    window.history.replaceState({}, '', '/menu');
+    useScreenStore.setState({ current: 'menu' });
+  });
+  afterEach(cleanup);
+
+  const soloWaitingRoom = {
+    ...tutorialHintRoom('basic', null),
+    phase: 'waiting',
+    game: null,
+  } satisfies PlayerRoomView;
+
+  /** 部屋作成で待機、開始で対局へ進む client。開始の成否を差し替えられる。 */
+  const soloClient = (startRoom: () => Promise<void>) => {
+    let state: MultiplayerState = {
+      connection: 'ready',
+      registered: false,
+      displayName: 'ホスト',
+      room: null,
+      roomClosedReason: null,
+      error: null,
+    };
+    const listeners = new Set<() => void>();
+    const notify = () => {
+      for (const listener of listeners) listener();
+    };
+    const createRoom = vi.fn(async () => {
+      state = { ...state, room: soloWaitingRoom };
+      notify();
+    });
+    const client = {
+      subscribe: (listener: () => void) => {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+      snapshot: () => state,
+      createRoom,
+      startRoom: vi.fn(async () => {
+        await startRoom();
+        state = { ...state, room: tutorialHintRoom('basic', null) };
+        notify();
+      }),
+    } as unknown as MultiplayerClient;
+    return { client, createRoom, startRoom: client.startRoom };
+  };
+
+  it('部屋を作ったらそのまま対局を始める', async () => {
+    const user = userEvent.setup();
+    const { client, createRoom, startRoom } = soloClient(async () => undefined);
+    render(<App client={client} />);
+
+    await user.click(screen.getByRole('button', { name: 'あそぶ' }));
+    await user.click(screen.getByRole('button', { name: 'ひとりで練習する' }));
+
+    await waitFor(() => expect(createRoom).toHaveBeenCalledWith('basic'));
+    await waitFor(() => expect(startRoom).toHaveBeenCalledOnce());
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: '卓' })).toBeTruthy(),
+    );
+    expect(screen.queryByRole('heading', { name: '待機中' })).toBeNull();
+  });
+
+  it('開始に失敗したら待機室に落ち、招待コードは出さない', async () => {
+    const user = userEvent.setup();
+    const { client, startRoom } = soloClient(() =>
+      Promise.reject(new Error('start failed')),
+    );
+    render(<App client={client} />);
+
+    await user.click(screen.getByRole('button', { name: 'あそぶ' }));
+    await user.click(screen.getByRole('button', { name: 'ひとりで練習する' }));
+
+    await waitFor(() => expect(startRoom).toHaveBeenCalledOnce());
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: '待機中' })).toBeTruthy(),
+    );
+    expect(screen.queryByText('01234')).toBeNull();
+    expect(screen.queryByRole('button', { name: /招待/ })).toBeNull();
+  });
+
+  it('招待コードでひとりで練習する部屋に入ろうとしたら理由を伝える', async () => {
+    window.history.replaceState({}, '', '/?room=01234');
+    let state: MultiplayerState = {
+      connection: 'ready',
+      registered: true,
+      displayName: 'ホスト',
+      room: null,
+      roomClosedReason: null,
+      error: null,
+    };
+    const listeners = new Set<() => void>();
+    const joinRoom = vi.fn(() => {
+      state = { ...state, error: 'ROOM_SOLO_ONLY' };
+      for (const listener of listeners) listener();
+      return Promise.reject(new Error('ROOM_SOLO_ONLY'));
+    });
+    const client = {
+      subscribe: (listener: () => void) => {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+      snapshot: () => state,
+      joinRoom,
+    } as unknown as MultiplayerClient;
+    render(<App client={client} />);
+
+    await userEvent
+      .setup()
+      .click(await screen.findByRole('button', { name: 'はいる' }));
+
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'この部屋はひとりで練習する部屋です。友だちの部屋の招待コードをたしかめてください。',
+    );
   });
 });
 

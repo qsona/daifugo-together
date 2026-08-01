@@ -43,6 +43,7 @@ export type RoomManagerErrorCode =
   | 'ROOM_FULL'
   | 'ROOM_NOT_FOUND'
   | 'ROOM_IN_GAME'
+  | 'ROOM_SOLO_ONLY'
   | 'INVITE_SPACE_EXHAUSTED';
 
 export type RoomManagerResult<T> =
@@ -282,6 +283,11 @@ export class RoomManager {
     const room = roomId ? this.#rooms.get(roomId) : undefined;
     if (!room) {
       return { ok: false, code: 'ROOM_NOT_FOUND' };
+    }
+    // きほんは1人練習専用。モードごとの制約はここで持ち、reducerは部屋の状態機械に
+    // 徹させる。
+    if (room.mode === 'basic') {
+      return { ok: false, code: 'ROOM_SOLO_ONLY' };
     }
     if (room.phase !== 'waiting') {
       return { ok: false, code: 'ROOM_IN_GAME' };

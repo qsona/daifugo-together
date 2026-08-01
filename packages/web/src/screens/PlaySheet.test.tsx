@@ -6,56 +6,89 @@ import { PlaySheet } from './PlaySheet';
 
 afterEach(cleanup);
 
-describe('TU-01: あそぶモードの選択', () => {
-  it('きほんを先頭・初心者アイコン付きで出し、選ぶとすぐ部屋を作る', async () => {
+describe('TU-01: あそぶ導線の選択', () => {
+  it('最初に「だれとあそぶか」を聞き、みんなのルールを主ボタンにする', () => {
+    render(<PlaySheet onCreate={vi.fn()} onJoin={vi.fn()} onClose={vi.fn()} />);
+
+    expect(
+      screen.getByRole('dialog', { name: 'あそびかたをえらぶ' }),
+    ).toBeTruthy();
+    const choices = screen.getAllByRole('button');
+    expect(choices).toHaveLength(2);
+    expect(choices[0]?.textContent).toBe('みんなのルールであそぶ');
+    expect(choices[0]?.className).toContain('primary');
+    expect(choices[1]?.textContent).toContain('ひとりで練習する');
+    expect(choices[1]?.className).not.toContain('primary');
+  });
+
+  it('ひとりで練習するには初心者アイコンとキャプションを添える', () => {
+    render(<PlaySheet onCreate={vi.fn()} onJoin={vi.fn()} onClose={vi.fn()} />);
+
+    // キャプションは説明として渡し、アクセシブル名には混ぜない。
+    const practice = screen.getByRole('button', { name: 'ひとりで練習する' });
+    expect(practice.querySelector('svg')).toBeTruthy();
+    const caption = screen.getByText('大富豪がはじめての人はこちら');
+    expect(practice.getAttribute('aria-describedby')).toBe(caption.id);
+  });
+
+  it('ひとりで練習するを選ぶとすぐ きほん の部屋を作る', async () => {
     const user = userEvent.setup();
     const onCreate = vi.fn();
     render(
       <PlaySheet onCreate={onCreate} onJoin={vi.fn()} onClose={vi.fn()} />,
     );
 
-    const choices = screen.getAllByRole('button');
-    expect(choices[0]?.textContent).toBe('きほんルールであそぶ');
-    expect(choices[0]?.querySelector('svg')).toBeTruthy();
-    expect(screen.queryByText('はじめてのひとはこちら')).toBeNull();
-
-    await user.click(
-      screen.getByRole('button', { name: 'きほんルールであそぶ' }),
-    );
+    await user.click(screen.getByRole('button', { name: 'ひとりで練習する' }));
 
     expect(onCreate).toHaveBeenCalledWith('basic');
-    expect(
-      screen.queryByRole('button', { name: 'じぶんの部屋をつくる' }),
-    ).toBeNull();
   });
 
-  it('3つの選択肢をすべて白いボタンで出す', () => {
-    render(<PlaySheet onCreate={vi.fn()} onJoin={vi.fn()} onClose={vi.fn()} />);
-
-    const choices = screen.getAllByRole('button');
-    expect(choices).toHaveLength(3);
-    expect(
-      screen.getByRole('button', { name: 'きほんルールであそぶ' }),
-    ).toBeTruthy();
-    expect(
-      screen.getByRole('button', { name: 'みんなのルールであそぶ' }),
-    ).toBeTruthy();
-    for (const choice of choices) {
-      expect(choice.className).not.toContain('primary');
-    }
-  });
-
-  it('みんなのルールを選ぶとすぐ作れ、入る側にはモードを要求しない', async () => {
+  it('みんなのルールを選ぶと部屋を立てるか入るかの2段目へ進む', async () => {
     const user = userEvent.setup();
     const onCreate = vi.fn();
-    const onJoin = vi.fn();
-    render(<PlaySheet onCreate={onCreate} onJoin={onJoin} onClose={vi.fn()} />);
+    render(
+      <PlaySheet onCreate={onCreate} onJoin={vi.fn()} onClose={vi.fn()} />,
+    );
 
     await user.click(
       screen.getByRole('button', { name: 'みんなのルールであそぶ' }),
     );
-    expect(onCreate).toHaveBeenCalledWith('community');
 
+    expect(
+      screen.getByRole('dialog', { name: 'みんなのルールであそぶ' }),
+    ).toBeTruthy();
+    expect(onCreate).not.toHaveBeenCalled();
+    const choices = screen.getAllByRole('button');
+    expect(choices[0]?.textContent).toBe('部屋を立てる');
+    expect(choices[0]?.className).toContain('primary');
+    expect(choices[1]?.textContent).toBe('友だちの部屋にはいる');
+
+    await user.click(screen.getByRole('button', { name: '部屋を立てる' }));
+    expect(onCreate).toHaveBeenCalledWith('community');
+  });
+
+  it('2段目からもどると「だれとあそぶか」に戻る', async () => {
+    const user = userEvent.setup();
+    render(<PlaySheet onCreate={vi.fn()} onJoin={vi.fn()} onClose={vi.fn()} />);
+
+    await user.click(
+      screen.getByRole('button', { name: 'みんなのルールであそぶ' }),
+    );
+    await user.click(screen.getByRole('button', { name: 'もどる' }));
+
+    expect(
+      screen.getByRole('button', { name: 'ひとりで練習する' }),
+    ).toBeTruthy();
+  });
+
+  it('友だちの部屋には招待コードだけで入れ、モードは要求しない', async () => {
+    const user = userEvent.setup();
+    const onJoin = vi.fn();
+    render(<PlaySheet onCreate={vi.fn()} onJoin={onJoin} onClose={vi.fn()} />);
+
+    await user.click(
+      screen.getByRole('button', { name: 'みんなのルールであそぶ' }),
+    );
     await user.click(
       screen.getByRole('button', { name: '友だちの部屋にはいる' }),
     );
@@ -67,6 +100,21 @@ describe('TU-01: あそぶモードの選択', () => {
     expect(inviteCodeInput.value).toBe('01234');
     await user.click(screen.getByRole('button', { name: 'はいる' }));
     expect(onJoin).toHaveBeenCalledWith('01234');
+  });
+
+  it('参加フォームからもどると みんなのルール の2段目に戻る', async () => {
+    const user = userEvent.setup();
+    render(<PlaySheet onCreate={vi.fn()} onJoin={vi.fn()} onClose={vi.fn()} />);
+
+    await user.click(
+      screen.getByRole('button', { name: 'みんなのルールであそぶ' }),
+    );
+    await user.click(
+      screen.getByRole('button', { name: '友だちの部屋にはいる' }),
+    );
+    await user.click(screen.getByRole('button', { name: 'もどる' }));
+
+    expect(screen.getByRole('button', { name: '部屋を立てる' })).toBeTruthy();
   });
 
   it('匿名ユーザーは友だちの部屋へ入る前になまえを設定できる', async () => {
@@ -81,6 +129,9 @@ describe('TU-01: あそぶモードの選択', () => {
       />,
     );
 
+    await user.click(
+      screen.getByRole('button', { name: 'みんなのルールであそぶ' }),
+    );
     await user.click(
       screen.getByRole('button', { name: '友だちの部屋にはいる' }),
     );
@@ -131,6 +182,9 @@ describe('TU-01: あそぶモードの選択', () => {
     );
 
     await user.click(
+      screen.getByRole('button', { name: 'みんなのルールであそぶ' }),
+    );
+    await user.click(
       screen.getByRole('button', { name: '友だちの部屋にはいる' }),
     );
     await user.type(screen.getByLabelText('招待コード'), '01234');
@@ -147,7 +201,7 @@ describe('TU-01: あそぶモードの選択', () => {
     expect(join.hasAttribute('disabled')).toBe(false);
   });
 
-  it('作成失敗をモード選択肢の下へ出し、その場で再試行できる', async () => {
+  it('作成失敗を選択肢の下へ出し、その場で再試行できる', async () => {
     const user = userEvent.setup();
     const onCreate = vi.fn();
     render(
@@ -155,7 +209,7 @@ describe('TU-01: あそぶモードの選択', () => {
         onCreate={onCreate}
         onJoin={vi.fn()}
         onClose={vi.fn()}
-        error="みんなのルールへ進めませんでした。もう一度ためしてください"
+        error="みんなのルールへ進めませんでした。もう一度ためしてください。"
       />,
     );
 
@@ -165,24 +219,52 @@ describe('TU-01: あそぶモードの選択', () => {
     expect(screen.getByRole('alert').textContent).toContain(
       'もう一度ためしてください',
     );
-    await user.click(
-      screen.getByRole('button', { name: 'みんなのルールであそぶ' }),
-    );
-    expect(onCreate).toHaveBeenCalledWith('community');
+    await user.click(screen.getByRole('button', { name: 'ひとりで練習する' }));
+    expect(onCreate).toHaveBeenCalledWith('basic');
   });
 
-  it('みんなのルールへの再試行では該当ボタンを主ボタンにする', () => {
+  it('参加の失敗はその場だけに出し、もどった先へ持ち越さない', async () => {
+    const user = userEvent.setup();
+    render(
+      <PlaySheet
+        initialInviteCode="01234"
+        onCreate={vi.fn()}
+        onJoin={vi.fn()}
+        onClose={vi.fn()}
+        error="この部屋はひとりで練習する部屋です。友だちの部屋の招待コードをたしかめてください。"
+      />,
+    );
+
+    expect(screen.getByRole('alert').textContent).toContain(
+      'ひとりで練習する部屋です',
+    );
+
+    await user.click(screen.getByRole('button', { name: 'もどる' }));
+    expect(screen.queryByRole('alert')).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'もどる' }));
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('みんなのルールへの再試行では2段目から始める', () => {
     render(
       <PlaySheet
         initialMode="community"
         onCreate={vi.fn()}
         onJoin={vi.fn()}
         onClose={vi.fn()}
+        error="みんなのルールへ進めませんでした。もう一度ためしてください。"
       />,
     );
 
     expect(
-      screen.getByRole('button', { name: 'みんなのルールであそぶ' }).className,
+      screen.getByRole('dialog', { name: 'みんなのルールであそぶ' }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: '部屋を立てる' }).className,
     ).toContain('primary');
+    expect(screen.getByRole('alert').textContent).toContain(
+      'もう一度ためしてください',
+    );
   });
 });

@@ -1241,6 +1241,7 @@ function ConnectedApp({
             invoke(client.startRoom());
           }}
           canStart={you?.isHost === true}
+          showInvite={room.mode !== 'basic'}
         />
         {rulesOverlay}
       </>,
@@ -1561,6 +1562,10 @@ function ConnectedApp({
             invoke(
               client.createRoom(mode).then(() => {
                 setIsChoosingRoom(false);
+                // ひとりで練習する部屋は待つ相手がいないので待機室を挟まない。
+                // 開始に失敗したらそのまま待機室に残す。部屋の主は自分ひとりで、
+                // 目の前の「はじめる」を押せばやり直せるため、専用の文言は出さない。
+                if (mode === 'basic') invoke(client.startRoom());
               }),
             );
           }}
@@ -1600,6 +1605,8 @@ function friendlyError(error: string | null): string | null {
       ROOM_NOT_FOUND: '部屋が見つかりません。コードをたしかめてください',
       ROOM_FULL: 'この部屋は満員です',
       ROOM_IN_GAME: 'この部屋は対戦中です',
+      ROOM_SOLO_ONLY:
+        'この部屋はひとりで練習する部屋です。友だちの部屋の招待コードをたしかめてください。',
       RATE_LIMITED: 'しばらく待ってから、もう一度ためしてください',
     }[error] ?? '操作に失敗しました。もう一度ためしてください'
   );
