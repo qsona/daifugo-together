@@ -2,8 +2,9 @@ import type { NotificationView } from '@daifugo/core';
 import { useEffect, useState } from 'react';
 
 import { AppBar } from '../components/AppBar';
-import { Button } from '../components/Button';
+import { Button, LinkButton } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
+import { buildXShareUrl } from '../links';
 import type { NotificationClient } from '../notification/client';
 
 import styles from './NotificationsScreen.module.css';
@@ -97,7 +98,7 @@ export function NotificationsScreen({
         {items && items.length > 0 && (
           <ol className={styles.list}>
             {items.map((item) => (
-              <li key={item.id}>
+              <li key={item.id} className={styles.itemCard}>
                 <button
                   type="button"
                   className={styles.item}
@@ -122,6 +123,21 @@ export function NotificationsScreen({
                     <span className={styles.unread} aria-label="未読" />
                   )}
                 </button>
+                {item.type === 'proposal_released' &&
+                  typeof item.payload.proposalName === 'string' &&
+                  item.payload.proposalName.trim() && (
+                    <LinkButton
+                      size="small"
+                      href={buildXShareUrl(
+                        `提案したルール「${item.payload.proposalName.trim()}」が、みんなでつくろう大富豪に実装されました`,
+                        '/rules',
+                      )}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      𝕏 じまんする
+                    </LinkButton>
+                  )}
               </li>
             ))}
           </ol>

@@ -7,6 +7,27 @@ import { MenuScreen } from './MenuScreen';
 afterEach(cleanup);
 
 describe('MenuScreen', () => {
+  it('フッターに支援と開発者Xの外部リンクを出す', () => {
+    render(
+      <MenuScreen
+        onPlay={vi.fn()}
+        onPropose={vi.fn()}
+        onEncyclopedia={vi.fn()}
+        onMyProposals={vi.fn()}
+        displayName="ゲスト000001"
+        accountState="anonymous"
+        onOpenAccount={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByRole('link', { name: '☕ 開発を支援する' }),
+    ).toHaveProperty('href', 'https://ofuse.me/qsona');
+    expect(screen.getByRole('link', { name: '開発者X' })).toHaveProperty(
+      'href',
+      'https://x.com/qsona',
+    );
+  });
+
   it('マイ提案に未読件数を表示し、99件を超えたら省略する', () => {
     const props = {
       onPlay: vi.fn(),

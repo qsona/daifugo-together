@@ -40,6 +40,12 @@
   cursor: pointer;
 }
 
+.shareAction {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--space-1);
+}
+
 .error {
   margin: 0;
   color: var(--color-text-danger);

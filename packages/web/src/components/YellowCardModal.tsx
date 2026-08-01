@@ -1,7 +1,8 @@
 import type { CardAppealStatus, YellowCardInfo } from '@daifugo/core';
 import { useState } from 'react';
 
-import { Button } from './Button';
+import { Button, LinkButton } from './Button';
+import { buildXShareUrl } from '../links';
 import {
   Dialog,
   DialogBody,
@@ -75,6 +76,18 @@ export function YellowCardModal({
           {cards.map((card) => (
             <AppealControl key={card.id} card={card} onAppeal={onAppeal} />
           ))}
+          <div className={styles.shareAction}>
+            <LinkButton
+              size="small"
+              href={buildXShareUrl(
+                'みんなでつくろう大富豪で、イエローカードをもらいました🟨',
+              )}
+              target="_blank"
+              rel="noreferrer"
+            >
+              𝕏 じまんする
+            </LinkButton>
+          </div>
         </div>
       </Dialog>
     </div>

@@ -39,3 +39,10 @@
   font-weight: var(--font-weight-bold);
   text-align: center;
 }
+
+.supportLink {
+  align-self: center;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-caption);
+  text-align: center;
+}

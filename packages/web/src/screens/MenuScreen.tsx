@@ -9,6 +9,7 @@ import { Callout } from '../components/Callout';
 import { useEffect, type ReactNode } from 'react';
 
 import { GOOGLE_CONNECT_LABEL, PROPOSE_RULE_LABEL } from '../messages';
+import { SUPPORT_URL, X_ACCOUNT_URL } from '../links';
 
 import styles from './MenuScreen.module.css';
 import screen from './screen.module.css';
@@ -87,6 +88,16 @@ export function MenuScreen({
             {...(onConnectPromptShown ? { onShown: onConnectPromptShown } : {})}
           />
         )}
+        <footer className={styles.appLinks}>
+          {SUPPORT_URL && (
+            <a href={SUPPORT_URL} target="_blank" rel="noreferrer">
+              ☕ 開発を支援する
+            </a>
+          )}
+          <a href={X_ACCOUNT_URL} target="_blank" rel="noreferrer">
+            開発者X
+          </a>
+        </footer>
         <HillDivider />
       </main>
     </div>

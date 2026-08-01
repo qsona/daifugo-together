@@ -16,6 +16,7 @@ import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
 import { RuleCard } from '../components/RuleCard';
 import { FEATURES, type FeatureFlags } from '../features';
+import { buildXShareUrl } from '../links';
 import type { RuleCatalogApi } from '../rules/client';
 
 import styles from './RuleDexScreen.module.css';
@@ -170,7 +171,7 @@ export function RuleDexScreen({
                   ? '低評価が集まって引退'
                   : rule.description;
               return (
-                <div key={rule.id}>
+                <div key={rule.id} className={styles.ruleEntry}>
                   <button
                     type="button"
                     className={styles.ruleButton}
@@ -220,6 +221,14 @@ export function RuleDexScreen({
                       </dl>
                     </section>
                   )}
+                  <a
+                    className={styles.shareLink}
+                    href={buildXShareUrl(ruleShareText(rule), '/rules')}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    𝕏 このルールをシェア
+                  </a>
                 </div>
               );
             })}
@@ -237,6 +246,20 @@ export function RuleDexScreen({
       </main>
     </div>
   );
+}
+
+function ruleShareText(rule: {
+  name: string;
+  description: string | null;
+  prefecture: string | null;
+}): string {
+  const place = rule.prefecture ? `(${rule.prefecture}で遊ばれていた報告)` : '';
+  const description = Array.from(
+    rule.description?.trim().replaceAll(/\s+/gu, ' ') ?? '',
+  )
+    .slice(0, 40)
+    .join('');
+  return `ルール図鑑「${rule.name}」${place}${description ? `\n${description}` : ''}`;
 }
 
 function formatDate(value: string): string {

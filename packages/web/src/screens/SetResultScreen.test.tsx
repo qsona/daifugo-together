@@ -9,6 +9,51 @@ import { SetResultScreen } from './SetResultScreen';
 afterEach(cleanup);
 
 describe('SetResultScreen phase boundary', () => {
+  it('自分の総合順位に応じたXシェアと支援導線を出す', () => {
+    render(
+      <SetResultScreen
+        ranks={[
+          {
+            place: 2,
+            name: 'あなた',
+            kind: 'human',
+            totalPoints: 10,
+            isYou: true,
+          },
+        ]}
+        funRating={null}
+        firedRules={[]}
+        onChangeFunRating={() => undefined}
+        onVoteRule={() => undefined}
+        onPlayAgain={() => undefined}
+        onHome={() => undefined}
+      />,
+    );
+
+    const share = screen.getByRole('link', { name: '𝕏 でシェアする' });
+    const intent = new URL(share.getAttribute('href')!);
+    expect(intent.searchParams.get('text')).toBe('富豪でした');
+    expect(
+      screen.getByRole('link', { name: '☕ 楽しかったら開発を支援する' }),
+    ).toBeTruthy();
+  });
+
+  it('きほんモード相当では支援導線を隠せる', () => {
+    render(
+      <SetResultScreen
+        ranks={[]}
+        funRating={null}
+        firedRules={[]}
+        onChangeFunRating={() => undefined}
+        onVoteRule={() => undefined}
+        onPlayAgain={() => undefined}
+        onHome={() => undefined}
+        showSupport={false}
+      />,
+    );
+    expect(screen.queryByRole('link', { name: /支援/u })).toBeNull();
+  });
+
   it('E8未導入のマルチプレイ画面では未保存の評価UIを出さない', () => {
     render(
       <SetResultScreen

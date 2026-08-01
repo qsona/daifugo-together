@@ -73,6 +73,27 @@ describe('RuleDexScreen', () => {
     expect(container.textContent).not.toMatch(/埼玉県|都道府県|人気|優先/u);
   });
 
+  it('ルール名・都道府県・説明の先頭をXシェア文に入れる', async () => {
+    render(
+      <RuleDexScreen
+        api={{ list: vi.fn(async () => response()) }}
+        onBack={vi.fn()}
+        features={features}
+      />,
+    );
+    await screen.findByText('県ありルール');
+    const links = screen.getAllByRole('link', {
+      name: '𝕏 このルールをシェア',
+    });
+    const intent = new URL(links[0]!.getAttribute('href')!);
+    expect(intent.searchParams.get('text')).toBe(
+      'ルール図鑑「県ありルール」(埼玉県で遊ばれていた報告)\n説明',
+    );
+    expect(intent.searchParams.get('url')).toBe(
+      'https://daifugo-together.fly.dev/rules?from=share',
+    );
+  });
+
   it('状態・区分をAND条件として再取得する', async () => {
     const list = vi.fn(async () => response());
     render(

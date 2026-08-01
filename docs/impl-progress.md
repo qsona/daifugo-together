@@ -1705,8 +1705,8 @@ TS-02 から継続で未解決のもの:
 
 - `CI=true pnpm verify`: 成功
   - Prettier / ESLint / AI boundary / design lint / TypeScript / 全package build: 成功
-  - design lint: **185 files**、キービジュアル3ファイル、アウトライン20件が成功
-  - Vitest: **141 files / 1023 tests** 成功
+  - design lint: **188 files**、キービジュアル3ファイル、アウトライン20件が成功
+  - Vitest: **143 files / 1030 tests** 成功
 - 375×812で、未登録/登録済みのメニューと記録画面、なまえ変更、DLG1の表示・再編集、DLG2、DLG3、認証切替/期限切れ/利用不可、Toastを確認した。各画面は`innerWidth = scrollWidth = 375`で横スクロールなし、ダイアログとToastはviewport内に収まり、ブラウザエラーは0件だった
 
 ---

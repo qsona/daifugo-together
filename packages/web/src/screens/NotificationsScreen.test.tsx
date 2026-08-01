@@ -1,9 +1,11 @@
 import type { NotificationView } from '@daifugo/core';
-import { render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { NotificationsScreen } from './NotificationsScreen';
+
+afterEach(cleanup);
 
 const item: NotificationView = {
   id: 1,
@@ -39,6 +41,10 @@ describe('NotificationsScreen', () => {
       />,
     );
     expect(await screen.findByText('提案がルールになったよ！')).toBeTruthy();
+    const share = screen.getByRole('link', { name: '𝕏 じまんする' });
+    expect(new URL(share.getAttribute('href')!).searchParams.get('text')).toBe(
+      '提案したルール「革命」が、みんなでつくろう大富豪に実装されました',
+    );
     expect(onUnreadCountChange).toHaveBeenCalledWith(1);
     await userEvent.click(screen.getByRole('button', { name: 'すべて既読' }));
     expect(readAll).toHaveBeenCalledOnce();
@@ -50,5 +56,26 @@ describe('NotificationsScreen', () => {
     expect(onOpen).toHaveBeenCalledWith(
       expect.objectContaining({ id: item.id, url: item.url }),
     );
+  });
+
+  it('不採用通知にはシェア導線を出さない', async () => {
+    render(
+      <NotificationsScreen
+        api={{
+          list: async () => ({
+            items: [{ ...item, type: 'proposal_rejected' }],
+            unreadCount: 1,
+          }),
+          opened: async () => undefined,
+          readAll: async () => undefined,
+        }}
+        onBack={() => undefined}
+        onOpen={() => undefined}
+        onSettings={() => undefined}
+        onUnreadCountChange={() => undefined}
+      />,
+    );
+    expect(await screen.findByText('提案がルールになったよ！')).toBeTruthy();
+    expect(screen.queryByRole('link', { name: /じまん/u })).toBeNull();
   });
 });
