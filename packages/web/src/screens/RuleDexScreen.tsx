@@ -4,7 +4,13 @@ import type {
   RuleCatalogStatus,
 } from '@daifugo/core';
 import { PREFECTURES } from '@daifugo/core';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 
 import { AppBar } from '../components/AppBar';
 import { Button } from '../components/Button';
@@ -23,10 +29,12 @@ export function RuleDexScreen({
   api,
   onBack,
   features = FEATURES,
+  notification,
 }: {
   api: Pick<RuleCatalogApi, 'list'>;
   onBack: () => void;
   features?: FeatureFlags;
+  notification?: ReactNode;
 }) {
   const [prefecture, setPrefecture] = useState('');
   const [status, setStatus] = useState<'' | RuleCatalogStatus>('');
@@ -91,7 +99,7 @@ export function RuleDexScreen({
   const remaining = Math.max(0, (result?.page.total ?? 0) - shown);
   return (
     <div className={screen.screen}>
-      <AppBar title="ルール図鑑" onBack={onBack} />
+      <AppBar title="ルール図鑑" onBack={onBack} notification={notification} />
       <main className={screen.body}>
         <div className={styles.filters}>
           <label className={styles.filter}>

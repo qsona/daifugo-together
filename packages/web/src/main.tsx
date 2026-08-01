@@ -6,6 +6,7 @@ import '@design/design-tokens.css';
 import './styles/global.css';
 
 import { App } from './App';
+import { registerServiceWorker } from './push/register';
 
 const container = document.getElementById('root');
 if (!container) {
@@ -20,3 +21,4 @@ createRoot(container).render(
 
 // Web フォントの宣言は重いので初回描画の経路から外す(詳細は styles/fonts.ts)。
 void import('./styles/fonts');
+void registerServiceWorker();

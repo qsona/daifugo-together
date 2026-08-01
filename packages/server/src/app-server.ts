@@ -33,6 +33,8 @@ import type { RuleRegistryService } from './rules/service.js';
 import type { RuleCatalogService } from './rules/catalog.js';
 import { FixedWindowRateLimiter } from './room/rate-limit.js';
 import type { AuthService } from './auth/service.js';
+import type { NotificationService } from './notification/service.js';
+import type { PushService } from './push/service.js';
 
 const RELEASE_REMINDER_MS = 48 * 60 * 60 * 1_000;
 const AUTH_FLOW_COOKIE = '__Host-daifugo-auth-flow';
@@ -49,6 +51,7 @@ const CONTENT_TYPES: Record<string, string> = {
   '.json': 'application/json; charset=utf-8',
   '.png': 'image/png',
   '.svg': 'image/svg+xml',
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
   '.webp': 'image/webp',
   '.woff': 'font/woff',
   '.woff2': 'font/woff2',
@@ -66,6 +69,14 @@ export interface AppServerOptions {
   now?: () => number;
   yellowCards?: YellowCardPort;
   auth?: Pick<AuthService, 'begin' | 'callback' | 'complete'>;
+  notifications?: Pick<
+    NotificationService,
+    'list' | 'read' | 'opened' | 'readAll'
+  >;
+  push?: Pick<
+    PushService,
+    'config' | 'subscribe' | 'unsubscribe' | 'getPreferences' | 'setPreferences'
+  >;
   adminScreening?: {
     token: string;
     service: Pick<LocalScreeningService, 'pending' | 'record'>;
@@ -876,6 +887,151 @@ export function createAppServer(options: AppServerOptions): AppServer {
     writeJson(response, result.status, result.body);
     return true;
   };
+  const handleNotifications = async (
+    request: IncomingMessage,
+    response: ServerResponse,
+  ): Promise<boolean> => {
+    const pathname = new URL(request.url ?? '/', 'http://localhost').pathname;
+    const isList = pathname === '/api/notifications';
+    const isReadAll = pathname === '/api/notifications/read-all';
+    const itemMatch = /^\/api\/notifications\/([1-9]\d*)\/(read|opened)$/u.exec(
+      pathname,
+    );
+    if (!isList && !isReadAll && !itemMatch) return false;
+    if (!options.notifications) {
+      writeJson(response, 503, { error: 'notification_service_unavailable' });
+      return true;
+    }
+    const allowedMethod = isList ? 'GET' : 'POST';
+    if (request.method !== allowedMethod) {
+      response.setHeader('allow', allowedMethod);
+      writeJson(response, 405, { error: 'method_not_allowed' });
+      return true;
+    }
+    if (isList) {
+      const result = options.notifications.list(bearerToken(request));
+      writeJson(response, result.status, result.body);
+      return true;
+    }
+    let status: 204 | 401 | 404;
+    if (isReadAll) {
+      status = options.notifications.readAll(bearerToken(request));
+    } else if (itemMatch![2] === 'read') {
+      status = options.notifications.read(
+        bearerToken(request),
+        Number(itemMatch![1]),
+      );
+    } else {
+      let via: 'center' | 'push' = 'center';
+      const hasBody =
+        request.headers['transfer-encoding'] !== undefined ||
+        Number(request.headers['content-length'] ?? 0) > 0;
+      if (hasBody) {
+        try {
+          const body = await readJsonBody(request);
+          if (
+            typeof body !== 'object' ||
+            body === null ||
+            !('via' in body) ||
+            (body.via !== 'center' && body.via !== 'push')
+          ) {
+            writeJson(response, 400, { error: 'invalid_open_source' });
+            return true;
+          }
+          via = body.via;
+        } catch (error) {
+          writeJson(response, error instanceof SyntaxError ? 400 : 413, {
+            error:
+              error instanceof SyntaxError
+                ? 'invalid_json'
+                : 'request_too_large',
+          });
+          return true;
+        }
+      }
+      status = options.notifications.opened(
+        bearerToken(request),
+        Number(itemMatch![1]),
+        via,
+      );
+    }
+    if (status === 204) {
+      response.statusCode = 204;
+      response.setHeader('cache-control', 'no-store');
+      response.end();
+    } else {
+      writeJson(response, status, {
+        error: status === 401 ? 'unauthorized' : 'not_found',
+      });
+    }
+    return true;
+  };
+  const handlePush = async (
+    request: IncomingMessage,
+    response: ServerResponse,
+  ): Promise<boolean> => {
+    const pathname = new URL(request.url ?? '/', 'http://localhost').pathname;
+    const isConfig = pathname === '/api/push/config';
+    const isSubscriptions = pathname === '/api/push/subscriptions';
+    const isPreferences = pathname === '/api/push/preferences';
+    if (!isConfig && !isSubscriptions && !isPreferences) return false;
+    if (isConfig) {
+      if (request.method !== 'GET') {
+        response.setHeader('allow', 'GET');
+        writeJson(response, 405, { error: 'method_not_allowed' });
+        return true;
+      }
+      writeJson(
+        response,
+        200,
+        options.push?.config() ?? { vapidPublicKey: null, available: false },
+      );
+      return true;
+    }
+    if (!options.push) {
+      writeJson(response, 503, { error: 'push_unavailable' });
+      return true;
+    }
+    const allowed = isSubscriptions ? 'POST, DELETE' : 'GET, PUT';
+    if (
+      (isSubscriptions &&
+        request.method !== 'POST' &&
+        request.method !== 'DELETE') ||
+      (isPreferences && request.method !== 'GET' && request.method !== 'PUT')
+    ) {
+      response.setHeader('allow', allowed);
+      writeJson(response, 405, { error: 'method_not_allowed' });
+      return true;
+    }
+    let result;
+    if (isPreferences && request.method === 'GET') {
+      result = options.push.getPreferences(bearerToken(request));
+    } else {
+      let body: unknown;
+      try {
+        body = await readJsonBody(request);
+      } catch (error) {
+        writeJson(response, error instanceof SyntaxError ? 400 : 413, {
+          error:
+            error instanceof SyntaxError ? 'invalid_json' : 'request_too_large',
+        });
+        return true;
+      }
+      result = isSubscriptions
+        ? request.method === 'POST'
+          ? options.push.subscribe(bearerToken(request), body)
+          : options.push.unsubscribe(bearerToken(request), body)
+        : options.push.setPreferences(bearerToken(request), body);
+    }
+    if (result.status === 204) {
+      response.statusCode = 204;
+      response.setHeader('cache-control', 'no-store');
+      response.end();
+    } else {
+      writeJson(response, result.status, result.body);
+    }
+    return true;
+  };
   const handleEvaluation = async (
     request: IncomingMessage,
     response: ServerResponse,
@@ -978,6 +1134,10 @@ export function createAppServer(options: AppServerOptions): AppServer {
         handled ? true : handleYellowCards(request, response),
       )
       .then((handled) => (handled ? true : handleEvaluation(request, response)))
+      .then((handled) =>
+        handled ? true : handleNotifications(request, response),
+      )
+      .then((handled) => (handled ? true : handlePush(request, response)))
       .then((handled) => (handled ? true : handleProposal(request, response)))
       .then((handled) => {
         if (!handled) {

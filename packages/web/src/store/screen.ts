@@ -11,6 +11,8 @@ export type ScreenId =
   | 'menu'
   | 'proposal'
   | 'myProposals'
+  | 'notifications'
+  | 'pushSettings'
   | 'activeRules'
   | 'ruleDex'
   | 'waitingRoom'

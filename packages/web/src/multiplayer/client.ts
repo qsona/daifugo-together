@@ -22,6 +22,7 @@ export interface MultiplayerState {
   room: PlayerRoomView | null;
   roomClosedReason: RoomCloseReason | null;
   error: string | null;
+  unreadNotificationCount?: number;
 }
 
 type Listener = () => void;
@@ -38,6 +39,7 @@ export class MultiplayerClient {
     room: null,
     roomClosedReason: null,
     error: null,
+    unreadNotificationCount: 0,
   };
 
   constructor(
@@ -86,6 +88,17 @@ export class MultiplayerClient {
         ...this.#state,
         room: null,
         roomClosedReason: reason,
+      };
+      this.#notify();
+    });
+    this.#socket.on('notification:sync', ({ unreadCount }) => {
+      this.#state = { ...this.#state, unreadNotificationCount: unreadCount };
+      this.#notify();
+    });
+    this.#socket.on('notification:new', () => {
+      this.#state = {
+        ...this.#state,
+        unreadNotificationCount: (this.#state.unreadNotificationCount ?? 0) + 1,
       };
       this.#notify();
     });
@@ -196,9 +209,18 @@ export class MultiplayerClient {
       displayName: null,
       registered: false,
       room: null,
+      unreadNotificationCount: 0,
     };
     this.#notify();
     this.#socket.disconnect().connect();
+  }
+
+  setUnreadNotificationCount(count: number): void {
+    this.#state = {
+      ...this.#state,
+      unreadNotificationCount: Math.max(0, count),
+    };
+    this.#notify();
   }
 
   #newerRoom(incoming: PlayerRoomView | null): PlayerRoomView | null {

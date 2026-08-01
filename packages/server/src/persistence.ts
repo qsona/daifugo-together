@@ -35,6 +35,8 @@ import type { RoomAction, RoomState, RoomTransition } from './room/types.js';
 import { ProposalRepository } from './proposal/repository.js';
 import { RuleRepository } from './rules/repository.js';
 import { AuthRepository } from './auth/repository.js';
+import { NotificationRepository } from './notification/repository.js';
+import { PushRepository } from './push/repository.js';
 
 const users = sqliteTable('users', {
   userId: text('user_id').primaryKey(),
@@ -43,6 +45,8 @@ const users = sqliteTable('users', {
   googleSub: text('google_sub'),
   registeredAt: integer('registered_at'),
   proposalsSeenAt: integer('proposals_seen_at'),
+  notificationsSeededAt: integer('notifications_seeded_at'),
+  notificationsSeededRuleId: text('notifications_seeded_rule_id'),
   createdAt: integer('created_at').notNull(),
 });
 
@@ -205,6 +209,8 @@ export class SqlitePersistence implements RoomPersistencePort {
   readonly evaluations: EvaluationRepository;
   readonly pipeline: PipelineRepository;
   readonly rules: RuleRepository;
+  readonly notifications: NotificationRepository;
+  readonly push: PushRepository;
 
   constructor(path: string, sessionOptions: SessionStoreOptions = {}) {
     if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
@@ -219,6 +225,8 @@ export class SqlitePersistence implements RoomPersistencePort {
         google_sub TEXT,
         registered_at INTEGER,
         proposals_seen_at INTEGER,
+        notifications_seeded_at INTEGER,
+        notifications_seeded_rule_id TEXT,
         created_at INTEGER NOT NULL
       );
       CREATE TABLE IF NOT EXISTS replay_records (
@@ -271,6 +279,41 @@ export class SqlitePersistence implements RoomPersistencePort {
         ON proposals(author_id, content_hash)
         WHERE status IN ('screening', 'implementing')
           OR (status = 'failed' AND attempt_count = 0);
+      CREATE TABLE IF NOT EXISTS notifications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT NOT NULL REFERENCES users(user_id),
+        type TEXT NOT NULL,
+        payload TEXT NOT NULL,
+        dedupe_key TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        read_at INTEGER,
+        opened_at INTEGER,
+        opened_via TEXT
+          CHECK (opened_via IS NULL OR opened_via IN ('center', 'push'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_notifications_user
+        ON notifications(user_id, created_at DESC);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_dedupe
+        ON notifications(user_id, type, dedupe_key);
+      CREATE TABLE IF NOT EXISTS push_subscriptions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT NOT NULL REFERENCES users(user_id),
+        endpoint TEXT NOT NULL UNIQUE,
+        keys_p256dh TEXT NOT NULL,
+        keys_auth TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        last_sent_at INTEGER,
+        revoked_at INTEGER
+      );
+      CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user
+        ON push_subscriptions(user_id);
+      CREATE TABLE IF NOT EXISTS push_preferences (
+        user_id TEXT NOT NULL REFERENCES users(user_id),
+        type TEXT NOT NULL,
+        enabled INTEGER NOT NULL CHECK (enabled IN (0, 1)),
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (user_id, type)
+      );
     `);
     const userColumns = this.#sqlite
       .prepare("PRAGMA table_info('users')")
@@ -285,6 +328,24 @@ export class SqlitePersistence implements RoomPersistencePort {
     }
     if (!userColumns.some(({ name }) => name === 'registered_at')) {
       this.#sqlite.exec('ALTER TABLE users ADD COLUMN registered_at INTEGER');
+    }
+    if (!userColumns.some(({ name }) => name === 'notifications_seeded_at')) {
+      this.#sqlite.exec(
+        'ALTER TABLE users ADD COLUMN notifications_seeded_at INTEGER',
+      );
+    }
+    if (
+      !userColumns.some(({ name }) => name === 'notifications_seeded_rule_id')
+    ) {
+      this.#sqlite.exec(
+        'ALTER TABLE users ADD COLUMN notifications_seeded_rule_id TEXT',
+      );
+    }
+    const notificationColumns = this.#sqlite
+      .prepare("PRAGMA table_info('notifications')")
+      .all() as Array<{ name: string }>;
+    if (!notificationColumns.some(({ name }) => name === 'opened_via')) {
+      this.#sqlite.exec('ALTER TABLE notifications ADD COLUMN opened_via TEXT');
     }
     this.#sqlite.exec(`
       CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_sub
@@ -343,6 +404,8 @@ export class SqlitePersistence implements RoomPersistencePort {
       this.injection,
     );
     this.rules = new RuleRepository(this.#sqlite);
+    this.notifications = new NotificationRepository(this.#sqlite);
+    this.push = new PushRepository(this.#sqlite);
     this.evaluations = new EvaluationRepository(this.#sqlite);
     this.operations = new OperationsRepository(this.#sqlite);
   }

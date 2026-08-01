@@ -7,6 +7,8 @@ const SCREEN_PATHS: Record<ScreenId, string> = {
   menu: '/menu',
   proposal: '/proposals/new',
   myProposals: '/proposals/mine',
+  notifications: '/notifications',
+  pushSettings: '/notifications/settings',
   activeRules: '/demo/rules/active',
   ruleDex: '/rules',
   waitingRoom: '/demo/waiting',

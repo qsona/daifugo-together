@@ -5,6 +5,7 @@ import { LocalScreeningService } from '../injection/local-screening.js';
 import { InjectionSignalRecorder } from '../injection/screening.js';
 import { SqlitePersistence } from '../persistence.js';
 import { ProposalSubmissionService } from '../proposal/submission.js';
+import { NotificationService } from '../notification/service.js';
 import { PipelineJobService } from './jobs.js';
 import { PipelineJudgementService } from './service.js';
 
@@ -61,6 +62,7 @@ async function approvedProposal() {
     persistence.proposals,
     persistence.injection,
     () => ++now,
+    new NotificationService(persistence.notifications, { now: () => ++now }),
   );
   const ai = judgements.recordAi(proposal.id, {
     verdict: 'approve',
@@ -113,9 +115,11 @@ async function approvedProposal() {
       persistence.pipeline,
       persistence.proposals,
       () => ++now,
+      new NotificationService(persistence.notifications, { now: () => ++now }),
     ),
     persistence,
     proposal,
+    userToken: session.userToken,
   };
 }
 
@@ -339,7 +343,7 @@ describe('CX-02 pipeline jobs', () => {
   });
 
   it('内部失敗区分とユーザー向けimplementation_failedを同時に確定する', async () => {
-    const { jobs, persistence, proposal } = await approvedProposal();
+    const { jobs, persistence, proposal, userToken } = await approvedProposal();
     const item = jobs.next();
     if (!item) throw new Error('queued job missing');
     jobs.update(item.job.id, {
@@ -368,6 +372,15 @@ describe('CX-02 pipeline jobs', () => {
       status: 'failed',
       reasonCode: 'implementation_failed',
       attemptCount: 1,
+    });
+    expect(
+      persistence.notifications.list(
+        persistence.notifications.userIdForToken(userToken)!,
+        Date.now(),
+      ),
+    ).toMatchObject({
+      unreadCount: 2,
+      items: [{ type: 'proposal_failed' }, { type: 'proposal_implementing' }],
     });
     expect(
       jobs.fail(item.job.id, {

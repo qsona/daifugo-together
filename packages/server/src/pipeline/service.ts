@@ -1,6 +1,7 @@
 import { matchPatterns } from '../injection/patterns.js';
 import type { InjectionRepository } from '../injection/repository.js';
 import type { ProposalRepository } from '../proposal/repository.js';
+import type { NotificationService } from '../notification/service.js';
 import {
   JUDGEMENT_VERDICTS,
   PipelineRepository,
@@ -366,17 +367,21 @@ export class PipelineJudgementService {
   readonly #proposals: ProposalRepository;
   readonly #injection: InjectionRepository;
   readonly #now: () => number;
+  readonly #notifications:
+    Pick<NotificationService, 'publishProposal'> | undefined;
 
   constructor(
     pipeline: PipelineRepository,
     proposals: ProposalRepository,
     injection: InjectionRepository,
     now: () => number = Date.now,
+    notifications?: Pick<NotificationService, 'publishProposal'>,
   ) {
     this.#pipeline = pipeline;
     this.#proposals = proposals;
     this.#injection = injection;
     this.#now = now;
+    this.#notifications = notifications;
   }
 
   pending(limit = 100, currentPromptVersion?: string) {
@@ -444,7 +449,7 @@ export class PipelineJudgementService {
     if (!Number.isSafeInteger(checkId) || !confirmedBy) {
       return { status: 'invalid', error: 'invalid_confirmation' };
     }
-    return this.#pipeline.transaction(() => {
+    const result: PipelineMutationResult = this.#pipeline.transaction(() => {
       const proposal = this.#proposals.findById(proposalId);
       const check = this.#injection.checkForProposal(proposalId);
       if (!proposal || !check) return { status: 'not_found' };
@@ -503,6 +508,10 @@ export class PipelineJudgementService {
       });
       return { status: 'confirmed', judgement };
     });
+    if (result.status === 'confirmed') {
+      this.#notify('proposal_rejected', proposalId);
+    }
+    return result;
   }
 
   confirmCxRejection(
@@ -515,7 +524,7 @@ export class PipelineJudgementService {
     if (!Number.isSafeInteger(judgementId) || !confirmedBy) {
       return { status: 'invalid', error: 'invalid_confirmation' };
     }
-    return this.#pipeline.transaction(() => {
+    const result: PipelineMutationResult = this.#pipeline.transaction(() => {
       const proposal = this.#proposals.findById(proposalId);
       const source = this.#pipeline.judgement(judgementId as number);
       if (!proposal || !source || source.proposalId !== proposalId) {
@@ -606,6 +615,10 @@ export class PipelineJudgementService {
       });
       return { status: 'confirmed', judgement };
     });
+    if (result.status === 'confirmed') {
+      this.#notify('proposal_rejected', proposalId);
+    }
+    return result;
   }
 
   approveSpec(proposalId: string, input: unknown): PipelineMutationResult {
@@ -627,7 +640,7 @@ export class PipelineJudgementService {
     ) {
       return { status: 'invalid', error: 'invalid_spec_approval' };
     }
-    return this.#pipeline.transaction(() => {
+    const result: PipelineMutationResult = this.#pipeline.transaction(() => {
       const proposal = this.#proposals.findById(proposalId);
       const source = this.#pipeline.judgement(judgementId as number);
       if (!proposal || !source || source.proposalId !== proposalId) {
@@ -700,6 +713,10 @@ export class PipelineJudgementService {
       }
       return { status: 'confirmed', judgement, jobId: job.id };
     });
+    if (result.status === 'confirmed') {
+      this.#notify('proposal_implementing', proposalId);
+    }
+    return result;
   }
 
   amendSpec(proposalId: string, input: unknown): PipelineMutationResult {
@@ -792,5 +809,13 @@ export class PipelineJudgementService {
         jobId: item.job.id,
       };
     });
+  }
+
+  #notify(
+    type: 'proposal_rejected' | 'proposal_implementing',
+    proposalId: string,
+  ): void {
+    const proposal = this.#proposals.findById(proposalId);
+    if (proposal) this.#notifications?.publishProposal(type, proposal);
   }
 }
