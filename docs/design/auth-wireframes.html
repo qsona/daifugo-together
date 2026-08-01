@@ -167,10 +167,10 @@
       <li><b>確認ダイアログの規範を実装に合わせた</b>: 見出しは「〜しますか?」の疑問文、<b>primary は取り消し側</b>(破壊的な側を目立たせない)。どちらも <code>ConfirmDialog.tsx:6-22</code> が確立した規範で、初版(体言見出し・実行側 primary)と衝突していた。DLG-2・DLG-3 が対象。</li>
       <li><b>メニュー系フレーム(A-1〜A-4・A-6・F-2)に通知ベルと現行メニュー構成を反映</b>: 通知センター(47b41e0)が <code>MenuScreen</code> の <code>notification</code> スロット(<code>MenuScreen.tsx:21, 47-49</code>)にベルを置いた。アカウント行と縦に 2 段積みにせず<b>同じ行に並べる</b>。導線は「あそぶ / ルールを提案する / ルール図鑑 / マイ提案(未読バッジ)」(d714b6a・ガイド #27)。</li>
       <li><b>なまえまわりに PlaySheet 実装(409d173)との関係を注記</b>(C-1・C-2・C-3・DLG-1): 匿名ユーザーが<b>「友だちの部屋にはいる」ときだけ</b>入室前になまえを設定できるようになった(<code>PlaySheet.tsx:53, 72-83, 112-125</code>)。検証は <code>clientPayloadSchemas['user:rename']</code> の共有で、<b>J8-4 は解消済み</b>。</li>
-      <li><b>A2HS(ホーム画面追加)の再ログイン文脈を追加</b>(§4 フロー末尾・§7 実装メモ・A-3 の注記。<b>フレームは増やしていない</b>): <code>InstallGuide.tsx:119-121</code> が「追加したあとは、もう一度Googleでログインしてください」と<b>文で指示するのに、その画面に導線がない</b>。開発者の Critical (3) の実例で、レビュー §0.7 の <b>N-8</b> に対応する。</li>
+      <li><b>A2HS(ホーム画面追加)の再ログイン文脈を追加</b>(§4 フロー末尾・§7 実装メモ・A-3 の注記。<b>フレームは増やしていない</b>。<b>817409b で縮小 — §7 実装メモの該当項を参照</b>): <code>InstallGuide.tsx:119-121</code> が「追加したあとは、もう一度Googleでログインしてください」と<b>文で指示するのに、その画面に導線がない</b>。開発者の Critical (3) の実例で、レビュー §0.7 の <b>N-8</b> に対応する。</li>
     </ol>
     <div style="margin-top:6px;">変えていないもの: <b>22 フレームの構成・DLG / RES の体系・フレーム ID・Q-1〜Q-8 の裁定・E15 のバックエンド仕様</b>。本書は今回も<b>サーバー変更を要する設計を含まない</b>。</div>
-    <div style="margin-top:6px; border-top:1px dashed var(--g4); padding-top:6px;"><b>本書で描かないもの(意図的)</b>: <b>通知設定画面(<code>PushSettingsScreen</code>)のワイヤーは作らない</b>。2026-08-02 の監査で <b>Push と認証の交差に 7 件の新指摘(auth-ux-review.md §0.9 の J9-1〜J9-7)</b>が見つかったが、認証の再設計と同じコミットに混ぜるとレビュー対象が二重になるため、<b>後続の work order に分ける</b>(Q-4 で「マイ提案」を触らないと決めたのと同じ理由)。<b>2026-08-02 追記(817409b)</b>: このうち <b>J9-1・J9-2 は解消、J9-6 は論点ごと消滅、J9-3 は Minor へ縮小</b>(auth-ux-review.md §0.9 の追従表)。残るのは J9-4・J9-5・J9-7 で、いずれも通知設定画面の中の話なので本書の対象外のまま。<b>Q-9 は実装が決着させたので裁定不要になった</b>。本書に影響するのは次の 3 点だけ: (1) <b>N-8 の優先度が上がった</b> — iOS では A2HS が認証状態を壊すため、通知を使うための必須要件になった(§4 フローの A2HS 節)。(2) <b>U-2 の語彙統一の対象に通知設定画面と提案画面の Push 誘いが加わる</b> — 817409b が「<b>Googleで引き継ぐ</b>」を <code>PushSettingsScreen.tsx:76, 80</code> と <code>ProposalFormScreen.tsx:415, 419</code> の 2 か所に新設した。<b>格助詞は「で」で揃っているので差は動詞だけ</b>だが、「引き継ぎ」はレビュー §3.1 が「E15 の設計語彙であってプレイヤーの語彙ではない」として名指しで否定した語である。<b>認証画面の外にあるため、認証の再設計だけを見ていると取り残される</b>。(3) <b>~~Q-9~~ は裁定不要</b>: 「未登録者に通知設定画面を見せるか」は 817409b が「画面は見せて購読 UI を認証導線に差し替える」で実装済み。</div>
+    <div style="margin-top:6px; border-top:1px dashed var(--g4); padding-top:6px;"><b>本書で描かないもの(意図的)</b>: <b>通知設定画面(<code>PushSettingsScreen</code>)のワイヤーは作らない</b>。2026-08-02 の監査で <b>Push と認証の交差に 7 件の新指摘(auth-ux-review.md §0.9 の J9-1〜J9-7)</b>が見つかったが、認証の再設計と同じコミットに混ぜるとレビュー対象が二重になるため、<b>後続の work order に分ける</b>(Q-4 で「マイ提案」を触らないと決めたのと同じ理由)。<b>2026-08-02 追記(817409b)</b>: このうち <b>J9-1・J9-2 は解消、J9-6 は論点ごと消滅、J9-3 は Minor へ縮小</b>(auth-ux-review.md §0.9 の追従表)。残るのは J9-4・J9-5・J9-7 で、いずれも通知設定画面の中の話なので本書の対象外のまま。<b>Q-9 は実装が決着させたので裁定不要になった</b>。本書に影響するのは次の 3 点だけ: (1) <b>~~N-8 の優先度が上がった~~ → N-8 は縮小</b> — <b>817409b で <code>InstallGuide</code> は登録済み限定になり(<code>PushSettingsScreen.tsx:83</code>)、未登録は到達しない</b>。再ログインの受け皿は<b>ホーム画面アプリ側の未登録通知設定画面の「Googleで引き継ぐ」(実装済み)+ 1/5 のアカウント行</b>で、<b>残作業は語彙差し替えのみ</b>(work order 3/5 §3.1 が正)。「iOS では A2HS が認証状態を壊す」という構造の指摘自体は有効(§4 フローの A2HS 節)。(2) <b>U-2 の語彙統一の対象に通知設定画面と提案画面の Push 誘いが加わる</b> — 817409b が「<b>Googleで引き継ぐ</b>」を <code>PushSettingsScreen.tsx:76, 80</code> と <code>ProposalFormScreen.tsx:415, 419</code> の 2 か所に新設した。<b>格助詞は「で」で揃っているので差は動詞だけ</b>だが、「引き継ぎ」はレビュー §3.1 が「E15 の設計語彙であってプレイヤーの語彙ではない」として名指しで否定した語である。<b>認証画面の外にあるため、認証の再設計だけを見ていると取り残される</b>。(3) <b>~~Q-9~~ は裁定不要</b>: 「未登録者に通知設定画面を見せるか」は 817409b が「画面は見せて購読 UI を認証導線に差し替える」で実装済み。</div>
   </div>
   <div class="kv"><span class="k">前提(動かさない)</span><span>E15 のバックエンド仕様(<code>POST /api/auth/begin</code> → <code>authUrl</code> → <code>/auth/google/callback</code> → <code>POST /api/auth/complete</code>、outcome = linked / switched / already)と、改名プロトコル <code>user:rename</code>、なまえの制約(trim 後 1〜10 コードポイント・制御文字禁止)。<b>本ワイヤーはサーバー変更を要する設計を含まない。</b></span></div>
   <div class="kv"><span class="k">凡例</span><span>名前・件数はダミー。ボタン内の「→ 〇〇」は遷移先を示す設計注記であり実画面には出さない。<span class="legend-mk">1</span> は各フレーム下の注記への参照。</span></div>
@@ -229,7 +229,9 @@
 
 (DLG-1/DLG-2 確認ダイアログ) ← 認証の「実行」の唯一の入口
   提案画面 G-2 の「Googleでつなぐ」/ 退室後メニュー F-2 の誘い /
-  A2HS 案内(InstallGuide)の「Googleでつなぐ」も、ここを直接開く
+  ※ A2HS 案内から DLG-1 を開く経路は作らない(817409b で InstallGuide は登録済み限定になり、
+    未登録は到達しない)。再ログインの受け皿はホーム画面アプリ側の通知設定画面の
+    「Googleで引き継ぐ」(実装済み)+ メニューのアカウント行
   DLG-1 の「変える」は C-1 へ遷移せず、ダイアログの中で名前を直す(インライン編集)
     ← 独立画面へ抜けるとダイアログが閉じて認証フローが切れるため
 
@@ -283,15 +285,19 @@
       走らせてから switchSession(null) する。押し間違いで通知購読まで消えるので、
       DLG-3 の確認を挟むこと自体の必要性が初版より上がっている(J6-2)
 
-■ ホーム画面に追加(A2HS)したあとの再ログイン  ★2026-08-02 追加
+■ ホーム画面に追加(A2HS)したあとの再ログイン  ★2026-08-02 追加 / 817409b で更新
     ホーム画面アプリはブラウザとストレージを共有しない → userToken を引き継げない
-  PushSettings / 通知のおすすめダイアログ → InstallGuide(InstallGuide.tsx:119-121)
-    → 現状は「追加したあとは、もう一度Googleでログインしてください」という文だけで、
-      その画面から認証を始める手段がない(開発者の Critical (3)。レビュー §0.7 N-8)
-    → あるべき形: この案内から DLG-1 を直接開ける(実行口は 1 つのまま)。
-      文言も §2 の語彙に合わせて「Googleでつなぐ」にする
-    → 未登録の人にはそもそも引き継ぐ記録が無いので、案内の文はここで分岐する
-      (未登録: 「追加すると、いまの記録は引きつげません。先にGoogleでつないでください。」)
+  [登録済み] 通知設定 → InstallGuide(InstallGuide.tsx:119-121)
+    → 「追加したあとは、もう一度Googleでログインしてください」
+    → 追加する → ホーム画面アプリを開く(未登録の新ゲストになっている)
+  [未登録] ホーム画面アプリで通知設定を開く
+    → 購読ボタンは出ない。Callout「Push通知を受け取るには、Googleで引き継いでください。」
+      + ボタン「Googleで引き継ぐ」(PushSettingsScreen.tsx:67-82)  ← ここが再ログインの受け皿
+    → 認証 → 完了後に Push の提示が再開する(beginPushLogin の意図引き継ぎ)
+
+  ※ 817409b で InstallGuide は登録済み限定になった(PushSettingsScreen.tsx:83 の registered &&)。
+    未登録の人は A2HS 案内そのものに到達しないので、案内側に未登録分岐は要らない。
+    残作業は文言を §2 の語彙(Googleでつなぐ)に揃えることだけ — work order 3/5 §3.1 が正
 
 ■ 失敗系
   denied (自分でやめた)      → 何も出さない。匿名のまま続行
@@ -402,8 +408,8 @@
     <li><b>通知の設置場所はアプリのルート</b>: メニュー内に置くと、部屋が生きている経路で一度も見えない(J3-2)。</li>
     <li><b>認証開始の経路を差し替える</b>(廃止D-6): 隠しフォーム POST をやめ、<code>POST /api/auth/begin</code> を fetch → <code>{ authUrl }</code> → <code>location.href</code>。これをやらないと 503・401 がブラウザに生 JSON で出て、RES-3 のダイアログは<b>そもそも表示されない</b>。サーバー変更は不要(エンドポイントは実装済み)。</li>
     <li><b>なまえの検証は core の写し</b>: <code>protocol.ts</code> の 3 条件(trim 後 1 以上 / 10 以下 / 制御文字 <code>&lt;=31</code>・<code>127</code> 禁止)をクライアントでも使う。UI 側で条件を足さない(J8-4)。送信は <code>user:rename</code>。<b>永続化は部屋の外でも走る</b>(<code>socket-gateway.ts:664</code> が <code>if (current)</code> ブロックの外)ので、メニューからの改名にサーバー変更は要らない。<br><b>2026-08-02 — 実装済み</b>: <code>PlaySheet.tsx:73-83</code> が <code>clientPayloadSchemas['user:rename'].safeParse</code> をそのまま使い、送信は <code>multiplayer/client.ts:141-146</code> の <code>rename</code>(<code>App.tsx:1719-1726</code> が入室前に呼ぶ)。<b>J8-4 は解消済みで、検証の流儀もこの形を踏襲すればよい</b>。ただし PlaySheet 側には<b>カウンタ(n / 10)も <code>clampCodePoints</code> による切り詰めも無い</b>(超過を入力させてからエラーを出す方式)。C-1 / C-2 / DLG-1 は提案フォームと同じ「切り詰め + カウンタ」で作り、<b>PlaySheet 側もそちらに揃える</b>(レビュー §0.7 N-10)。</li>
-    <li><b>A2HS 案内からの再ログイン導線</b>(2026-08-02 追加・レビュー §0.7 N-8。<b>優先度: 高</b>): <code>InstallGuide.tsx:119-121</code> は「追加したあとは、もう一度Googleでログインしてください」と<b>文で指示するだけ</b>で、その画面から認証を始められない。<b>ここから DLG-1 を直接開けるようにする</b>(実行口は 1 つのまま)。文言も §2 の語彙(「Googleでつなぐ」)に統一する。表示元は <code>PushSettingsScreen.tsx:119</code> と <code>PushOfferDialog.tsx:90</code> の 2 つで、どちらも部屋の外なので E15 §2.3(対局中は導線を出さない)と衝突しない。<b>未登録の人には引き継ぐ記録が無い</b>ので、案内の文をそこで分岐させる。<br><b>これは利便性ではなく必須要件である</b>(2026-08-02 の Push 監査で判明。auth-ux-review.md §0.8): Push の購読はサーバー側で<b>登録済み(<code>google_sub</code> 非 NULL)を要求</b>し、未登録は 403 <code>registration_required</code>(<code>packages/server/src/push/service.ts:118-137</code>)。一方 iOS で通知を受けるにはホーム画面追加が要り、<b>追加すると認証状態が失われる</b>。つまり <b>iOS では「追加 → 未登録に戻る → 通知設定 → 403」が素直な経路になる</b>ので、この導線が無いと通知機能そのものに到達できない。</li>
-    <li><b>認証後に元の文脈へ戻す前例</b>(2026-08-02・817409b。<b>N-8 はこれをなぞる</b>): <code>beginPushLogin</code>(<code>App.tsx:743-748</code>)は <code>markOfferAfterLogin()</code> で「何をしようとしていたか」を localStorage に記録してから認証を開始し、完了ハンドラ(<code>App.tsx:1074-1091</code>)が <code>consumeOfferAfterLogin()</code> で回収して<b>元の文脈(Push の提示)を再開する</b>。開始に失敗したらフラグを戻す(<code>App.tsx:746</code>)。<b>OAuth のフルページ遷移で失われる意図を、サーバー変更なしに引き継げる</b>。N-8(A2HS 案内からの認証)も DLG-1 から戻ったあとに元の案内へ帰す必要があるので、<b>新しい仕組みを設計せずこの前例を使う</b>。</li>
+    <li><s><b>A2HS 案内からの再ログイン導線</b></s> → <b>縮小(817409b・レビュー §0.7 N-8)</b>: 当初は <code>InstallGuide.tsx:119-121</code> が「追加したあとは、もう一度Googleでログインしてください」と<b>文で指示するだけ</b>で認証を始められない点を、<b>優先度: 高</b>の必須要件として挙げていた。<b>817409b で前提が消えた</b> — <code>PushSettingsScreen.tsx:83</code> が <code>registered &amp;&amp;</code> でガードするようになり、<b>InstallGuide は登録済み限定になった</b>(<code>PushOfferDialog</code> 経由も <code>ProposalFormScreen.tsx:220</code> の <code>registered &amp;&amp; pushOffer</code> と認証完了直後の提示(<code>App.tsx:1777</code>)だけなので、いずれも登録済み)。<b>未登録の人は A2HS 案内に到達しないので、案内側に未登録分岐を作る必要はない。</b>再ログインの受け皿は<b>ホーム画面アプリ側で開いた未登録の通知設定画面の「Googleで引き継ぐ」(<code>PushSettingsScreen.tsx:67-82</code>。実装済み)+ 1/5 のアカウント行</b>。<b>残作業は語彙差し替えのみ</b>(「Googleで引き継ぐ」→ §2 の「Googleでつなぐ」) — <b>work order 3/5 §3.1 が正</b>。なお「iOS では A2HS が Push の前提条件を壊す」という構造の指摘(レビュー §0.8)自体は有効で、<b>行き止まりの出口が既に実装されている</b>という点だけが変わった。</li>
+    <li><b>認証後に元の文脈へ戻す前例</b>(2026-08-02・817409b。<b>N-8 の縮小により当てはめ先が変わった</b> — なぞるべきは新設ではなく<b>いま動いている経路</b>): <code>beginPushLogin</code>(<code>App.tsx:743-748</code>)は <code>markOfferAfterLogin()</code> で「何をしようとしていたか」を localStorage に記録してから認証を開始し、完了ハンドラ(<code>App.tsx:1074-1091</code>)が <code>consumeOfferAfterLogin()</code> で回収して<b>元の文脈(Push の提示)を再開する</b>。開始に失敗したらフラグを戻す(<code>App.tsx:746</code>)。<b>OAuth のフルページ遷移で失われる意図を、サーバー変更なしに引き継げる</b>。この仕組みは<b>すでにホーム画面アプリ側の「Googleで引き継ぐ」で動いている</b>(認証後に Push の提示が再開する)。<b>work order は新しい仕組みを設計する必要がない</b> — 将来 DLG-1 から戻ったあとに元の文脈へ帰す要件が出たときも、この前例をそのまま使える。</li>
     <li><b>不変条件: <code>subscribeProposalResults</code> を呼ぶ側は登録済みを保証する</b>(2026-08-02・レビュー §0.9 J9-2): <code>push/client.ts</code> は <code>Notification.requestPermission()</code> を<b>最初の非同期処理として呼ぶ</b>(WebKit の user activation を失わないため)ので、サーバー往復を許可の前に挟めない。817409b 以降が安全なのは<b>呼び出し口 3 つがすべて登録済みをガードしているから</b>にすぎない。<b>N-8 で A2HS 案内から通知を勧める導線を足すときは、このガードを必ず引き継ぐこと</b> — 破ると「OS 許可を与えたあとに 403」が再発する。</li>
     <li><b>認証語彙が散らばっている場所の棚卸し</b>(2026-08-02): §2 の語彙に統一するとき、認証画面の外にある次の 4 つも対象になる。<b>「Googleで引き継ぐ」(817409b で新設)</b> = <code>PushSettingsScreen.tsx:76, 80</code> / <code>ProposalFormScreen.tsx:415, 419</code>。加えて<code>InstallGuide.tsx:120</code>「もう一度Googleでログインしてください」/ <code>InviteCode.tsx:52</code>「このリンクを送ると、ログインしていない友だちも参加できます」。ガイド §6 の用語集に<b>認証まわりの項が 1 つも無い</b>ことが揺れの根本原因なので、Q-3 の確定と同時にガイドへ追記する(ガイド §11.2 のマージ条件)。</li>
     <li><b>ログアウトの副作用</b>(2026-08-02): 現行 <code>App.tsx:1688-1694</code> は <code>pushApi.disableThisDevice()</code> を走らせてから <code>switchSession(null)</code> する。無確認の 1 タップで<b>通知購読まで消える</b>ので、DLG-3 の確認を挟む必要性は初版より上がっている(J6-2)。DLG-3 の本文でこの副作用に触れるかは、通知を有効にしている人にだけ 1 文を足す形で足りる(常設しない = 原則 4)。</li>
@@ -513,7 +519,7 @@
         <li><b>解消</b>: J1-1・J6-1(切替が到達不能)・J6-2。「登録済み・ログアウト」ボタン(<code>MenuScreen.tsx:70-78</code>)は<b>廃止</b>(廃止D-1)。</li>
         <li><span class="mk">1</span> 塗りバッジで「済み」を示す。これが常時見えているので、<b>成功トーストは状態表示の代わりではない</b>(N-4 補足 1)。トーストは戻ってきた直後の 1 回だけ。</li>
         <li><b>別端末で切り替わったことの確認手段</b>がここで初めて成立する(E15 §2.4 ケース 2 の受け入れ条件)。</li>
-        <li><b>2026-08-02 — A2HS のあとに戻ってくる先がここ</b>: ホーム画面に追加したアプリは<b>ブラウザとストレージを共有しない</b>ので、<code>userToken</code> が引き継がれず<b>未登録の新しいゲストとして立ち上がる</b>(<code>InstallGuide.tsx:119-121</code>)。つまりホーム画面アプリの初回起動時のメニューは A-1 の見た目になり、<b>ここ(A-3)に戻るには「Googleでつなぐ」をやり直す必要がある</b>。案内の中から DLG-1 を直接開けるようにする(レビュー §0.7 N-8・§7 実装メモ)。</li>
+        <li><b>2026-08-02 — A2HS のあとに戻ってくる先がここ</b>: ホーム画面に追加したアプリは<b>ブラウザとストレージを共有しない</b>ので、<code>userToken</code> が引き継がれず<b>未登録の新しいゲストとして立ち上がる</b>(<code>InstallGuide.tsx:119-121</code>)。つまりホーム画面アプリの初回起動時のメニューは A-1 の見た目になり、<b>ここ(A-3)に戻るには「Googleでつなぐ」をやり直す必要がある</b>。<b>2026-08-02(817409b)</b>: 当初は「案内の中から DLG-1 を直接開けるようにする」(N-8)としていたが、<b><code>InstallGuide</code> が登録済み限定になった</b>(<code>PushSettingsScreen.tsx:83</code>)ため未登録はその案内に到達しない。<b>やり直しの受け皿は、ホーム画面アプリ側で開いた未登録の通知設定画面の「Googleで引き継ぐ」(<code>PushSettingsScreen.tsx:67-82</code>。実装済み)と、このアカウント行</b>。残作業は語彙差し替えのみ(work order 3/5 §3.1 が正)。</li>
       </ul>
     </div>
   </div>

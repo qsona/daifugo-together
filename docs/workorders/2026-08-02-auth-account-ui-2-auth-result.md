@@ -26,7 +26,7 @@
 `packages/web/src/auth/client.ts` を書き換える。
 
 - `begin(userToken)`: `fetch('POST /api/auth/begin')` に `Authorization: Bearer <userToken>` を付けて呼び、`{ authUrl }` を受けてから `location.href = authUrl` に入れる。**戻り値は Promise にし、失敗はステータスを保った例外として投げる**(呼び出し側が 401 / 503 / その他を区別できるようにする)
-- **`credentials: 'include'` を必ず付ける**(同一オリジンでも明示する。将来オリジンが分かれたときに黙って壊れないため)。理由: begin の成功応答は `__Host-daifugo-auth-flow` Cookie(`app-server.ts:41`。`HttpOnly; Secure; SameSite=None`)を `Set-Cookie` で返し、**callback がこの nonce Cookie と `state` を照合する**(E15 §2.3)。**この Cookie が保存されないと認証は必ず失敗する。**隠しフォーム POST ではブラウザが自動で扱っていた部分なので、fetch 化で最も壊れやすいのがここ
+- **`credentials: 'include'` を必ず付ける**(同一オリジンでも明示する。将来オリジンが分かれたときに黙って壊れないため)。理由: begin の成功応答は `__Host-daifugo-auth-flow` Cookie(`app-server.ts:40`。属性は `:41` の `Path=/; HttpOnly; Secure; SameSite=None`)を `Set-Cookie` で返し、**callback がこの nonce Cookie と `state` を照合する**(E15 §2.3)。**この Cookie が保存されないと認証は必ず失敗する。**隠しフォーム POST ではブラウザが自動で扱っていた部分なので、fetch 化で最も壊れやすいのがここ
 - 同じ理由で `complete` にも `credentials: 'include'` を付ける
 - `complete(ott)`: `fetch('POST /api/auth/complete', { ott })` で `{ outcome, userToken, displayName }` を受け取る。**JSON を返す形にする**
 - **`#submit`(隠しフォーム POST)と `takeResult()`(結果 Cookie の読み出し)は削除する。**あわせて `#/auth/result` 経路を使わなくなるので、`App.tsx` のハッシュ分岐も `#/auth/complete` の 1 本にまとめる
