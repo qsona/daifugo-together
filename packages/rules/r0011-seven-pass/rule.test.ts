@@ -238,6 +238,17 @@ describe('7渡し', () => {
     expect(effects).toEqual([]);
   });
 
+  it('別のchoiceIdへの応答ではカードを移動しない', () => {
+    const currentPlay = play([card('S07', '7')]);
+    const effects = afterPlay(context({ currentPlay }), currentPlay, {
+      kind: 'cards',
+      choiceId: 'other_choice',
+      cardIds: ['S03'],
+    });
+
+    expect(effects).toEqual([]);
+  });
+
   it('選択を省略した呼び出しではmoveCardsせず必ずrequestChoiceを返す', () => {
     const currentPlay = play([card('S07', '7')]);
     expect(afterPlay(context({ currentPlay }), currentPlay)).toMatchObject([
