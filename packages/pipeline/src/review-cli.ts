@@ -14,6 +14,8 @@ import {
 import {
   editableConfirmation,
   formatReviewItem,
+  manualRejectionConfirmation,
+  MANUAL_REJECTION_REASONS,
   suggestedConfirmation,
   validateConfirmationForItem,
 } from './review.js';
@@ -124,6 +126,45 @@ async function editConfirmation(
   }
 }
 
+async function chooseRejection(
+  terminal: ReturnType<typeof createInterface>,
+  item: Extract<PendingVerdictConfirmation, { source: 'cx01' }>,
+  actor: string,
+): Promise<ConfirmationCommand | null> {
+  const choices = MANUAL_REJECTION_REASONS.map(
+    ({ key, label }) => `[${key}] ${label}`,
+  ).join('\n');
+  while (true) {
+    const answer = (
+      await terminal.question(
+        `却下理由を選んでください。\n${choices}\n[b] 戻る\n> `,
+      )
+    )
+      .trim()
+      .toLowerCase();
+    if (answer === 'b') return null;
+    const reason = MANUAL_REJECTION_REASONS.find(({ key }) => key === answer);
+    if (!reason) {
+      process.stdout.write('表示されたキーから選んでください。\n');
+      continue;
+    }
+    if (reason.reasonForUser !== null) {
+      return manualRejectionConfirmation(item, actor, reason);
+    }
+    const customReason = (
+      await terminal.question('ユーザーに表示する理由を入力してください。\n> ')
+    ).trim();
+    const command = manualRejectionConfirmation(
+      item,
+      actor,
+      reason,
+      customReason,
+    );
+    if (command !== null) return command;
+    process.stdout.write('理由を入力してください。\n');
+  }
+}
+
 async function submit(
   baseUrl: URL,
   token: string,
@@ -175,7 +216,8 @@ if (items.length === 0) {
             : 'r';
       const choices = [
         ...(acceptKey === 'a' ? ['[a] 承認して次へ'] : []),
-        ...(acceptKey === 'r' ? ['[r] 却下を確定して次へ'] : []),
+        ...(item.source === 'cx01' ? ['[r] 理由を選んで却下'] : []),
+        ...(item.source === 'e6' ? ['[r] 却下を確定して次へ'] : []),
         `[e] ${suggested === null ? '判断内容を編集して確定' : '内容を編集して確定'}`,
         '[s] 保留して次へ',
         '[q] 終了',
@@ -203,6 +245,10 @@ if (items.length === 0) {
             );
             continue;
           }
+        } else if (answer === 'r' && item.source === 'cx01') {
+          const rejection = await chooseRejection(terminal, item, actor);
+          if (rejection === null) continue;
+          command = rejection;
         } else if (answer === acceptKey && suggested !== null) {
           command = suggested;
         } else {

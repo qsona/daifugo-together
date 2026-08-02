@@ -5,6 +5,47 @@ import type {
 
 import type { ConfirmationCommand } from './confirmation.js';
 
+export const MANUAL_REJECTION_REASONS = [
+  {
+    key: '1',
+    category: 'contract',
+    label: '今のしくみでは開発できない',
+    reasonForUser: '今のしくみでは開発できませんでした。',
+  },
+  {
+    key: '2',
+    category: 'game_breaking',
+    label: 'ゲームが成り立たなくなる',
+    reasonForUser: 'ゲームが成り立たなくなるため、開発できませんでした。',
+  },
+  {
+    key: '3',
+    category: 'inappropriate',
+    label: '安全に扱えない内容が含まれている',
+    reasonForUser: '安全に扱えない内容が含まれていました。',
+  },
+  {
+    key: '4',
+    category: 'duplicate',
+    label: '既存のルールと重複している',
+    reasonForUser: '似たルールが既にあります。',
+  },
+  {
+    key: '5',
+    category: 'unintelligible',
+    label: 'ルールとして解釈できない',
+    reasonForUser: 'ルールとして解釈できませんでした。',
+  },
+  {
+    key: '6',
+    category: 'other',
+    label: 'その他（理由を入力）',
+    reasonForUser: null,
+  },
+] as const;
+
+export type ManualRejectionReason = (typeof MANUAL_REJECTION_REASONS)[number];
+
 function indent(value: string): string {
   return value
     .split(/\r?\n/u)
@@ -148,6 +189,25 @@ export function editableConfirmation(
   throw new Error('unsupported confirmation item');
 }
 
+export function manualRejectionConfirmation(
+  item: Extract<PendingVerdictConfirmation, { source: 'cx01' }>,
+  actor: string,
+  reason: ManualRejectionReason,
+  customReason?: string,
+): ConfirmationCommand | null {
+  const reasonForUser = reason.reasonForUser ?? customReason?.trim();
+  if (!reasonForUser) return null;
+  return {
+    action: 'confirm_rejection',
+    proposalId: item.proposal.id,
+    judgementId: item.judgement.id,
+    actor,
+    rejectCategory: reason.category,
+    rejectSubtype: null,
+    reasonForUser,
+  };
+}
+
 export function validateConfirmationForItem(
   item: PendingVerdictConfirmation,
   command: ConfirmationCommand,
@@ -174,11 +234,9 @@ export function validateConfirmationForItem(
     item.judgement.verdict === 'needs_review' &&
     (command.action !== 'confirm_rejection' ||
       command.rejectCategory === undefined ||
-      command.rejectSubtype === undefined ||
-      command.rejectSubtype === null ||
       command.reasonForUser === undefined)
   ) {
-    return 'needs_reviewの却下にはrejectCategory、rejectSubtype、reasonForUserが必要です';
+    return 'needs_reviewの却下にはrejectCategoryとreasonForUserが必要です';
   }
   return null;
 }

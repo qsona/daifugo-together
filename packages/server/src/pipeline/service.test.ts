@@ -560,6 +560,43 @@ describe('CX-01 judgement and VERDICT_CONFIRMATION', () => {
     });
   });
 
+  it('AI承認を開発者が定義済みの理由で却下できる', async () => {
+    const { persistence, proposal, local, pipeline } = await setup();
+    local.record(proposal.id, {
+      verdict: 'clean',
+      reason: '通常の提案',
+      evidence: null,
+      model: 'gpt-5.6-sol',
+      latencyMs: 5,
+    });
+    const recorded = pipeline.recordAi(proposal.id, aiApprove());
+    if (recorded.status !== 'recorded') return;
+
+    expect(
+      pipeline.confirmCxRejection(proposal.id, {
+        judgementId: recorded.judgement.id,
+        actor: 'developer',
+        rejectCategory: 'game_breaking',
+        rejectSubtype: null,
+        reasonForUser: 'ゲームが成り立たなくなるため、開発できませんでした。',
+      }),
+    ).toMatchObject({
+      status: 'confirmed',
+      judgement: {
+        verdict: 'reject',
+        rejectCategory: 'game_breaking',
+        rejectSubtype: null,
+        decidedBy: 'developer',
+        sourceJudgementId: recorded.judgement.id,
+      },
+    });
+    expect(persistence.proposals.findById(proposal.id)).toMatchObject({
+      status: 'rejected',
+      reasonCode: 'breaks_game',
+      reasonText: 'ゲームが成り立たなくなるため、開発できませんでした。',
+    });
+  });
+
   it('needs_reviewを開発者が修正SPECで承認できる', async () => {
     const { persistence, proposal, local, pipeline } = await setup();
     local.record(proposal.id, {

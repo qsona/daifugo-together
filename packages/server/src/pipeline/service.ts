@@ -556,24 +556,20 @@ export class PipelineJudgementService {
           ? value.rejectSubtype
           : null;
       const overrideReason = nonempty(value?.reasonForUser, 1_000);
+      const overrideSubtypeWasProvided =
+        value?.rejectSubtype !== undefined && value.rejectSubtype !== null;
       const manualReview =
-        source.verdict === 'needs_review' &&
         overrideCategory !== null &&
         overrideReason !== null &&
-        (overrideCategory === 'other'
-          ? overrideSubtype === null
-          : overrideSubtype !== null &&
-            CATEGORY_SUBTYPES[overrideCategory].has(overrideSubtype));
-      const category =
-        source.verdict === 'reject' ? source.rejectCategory : overrideCategory;
-      const subtype =
-        source.verdict === 'reject' ? source.rejectSubtype : overrideSubtype;
-      const userReason =
-        source.verdict === 'reject' ? source.reasonForUser : overrideReason;
+        (!overrideSubtypeWasProvided ||
+          (overrideSubtype !== null &&
+            CATEGORY_SUBTYPES[overrideCategory].has(overrideSubtype)));
+      const category = manualReview ? overrideCategory : source.rejectCategory;
+      const subtype = manualReview ? overrideSubtype : source.rejectSubtype;
+      const userReason = manualReview ? overrideReason : source.reasonForUser;
       if (
         (source.verdict !== 'reject' && !manualReview) ||
         category === null ||
-        (category !== 'other' && subtype === null) ||
         userReason === null
       ) {
         return { status: 'conflict', error: 'stale_or_nonreject_judgement' };
@@ -596,10 +592,9 @@ export class PipelineJudgementService {
         rejectCategory: category,
         rejectSubtype: subtype,
         reasonForUser: userReason,
-        reasonInternal:
-          source.verdict === 'needs_review'
-            ? 'Developer rejected a needs_review judgement.'
-            : source.reasonInternal,
+        reasonInternal: manualReview
+          ? `Developer rejected an AI ${source.verdict} judgement.`
+          : source.reasonInternal,
         spec: null,
         scaffoldMeta: null,
         confidence: source.confidence,

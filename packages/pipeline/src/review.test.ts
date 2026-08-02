@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest';
 import {
   editableConfirmation,
   formatReviewItem,
+  manualRejectionConfirmation,
+  MANUAL_REJECTION_REASONS,
   suggestedConfirmation,
   validateConfirmationForItem,
 } from './review.js';
@@ -134,6 +136,53 @@ describe('interactive confirmation review', () => {
       rejectCategory: '',
       rejectSubtype: '',
       reasonForUser: '',
+    });
+  });
+
+  it('定義済みの理由を選んでAI判定を却下へ上書きできる', () => {
+    expect(MANUAL_REJECTION_REASONS.map(({ category }) => category)).toEqual([
+      'contract',
+      'game_breaking',
+      'inappropriate',
+      'duplicate',
+      'unintelligible',
+      'other',
+    ]);
+    expect(
+      manualRejectionConfirmation(
+        cxItem('approve'),
+        'developer',
+        MANUAL_REJECTION_REASONS[1],
+      ),
+    ).toEqual({
+      action: 'confirm_rejection',
+      proposalId: 'proposal-1',
+      judgementId: 12,
+      actor: 'developer',
+      rejectCategory: 'game_breaking',
+      rejectSubtype: null,
+      reasonForUser: 'ゲームが成り立たなくなるため、開発できませんでした。',
+    });
+  });
+
+  it('その他の却下理由は自由文を必要とする', () => {
+    expect(
+      manualRejectionConfirmation(
+        cxItem('needs_review'),
+        'developer',
+        MANUAL_REJECTION_REASONS[5],
+      ),
+    ).toBeNull();
+    expect(
+      manualRejectionConfirmation(
+        cxItem('needs_review'),
+        'developer',
+        MANUAL_REJECTION_REASONS[5],
+        '今回は開発対象にできません。',
+      ),
+    ).toMatchObject({
+      rejectCategory: 'other',
+      reasonForUser: '今回は開発対象にできません。',
     });
   });
 
