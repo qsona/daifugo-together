@@ -81,19 +81,16 @@ export function AccountScreen({
               見る
             </Button>
           </div>
-          <div className={styles.summaryRow}>
-            <span>
-              イエローカード{' '}
-              {yellowCardCount === null ? '—' : `${String(yellowCardCount)}枚`}
-            </span>
-          </div>
+          {yellowCardCount !== null && yellowCardCount > 0 && (
+            <div className={styles.summaryRow}>
+              <span>イエローカード {String(yellowCardCount)}枚</span>
+            </div>
+          )}
         </section>
 
         <div className={styles.state}>
           <Tag variant={registered ? 'accountActive' : 'account'}>
-            {registered
-              ? 'Googleでつないである・どの端末でも'
-              : '記録はこの端末だけ'}
+            {registered ? 'Googleでつないである' : '記録はこの端末だけ'}
           </Tag>
         </div>
 

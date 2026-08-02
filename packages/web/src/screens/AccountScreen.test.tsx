@@ -37,7 +37,8 @@ describe('AccountScreen', () => {
       />,
     );
     await waitFor(() => expect(screen.getByText('提案 0件')).toBeTruthy());
-    expect(screen.getByText('イエローカード 0枚')).toBeTruthy();
+    // イエローカードは 1 枚以上のときだけ表示する
+    expect(screen.queryByText(/イエローカード/u)).toBeNull();
     await userEvent.click(
       screen.getByRole('button', { name: 'Googleでつなぐ' }),
     );
@@ -61,7 +62,7 @@ describe('AccountScreen', () => {
       />,
     );
     expect(screen.getByText('提案 —')).toBeTruthy();
-    expect(screen.getByText('イエローカード —')).toBeTruthy();
+    expect(screen.queryByText(/イエローカード/u)).toBeNull();
     expect(
       screen.getByRole('button', { name: '別のアカウントにする' }),
     ).toBeTruthy();
