@@ -68,4 +68,30 @@ describe('AccountScreen', () => {
     ).toBeTruthy();
     expect(screen.getByRole('button', { name: 'サインアウト' })).toBeTruthy();
   });
+
+  it('停止中は枚数ではなくお休み中と解除予定を出す', async () => {
+    const endsAt = Date.UTC(2026, 7, 3, 4, 22);
+    render(
+      <AccountScreen
+        api={{
+          mine: vi.fn(async () => ({ items: [], unreadCount: 0 })),
+          // 停止に使われたカードは consumed になり active は 0 になる
+          getYellowCards: vi.fn(async () => ({
+            active: 0,
+            limit: 2 as const,
+            cards: [],
+            suspension: { level: 1, startsAt: endsAt - 86_400_000, endsAt },
+          })),
+        }}
+        displayName="ゲスト000001"
+        registered={false}
+        connection="ready"
+        {...actions}
+      />,
+    );
+    await waitFor(() =>
+      expect(screen.getByText(/提案はお休み中です。/u)).toBeTruthy(),
+    );
+    expect(screen.queryByText(/イエローカード/u)).toBeNull();
+  });
 });

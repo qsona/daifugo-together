@@ -36,6 +36,7 @@ export function AccountScreen({
 }) {
   const [proposalCount, setProposalCount] = useState<number | null>(null);
   const [yellowCardCount, setYellowCardCount] = useState<number | null>(null);
+  const [suspendedUntil, setSuspendedUntil] = useState<number | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -51,7 +52,11 @@ export function AccountScreen({
       void api
         .getYellowCards()
         .then((response) => {
-          if (active) setYellowCardCount(response.active);
+          if (!active) return;
+          setYellowCardCount(response.active);
+          // 停止に使われたカードは consumed になり active から外れるので、
+          // 停止中であることは suspension から見る。
+          setSuspendedUntil(response.suspension?.endsAt ?? null);
         })
         .catch(() => undefined);
     }
@@ -81,10 +86,20 @@ export function AccountScreen({
               見る
             </Button>
           </div>
-          {yellowCardCount !== null && yellowCardCount > 0 && (
+          {suspendedUntil !== null ? (
             <div className={styles.summaryRow}>
-              <span>イエローカード {String(yellowCardCount)}枚</span>
+              <span>
+                提案はお休み中です。解除予定:{' '}
+                {new Date(suspendedUntil).toLocaleString('ja-JP')}
+              </span>
             </div>
+          ) : (
+            yellowCardCount !== null &&
+            yellowCardCount > 0 && (
+              <div className={styles.summaryRow}>
+                <span>イエローカード {String(yellowCardCount)}枚</span>
+              </div>
+            )
           )}
         </section>
 
