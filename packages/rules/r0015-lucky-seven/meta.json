@@ -1,0 +1,11 @@
+{
+  "ruleId": "r0015-lucky-seven",
+  "name": "ラッキー7",
+  "description": "自然なランク7を2枚以上同時に出したプレイヤーは、その手に含まれる7の枚数と残り手札枚数の小さい方と同じ枚数のカードを残り手札から必ず選び、捨て札へ移す。",
+  "kind": "local",
+  "proposalId": "01KZ0F33DXRJFH9QB47SSJEB3D",
+  "contractVersion": 2,
+  "messages": {
+    "lucky_seven_choice": "ラッキー7: 捨てるカードを選んでください。"
+  }
+}
