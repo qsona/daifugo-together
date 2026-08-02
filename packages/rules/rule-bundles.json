@@ -42,5 +42,9 @@
   "r0011-seven-pass": {
     "version": 1,
     "hash": "e05583a6d63171353288dcfce7e49ab0202a113bf516079ecb557704a90c8557"
+  },
+  "r0015-lucky-seven": {
+    "version": 1,
+    "hash": "98d44d536a06289bc32e3527f6fb615d5893be6fbbe1591d6f005aa9dd266b1f"
   }
 }
