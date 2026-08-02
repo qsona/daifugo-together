@@ -39,6 +39,10 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Check rule version bumps
+        # Rule PRs cannot update the shared bundle manifests because diff-guard
+        # limits them to the generated rule files. The post-merge workflow records
+        # their initial hashes on main instead.
+        if: github.event_name != 'pull_request' || !startsWith(github.head_ref, 'rule/')
         run: pnpm rules:check-versions
 
       - name: Check formatting
