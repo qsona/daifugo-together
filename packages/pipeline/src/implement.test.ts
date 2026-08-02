@@ -156,7 +156,7 @@ describe('CX-02 interactive-session implementation', () => {
       status: 'prepared',
       job: {
         phase: 'implementing',
-        promptVersion: 'cx02-v4',
+        promptVersion: 'cx02-v5',
         scaffoldSha: 'a'.repeat(40),
       },
     });

@@ -1,6 +1,6 @@
 import type { PendingCxJudgement } from '@daifugo/server';
 
-export const CX01_PROMPT_VERSION = 'cx01-v12';
+export const CX01_PROMPT_VERSION = 'cx01-v13';
 
 const CONTRACT = `
 契約 v1/v2 のフック:
@@ -10,8 +10,9 @@ const CONTRACT = `
 
 Effect 語彙:
 - clearField, requestChoice, skipTurns, reverseTurnOrder, forceRank, moveCards, setMemory, announce
-- requestChoice は contract v2 の afterPlay 専用。対象者自身の残り手札から正確な
-  枚数を選ばせ、応答を受けた同じ afterPlay が moveCards 等の通常 Effect を返す。
+- requestChoice は contract v2 の afterPlay / onGameStart で使える。対象者自身の
+  手札から正確な枚数を選ばせ、応答を受けた同じフックが
+  moveCards 等の通常 Effect を返す。onGameStart では完了まで最初の手番を開始しない。
 - 1回の発動で複数プレイヤーに選ばせる場合、requestChoice の additionalChoices に
   対象者ごとの要求を並べる。エンジンは先頭から直列処理し、全件完了まで手番を進めない。
 - requestChoice の players に候補を列挙すると、対象プレイヤーに相手1人を選ばせられる。
@@ -22,7 +23,8 @@ Effect 語彙:
 
 hook別のEffect許可:
 - afterPlay: 全Effect（requestChoice は contract v2 のみ）
-- afterFieldClear / onGameStart: clearField以外
+- afterFieldClear: requestChoice / clearField以外
+- onGameStart: clearField以外（requestChoice を含む）
 - onGameEnd: setMemory(set scopeのみ) / announce
 - modifyLegality / modifyStrength: Effectなし（戻り値の変換だけ）
 - 実効 StrengthOrder の revolution は永続的な革命状態を表す。革命系ルールは

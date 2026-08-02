@@ -44,6 +44,7 @@ const EFFECTS_BY_HOOK: Readonly<Record<string, ReadonlySet<string>>> = {
     'announce',
   ]),
   onGameStart: new Set([
+    'requestChoice',
     'skipTurns',
     'reverseTurnOrder',
     'forceRank',

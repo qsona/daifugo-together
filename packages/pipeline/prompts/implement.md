@@ -1,4 +1,4 @@
-# Daifugo rule implementation cx02-v4
+# Daifugo rule implementation cx02-v5
 
 Implement the rule described by `SPEC.json` in this directory from the current
 Codex App session. Do not launch another Codex process or delegate the work.
@@ -49,8 +49,10 @@ export const rule: RuleModule = {
 The exported `rule.meta` must be deeply equal to `meta.json`.
 
 For a contract v2 SPEC using `requestChoice`, copy `contractVersion: 2`
-exactly from `meta.json`. The initial `afterPlay` call must return only one
-`requestChoice` Effect. To request fixed choices from multiple players, put the
+exactly from `meta.json`. The initial `afterPlay` or `onGameStart` call must
+return only one `requestChoice` Effect. The engine resumes that same hook with
+the matching input; a game-start choice completes before the opening turn.
+To request fixed choices from multiple players, put the
 remaining per-player requests in its optional `additionalChoices`; every
 request must target that player's own hand and use a unique player and
 `choiceId`. When the optional third `input` argument contains the matching

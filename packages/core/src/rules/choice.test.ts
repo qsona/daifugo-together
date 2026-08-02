@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { createDeck, type Card } from '../cards/card.js';
 import { reduceGame } from '../engine/reducer.js';
+import { startGame } from '../game/start-game.js';
 import type { GameConfig, GameState } from '../game/types.js';
 import { seedRng } from '../rng/rng.js';
 import { buildPlayerSnapshot } from '../snapshot/snapshot.js';
@@ -297,7 +298,93 @@ const dynamicPlayerChoiceRule: RuleModule = {
   },
 };
 
+const gameStartChoiceRule: RuleModule = {
+  meta: {
+    ruleId: 'r-choice-game-start',
+    name: 'game-start choice fixture',
+    description: 'contract v2 game-start choice fixture',
+    kind: 'original',
+    proposalId: 'choice-fixture-game-start',
+    contractVersion: 2,
+    messages: { choose_start: '開始時のカードを選んでください' },
+  },
+  hooks: {
+    onGameStart(context, input) {
+      if (input?.kind === 'cards' && input.choiceId === 'start_card') {
+        return [
+          {
+            type: 'moveCards',
+            from: { kind: 'hand', player: 'p1' },
+            to: { kind: 'discard' },
+            cards: { kind: 'specific', cardIds: [...input.cardIds] },
+          },
+        ];
+      }
+      const player = context.game.players.find(({ id }) => id === 'p1');
+      return player && player.hand.length > 0
+        ? [
+            {
+              type: 'requestChoice',
+              player: 'p1',
+              choiceId: 'start_card',
+              from: { kind: 'hand', player: 'p1' },
+              cards: { kind: 'all' },
+              count: 1,
+              messageKey: 'choose_start',
+            },
+          ]
+        : [];
+    },
+  },
+};
+
 describe('contract v2 rule choices', () => {
+  it('onGameStartの選択完了まで最初の手番を開始しない', () => {
+    const { config, runtime } = fixture(gameStartChoiceRule);
+    const started = startGame(config, runtime);
+    const options = started.state.private.pendingChoice?.optionCardIds ?? [];
+    const selected = options[0];
+
+    expect(started.rejections).toEqual([]);
+    expect(started.state.public.phase).toBe('awaitingChoice');
+    expect(started.events.map(({ type }) => type)).toEqual(['gameStarted']);
+    expect(started.state.private.pendingChoice).toMatchObject({
+      hook: 'onGameStart',
+      ruleId: 'r-choice-game-start',
+      player: 'p1',
+      choiceId: 'start_card',
+      count: 1,
+    });
+    expect(
+      started.state.private.hookCalls['r-choice-game-start:onGameStart'],
+    ).toBeUndefined();
+    expect(selected).toBeDefined();
+    if (!selected) return;
+
+    const completed = reduceGame(
+      config,
+      started.state,
+      {
+        type: 'ruleInput',
+        player: 'p1',
+        choiceId: 'start_card',
+        cardIds: [selected],
+      },
+      runtime,
+    );
+
+    expect(completed.rejections).toEqual([]);
+    expect(completed.state.public.phase).toBe('awaitingPlay');
+    expect(completed.state.private.pendingChoice).toBeUndefined();
+    expect(completed.state.public.discard.map(({ id }) => id)).toEqual([
+      selected,
+    ]);
+    expect(completed.state.players.p1?.hand).toHaveLength(12);
+    expect(
+      completed.state.private.hookCalls['r-choice-game-start:onGameStart'],
+    ).toBe(1);
+  });
+
   it('プレイを確定して追加入力を待ち、応答後に同じafterPlayを完了する', () => {
     const { config, state, runtime } = fixture(choiceRule);
 

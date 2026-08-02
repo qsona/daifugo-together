@@ -7,9 +7,10 @@ import {
   type ScaffoldResult,
 } from './scaffold.js';
 
-export const IMPLEMENTATION_PROMPT_VERSION = 'cx02-v4';
+export const IMPLEMENTATION_PROMPT_VERSION = 'cx02-v5';
 const SUPPORTED_PROMPT_VERSIONS = new Set([
   'cx02-v3',
+  'cx02-v4',
   IMPLEMENTATION_PROMPT_VERSION,
 ]);
 

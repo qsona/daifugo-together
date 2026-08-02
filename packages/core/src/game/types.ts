@@ -139,6 +139,7 @@ export interface PrivateGameState {
   rng: RngState;
   hookCalls: Record<string, number>;
   pendingChoice?: {
+    hook?: 'afterPlay' | 'onGameStart';
     kind?: 'cards' | 'player';
     ruleId: RuleId;
     player: PlayerId;
@@ -147,8 +148,8 @@ export interface PrivateGameState {
     optionCardIds?: CardId[];
     optionPlayerIds?: PlayerId[];
     count?: number;
-    play: Play;
-    strength: StrengthOrder;
+    play?: Play;
+    strength?: StrengthOrder;
     playedBy?: PlayerId;
     continuation?: {
       remainingRuleIds: RuleId[];

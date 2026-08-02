@@ -802,6 +802,40 @@ describe('CX-01 judgement and VERDICT_CONFIRMATION', () => {
     });
   });
 
+  it('onGameStartのrequestChoice SPECを承認できる', async () => {
+    const { proposal, local, pipeline } = await setup();
+    local.record(proposal.id, {
+      verdict: 'clean',
+      reason: '通常の提案',
+      evidence: null,
+      model: 'gpt-5.6-sol',
+      latencyMs: 5,
+    });
+    const choiceSpec = {
+      ...spec('カード交換'),
+      hooks: ['onGameStart', 'onGameEnd'],
+      effects: ['requestChoice', 'moveCards', 'setMemory'],
+    };
+
+    expect(
+      pipeline.recordAi(proposal.id, {
+        ...aiApprove(),
+        spec: choiceSpec,
+        scaffoldMeta: {
+          slug: 'rank-card-exchange',
+          contractVersion: 2,
+          messages: { choose: '渡すカードを選んでください' },
+        },
+      }),
+    ).toMatchObject({
+      status: 'recorded',
+      judgement: {
+        spec: { hooks: ['onGameStart', 'onGameEnd'] },
+        scaffoldMeta: { contractVersion: 2 },
+      },
+    });
+  });
+
   it('プロンプト版指定時は旧版の未確定AI判定を再判定対象に含める', async () => {
     const { persistence, proposal, local, pipeline } = await setup();
     local.record(proposal.id, {

@@ -9,6 +9,7 @@ import type {
   PlayerId,
   PublicGameEvent,
 } from '../game/types.js';
+import { completeGameStart } from '../game/start-game.js';
 import { evaluateCandidates, generateCandidates } from '../play/candidates.js';
 import {
   matchPlayCandidates,
@@ -17,8 +18,12 @@ import {
 } from '../play/play.js';
 import { rankPosition, type StrengthOrder } from '../play/strength.js';
 import { noRuleRuntime, type RuleRuntime } from '../rules/chain.js';
-import { engineFeaturesOf } from '../rules/contract.js';
-import { executeEffectHook, type EffectHookResult } from './effects.js';
+import { engineFeaturesOf, type RuleInput } from '../rules/contract.js';
+import {
+  executeEffectHook,
+  type ChoiceRequest,
+  type EffectHookResult,
+} from './effects.js';
 import {
   activePlayers,
   finishGame,
@@ -736,6 +741,153 @@ function reducePlay(
   );
 }
 
+function awaitGameStartChoice(
+  state: GameState,
+  request: ChoiceRequest,
+  continuation: NonNullable<
+    NonNullable<GameState['private']['pendingChoice']>['continuation']
+  >,
+  events: EngineEvent[],
+  setMemory: NonNullable<GameTransition['setMemory']>,
+): GameTransition {
+  const withEvents = appendEvents(state, events);
+  return {
+    state: {
+      ...withEvents,
+      public: { ...withEvents.public, phase: 'awaitingChoice' },
+      private: {
+        ...withEvents.private,
+        pendingChoice: {
+          ...request,
+          hook: 'onGameStart',
+          continuation,
+        },
+      },
+    },
+    events,
+    rejections: [],
+    setMemory,
+  };
+}
+
+function reduceGameStartRuleInput(
+  config: GameConfig,
+  state: GameState,
+  pending: NonNullable<GameState['private']['pendingChoice']>,
+  inputValue: RuleInput,
+  runtime: RuleRuntime,
+): GameTransition {
+  const continuation = pending.continuation ?? {
+    remainingRuleIds: [],
+    remainingChoices: [],
+    clearRequested: false,
+  };
+  const currentConfig: GameConfig = {
+    ...config,
+    ruleChain: config.ruleChain.filter(
+      ({ ruleId }) => ruleId === pending.ruleId,
+    ),
+  };
+  const currentEffects = executeEffectHook(
+    currentConfig,
+    state,
+    runtime,
+    'onGameStart',
+    undefined,
+    undefined,
+    {
+      previewChoice: true,
+      input: { ruleId: pending.ruleId, value: inputValue },
+    },
+  );
+  const remainingChoices = continuation.remainingChoices ?? [];
+  const dynamicRequest = currentEffects.choiceRequests?.[0];
+  if (dynamicRequest) {
+    return awaitGameStartChoice(
+      currentEffects.state,
+      dynamicRequest,
+      {
+        remainingChoices: [
+          ...(currentEffects.choiceRequests ?? []).slice(1),
+          ...remainingChoices,
+        ],
+        remainingRuleIds: continuation.remainingRuleIds,
+        clearRequested: false,
+      },
+      currentEffects.events,
+      currentEffects.setMemory,
+    );
+  }
+  const nextSameRuleChoice = remainingChoices[0];
+  if (nextSameRuleChoice) {
+    return awaitGameStartChoice(
+      currentEffects.state,
+      nextSameRuleChoice,
+      {
+        remainingChoices: remainingChoices.slice(1),
+        remainingRuleIds: continuation.remainingRuleIds,
+        clearRequested: false,
+      },
+      currentEffects.events,
+      currentEffects.setMemory,
+    );
+  }
+
+  const remainingConfig: GameConfig = {
+    ...config,
+    ruleChain: config.ruleChain.filter(({ ruleId }) =>
+      continuation.remainingRuleIds.includes(ruleId),
+    ),
+  };
+  const continuedRuntime: RuleRuntime = {
+    ...runtime,
+    setMemory: currentEffects.setMemory,
+  };
+  const preview = executeEffectHook(
+    remainingConfig,
+    currentEffects.state,
+    continuedRuntime,
+    'onGameStart',
+    undefined,
+    undefined,
+    { previewChoice: true },
+  );
+  const nextRequest = preview.choiceRequests?.[0];
+  if (nextRequest) {
+    return awaitGameStartChoice(
+      currentEffects.state,
+      nextRequest,
+      {
+        remainingChoices: (preview.choiceRequests ?? []).filter(
+          (candidate, index) =>
+            index > 0 && candidate.ruleId === nextRequest.ruleId,
+        ),
+        remainingRuleIds: continuation.remainingRuleIds.filter(
+          (ruleId) => ruleId !== nextRequest.ruleId,
+        ),
+        clearRequested: false,
+      },
+      currentEffects.events,
+      currentEffects.setMemory,
+    );
+  }
+
+  const remainingEffects = executeEffectHook(
+    remainingConfig,
+    currentEffects.state,
+    continuedRuntime,
+    'onGameStart',
+  );
+  return completeGameStart(
+    config,
+    {
+      ...remainingEffects,
+      events: [...currentEffects.events, ...remainingEffects.events],
+    },
+    { ...runtime, setMemory: remainingEffects.setMemory },
+  );
+}
+
 function reduceRuleInput(
   config: GameConfig,
   state: GameState,
@@ -794,6 +946,18 @@ function reduceRuleInput(
     },
     private: privateState,
   };
+  if (pending.hook === 'onGameStart') {
+    return reduceGameStartRuleInput(
+      config,
+      resumedState,
+      pending,
+      inputValue,
+      runtime,
+    );
+  }
+  if (!pending.play || !pending.strength) {
+    return reject(state, action.player, 'NO_PENDING_CHOICE');
+  }
   const playedBy =
     pending.playedBy ?? state.public.field.current?.by ?? action.player;
   if (pending.continuation) {

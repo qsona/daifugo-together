@@ -450,6 +450,7 @@ Effect を返す 4 フックの `ctx.game.strength` は、同じ状態に
 | Effect \ フック | afterPlay | afterFieldClear | onGameStart | onGameEnd |
 |---|---|---|---|---|
 | clearField | ○ | ×(no-op) | ×(場が空) | × |
+| requestChoice (contract v2) | ○ | × | ○ | × |
 | skipTurns | ○ | ○ | ○ | × |
 | reverseTurnOrder | ○ | ○ | ○ | × |
 | forceRank | ○ | ○ | ○(奇習的だが意味は定義される) | × |
@@ -629,7 +630,7 @@ export interface CandidateGenerator {
 正準の状態遷移、秘匿性、AI・タイムアウト、互換性の仕様は
 `docs/specs/2026-07-31-rule-choice-contract-v2-design.md` とする。
 
-- `afterPlay` の `requestChoice` は、対象プレイヤー自身の残り手札から正確な枚数を要求する。`additionalChoices` で複数プレイヤー分を宣言した場合は先頭から直列処理し、全件完了まで手番を進めない。
+- `afterPlay` と `onGameStart` の `requestChoice` は、対象プレイヤー自身の手札から正確な枚数を要求する。`additionalChoices` で複数プレイヤー分を宣言した場合は先頭から直列処理し、全件完了まで次の手番または最初の手番を進めない。
 - `requestChoice.players` は列挙された候補からプレイヤー1人を選ぶ。応答付き `afterPlay` が次の `requestChoice` を返した場合は同一ルールの動的な次段として直列処理する。
 - エンジンはプレイを確定したあと `awaitingChoice` で停止し、`ruleInput` をリプレイ可能な通常アクションとして受け取る。
 - 応答は要求元ルールの同じ `afterPlay` だけへ渡り、ルールは `moveCards` 等の通常 Effect を返す。
@@ -1031,9 +1032,9 @@ export interface Standings {
 export interface RuleHooks {
   modifyLegality(ctx: RuleContext, play: Play, base: Legality): Legality;
   modifyStrength(ctx: RuleContext, base: StrengthOrder): StrengthOrder;
-  afterPlay(ctx: RuleContext, play: Play): Effect[];
+  afterPlay(ctx: RuleContext, play: Play, input?: RuleInput): Effect[];
   afterFieldClear(ctx: RuleContext): Effect[];
-  onGameStart(ctx: RuleContext): Effect[];
+  onGameStart(ctx: RuleContext, input?: RuleInput): Effect[];
   onGameEnd(ctx: RuleContext, standings: Standings): Effect[];
 }
 // 注: RuleChainPort(§2.3)は modifyLegality を候補配列で一括呼び出しするが、

@@ -200,6 +200,15 @@ export function createInProcessRuleChainPort(
                     : undefined,
                 ) ?? [],
               );
+            } else if (hookName === 'onGameStart') {
+              effects = detachedEffectList(
+                hooks.onGameStart?.(
+                  ruleContext,
+                  input?.ruleId === entry.ruleId
+                    ? detachedFrozen(input.value)
+                    : undefined,
+                ) ?? [],
+              );
             } else if (hookName === 'onGameEnd') {
               effects = detachedEffectList(
                 hooks.onGameEnd?.(

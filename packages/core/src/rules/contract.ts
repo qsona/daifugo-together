@@ -115,7 +115,7 @@ export interface RuleHooks {
     input?: DeepReadonly<RuleInput>,
   ): Effect[];
   afterFieldClear(context: RuleContext): Effect[];
-  onGameStart(context: RuleContext): Effect[];
+  onGameStart(context: RuleContext, input?: DeepReadonly<RuleInput>): Effect[];
   onGameEnd(context: RuleContext, standings: DeepReadonly<Standings>): Effect[];
 }
 
@@ -199,7 +199,7 @@ export type ChoiceRequestPayload = CardChoiceRequest | PlayerChoiceRequest;
  * | Effect | afterPlay | afterFieldClear | onGameStart | onGameEnd |
  * | --- | --- | --- | --- | --- |
  * | clearField | yes | no | no | no |
- * | requestChoice (contract v2) | yes | no | no | no |
+ * | requestChoice (contract v2) | yes | no | yes | no |
  * | skipTurns / reverseTurnOrder / forceRank / moveCards | yes | yes | yes | no |
  * | setMemory | yes | yes | yes | set scope only |
  * | announce | yes | yes | yes | yes |

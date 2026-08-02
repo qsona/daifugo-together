@@ -121,7 +121,7 @@ function effectAllowed(hook: EffectHook, effect: Effect): boolean {
     return hook === 'afterPlay';
   }
   if (effect.type === 'requestChoice') {
-    return hook === 'afterPlay';
+    return hook === 'afterPlay' || hook === 'onGameStart';
   }
   return true;
 }

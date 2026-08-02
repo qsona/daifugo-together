@@ -15,7 +15,7 @@ import type {
 } from './types.js';
 import { noRuleRuntime, type RuleRuntime } from '../rules/chain.js';
 import { engineFeaturesOf } from '../rules/contract.js';
-import { executeEffectHook } from '../engine/effects.js';
+import { executeEffectHook, type EffectHookResult } from '../engine/effects.js';
 import { activePlayers, finishGame } from '../engine/standing.js';
 
 function shuffle(cards: readonly Card[], initialRng: RngState) {
@@ -154,6 +154,46 @@ function resolveOpeningTurn(
   throw new Error('Opening skip resolution exceeded the turn safety bound');
 }
 
+export function completeGameStart(
+  config: GameConfig,
+  startedHook: EffectHookResult,
+  runtime: RuleRuntime,
+): GameTransition {
+  let nextState = appendPublicEvents(startedHook.state, startedHook.events);
+  const events: EngineEvent[] = [...startedHook.events];
+  const active = activePlayers(config, nextState);
+  if (active.length <= 1) {
+    const finished = finishGame(config, nextState);
+    const endHook = executeEffectHook(
+      config,
+      finished.state,
+      { ...runtime, setMemory: startedHook.setMemory },
+      'onGameEnd',
+      { standings: finished.event.standings },
+    );
+    events.push(...endHook.events, finished.event);
+    nextState = appendPublicEvents(endHook.state, [
+      ...endHook.events,
+      finished.event,
+    ]);
+    return {
+      state: nextState,
+      events,
+      rejections: [],
+      setMemory: endHook.setMemory,
+    };
+  }
+  const opening = resolveOpeningTurn(config, nextState);
+  nextState = appendPublicEvents(opening.state, opening.events);
+  events.push(...opening.events);
+  return {
+    state: nextState,
+    events,
+    rejections: [],
+    setMemory: startedHook.setMemory,
+  };
+}
+
 export function startGame(
   config: GameConfig,
   runtime: RuleRuntime = noRuleRuntime(),
@@ -212,38 +252,49 @@ export function startGame(
     ),
   };
 
-  const startedHook = executeEffectHook(config, state, runtime, 'onGameStart');
-  let nextState = appendPublicEvents(startedHook.state, startedHook.events);
-  const events: EngineEvent[] = [gameStarted, ...startedHook.events];
-  const active = activePlayers(config, nextState);
-  if (active.length <= 1) {
-    const finished = finishGame(config, nextState);
-    const endHook = executeEffectHook(
+  if (config.ruleChain.some((entry) => entry.contractVersion === 2)) {
+    const preview = executeEffectHook(
       config,
-      finished.state,
-      { ...runtime, setMemory: startedHook.setMemory },
-      'onGameEnd',
-      { standings: finished.event.standings },
+      state,
+      runtime,
+      'onGameStart',
+      undefined,
+      undefined,
+      { previewChoice: true },
     );
-    events.push(...endHook.events, finished.event);
-    nextState = appendPublicEvents(endHook.state, [
-      ...endHook.events,
-      finished.event,
-    ]);
-    return {
-      state: nextState,
-      events,
-      rejections: [],
-      setMemory: endHook.setMemory,
-    };
+    const requests = preview.choiceRequests ?? [];
+    const request = requests[0];
+    if (request) {
+      return {
+        state: {
+          ...state,
+          public: { ...state.public, phase: 'awaitingChoice' },
+          private: {
+            ...state.private,
+            pendingChoice: {
+              ...request,
+              hook: 'onGameStart',
+              continuation: {
+                remainingChoices: requests.filter(
+                  (candidate, index) =>
+                    index > 0 && candidate.ruleId === request.ruleId,
+                ),
+                remainingRuleIds: config.ruleChain
+                  .filter(({ ruleId }) => ruleId !== request.ruleId)
+                  .map(({ ruleId }) => ruleId),
+                clearRequested: false,
+              },
+            },
+          },
+        },
+        events: [gameStarted],
+        rejections: [],
+        setMemory: runtime.setMemory,
+      };
+    }
   }
-  const opening = resolveOpeningTurn(config, nextState);
-  nextState = appendPublicEvents(opening.state, opening.events);
-  events.push(...opening.events);
-  return {
-    state: nextState,
-    events,
-    rejections: [],
-    setMemory: startedHook.setMemory,
-  };
+
+  const startedHook = executeEffectHook(config, state, runtime, 'onGameStart');
+  const completed = completeGameStart(config, startedHook, runtime);
+  return { ...completed, events: [gameStarted, ...completed.events] };
 }

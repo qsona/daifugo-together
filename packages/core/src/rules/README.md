@@ -39,7 +39,7 @@ export const rule: RuleModule = {
 境界/複数枚と `SPEC.json.testPoints` を検証します。
 
 契約 v1 はプレイヤーへの追加入力とパス起点のフックに対応しません。
-契約 v2 は `afterPlay` のカード選択だけを `requestChoice` で追加します。
+契約 v2 は `afterPlay` と `onGameStart` の追加入力を `requestChoice` で追加します。
 パス起点のフック、自由入力、宣言には引き続き対応しません。
 
 ## engineFeatures (エンジン機能の宣言)
@@ -71,7 +71,7 @@ export const rule: RuleModule = {
 | Effect                                                       | `afterPlay` | `afterFieldClear` | `onGameStart` | `onGameEnd` |
 | ------------------------------------------------------------ | ----------- | ----------------- | ------------- | ----------- |
 | `clearField`                                                 | ○           | ×                 | ×             | ×           |
-| `requestChoice` (contract v2)                                | ○           | ×                 | ×             | ×           |
+| `requestChoice` (contract v2)                                | ○           | ×                 | ○             | ×           |
 | `skipTurns` / `reverseTurnOrder` / `forceRank` / `moveCards` | ○           | ○                 | ○             | ×           |
 | `setMemory`                                                  | ○           | ○                 | ○             | set のみ    |
 | `announce`                                                   | ○           | ○                 | ○             | ○           |
@@ -101,13 +101,15 @@ KV はルール・スコープごとに分離し、最大 32 キー、1 値 1KB�
 
 ## contract v2 のカード選択
 
-`requestChoice` は `afterPlay` から、対象プレイヤー自身の残り手札を
+`requestChoice` は `afterPlay` または `onGameStart` から、対象プレイヤー自身の手札を
 選択肢として正確な枚数を選ばせるか、`players` に列挙した候補からプレイヤー1人を
 選ばせます。要求するルールは
 `meta.contractVersion: 2` とし、最初の呼び出しでは `requestChoice` だけを
 返してください。入力待ち中は次の手番へ進みません。
 
-応答後、同じ `afterPlay(context, play, input)` が再び呼ばれます。
+応答後、同じ `afterPlay(context, play, input)` または
+`onGameStart(context, input)` が再び呼ばれます。開始時選択では、応答と
+残りの開始時 Effect が完了するまで最初の手番を開始しません。
 カード選択は `input.kind === 'cards'`、プレイヤー選択は
 `input.kind === 'player'` と `input.playerId` を確認します。`input.choiceId` も確認し、
 `input.cardIds` を `moveCards` の `specific` selector に渡して通常の Effect
