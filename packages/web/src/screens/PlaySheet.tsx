@@ -107,7 +107,6 @@ export function PlaySheet({
           {asksDisplayName && (
             <NameField
               label="なまえ"
-              caption="友だちに見えるなまえ"
               value={displayName}
               onChange={setDisplayName}
             />
