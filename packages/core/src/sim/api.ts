@@ -147,11 +147,11 @@ export function createSimulationApi(
           )}`,
         );
       }
-      const pending = transition.state.private.pendingChoice;
-      if (
-        transition.state.public.phase === 'awaitingChoice' &&
-        pending !== undefined
-      ) {
+      while (transition.state.public.phase === 'awaitingChoice') {
+        const pending = transition.state.private.pendingChoice;
+        if (pending === undefined) {
+          throw new Error('Simulation choice phase has no pending choice');
+        }
         const resumed = reduceGame(
           config,
           transition.state,

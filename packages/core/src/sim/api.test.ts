@@ -28,26 +28,77 @@ const snapshotContext = {
   setResults: [],
 };
 
-function entry(ruleId: string): RuleChainEntry {
+function entry(
+  ruleId: string,
+  contractVersion: 1 | 2 = 1,
+  position = 0,
+): RuleChainEntry {
   return {
     ruleId,
     name: ruleId,
-    position: 0,
+    position,
     priority: {
       score: 0,
       activatedAt: Date.parse('2026-07-26T00:00:00.000Z'),
       ruleId,
     },
     bundleHash: 'fixture',
-    contractVersion: 1,
+    contractVersion,
   };
 }
 
-function runtime(module: RuleModule): RuleRuntime {
+function runtime(module: RuleModule | readonly RuleModule[]): RuleRuntime {
+  const modules = Array.isArray(module) ? module : [module];
   return {
-    port: createInProcessRuleChainPort([module]),
+    port: createInProcessRuleChainPort(modules),
     setHistory: [],
     setMemory: {},
+  };
+}
+
+function choiceModule(ruleId: string, choiceId: string): RuleModule {
+  return {
+    meta: {
+      ruleId,
+      name: ruleId,
+      description: 'move one selected card to discard',
+      kind: 'original',
+      proposalId: 'fixture',
+      contractVersion: 2,
+      messages: { [choiceId]: choiceId },
+    },
+    hooks: {
+      afterPlay: (context, _play, input) => {
+        const player = context.game.field.current?.by;
+        if (!player) return [];
+        if (input?.kind === 'cards' && input.choiceId === choiceId) {
+          return [
+            {
+              type: 'moveCards',
+              from: { kind: 'hand', player },
+              to: { kind: 'discard' },
+              cards: { kind: 'specific', cardIds: [...input.cardIds] },
+            },
+          ];
+        }
+        const hand = context.game.players.find(
+          (candidate) => candidate.id === player,
+        )?.hand;
+        return hand && hand.length > 0
+          ? [
+              {
+                type: 'requestChoice',
+                player,
+                choiceId,
+                from: { kind: 'hand', player },
+                cards: { kind: 'all' },
+                count: 1,
+                messageKey: choiceId,
+              },
+            ]
+          : [];
+      },
+    },
   };
 }
 
@@ -173,6 +224,44 @@ describe('E1 SimulationApi', () => {
         .enumerateLegalPlays(applied.position, nextPlayer)
         .some((play) => play.kind === 'single'),
     ).toBe(false);
+  });
+
+  it('同じプレイで複数ルールが要求したchoiceをすべて直列に自動解決する', () => {
+    const firstEntry = entry('r1002-first-choice', 2, 0);
+    const secondEntry = entry('r1003-second-choice', 2, 1);
+    const modules = [
+      choiceModule(firstEntry.ruleId, 'first_choice'),
+      choiceModule(secondEntry.ruleId, 'second_choice'),
+    ];
+    const ruleConfig = {
+      ...config,
+      ruleChain: [firstEntry, secondEntry],
+    };
+    const ruleRuntime = runtime(modules);
+    const state = startGame(ruleConfig, ruleRuntime).state;
+    const player = state.public.turn!;
+    const api = createSimulationApi({
+      config: ruleConfig,
+      snapshotContext,
+      runtime: ruleRuntime,
+    });
+    const position = api.createPosition(state);
+    const handCount = state.players[player]!.hand.length;
+    const fallback = api.fallbackPlay(position, player);
+    if (fallback.type !== 'play') {
+      throw new Error('Lead fallback must play');
+    }
+
+    const applied = api.applyPlay(position, fallback);
+
+    expect(applied.position.state.public.phase).toBe('awaitingPlay');
+    expect(applied.position.state.private.pendingChoice).toBeUndefined();
+    expect(applied.position.state.players[player]!.hand).toHaveLength(
+      handCount - fallback.cards.length - 2,
+    );
+    expect(
+      applied.events.filter((event) => event.type === 'cardsMoved'),
+    ).toHaveLength(2);
   });
 
   it('リードで単騎が禁止されても合法な組をfallbackとして返す', () => {
