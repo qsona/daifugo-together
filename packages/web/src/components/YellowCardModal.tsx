@@ -51,7 +51,8 @@ export function YellowCardModal({
         }
         actions={
           <Button variant="primary" onClick={onClose}>
-            提案画面にもどる
+            {/* 停止中は提案画面に使えるものが無く、閉じるとメニューへ戻る。 */}
+            {info.suspension ? 'メニューにもどる' : '提案画面にもどる'}
           </Button>
         }
       >

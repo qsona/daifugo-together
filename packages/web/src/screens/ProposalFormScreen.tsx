@@ -491,9 +491,7 @@ export function ProposalFormScreen({
                 }
               : undefined
           }
-          onClose={
-            animateSuspension ? () => setAnimateSuspension(false) : onBack
-          }
+          onClose={onBack}
         />
       )}
       {pushOfferKind && pushOffer && (
