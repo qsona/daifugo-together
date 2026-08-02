@@ -212,6 +212,21 @@ describe('ラッキー7', () => {
     expect(effects).toEqual([]);
   });
 
+  it('別のchoiceIdへの応答ではカードを捨てない', () => {
+    const currentPlay = play([card('S07', '7'), card('H07', '7')]);
+    const effects = afterPlay(
+      context(currentPlay, [card('S03', '3'), card('S04', '4')]),
+      currentPlay,
+      {
+        kind: 'cards',
+        choiceId: 'other_choice',
+        cardIds: ['S03', 'S04'],
+      },
+    );
+
+    expect(effects).toEqual([]);
+  });
+
   it('選択を省略した呼び出しではmoveCardsせず必ずrequestChoiceを返す', () => {
     const currentPlay = play([card('S07', '7'), card('H07', '7')]);
     expect(
