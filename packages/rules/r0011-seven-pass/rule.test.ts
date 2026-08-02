@@ -200,6 +200,24 @@ describe('7渡し', () => {
     ]);
   });
 
+  it('7から10の階段では10捨てと同時発動しても自然な7の1枚分を要求する', () => {
+    const currentPlay: Play = {
+      kind: 'sequence',
+      cards: [
+        card('S07', '7'),
+        card('S08', '8'),
+        card('S09', '9'),
+        card('S10', '10'),
+      ],
+      count: 4,
+      repRank: '10',
+    };
+
+    expect(afterPlay(context({ currentPlay }), currentPlay)).toMatchObject([
+      { type: 'requestChoice', count: 1 },
+    ]);
+  });
+
   it('残り手札が7の枚数より少ない場合は残り手札をすべて要求する', () => {
     const currentPlay = play([card('S07', '7'), card('H07', '7')]);
     expect(
