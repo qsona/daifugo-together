@@ -77,4 +77,19 @@ describe('RuleDetailModal', () => {
 
     expect(screen.getByText('場が流れる')).toBeTruthy();
   });
+
+  it('閉じるボタンの戻り先をルール一覧と伝える', () => {
+    render(
+      <RuleDetailModal
+        api={{ list: vi.fn(), get: vi.fn(async () => ITEM) }}
+        ruleId="r0001-eight-cut"
+        name="8切り"
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole('button', { name: 'ルール一覧に戻る' }),
+    ).toBeTruthy();
+  });
 });

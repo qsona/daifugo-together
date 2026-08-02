@@ -1556,6 +1556,11 @@ function ConnectedApp({
     navigate(roomPath(room), 'replace');
     setRoomOverlay(null);
   };
+  const backToRules = () => {
+    if (!room) return;
+    navigate(roomPath(room, 'activeRules'), 'replace');
+    setRoomOverlay({ kind: 'activeRules', ruleId: null });
+  };
   const cancelLeave = () => {
     setLeaveConfirm(null);
     setLeaveError(null);
@@ -1609,7 +1614,7 @@ function ConnectedApp({
           lastActivation.effectLabel
             ? { effectLabel: lastActivation.effectLabel }
             : {})}
-          onClose={closeRules}
+          onClose={backToRules}
         />
       ) : (
         <ActiveRulesModal

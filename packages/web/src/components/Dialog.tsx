@@ -16,6 +16,8 @@ type DialogProps = {
   disableAnimation?: boolean;
   /** 閉じられるモーダルにする。渡すと閉じるボタン・スクリム・Esc が効く。 */
   onClose?: () => void;
+  /** 閉じるボタンが戻る導線の場合に、移動先を伝える。 */
+  closeLabel?: string;
   /** 一覧のように縦に伸びる中身は wide にする。 */
   size?: 'compact' | 'wide';
   align?: 'center' | 'start';
@@ -28,6 +30,7 @@ export function Dialog({
   actions,
   disableAnimation = false,
   onClose,
+  closeLabel = '閉じる',
   size = 'compact',
   align = 'center',
 }: DialogProps) {
@@ -68,7 +71,7 @@ export function Dialog({
           <button
             type="button"
             className={styles.close}
-            aria-label="閉じる"
+            aria-label={closeLabel}
             onClick={onClose}
           >
             ×

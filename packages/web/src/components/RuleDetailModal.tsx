@@ -47,7 +47,12 @@ export function RuleDetailModal({
   }, [api, attempt, ruleId]);
 
   return (
-    <Dialog title={name} align="start" onClose={onClose}>
+    <Dialog
+      title={name}
+      align="start"
+      onClose={onClose}
+      closeLabel="ルール一覧に戻る"
+    >
       {effectLabel && <p className={styles.effect}>{effectLabel}</p>}
       {rule?.description && (
         <p className={styles.description}>{rule.description}</p>

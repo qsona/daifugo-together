@@ -1019,6 +1019,25 @@ describe('E11: ルール閲覧の実App導線', () => {
     expect(screen.getByRole('region', { name: '卓' })).toBeTruthy();
   });
 
+  it('詳細のバツで対局画面まで閉じずルール一覧へ戻る', async () => {
+    const user = userEvent.setup();
+    const room = {
+      ...tutorialHintRoom('community', []),
+      activeRules: [{ ruleId: 'r0001-eight-cut', name: '8切り' }],
+    };
+    render(<App client={tutorialHintClient(room)} />);
+
+    await user.click(screen.getByRole('button', { name: /有効ルール/u }));
+    await user.click(screen.getByRole('button', { name: '8切り' }));
+    await user.click(screen.getByRole('button', { name: 'ルール一覧に戻る' }));
+
+    expect(
+      screen.getByRole('heading', { name: 'この対局のルール' }),
+    ).toBeTruthy();
+    expect(window.location.pathname).toBe('/rooms/tutorial-room/rules');
+    expect(screen.getByRole('region', { name: '卓' })).toBeTruthy();
+  });
+
   it('部屋が閉じたら卓内オーバーレイを破棄する', async () => {
     const user = userEvent.setup();
     const observable = observableTutorialClient({
