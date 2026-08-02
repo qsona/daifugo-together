@@ -695,9 +695,14 @@ function reducePlay(
               ...request,
               play: interpretedPlay,
               strength: evaluated.strength,
+              playedBy: action.player,
               ...(requests.length > 1
                 ? {
                     continuation: {
+                      remainingChoices: requests.filter(
+                        (candidate, index) =>
+                          index > 0 && candidate.ruleId === request.ruleId,
+                      ),
                       remainingRuleIds: config.ruleChain
                         .filter(({ ruleId }) => ruleId !== request.ruleId)
                         .map(({ ruleId }) => ruleId),
@@ -773,6 +778,8 @@ function reduceRuleInput(
     },
     private: privateState,
   };
+  const playedBy =
+    pending.playedBy ?? state.public.field.current?.by ?? action.player;
   if (pending.continuation) {
     const currentConfig: GameConfig = {
       ...config,
@@ -808,6 +815,46 @@ function reduceRuleInput(
       ...runtime,
       setMemory: currentEffects.setMemory,
     };
+    const nextSameRuleChoice = pending.continuation.remainingChoices?.[0];
+    const clearRequested =
+      pending.continuation.clearRequested || currentEffects.clearRequested;
+    if (nextSameRuleChoice) {
+      const withEvents = appendEvents(
+        currentEffects.state,
+        currentEffects.events,
+      );
+      return {
+        state: {
+          ...withEvents,
+          public: {
+            ...withEvents.public,
+            phase: 'awaitingChoice',
+          },
+          private: {
+            ...withEvents.private,
+            pendingChoice: {
+              ...nextSameRuleChoice,
+              play: pending.play,
+              strength: pending.strength,
+              playedBy,
+              continuation: {
+                ...(pending.continuation.remainingChoices
+                  ? {
+                      remainingChoices:
+                        pending.continuation.remainingChoices.slice(1),
+                    }
+                  : {}),
+                remainingRuleIds: pending.continuation.remainingRuleIds,
+                clearRequested,
+              },
+            },
+          },
+        },
+        events: currentEffects.events,
+        rejections: [],
+        setMemory: currentEffects.setMemory,
+      };
+    }
     const preview = executeEffectHook(
       remainingConfig,
       currentEffects.state,
@@ -818,8 +865,6 @@ function reduceRuleInput(
       { previewChoice: true },
     );
     const nextRequest = preview.choiceRequests?.[0];
-    const clearRequested =
-      pending.continuation.clearRequested || currentEffects.clearRequested;
     if (nextRequest) {
       const withEvents = appendEvents(
         currentEffects.state,
@@ -838,7 +883,12 @@ function reduceRuleInput(
               ...nextRequest,
               play: pending.play,
               strength: pending.strength,
+              playedBy,
               continuation: {
+                remainingChoices: (preview.choiceRequests ?? []).filter(
+                  (candidate, index) =>
+                    index > 0 && candidate.ruleId === nextRequest.ruleId,
+                ),
                 remainingRuleIds: pending.continuation.remainingRuleIds.filter(
                   (ruleId) => ruleId !== nextRequest.ruleId,
                 ),
@@ -863,7 +913,7 @@ function reduceRuleInput(
     return completeAfterPlay(
       config,
       remainingEffects.state,
-      action.player,
+      playedBy,
       [...currentEffects.events, ...remainingEffects.events],
       {
         ...remainingEffects,
@@ -893,7 +943,7 @@ function reduceRuleInput(
   return completeAfterPlay(
     config,
     effects.state,
-    action.player,
+    playedBy,
     effects.events,
     effects,
     runtime,

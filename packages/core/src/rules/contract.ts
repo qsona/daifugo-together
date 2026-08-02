@@ -175,6 +175,15 @@ export interface RuleInput {
   cardIds: CardId[];
 }
 
+export interface CardChoiceRequest {
+  player: PlayerId;
+  choiceId: string;
+  from: Extract<Zone, { kind: 'hand' }>;
+  cards: CardSelector;
+  count: number;
+  messageKey: string;
+}
+
 /**
  * Declarative state changes accepted from contract v1 rules.
  *
@@ -197,15 +206,10 @@ export interface RuleInput {
  */
 export type Effect =
   | { type: 'clearField' }
-  | {
+  | ({
       type: 'requestChoice';
-      player: PlayerId;
-      choiceId: string;
-      from: Extract<Zone, { kind: 'hand' }>;
-      cards: CardSelector;
-      count: number;
-      messageKey: string;
-    }
+      additionalChoices?: CardChoiceRequest[];
+    } & CardChoiceRequest)
   | { type: 'skipTurns'; player: PlayerId; count: number }
   | { type: 'reverseTurnOrder' }
   | {

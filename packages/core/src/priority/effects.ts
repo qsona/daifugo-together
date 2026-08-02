@@ -17,6 +17,13 @@ export interface EffectEmission {
   effectIndex: number;
   effect: Effect;
   resolvedCards?: CardId[];
+  resolvedChoices?: {
+    player: string;
+    choiceId: string;
+    messageKey: string;
+    optionCardIds: CardId[];
+    count: number;
+  }[];
 }
 
 export interface ResolvedEffect extends EffectEmission {

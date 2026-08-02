@@ -50,13 +50,17 @@ The exported `rule.meta` must be deeply equal to `meta.json`.
 
 For a contract v2 SPEC using `requestChoice`, copy `contractVersion: 2`
 exactly from `meta.json`. The initial `afterPlay` call must return only one
-`requestChoice`. When the optional third `input` argument contains the matching
+`requestChoice` Effect. To request fixed choices from multiple players, put the
+remaining per-player requests in its optional `additionalChoices`; every
+request must target that player's own hand and use a unique player and
+`choiceId`. When the optional third `input` argument contains the matching
 card choice, return the approved ordinary Effects (for example `moveCards`
 with a `specific` selector) instead of requesting another choice. Do not add
 rule-local pending state or implement input handling outside this contract.
 Independent `requestChoice` Effects from different enabled rules are serialized
-by the engine in rule-priority order; each rule still requests at most one
-choice and must compute its count from the current hand in its preflight call.
+by the engine in rule-priority order. All `additionalChoices` for the current
+rule complete first, then the next rule recomputes its request from the current
+hand. A choice response cannot dynamically request another choice.
 
 Before finishing, run these commands from the prepared repository workspace and
 fix any failure:

@@ -147,8 +147,17 @@ export interface PrivateGameState {
     count: number;
     play: Play;
     strength: StrengthOrder;
+    playedBy?: PlayerId;
     continuation?: {
       remainingRuleIds: RuleId[];
+      remainingChoices?: {
+        ruleId: RuleId;
+        player: PlayerId;
+        choiceId: string;
+        messageKey: string;
+        optionCardIds: CardId[];
+        count: number;
+      }[];
       clearRequested: boolean;
     };
   };

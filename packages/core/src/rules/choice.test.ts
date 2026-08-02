@@ -195,6 +195,56 @@ const secondChoiceRule: RuleModule = {
   },
 };
 
+const multiPlayerChoiceRule: RuleModule = {
+  meta: {
+    ruleId: 'r-choice-multi',
+    name: 'multi-player choice fixture',
+    description: 'contract v2 multi-player choice fixture',
+    kind: 'original',
+    proposalId: 'choice-fixture-multi',
+    contractVersion: 2,
+    messages: {
+      choose_multi: '自分のカードを選んでください',
+    },
+  },
+  hooks: {
+    afterPlay(context, play, input) {
+      if (input?.kind === 'cards') {
+        const player = input.choiceId.replace('discard_', '');
+        return [
+          {
+            type: 'moveCards',
+            from: { kind: 'hand', player },
+            to: { kind: 'discard' },
+            cards: { kind: 'specific', cardIds: [...input.cardIds] },
+          },
+        ];
+      }
+      if (
+        !play.cards.some(
+          (played) => played.kind === 'natural' && played.rank === '10',
+        )
+      ) {
+        return [];
+      }
+      const choices = context.game.players
+        .filter(({ hand }) => hand.length > 0)
+        .map(({ id }) => ({
+          player: id,
+          choiceId: `discard_${id}`,
+          from: { kind: 'hand' as const, player: id },
+          cards: { kind: 'all' as const },
+          count: 1,
+          messageKey: 'choose_multi',
+        }));
+      const [first, ...additionalChoices] = choices;
+      return first
+        ? [{ type: 'requestChoice', ...first, additionalChoices }]
+        : [];
+    },
+  },
+};
+
 describe('contract v2 rule choices', () => {
   it('プレイを確定して追加入力を待ち、応答後に同じafterPlayを完了する', () => {
     const { config, state, runtime } = fixture(choiceRule);
@@ -387,5 +437,63 @@ describe('contract v2 rule choices', () => {
         (event) => event.type === 'ruleFired',
       ),
     ).toHaveLength(2);
+  });
+
+  it('1ルールで全プレイヤー自身の手札選択を直列化し、完了まで手番を進めない', () => {
+    const { config, state, runtime } = fixture(multiPlayerChoiceRule);
+    state.players.p2?.hand.push(card('H05'));
+    state.players.p3?.hand.push(card('H06'));
+    state.players.p4?.hand.push(card('H07'));
+
+    let transition = reduceGame(
+      config,
+      state,
+      { type: 'play', player: 'p1', cards: ['S10'] },
+      runtime,
+    );
+
+    expect(transition.state.private.pendingChoice).toMatchObject({
+      player: 'p1',
+      choiceId: 'discard_p1',
+      optionCardIds: ['H03', 'H04'],
+    });
+
+    const responses = [
+      ['p1', 'discard_p1', 'H03'],
+      ['p2', 'discard_p2', 'S05'],
+      ['p3', 'discard_p3', 'S06'],
+      ['p4', 'discard_p4', 'S07'],
+    ] as const;
+    for (const [player, choiceId, selected] of responses) {
+      transition = reduceGame(
+        config,
+        transition.state,
+        { type: 'ruleInput', player, choiceId, cardIds: [selected] },
+        { ...runtime, setMemory: transition.setMemory ?? {} },
+      );
+      expect(transition.rejections).toEqual([]);
+      if (player !== 'p4') {
+        expect(transition.state.public.phase).toBe('awaitingChoice');
+        expect(
+          transition.events.some(({ type }) => type === 'turnChanged'),
+        ).toBe(false);
+      }
+    }
+
+    expect(transition.state.public.phase).toBe('awaitingPlay');
+    expect(transition.state.public.turn).toBe('p2');
+    expect(transition.state.private.pendingChoice).toBeUndefined();
+    expect(transition.state.public.discard.map(({ id }) => id)).toEqual([
+      'H03',
+      'S05',
+      'S06',
+      'S07',
+    ]);
+    expect(transition.state.players.p1?.hand.map(({ id }) => id)).toEqual([
+      'H04',
+    ]);
+    expect(transition.state.players.p2?.hand.map(({ id }) => id)).toEqual([
+      'H05',
+    ]);
   });
 });

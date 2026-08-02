@@ -27,6 +27,7 @@ import {
   prepareRuleInvocation,
 } from '../rules/context.js';
 import type {
+  CardChoiceRequest,
   CardSelector,
   Effect,
   RuleInput,
@@ -553,6 +554,53 @@ function selectorValid(value: unknown): boolean {
   }
 }
 
+function cardChoiceRequestValid(value: unknown): value is CardChoiceRequest {
+  return (
+    isRecord(value) &&
+    hasExactKeys(value, [
+      'player',
+      'choiceId',
+      'from',
+      'cards',
+      'count',
+      'messageKey',
+    ]) &&
+    typeof value.player === 'string' &&
+    typeof value.choiceId === 'string' &&
+    /^[a-z][a-z0-9_]{0,63}$/u.test(value.choiceId) &&
+    isRecord(value.from) &&
+    value.from.kind === 'hand' &&
+    value.from.player === value.player &&
+    zoneValid(value.from) &&
+    selectorValid(value.cards) &&
+    isRecord(value.cards) &&
+    value.cards.kind !== 'random' &&
+    typeof value.count === 'number' &&
+    Number.isInteger(value.count) &&
+    value.count >= 1 &&
+    value.count <= 14 &&
+    typeof value.messageKey === 'string' &&
+    /^[a-z][a-z0-9_.-]{0,63}$/u.test(value.messageKey)
+  );
+}
+
+function additionalChoiceRequestsValid(
+  primary: { player: string; choiceId: string },
+  value: unknown,
+): boolean {
+  return (
+    value === undefined ||
+    (Array.isArray(value) &&
+      value.length <= 3 &&
+      value.every(cardChoiceRequestValid) &&
+      new Set([primary.player, ...value.map(({ player }) => player)]).size ===
+        value.length + 1 &&
+      new Set([primary.choiceId, ...value.map(({ choiceId }) => choiceId)])
+        .size ===
+        value.length + 1)
+  );
+}
+
 function effectPayloadValid(effect: unknown): effect is Effect {
   try {
     if (
@@ -568,31 +616,34 @@ function effectPayloadValid(effect: unknown): effect is Effect {
         return hasExactKeys(effect, ['type']);
       case 'requestChoice':
         return (
-          hasExactKeys(effect, [
-            'type',
-            'player',
-            'choiceId',
-            'from',
-            'cards',
-            'count',
-            'messageKey',
-          ]) &&
-          typeof effect.player === 'string' &&
-          typeof effect.choiceId === 'string' &&
-          /^[a-z][a-z0-9_]{0,63}$/u.test(effect.choiceId) &&
-          isRecord(effect.from) &&
-          effect.from.kind === 'hand' &&
-          effect.from.player === effect.player &&
-          zoneValid(effect.from) &&
-          selectorValid(effect.cards) &&
-          isRecord(effect.cards) &&
-          effect.cards.kind !== 'random' &&
-          typeof effect.count === 'number' &&
-          Number.isInteger(effect.count) &&
-          effect.count >= 1 &&
-          effect.count <= 14 &&
-          typeof effect.messageKey === 'string' &&
-          /^[a-z][a-z0-9_.-]{0,63}$/u.test(effect.messageKey)
+          hasExactKeys(
+            effect,
+            [
+              'type',
+              'player',
+              'choiceId',
+              'from',
+              'cards',
+              'count',
+              'messageKey',
+            ],
+            ['additionalChoices'],
+          ) &&
+          cardChoiceRequestValid({
+            player: effect.player,
+            choiceId: effect.choiceId,
+            from: effect.from,
+            cards: effect.cards,
+            count: effect.count,
+            messageKey: effect.messageKey,
+          }) &&
+          additionalChoiceRequestsValid(
+            {
+              player: effect.player as string,
+              choiceId: effect.choiceId as string,
+            },
+            effect.additionalChoices,
+          )
         );
       case 'skipTurns':
         return (
@@ -665,7 +716,6 @@ type InvalidEffectReason =
   | 'hook-not-allowed'
   | 'contract-version'
   | 'choice-request-must-be-alone'
-  | 'choice-player-not-actor'
   | 'unexpected-choice-request'
   | 'insufficient-choice-options';
 
@@ -807,6 +857,25 @@ export function executeEffectHook(
                 ),
               }
             : {}),
+          ...(valid && effect.type === 'requestChoice'
+            ? {
+                resolvedChoices: [
+                  effect,
+                  ...(effect.additionalChoices ?? []),
+                ].map((request) => ({
+                  player: request.player,
+                  choiceId: request.choiceId,
+                  messageKey: request.messageKey,
+                  optionCardIds: resolveCardSelector(
+                    invocation.state,
+                    request.from,
+                    request.cards,
+                    contextForRule(context, ruleId).rng,
+                  ),
+                  count: request.count,
+                })),
+              }
+            : {}),
         };
         const reason: InvalidEffectReason | null =
           effectIndex >= 8
@@ -820,19 +889,18 @@ export function executeEffectHook(
                     collectedEffects.length !== 1
                   ? 'choice-request-must-be-alone'
                   : effect.type === 'requestChoice' &&
-                      effect.player !==
-                        invocation.state.public.field.current?.by
-                    ? 'choice-player-not-actor'
+                      (options.previewChoice !== true ||
+                        options.input !== undefined)
+                    ? 'unexpected-choice-request'
                     : effect.type === 'requestChoice' &&
-                        (options.previewChoice !== true ||
-                          options.input !== undefined)
-                      ? 'unexpected-choice-request'
-                      : effect.type === 'requestChoice' &&
-                          (emission.resolvedCards?.length ?? 0) < effect.count
-                        ? 'insufficient-choice-options'
-                        : !effectAllowed(hook, effect)
-                          ? 'hook-not-allowed'
-                          : null;
+                        (emission.resolvedChoices ?? []).some(
+                          (request) =>
+                            request.optionCardIds.length < request.count,
+                        )
+                      ? 'insufficient-choice-options'
+                      : !effectAllowed(hook, effect)
+                        ? 'hook-not-allowed'
+                        : null;
         if (reason) {
           invalid.push({ emission, reason });
         } else {
@@ -846,16 +914,10 @@ export function executeEffectHook(
     const choiceRequests = batch.applyOrder.flatMap((index) => {
       const entry = batch.entries[index];
       return entry?.effect.type === 'requestChoice'
-        ? [
-            {
-              ruleId: entry.ruleId,
-              player: entry.effect.player,
-              choiceId: entry.effect.choiceId,
-              messageKey: entry.effect.messageKey,
-              optionCardIds: entry.resolvedCards ?? [],
-              count: entry.effect.count,
-            },
-          ]
+        ? (entry.resolvedChoices ?? []).map((request) => ({
+            ruleId: entry.ruleId,
+            ...request,
+          }))
         : [];
     });
     return {
