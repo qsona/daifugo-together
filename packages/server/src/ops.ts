@@ -7,6 +7,13 @@ import {
   parseSince,
 } from './operations/cli.js';
 
+const DAY_MS = 24 * 60 * 60 * 1_000;
+const JST_OFFSET_MS = 9 * 60 * 60 * 1_000;
+
+function startOfJstDay(now: number): number {
+  return Math.floor((now + JST_OFFSET_MS) / DAY_MS) * DAY_MS - JST_OFFSET_MS;
+}
+
 function option(name: string): string | null {
   return optionValue(process.argv, name);
 }
@@ -57,6 +64,34 @@ try {
     }
     process.stdout.write(
       `${JSON.stringify(persistence.operations.metrics(since, now))}\n`,
+    );
+  } else if (command === 'activity') {
+    const now = Date.now();
+    const since = parseSince(option('--since'), now);
+    if (!Number.isSafeInteger(since) || since < 0 || since >= now) {
+      throw new Error('--since must be an ISO date before now');
+    }
+    process.stdout.write(
+      `${JSON.stringify(persistence.operations.activity(since, now))}\n`,
+    );
+  } else if (command === 'dashboard') {
+    const now = Date.now();
+    const today = startOfJstDay(now);
+    process.stdout.write(
+      `${JSON.stringify({
+        generatedAt: now,
+        windows: {
+          last30m: persistence.operations.activity(now - 30 * 60 * 1_000, now),
+          last3h: persistence.operations.activity(
+            now - 3 * 60 * 60 * 1_000,
+            now,
+          ),
+          today: persistence.operations.activity(today, now),
+        },
+        rules: persistence.operations.metrics(today, now).rules,
+        funnel: persistence.operations.funnel(today, now),
+        queue: persistence.operations.status(now).queue,
+      })}\n`,
     );
   } else if (command === 'settings') {
     if (process.argv[3] !== 'set') {
@@ -125,7 +160,7 @@ try {
     );
   } else {
     throw new Error(
-      'command must be status, budget, funnel, metrics, settings, rule, popularity, list-appeals, revoke-card, or reject-appeal',
+      'command must be status, budget, funnel, metrics, activity, dashboard, settings, rule, popularity, list-appeals, revoke-card, or reject-appeal',
     );
   }
 } finally {

@@ -16,6 +16,22 @@ DATABASE_PATH=/data/daifugo.sqlite node packages/server/dist/ops.js metrics --si
 DATABASE_PATH=/absolute/path/to/daifugo.sqlite pnpm ops metrics --since 2026-07-01
 ```
 
+## ローカル運用ダッシュボード
+
+Fly.ioへログイン済みの開発端末で、次を実行する。
+
+```bash
+pnpm ops:dashboard
+```
+
+`http://127.0.0.1:4173` が開き、直近30分・3時間・当日(JST)の接続回数、新規ユーザー、開始/完走卓、ゲーム数、評価、提案、稼働ルールを表示する。約60秒ごとに更新し、45秒以内の再読込にはキャッシュを使う。Fly.ioの認証トークンはローカルNodeプロセスだけが取得し、ブラウザへ渡さない。サーバーも`127.0.0.1`だけでlistenする。
+
+- 接続回数はFly ProxyのHTTP 101レスポンス数であり、再接続を含む。ユニークユーザー数ではない。
+- 新規ユーザーは期間内に初めて作成されたユーザー記録であり、既存ユーザーの再訪は含まない。
+- HTTP件数は静的ファイルとAPI通信を含むため、PVとして扱わない。
+- 自動でブラウザを開かない場合は`pnpm ops:dashboard -- --no-open`を使う。
+- ポートを変える場合は`OPS_DASHBOARD_PORT=4174 pnpm ops:dashboard`を使う。
+
 ## 週次観測
 
 1. 過去30日と直近7日の `metrics` を保存する。日付だけの `--since` は JST 00:00 として扱われる。

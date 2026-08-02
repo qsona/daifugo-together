@@ -130,6 +130,19 @@ export interface OperationsMetrics {
   partialSets: number;
 }
 
+export interface OperationsActivity {
+  cohort: { since: number; until: number };
+  newUsers: number;
+  setsStarted: number;
+  completedSets: number;
+  partialSets: number;
+  ongoingSets: number;
+  gamesPlayed: number;
+  actionSets: number;
+  actions: number;
+  evaluations: number;
+}
+
 function zeroRecord<const T extends readonly string[]>(
   keys: T,
 ): Record<T[number], number> {
@@ -169,6 +182,84 @@ export class OperationsRepository {
 
   constructor(sqlite: Database.Database) {
     this.#sqlite = sqlite;
+  }
+
+  activity(since: number, until = Date.now()): OperationsActivity {
+    if (
+      !Number.isSafeInteger(since) ||
+      !Number.isSafeInteger(until) ||
+      since < 0 ||
+      until <= since
+    ) {
+      throw new Error('activity requires a valid [since, until) range');
+    }
+    const row = this.#sqlite
+      .prepare(
+        `SELECT
+           (SELECT COUNT(*) FROM users
+             WHERE created_at >= ? AND created_at < ?) AS new_users,
+           (SELECT COUNT(*) FROM game_sets
+             WHERE started_at >= ? AND started_at < ?) AS sets_started,
+           (SELECT COUNT(*) FROM game_sets
+             WHERE ended_at >= ? AND ended_at < ? AND games_played >= 3)
+             AS completed_sets,
+           (SELECT COUNT(*) FROM game_sets
+             WHERE ended_at >= ? AND ended_at < ? AND games_played < 3)
+             AS partial_sets,
+           (SELECT COUNT(*) FROM game_sets
+             WHERE started_at >= ? AND started_at < ? AND ended_at IS NULL)
+             AS ongoing_sets,
+           (SELECT COALESCE(SUM(games_played), 0) FROM game_sets
+             WHERE ended_at >= ? AND ended_at < ?) AS games_played,
+           (SELECT COUNT(DISTINCT set_id) FROM replay_records
+             WHERE created_at >= ? AND created_at < ?) AS action_sets,
+           (SELECT COUNT(*) FROM replay_records
+             WHERE created_at >= ? AND created_at < ?) AS actions,
+           (SELECT COUNT(*) FROM set_evaluations
+             WHERE created_at >= ? AND created_at < ?) AS evaluations`,
+      )
+      .get(
+        since,
+        until,
+        since,
+        until,
+        since,
+        until,
+        since,
+        until,
+        since,
+        until,
+        since,
+        until,
+        since,
+        until,
+        since,
+        until,
+        since,
+        until,
+      ) as {
+      new_users: number;
+      sets_started: number;
+      completed_sets: number;
+      partial_sets: number;
+      ongoing_sets: number;
+      games_played: number;
+      action_sets: number;
+      actions: number;
+      evaluations: number;
+    };
+    return {
+      cohort: { since, until },
+      newUsers: row.new_users,
+      setsStarted: row.sets_started,
+      completedSets: row.completed_sets,
+      partialSets: row.partial_sets,
+      ongoingSets: row.ongoing_sets,
+      gamesPlayed: row.games_played,
+      actionSets: row.action_sets,
+      actions: row.actions,
+      evaluations: row.evaluations,
+    };
   }
 
   status(

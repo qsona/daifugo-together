@@ -647,4 +647,53 @@ describe('OperationsRepository', () => {
       partialSets: 1,
     });
   });
+
+  test('期間内の接続と対局活動をダッシュボード向けに集計する', () => {
+    const { persistence, raw } = fixture();
+    raw
+      .prepare(
+        `INSERT INTO users(user_id, user_token, display_name, created_at)
+         VALUES ('activity-user', 'token-activity-00000001', '来訪者', 2_000)`,
+      )
+      .run();
+    const insertSet = raw.prepare(
+      `INSERT INTO game_sets (
+         id, room_id, started_at, ended_at, games_played, completion, standings
+       ) VALUES (?, 'room-1', ?, ?, ?, ?, ?)`,
+    );
+    insertSet.run('completed-set', 2_100, 3_000, 3, 'completed', '[]');
+    insertSet.run('partial-set', 3_100, 3_500, 1, 'drained', '[]');
+    insertSet.run('ongoing-set', 3_600, null, 0, null, null);
+    const insertReplay = raw.prepare(
+      `INSERT INTO replay_records(set_id, seq, record_json, created_at)
+       VALUES (?, ?, '{}', ?)`,
+    );
+    insertReplay.run('completed-set', -1, 2_100);
+    insertReplay.run('completed-set', 0, 2_200);
+    insertReplay.run('ongoing-set', -1, 3_600);
+    raw
+      .prepare(
+        `INSERT INTO set_evaluations (
+           id, set_id, user_id, rating, created_at, updated_at
+         ) VALUES ('activity-evaluation', 'completed-set', 'activity-user',
+                   'fun', 3_200, 3_200)`,
+      )
+      .run();
+
+    expect(persistence.operations.activity(1_500, 4_000)).toEqual({
+      cohort: { since: 1_500, until: 4_000 },
+      newUsers: 1,
+      setsStarted: 3,
+      completedSets: 1,
+      partialSets: 1,
+      ongoingSets: 1,
+      gamesPlayed: 4,
+      actionSets: 2,
+      actions: 3,
+      evaluations: 1,
+    });
+    expect(() => persistence.operations.activity(4_000, 4_000)).toThrow(
+      'activity requires a valid [since, until) range',
+    );
+  });
 });
