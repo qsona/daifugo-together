@@ -43,19 +43,22 @@ export function InviteCode({ code, inviteUrl }: InviteCodeProps) {
         {code}
       </span>
 
-      <figure className={styles.qr}>
-        <QRCodeSVG
-          aria-label="友だちが参加するためのQRコード"
-          className={styles.qrCode}
-          level="M"
-          marginSize={4}
-          role="img"
-          size={200}
-          title="友だちが参加するためのQRコード"
-          value={inviteUrl}
-        />
-        <figcaption>スマホのカメラで読み取って参加</figcaption>
-      </figure>
+      <details className={styles.qrDisclosure}>
+        <summary>QRコードを表示</summary>
+        <figure className={styles.qr}>
+          <QRCodeSVG
+            aria-label="友だちが参加するためのQRコード"
+            className={styles.qrCode}
+            level="M"
+            marginSize={4}
+            role="img"
+            size={200}
+            title="友だちが参加するためのQRコード"
+            value={inviteUrl}
+          />
+          <figcaption>スマホのカメラで読み取って参加</figcaption>
+        </figure>
+      </details>
       <Button block onClick={() => void share()}>
         {canShare ? '📤 リンクを共有する' : 'リンクをコピー'}
       </Button>

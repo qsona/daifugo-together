@@ -35,6 +35,8 @@ describe('InviteCode', () => {
 
     expect(screen.queryByLabelText('招待リンク')).toBeNull();
     expect(screen.getByText('部屋コード')).toBeTruthy();
+
+    fireEvent.click(screen.getByText('QRコードを表示'));
     expect(
       screen.getByRole('img', {
         name: '友だちが参加するためのQRコード',
