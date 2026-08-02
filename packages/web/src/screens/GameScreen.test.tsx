@@ -107,7 +107,7 @@ describe('T1: あがりの認知', () => {
 describe('contract v2 choice UI', () => {
   afterEach(cleanup);
 
-  it('入力待ちでは選択枚数を案内し、パスを無効にして捨てる操作を表示する', () => {
+  it('入力待ちでは発動中のルールと選択枚数を案内し、パスを無効にする', () => {
     render(
       <GameScreen
         gameLabel="第1戦"
@@ -122,8 +122,9 @@ describe('contract v2 choice UI', () => {
         isMyTurn
         canPlay={false}
         canPass={false}
-        playLabel="えらんだ2枚を捨てる"
-        actionPrompt="10捨て: カードを2枚選んでください"
+        playLabel="10捨てで2枚捨てる"
+        actionRuleName="10捨て"
+        actionPrompt="カードを2枚選んでください"
         onViewRules={() => undefined}
         onQuit={() => undefined}
         onOpenActivation={() => undefined}
@@ -133,13 +134,14 @@ describe('contract v2 choice UI', () => {
       />,
     );
 
-    expect(screen.getByText('10捨て: カードを2枚選んでください')).toBeTruthy();
+    expect(screen.getByRole('status', { name: '10捨て 発動中' })).toBeTruthy();
+    expect(screen.getByText('カードを2枚選んでください')).toBeTruthy();
     expect(
       screen.getByRole('button', { name: 'パス' }).hasAttribute('disabled'),
     ).toBe(true);
     expect(
       screen
-        .getByRole('button', { name: 'えらんだ2枚を捨てる' })
+        .getByRole('button', { name: '10捨てで2枚捨てる' })
         .hasAttribute('disabled'),
     ).toBe(true);
   });

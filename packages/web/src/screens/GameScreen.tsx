@@ -83,6 +83,7 @@ type GameScreenProps = {
   canPlay?: boolean;
   canPass?: boolean;
   playLabel?: string;
+  actionRuleName?: string | null;
   actionPrompt?: string | null;
   turnDeadlineAt?: number | null;
   onViewRules: () => void;
@@ -125,6 +126,7 @@ export function GameScreen({
   canPlay,
   canPass = true,
   playLabel = 'えらんだカードを出す',
+  actionRuleName = null,
   actionPrompt = null,
   turnDeadlineAt,
   onViewRules,
@@ -186,11 +188,22 @@ export function GameScreen({
           turnDeadlineAt={turnDeadlineAt ?? null}
           onToggle={onToggleCard}
           {...(onDimmedCardTap ? { onDimmedCardTap } : {})}
+          notice={
+            actionRuleName && actionPrompt ? (
+              <div
+                className={styles.choiceNotice}
+                role="status"
+                aria-label={`${actionRuleName} 発動中`}
+              >
+                <strong>{actionRuleName} 発動中</strong>
+                <span>{actionPrompt}</span>
+              </div>
+            ) : actionPrompt ? (
+              <span className={styles.choicePrompt}>{actionPrompt}</span>
+            ) : null
+          }
           actions={
             <>
-              {actionPrompt && (
-                <span className={styles.choicePrompt}>{actionPrompt}</span>
-              )}
               <Button disabled={!isMyTurn || !canPass} onClick={onPass}>
                 パス
               </Button>

@@ -21,6 +21,8 @@ type HandTrayProps = {
   turnDeadlineAt?: number | null;
   onToggle: (id: string) => void;
   onDimmedCardTap?: (id: string) => void;
+  /** ルール入力など、手札を選ぶ前に常時見せる案内。 */
+  notice?: ReactNode;
   /** 出す・パスのボタン。合法手の判定はエンジン側の関心なので props で受ける。 */
   actions?: ReactNode;
 };
@@ -41,6 +43,7 @@ export function HandTray({
   turnDeadlineAt,
   onToggle,
   onDimmedCardTap,
+  notice,
   actions,
 }: HandTrayProps) {
   const flipping = useStrengthFlip(strengthInverted);
@@ -86,6 +89,7 @@ export function HandTray({
           )}
         </div>
       )}
+      {notice}
       <ul
         className={styles.cards}
         style={

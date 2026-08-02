@@ -74,6 +74,7 @@ import {
   screenFromPathname,
 } from './routing';
 import screenStyles from './screens/screen.module.css';
+import { choicePresentation } from './game/choice';
 import { deriveCardHints } from './game/hints';
 import {
   cardDiscardNotices,
@@ -1686,6 +1687,17 @@ function ConnectedApp({
       game.pendingChoice.cards !== null
         ? game.pendingChoice
         : null;
+    const pendingChoicePresentation = pendingChoice
+      ? choicePresentation({
+          choiceId: pendingChoice.choiceId,
+          count: pendingChoice.count,
+          message: pendingChoice.message,
+          ruleName:
+            room.activeRules.find(
+              (rule) => rule.ruleId === pendingChoice.ruleId,
+            )?.name ?? null,
+        })
+      : null;
     const choiceCardIds = new Set(
       pendingChoice?.cards?.map((card) => card.id) ?? [],
     );
@@ -1752,16 +1764,10 @@ function ConnectedApp({
           canPlay={legalSelection}
           canPass={!pendingChoice && game.field.cards.length > 0}
           playLabel={
-            pendingChoice
-              ? `えらんだ${String(pendingChoice.count)}枚を捨てる`
-              : 'えらんだカードを出す'
+            pendingChoicePresentation?.confirmLabel ?? 'えらんだカードを出す'
           }
-          actionPrompt={
-            pendingChoice
-              ? (pendingChoice.message ??
-                `カードを${String(pendingChoice.count)}枚えらんでください`)
-              : null
-          }
+          actionRuleName={pendingChoicePresentation?.ruleName ?? null}
+          actionPrompt={pendingChoicePresentation?.instruction ?? null}
           turnDeadlineAt={game.turn?.deadlineAt ?? null}
           onViewRules={() => {
             openRules();

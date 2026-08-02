@@ -742,6 +742,56 @@ function tutorialHintClient(
   } as unknown as MultiplayerClient;
 }
 
+describe('7の同時発動でのルール選択表示', () => {
+  afterEach(cleanup);
+
+  it.each([
+    {
+      ruleId: 'r0015-lucky-seven',
+      choiceId: 'lucky_seven_choice',
+      ruleName: 'ラッキー7',
+      message: 'ラッキー7: 捨てるカードを選んでください。',
+      buttonName: 'ラッキー7で2枚捨てる',
+    },
+    {
+      ruleId: 'r0011-seven-pass',
+      choiceId: 'seven_pass_choice',
+      ruleName: '7渡し',
+      message: '7渡し: 次の人に渡すカードを選んでください。',
+      buttonName: '7渡しで2枚渡す',
+    },
+  ])(
+    '$ruleNameの発動中表示と専用の確定ボタンを出す',
+    ({ ruleId, choiceId, ruleName, message, buttonName }) => {
+      const room = tutorialHintRoom('community', null);
+      render(
+        <App
+          client={tutorialHintClient({
+            ...room,
+            activeRules: [{ ruleId, name: ruleName }],
+            game: {
+              ...room.game!,
+              pendingChoice: {
+                ruleId,
+                choiceId,
+                message,
+                seat: 0,
+                count: 2,
+                cards: room.game!.yourHand,
+              },
+            },
+          })}
+        />,
+      );
+
+      expect(
+        screen.getByRole('status', { name: `${ruleName} 発動中` }),
+      ).toBeTruthy();
+      expect(screen.getByRole('button', { name: buttonName })).toBeTruthy();
+    },
+  );
+});
+
 function observableTutorialClient(
   initialRoom: import('@daifugo/core').PlayerRoomView,
 ): {
