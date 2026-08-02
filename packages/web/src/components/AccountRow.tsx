@@ -9,9 +9,10 @@ export function isDefaultDisplayName(displayName: string | null): boolean {
   return displayName !== null && /^ゲスト[0-9A-Z]{6}$/u.test(displayName);
 }
 
-const STATE_LABELS: Record<AccountState, string> = {
+/** 登録済みは通常状態なのでバッジを出さない。 */
+const STATE_LABELS: Record<AccountState, string | null> = {
   anonymous: 'ゲスト',
-  registered: 'どの端末でも',
+  registered: null,
   pending: 'つなぎ中',
   connecting: '接続中',
 };
@@ -35,7 +36,9 @@ export function AccountRow({
       className={styles.row}
       disabled={disabled}
       onClick={onOpen}
-      aria-label={`${shownName}、${STATE_LABELS[state]}、記録を開く`}
+      aria-label={[shownName, STATE_LABELS[state], '記録を開く']
+        .filter((part) => part !== null)
+        .join('、')}
     >
       <span
         className={isDefaultName ? styles.defaultName : styles.name}
@@ -43,9 +46,11 @@ export function AccountRow({
       >
         {shownName}
       </span>
-      <Tag variant={state === 'registered' ? 'accountActive' : 'account'}>
-        {STATE_LABELS[state]}
-      </Tag>
+      {STATE_LABELS[state] !== null && (
+        <Tag variant={state === 'registered' ? 'accountActive' : 'account'}>
+          {STATE_LABELS[state]}
+        </Tag>
+      )}
       <span className={styles.chevron} aria-hidden="true">
         ›
       </span>

@@ -9,7 +9,7 @@ afterEach(cleanup);
 describe('AccountRow', () => {
   it.each([
     ['anonymous', 'ゲスト', false],
-    ['registered', 'どの端末でも', false],
+    ['registered', null, false],
     ['pending', 'つなぎ中', true],
     ['connecting', '接続中', true],
   ] as const)('%s の状態と操作可否を表示する', (state, label, disabled) => {
@@ -21,7 +21,13 @@ describe('AccountRow', () => {
         onOpen={vi.fn()}
       />,
     );
-    expect(screen.getByText(label)).toBeTruthy();
+    if (label === null) {
+      // 登録済みは通常状態なのでバッジを出さない
+      expect(screen.queryByText('どの端末でも')).toBeNull();
+      expect(screen.queryByText('ゲスト')).toBeNull();
+    } else {
+      expect(screen.getByText(label)).toBeTruthy();
+    }
     expect(screen.getByRole('button').hasAttribute('disabled')).toBe(disabled);
     if (state === 'connecting') expect(screen.getByText('—')).toBeTruthy();
   });
