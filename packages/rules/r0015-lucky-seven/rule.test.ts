@@ -1,13 +1,7 @@
-import type {
-  Card,
-  CardId,
-  CardRank,
-  Effect,
-  Play,
-  RuleContext,
-  RuleInput,
-} from '@daifugo/core';
+import type { Card, CardRank, Play, RuleContext } from '@daifugo/core';
 import { describe, expect, it } from 'vitest';
+
+import { rule } from './rule.js';
 
 const seats = ['p1', 'p2', 'p3', 'p4'];
 const ranking: CardRank[] = [
@@ -72,64 +66,12 @@ function context(currentPlay: Play, hand: Card[]): RuleContext {
   };
 }
 
-function validSelection(
-  cardIds: readonly CardId[],
-  handIds: readonly CardId[],
-  count: number,
-): boolean {
-  return (
-    cardIds.length === count &&
-    new Set(cardIds).size === count &&
-    cardIds.every((cardId) => handIds.includes(cardId))
-  );
-}
-
 function afterPlay(
   ruleContext: RuleContext,
   currentPlay: Play,
-  input?: RuleInput,
-): Effect[] {
-  const sevenCount = currentPlay.cards.filter(
-    (candidate) => candidate.kind === 'natural' && candidate.rank === '7',
-  ).length;
-  const actor = ruleContext.game.field.current?.by;
-  if (sevenCount < 2 || !actor) return [];
-  const actorState = ruleContext.game.players.find(({ id }) => id === actor);
-  if (!actorState) return [];
-  const count = Math.min(sevenCount, actorState.hand.length);
-  if (count === 0) return [];
-
-  if (input) {
-    if (
-      input.choiceId !== 'lucky_seven_choice' ||
-      !validSelection(
-        input.cardIds,
-        actorState.hand.map(({ id }) => id),
-        count,
-      )
-    ) {
-      return [];
-    }
-    return [
-      {
-        type: 'moveCards',
-        from: { kind: 'hand', player: actor },
-        to: { kind: 'discard' },
-        cards: { kind: 'specific', cardIds: [...input.cardIds] },
-      },
-    ];
-  }
-  return [
-    {
-      type: 'requestChoice',
-      player: actor,
-      choiceId: 'lucky_seven_choice',
-      from: { kind: 'hand', player: actor },
-      cards: { kind: 'all' },
-      count,
-      messageKey: 'lucky_seven_choice',
-    },
-  ];
+  input?: { kind: 'cards'; choiceId: string; cardIds: string[] },
+) {
+  return rule.hooks.afterPlay?.(ruleContext, currentPlay, input) ?? [];
 }
 
 describe('ラッキー7', () => {
