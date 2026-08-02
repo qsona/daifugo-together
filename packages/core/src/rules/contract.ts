@@ -143,8 +143,6 @@ export type DeepReadonly<T> = T extends (...args: never[]) => unknown
 
 export interface GameView {
   readonly gameIndex: number;
-  /** Rules participating in this game's fixed rule chain, in priority order. */
-  readonly activeRuleIds: readonly RuleId[];
   readonly seats: readonly PlayerId[];
   readonly direction: 1 | -1;
   readonly turn: PlayerId | null;
@@ -210,7 +208,16 @@ export type Effect =
     }
   | { type: 'skipTurns'; player: PlayerId; count: number }
   | { type: 'reverseTurnOrder' }
-  | { type: 'forceRank'; player: PlayerId; rank: Standing | 'lowest' }
+  | {
+      type: 'forceRank';
+      player: PlayerId;
+      rank: Standing | 'lowest';
+      /**
+       * Apply only while another player's standing still matches. Evaluated
+       * after all unconditional effects in the same batch.
+       */
+      when?: { player: PlayerId; standing: Standing };
+    }
   | {
       type: 'moveCards';
       from: Zone;

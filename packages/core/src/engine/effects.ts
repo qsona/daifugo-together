@@ -604,13 +604,21 @@ function effectPayloadValid(effect: unknown): effect is Effect {
         );
       case 'forceRank':
         return (
-          hasExactKeys(effect, ['type', 'player', 'rank']) &&
+          hasExactKeys(effect, ['type', 'player', 'rank'], ['when']) &&
           typeof effect.player === 'string' &&
           (effect.rank === 'lowest' ||
             (typeof effect.rank === 'number' &&
               Number.isInteger(effect.rank) &&
               effect.rank >= 1 &&
-              effect.rank <= 4))
+              effect.rank <= 4)) &&
+          (effect.when === undefined ||
+            (isRecord(effect.when) &&
+              hasExactKeys(effect.when, ['player', 'standing']) &&
+              typeof effect.when.player === 'string' &&
+              typeof effect.when.standing === 'number' &&
+              Number.isInteger(effect.when.standing) &&
+              effect.when.standing >= 1 &&
+              effect.when.standing <= 4))
         );
       case 'moveCards':
         return (
@@ -923,6 +931,22 @@ export function executeEffectHook(
         };
         break;
       case 'forceRank': {
+        const condition = entry.effect.when;
+        if (
+          condition !== undefined &&
+          nextState.players[condition.player]?.standing !== condition.standing
+        ) {
+          entry.resolution = { status: 'condition-unmet' };
+          details.set(index, {
+            applied: false,
+            reason: 'condition-unmet',
+            player: condition.player,
+            expectedStanding: condition.standing,
+            actualStanding:
+              nextState.players[condition.player]?.standing ?? null,
+          });
+          break;
+        }
         const resolvedRank =
           entry.effect.rank === 'lowest'
             ? (config.seats.length as Standing)
@@ -1040,7 +1064,10 @@ export function executeEffectHook(
   }
 
   for (const failedWinner of batch.entries) {
-    if (failedWinner.resolution.status !== 'rejected') {
+    if (
+      failedWinner.resolution.status !== 'rejected' &&
+      failedWinner.resolution.status !== 'condition-unmet'
+    ) {
       continue;
     }
     for (const entry of batch.entries) {
@@ -1049,10 +1076,13 @@ export function executeEffectHook(
         entry.resolution.winnerRuleId === failedWinner.ruleId &&
         entry.conflictKey === failedWinner.conflictKey
       ) {
-        entry.resolution = {
-          status: 'rejected',
-          winnerRuleId: failedWinner.ruleId,
-        };
+        entry.resolution =
+          failedWinner.resolution.status === 'condition-unmet'
+            ? { status: 'condition-unmet' }
+            : {
+                status: 'rejected',
+                winnerRuleId: failedWinner.ruleId,
+              };
       }
     }
   }

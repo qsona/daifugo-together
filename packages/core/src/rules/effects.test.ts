@@ -893,6 +893,80 @@ describe('GE-04 effect pipeline and lifecycle hooks', () => {
     });
   });
 
+  it('条件付きforceRankは無条件効果の後に順位条件を評価する', () => {
+    const conditionalEntry = entry('r-high-conditional-rank');
+    const foulEntry = { ...entry('r-low-foul-rank'), position: 1 };
+    const conditional: RuleModule = {
+      meta: {
+        ruleId: conditionalEntry.ruleId,
+        name: conditionalEntry.name,
+        description: 'conditional force rank fixture',
+        kind: 'original',
+        proposalId: 'fixture',
+        contractVersion: 1,
+        messages: {},
+      },
+      hooks: {
+        afterPlay: () => [
+          {
+            type: 'forceRank',
+            player: 'p3',
+            rank: 'lowest',
+            when: { player: 'p2', standing: 1 },
+          },
+        ],
+      },
+    };
+    const foul: RuleModule = {
+      meta: {
+        ruleId: foulEntry.ruleId,
+        name: foulEntry.name,
+        description: 'unconditional foul rank fixture',
+        kind: 'original',
+        proposalId: 'fixture',
+        contractVersion: 1,
+        messages: {},
+      },
+      hooks: {
+        afterPlay: () => [{ type: 'forceRank', player: 'p2', rank: 'lowest' }],
+      },
+    };
+    const config: GameConfig = {
+      gameIndex: 0,
+      seats,
+      gameSeed: 'conditional-force-rank',
+      ruleChain: [conditionalEntry, foulEntry],
+    };
+    const started = startGame(config).state;
+    const player = started.public.turn;
+    const card = player ? started.players[player]?.hand[0] : undefined;
+    if (!player || !card) {
+      throw new Error('Expected opening play');
+    }
+
+    const transition = reduceGame(
+      config,
+      started,
+      { type: 'play', player, cards: [card.id] },
+      {
+        port: createInProcessRuleChainPort([conditional, foul]),
+        setHistory: [],
+        setMemory: {},
+      },
+    );
+
+    expect(transition.state.players.p2?.standing).toBe(4);
+    expect(transition.state.players.p3?.standing).toBeUndefined();
+    expect(transition.state.public.firedRules).toEqual([foulEntry.ruleId]);
+    expect(transition.events).toContainEqual(
+      expect.objectContaining({
+        type: 'effectRejected',
+        ruleId: conditionalEntry.ruleId,
+        resolution: 'condition-unmet',
+      }),
+    );
+  });
+
   it("別々のフック発火で順に'lowest'対象になった場合、先着がより低い順位になる", () => {
     const ruleEntry = entry('r0107-force-rank-lowest-sequential');
     const module: RuleModule = {

@@ -56,7 +56,6 @@ function context({
     contractVersion: 1,
     game: {
       gameIndex: 0,
-      activeRuleIds: ['r0004-no-finish-with-two'],
       seats: [PLAYER, 'p2', 'p3', 'p4'],
       direction: 1,
       turn: 'p2',

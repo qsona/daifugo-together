@@ -101,7 +101,12 @@ export type PublicGameEvent =
     };
 
 export type EffectResolutionStatus =
-  'adopted' | 'deduped' | 'rejected' | 'superseded' | 'suppressed-announce';
+  | 'adopted'
+  | 'deduped'
+  | 'rejected'
+  | 'superseded'
+  | 'suppressed-announce'
+  | 'condition-unmet';
 
 export type EngineEvent =
   | PublicGameEvent

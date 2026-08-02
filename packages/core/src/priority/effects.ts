@@ -8,7 +8,8 @@ export type Resolution =
   | { status: 'deduped'; winnerRuleId: RuleId }
   | { status: 'rejected'; winnerRuleId: RuleId }
   | { status: 'superseded' }
-  | { status: 'suppressed-announce' };
+  | { status: 'suppressed-announce' }
+  | { status: 'condition-unmet' };
 
 export interface EffectEmission {
   ruleId: RuleId;
@@ -261,6 +262,14 @@ export function resolveEffectBatch(
     )
     .sort(
       (left, right) =>
+        Number(
+          entries[left]!.effect.type === 'forceRank' &&
+            entries[left]!.effect.when !== undefined,
+        ) -
+          Number(
+            entries[right]!.effect.type === 'forceRank' &&
+              entries[right]!.effect.when !== undefined,
+          ) ||
         entries[left]!.position - entries[right]!.position ||
         entries[left]!.effectIndex - entries[right]!.effectIndex,
     );
