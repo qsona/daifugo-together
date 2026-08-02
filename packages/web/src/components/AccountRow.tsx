@@ -10,7 +10,7 @@ export function isDefaultDisplayName(displayName: string | null): boolean {
 }
 
 const STATE_LABELS: Record<AccountState, string> = {
-  anonymous: 'この端末だけ',
+  anonymous: 'ゲスト',
   registered: 'どの端末でも',
   pending: 'つなぎ中',
   connecting: '接続中',

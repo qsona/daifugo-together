@@ -8,7 +8,7 @@ afterEach(cleanup);
 
 describe('AccountRow', () => {
   it.each([
-    ['anonymous', 'この端末だけ', false],
+    ['anonymous', 'ゲスト', false],
     ['registered', 'どの端末でも', false],
     ['pending', 'つなぎ中', true],
     ['connecting', '接続中', true],
