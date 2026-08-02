@@ -27,6 +27,14 @@ function sha256(value: Buffer): string {
   return createHash('sha256').update(value).digest('hex');
 }
 
+function importAllowed(name: string, specifier: string): boolean {
+  return (
+    specifier === '@daifugo/core' ||
+    (name === 'rule.test.ts' &&
+      (specifier === 'vitest' || specifier === './rule.js'))
+  );
+}
+
 export async function inspectGeneratedRule(
   scaffold: ScaffoldResult,
 ): Promise<{ ok: true } | { ok: false; violations: string[] }> {
@@ -70,9 +78,7 @@ export async function inspectGeneratedRule(
       for (const match of content.matchAll(
         /\b(?:import|export)\s+[\s\S]*?\sfrom\s+['"]([^'"]+)['"]/gu,
       )) {
-        const allowed =
-          match[1] === '@daifugo/core' ||
-          (name === 'rule.test.ts' && match[1] === 'vitest');
+        const allowed = importAllowed(name, match[1] ?? '');
         if (!allowed) {
           violations.push(
             `${name}: imports forbidden module ${match[1] ?? 'unknown'}`,
@@ -80,9 +86,7 @@ export async function inspectGeneratedRule(
         }
       }
       for (const match of content.matchAll(/\bimport\s*['"]([^'"]+)['"]/gu)) {
-        const allowed =
-          match[1] === '@daifugo/core' ||
-          (name === 'rule.test.ts' && match[1] === 'vitest');
+        const allowed = importAllowed(name, match[1] ?? '');
         if (!allowed) {
           violations.push(
             `${name}: imports forbidden module ${match[1] ?? 'unknown'}`,

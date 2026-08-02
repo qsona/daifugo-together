@@ -21,8 +21,10 @@ process access, dynamic code execution, or nondeterministic external state.
 Do not use Web search, connectors, external network access, or unrelated
 repository files while implementing this rule.
 In `rule.ts`, imports and re-exports may target only `@daifugo/core`. In
-`rule.test.ts`, imports may target only `@daifugo/core` and `vitest`. Do not use
-`Date`, `Math.random`, dynamic `import()`, or any other nondeterministic global.
+`rule.test.ts`, imports may target only `@daifugo/core`, `vitest`, and the
+same-directory rule module at `./rule.js`. Import `rule` from `./rule.js` so the
+coverage gate measures the submitted implementation itself. Do not use `Date`,
+`Math.random`, dynamic `import()`, or any other nondeterministic global.
 
 Implement only the hooks and Effects listed in `SPEC.json`. Cover at least:
 

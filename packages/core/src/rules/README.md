@@ -5,9 +5,11 @@
 自動実装されるルールは `RuleModule` として独立登録し、状態を直接変更せず `Effect` を返します。同一バッチの全ルールは、権威状態から複製して深く凍結した同一時点のビューを受け取ります。メモリと乱数はルール ID ごとに分離されます。
 
 `rule.ts` は `@daifugo/core` だけをimportし、`export const rule:
-RuleModule` を1件公開します。`rule.test.ts` は `@daifugo/core` と `vitest`
-だけをimportできます。`rule.meta` は同じディレクトリの `meta.json`
-全フィールドを正確に複製してください。CIは型だけでなくJSONとのdeep equalityも検査します。
+RuleModule` を1件公開します。`rule.test.ts` は `@daifugo/core`、`vitest`、
+同じディレクトリの `./rule.js` だけをimportできます。テストは `./rule.js` から
+`rule` をimportし、提出した実装本体を検証してください。`rule.meta` は同じ
+ディレクトリの `meta.json` 全フィールドを正確に複製してください。CIは型だけでなく
+JSONとのdeep equalityも検査します。
 
 ```ts
 import type { RuleModule } from '@daifugo/core';
