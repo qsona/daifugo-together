@@ -1,5 +1,10 @@
-if (process.argv.includes('--review')) {
-  await import('./review-cli.js');
-} else {
-  await import('./judge-run.js');
-}
+import { runJudgeFlow } from './judge-flow.js';
+
+await runJudgeFlow(process.argv.includes('--review'), {
+  judge: async () => {
+    await import('./judge-run.js');
+  },
+  review: async () => {
+    await import('./review-cli.js');
+  },
+});
