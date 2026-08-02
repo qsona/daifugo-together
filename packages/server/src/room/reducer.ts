@@ -1023,27 +1023,36 @@ function gameAction(
   const actor = state.members.find(
     (member) => member.memberId === action.memberId,
   );
-  if (!actor || actor.seatId === null || currentPlayer !== actor.memberId) {
+  const pending = state.engine.currentGame?.private.pendingChoice;
+  const expectedPlayer =
+    action.type === 'ruleInput' ? pending?.player : currentPlayer;
+  if (!actor || actor.seatId === null || expectedPlayer !== actor.memberId) {
     return rejected(state, 'NOT_YOUR_TURN');
   }
   if (action.turnSeq !== state.turnSeq) {
     return rejected(state, 'STALE_TURN');
   }
-  const pending = state.engine.currentGame?.private.pendingChoice;
   const setAction: Parameters<typeof reduceSet>[1] =
     action.type === 'ruleInput'
       ? {
           type: 'ruleInput',
           player: actor.memberId,
           choiceId: action.choiceId,
-          cardIds: action.cardIds,
+          ...('playerId' in action && action.playerId !== undefined
+            ? { playerId: action.playerId }
+            : { cardIds: action.cardIds ?? [] }),
         }
       : action.type === 'autoAct' && pending
         ? {
             type: 'ruleInput',
             player: actor.memberId,
             choiceId: pending.choiceId,
-            cardIds: action.cards ?? [],
+            ...((pending.kind ?? 'cards') === 'player'
+              ? {
+                  playerId:
+                    [...(pending.optionPlayerIds ?? [])].sort()[0] ?? '',
+                }
+              : { cardIds: action.cards ?? [] }),
           }
         : action.type === 'play'
           ? { type: 'play', player: actor.memberId, cards: action.cards }

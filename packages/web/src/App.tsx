@@ -1689,9 +1689,15 @@ function ConnectedApp({
     const selected = [...selectedCardIds].sort();
     const pendingChoice =
       game.pendingChoice?.seat === room.you.seatId &&
-      game.pendingChoice.cards !== null
+      (game.pendingChoice.kind === 'player'
+        ? game.pendingChoice.players !== null
+        : game.pendingChoice.cards !== null)
         ? game.pendingChoice
         : null;
+    const pendingCardChoice =
+      pendingChoice && pendingChoice.kind !== 'player' ? pendingChoice : null;
+    const pendingPlayerChoice =
+      pendingChoice?.kind === 'player' ? pendingChoice : null;
     const pendingChoicePresentation = pendingChoice
       ? choicePresentation({
           choiceId: pendingChoice.choiceId,
@@ -1704,19 +1710,21 @@ function ConnectedApp({
         })
       : null;
     const choiceCardIds = new Set(
-      pendingChoice?.cards?.map((card) => card.id) ?? [],
+      pendingCardChoice?.cards?.map((card) => card.id) ?? [],
     );
-    const legalSelection = pendingChoice
-      ? selected.length === pendingChoice.count &&
+    const legalSelection = pendingCardChoice
+      ? selected.length === pendingCardChoice.count &&
         selected.every((id) => choiceCardIds.has(id))
-      : (game.legalMoves?.some(
-          (move) =>
-            move.cards.length === selected.length &&
-            move.cards
-              .map((card) => card.id)
-              .sort()
-              .every((id, index) => id === selected[index]),
-        ) ?? false);
+      : pendingPlayerChoice
+        ? false
+        : (game.legalMoves?.some(
+            (move) =>
+              move.cards.length === selected.length &&
+              move.cards
+                .map((card) => card.id)
+                .sort()
+                .every((id, index) => id === selected[index]),
+          ) ?? false);
     const cardHints =
       room.mode === 'basic' && !pendingChoice
         ? deriveCardHints(game.yourHand, game.legalMoves, selectedCardIds)
@@ -1789,10 +1797,12 @@ function ConnectedApp({
           onPlay={() => {
             if (!game.turn || !legalSelection) return;
             invoke(
-              (pendingChoice
-                ? client.ruleInput(game.turn.turnSeq, pendingChoice.choiceId, [
-                    ...selectedCardIds,
-                  ])
+              (pendingCardChoice
+                ? client.ruleInput(
+                    game.turn.turnSeq,
+                    pendingCardChoice.choiceId,
+                    [...selectedCardIds],
+                  )
                 : client.play(game.turn.turnSeq, [...selectedCardIds])
               ).then(() => {
                 setSelectedCardIds([]);
@@ -1807,6 +1817,38 @@ function ConnectedApp({
             setLeaveConfirm('game');
           }}
         />
+        {pendingPlayerChoice && game.turn && (
+          <Dialog
+            title={
+              room.activeRules.find(
+                (rule) => rule.ruleId === pendingPlayerChoice.ruleId,
+              )?.name ?? 'ルールの選択'
+            }
+            actions={(pendingPlayerChoice.players ?? []).map((player) => (
+              <Button
+                key={player.seat}
+                block
+                onClick={() => {
+                  invoke(
+                    client.rulePlayerInput(
+                      game.turn?.turnSeq ?? 0,
+                      pendingPlayerChoice.choiceId,
+                      room.members.find(
+                        (member) => member.seatId === player.seat,
+                      )?.memberId ?? '',
+                    ),
+                  );
+                }}
+              >
+                {player.displayName}
+              </Button>
+            ))}
+          >
+            <DialogBody>
+              {pendingPlayerChoice.message ?? '相手を選んでください'}
+            </DialogBody>
+          </Dialog>
+        )}
         {rulesOverlay}
         {leaveDialog}
       </>,

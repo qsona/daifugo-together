@@ -102,18 +102,20 @@ KV はルール・スコープごとに分離し、最大 32 キー、1 値 1KB�
 ## contract v2 のカード選択
 
 `requestChoice` は `afterPlay` から、対象プレイヤー自身の残り手札を
-選択肢として、正確な枚数の選択を要求します。要求するルールは
+選択肢として正確な枚数を選ばせるか、`players` に列挙した候補からプレイヤー1人を
+選ばせます。要求するルールは
 `meta.contractVersion: 2` とし、最初の呼び出しでは `requestChoice` だけを
 返してください。入力待ち中は次の手番へ進みません。
 
 応答後、同じ `afterPlay(context, play, input)` が再び呼ばれます。
-`input.kind === 'cards'` と `input.choiceId` を確認し、
+カード選択は `input.kind === 'cards'`、プレイヤー選択は
+`input.kind === 'player'` と `input.playerId` を確認します。`input.choiceId` も確認し、
 `input.cardIds` を `moveCards` の `specific` selector に渡して通常の Effect
 として適用します。1つの発動で複数プレイヤーに要求する場合は、先頭の要求に
 `additionalChoices` を付けます。各 player と `from.player` は一致させ、同じ
 player または `choiceId` を重複させてはいけません。先頭から順に1件ずつ応答を
-処理し、すべて完了するまで手番を進めません。応答処理から新しい choice を
-要求することはできません。
+処理し、すべて完了するまで手番を進めません。応答処理は次の `requestChoice` を
+1件返すこともでき、エンジンは同じルールの動的な次段として直列処理します。
 
 複数のルールが同じプレイで choice を要求した場合は、ルール優先順位順に直列処理
 します。同一ルールの `additionalChoices` をすべて適用した後の状態から次のルールを

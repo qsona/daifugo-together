@@ -245,6 +245,58 @@ const multiPlayerChoiceRule: RuleModule = {
   },
 };
 
+const dynamicPlayerChoiceRule: RuleModule = {
+  meta: {
+    ruleId: 'r-choice-dynamic-player',
+    name: 'dynamic player choice fixture',
+    description: 'player choice followed by card choice',
+    kind: 'original',
+    proposalId: 'choice-fixture-dynamic-player',
+    contractVersion: 2,
+    messages: { choose_player: '相手', choose_card: 'カード' },
+  },
+  hooks: {
+    afterPlay(_context, play, input) {
+      if (input?.kind === 'player' && input.choiceId === 'target') {
+        return [
+          {
+            type: 'requestChoice',
+            player: 'p1',
+            choiceId: `card_for_${input.playerId}`,
+            from: { kind: 'hand', player: 'p1' },
+            cards: { kind: 'all' },
+            count: 1,
+            messageKey: 'choose_card',
+          },
+        ];
+      }
+      if (input?.kind === 'cards' && input.choiceId === 'card_for_p2') {
+        return [
+          {
+            type: 'moveCards',
+            from: { kind: 'hand', player: 'p1' },
+            to: { kind: 'discard' },
+            cards: { kind: 'specific', cardIds: [...input.cardIds] },
+          },
+        ];
+      }
+      return play.cards.some(
+        (card) => card.kind === 'natural' && card.rank === '10',
+      )
+        ? [
+            {
+              type: 'requestChoice',
+              player: 'p1',
+              choiceId: 'target',
+              players: ['p2', 'p3'],
+              messageKey: 'choose_player',
+            },
+          ]
+        : [];
+    },
+  },
+};
+
 describe('contract v2 rule choices', () => {
   it('プレイを確定して追加入力を待ち、応答後に同じafterPlayを完了する', () => {
     const { config, state, runtime } = fixture(choiceRule);
@@ -494,6 +546,54 @@ describe('contract v2 rule choices', () => {
     ]);
     expect(transition.state.players.p2?.hand.map(({ id }) => id)).toEqual([
       'H05',
+    ]);
+  });
+
+  it('プレイヤー選択の応答から同じルールのカード選択へ進み、完了後だけ手番を進める', () => {
+    const { config, state, runtime } = fixture(dynamicPlayerChoiceRule);
+    let transition = reduceGame(
+      config,
+      state,
+      { type: 'play', player: 'p1', cards: ['S10'] },
+      runtime,
+    );
+    expect(transition.state.private.pendingChoice).toMatchObject({
+      kind: 'player',
+      player: 'p1',
+      choiceId: 'target',
+      optionPlayerIds: ['p2', 'p3'],
+    });
+
+    transition = reduceGame(
+      config,
+      transition.state,
+      { type: 'ruleInput', player: 'p1', choiceId: 'target', playerId: 'p2' },
+      runtime,
+    );
+    expect(transition.rejections).toEqual([]);
+    expect(transition.state.public.phase).toBe('awaitingChoice');
+    expect(transition.state.private.pendingChoice).toMatchObject({
+      kind: 'cards',
+      choiceId: 'card_for_p2',
+      optionCardIds: ['H03', 'H04'],
+    });
+
+    transition = reduceGame(
+      config,
+      transition.state,
+      {
+        type: 'ruleInput',
+        player: 'p1',
+        choiceId: 'card_for_p2',
+        cardIds: ['H03'],
+      },
+      { ...runtime, setMemory: transition.setMemory ?? {} },
+    );
+    expect(transition.rejections).toEqual([]);
+    expect(transition.state.public.phase).toBe('awaitingPlay');
+    expect(transition.state.public.turn).toBe('p2');
+    expect(transition.state.public.discard.map(({ id }) => id)).toEqual([
+      'H03',
     ]);
   });
 });

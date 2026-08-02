@@ -252,9 +252,12 @@ function gameView(
     turn:
       (game.public.phase === 'awaitingPlay' ||
         game.public.phase === 'awaitingChoice') &&
-      game.public.turn
+      (game.private.pendingChoice?.player ?? game.public.turn)
         ? {
-            seat: requiredSeat(seats, game.public.turn),
+            seat: requiredSeat(
+              seats,
+              game.private.pendingChoice?.player ?? game.public.turn ?? '',
+            ),
             turnSeq: state.turnSeq,
             deadlineAt: state.turnDeadlineAt,
           }
@@ -267,6 +270,7 @@ function gameView(
     legalMoves: playerSnapshot.legalMoves,
     pendingChoice: game.private.pendingChoice
       ? {
+          kind: game.private.pendingChoice.kind ?? 'cards',
           ruleId: game.private.pendingChoice.ruleId,
           choiceId: game.private.pendingChoice.choiceId,
           message:
@@ -275,10 +279,23 @@ function gameView(
               game.private.pendingChoice.messageKey,
             ) ?? null,
           seat: requiredSeat(seats, game.private.pendingChoice.player),
-          count: game.private.pendingChoice.count,
+          count: game.private.pendingChoice.count ?? 0,
           cards:
-            game.private.pendingChoice.player === memberId
+            game.private.pendingChoice.player === memberId &&
+            (game.private.pendingChoice.kind ?? 'cards') === 'cards'
               ? (playerSnapshot.pendingChoice?.cards ?? [])
+              : null,
+          players:
+            game.private.pendingChoice.player === memberId &&
+            game.private.pendingChoice.kind === 'player'
+              ? (game.private.pendingChoice.optionPlayerIds ?? []).map(
+                  (player) => ({
+                    seat: requiredSeat(seats, player),
+                    displayName:
+                      state.members.find((member) => member.memberId === player)
+                        ?.displayName ?? player,
+                  }),
+                )
               : null,
         }
       : null,

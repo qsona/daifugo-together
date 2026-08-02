@@ -59,8 +59,8 @@ export function buildPlayerSnapshot(
     state.public.phase === 'awaitingPlay' && state.public.turn === forPlayer;
   const pending = state.private.pendingChoice;
   const pendingCards =
-    pending?.player === forPlayer
-      ? pending.optionCardIds.flatMap((cardId) => {
+    pending?.player === forPlayer && (pending.kind ?? 'cards') === 'cards'
+      ? (pending.optionCardIds ?? []).flatMap((cardId) => {
           const card = ownState.hand.find(
             (candidate) => candidate.id === cardId,
           );
@@ -120,12 +120,17 @@ export function buildPlayerSnapshot(
       pending === undefined
         ? null
         : {
+            kind: pending.kind ?? 'cards',
             ruleId: pending.ruleId,
             player: pending.player,
             choiceId: pending.choiceId,
             messageKey: pending.messageKey,
-            count: pending.count,
+            count: pending.count ?? 0,
             cards: pendingCards,
+            players:
+              pending.player === forPlayer
+                ? [...(pending.optionPlayerIds ?? [])]
+                : [],
           },
   });
 }

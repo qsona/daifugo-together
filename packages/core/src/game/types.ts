@@ -139,24 +139,28 @@ export interface PrivateGameState {
   rng: RngState;
   hookCalls: Record<string, number>;
   pendingChoice?: {
+    kind?: 'cards' | 'player';
     ruleId: RuleId;
     player: PlayerId;
     choiceId: string;
     messageKey: string;
-    optionCardIds: CardId[];
-    count: number;
+    optionCardIds?: CardId[];
+    optionPlayerIds?: PlayerId[];
+    count?: number;
     play: Play;
     strength: StrengthOrder;
     playedBy?: PlayerId;
     continuation?: {
       remainingRuleIds: RuleId[];
       remainingChoices?: {
+        kind: 'cards' | 'player';
         ruleId: RuleId;
         player: PlayerId;
         choiceId: string;
         messageKey: string;
-        optionCardIds: CardId[];
-        count: number;
+        optionCardIds?: CardId[];
+        optionPlayerIds?: PlayerId[];
+        count?: number;
       }[];
       clearRequested: boolean;
     };
@@ -182,6 +186,14 @@ export type GameAction =
       player: PlayerId;
       choiceId: string;
       cardIds: CardId[];
+      playerId?: never;
+    }
+  | {
+      type: 'ruleInput';
+      player: PlayerId;
+      choiceId: string;
+      playerId: PlayerId;
+      cardIds?: never;
     };
 
 export type ActionRejectionCode =
@@ -266,11 +278,13 @@ export interface PlayerSnapshot {
   effectiveRules: { ruleId: RuleId; name: string }[];
   history: PublicGameEvent[];
   pendingChoice?: {
+    kind?: 'cards' | 'player';
     ruleId: RuleId;
     player: PlayerId;
     choiceId: string;
     messageKey: string;
     count: number;
     cards: Card[];
+    players?: PlayerId[];
   } | null;
 }

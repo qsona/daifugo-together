@@ -1,6 +1,6 @@
 import type { PendingCxJudgement } from '@daifugo/server';
 
-export const CX01_PROMPT_VERSION = 'cx01-v11';
+export const CX01_PROMPT_VERSION = 'cx01-v12';
 
 const CONTRACT = `
 契約 v1/v2 のフック:
@@ -14,6 +14,8 @@ Effect 語彙:
   枚数を選ばせ、応答を受けた同じ afterPlay が moveCards 等の通常 Effect を返す。
 - 1回の発動で複数プレイヤーに選ばせる場合、requestChoice の additionalChoices に
   対象者ごとの要求を並べる。エンジンは先頭から直列処理し、全件完了まで手番を進めない。
+- requestChoice の players に候補を列挙すると、対象プレイヤーに相手1人を選ばせられる。
+  応答後に次の requestChoice を1件返す動的な二段階入力も直列処理できる。
 - 異なるルールが同じプレイで requestChoice を返す場合、エンジンはルール優先順位順に
   直列処理し、先行Effect適用後の手札から後続ルールの要求を再計算する。
 - forceRank の rank は 1〜4 の順位または 'lowest'（最下位）。反則あがり系は 'lowest' を使う
@@ -42,9 +44,9 @@ engineFeatures 宣言（ルールが有効化できるエンジン機能）:
 
 const CRITERIA = `
 線引き（カオスは歓迎、破壊は却下。いまの契約で実装できないことは reject の理由にしない）:
-- A1 は requestChoice で表現できない自由入力・宣言・選択結果で次の要求が変わる
-  動的な複数段選択だけ needs_review。本人の残り手札から正確な枚数を選ぶ追加入力は、
-  対象が1人でも複数人でも contract v2 で approve できる。
+- A1 は requestChoice で表現できない自由入力・宣言だけ needs_review。本人の残り手札
+  から正確な枚数を選ぶ追加入力、候補から相手1人を選ぶ入力、その応答後のカード選択
+  という二段階入力は contract v2 で approve できる。
   複数の独立した有効ルールが同じプレイでそれぞれ1回ずつカード選択を要求する
   組み合わせはエンジンが直列化するため approve できる。
   A2 語彙外の状態 / A3 エンジン拡張: 原則 needs_review。

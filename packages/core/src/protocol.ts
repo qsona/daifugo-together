@@ -178,12 +178,14 @@ export interface MultiplayerGameView {
   yourHand: Card[];
   legalMoves: Play[] | null;
   pendingChoice?: {
+    kind?: 'cards' | 'player';
     ruleId: string;
     choiceId: string;
     message: string | null;
     seat: SeatId;
     count: number;
     cards: Card[] | null;
+    players?: { seat: SeatId; displayName: string }[] | null;
   } | null;
 }
 
@@ -244,13 +246,22 @@ export const clientPayloadSchemas = {
       kind: z.enum(['single', 'set', 'sequence']).optional(),
     })
     .strict(),
-  'game:ruleInput': z
-    .object({
-      turnSeq: turnSeqSchema,
-      choiceId: z.string().regex(/^[a-z][a-z0-9_]{0,63}$/),
-      cardIds: z.array(z.string().min(1)).min(1).max(14),
-    })
-    .strict(),
+  'game:ruleInput': z.union([
+    z
+      .object({
+        turnSeq: turnSeqSchema,
+        choiceId: z.string().regex(/^[a-z][a-z0-9_]{0,63}$/),
+        cardIds: z.array(z.string().min(1)).min(1).max(14),
+      })
+      .strict(),
+    z
+      .object({
+        turnSeq: turnSeqSchema,
+        choiceId: z.string().regex(/^[a-z][a-z0-9_]{0,63}$/),
+        playerId: z.string().min(1),
+      })
+      .strict(),
+  ]),
   'game:pass': z.object({ turnSeq: turnSeqSchema }).strict(),
   'game:readyNext': emptyPayloadSchema,
   'sync:request': emptyPayloadSchema,

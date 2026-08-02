@@ -57,10 +57,15 @@ request must target that player's own hand and use a unique player and
 card choice, return the approved ordinary Effects (for example `moveCards`
 with a `specific` selector) instead of requesting another choice. Do not add
 rule-local pending state or implement input handling outside this contract.
+For a player choice, omit card fields and provide `players` with one to three
+candidate player IDs; handle the response through `input.kind === 'player'`
+and `input.playerId`. A response may return one next `requestChoice` for a
+dynamic second stage; encode any earlier selection needed later in its unique
+`choiceId` instead of rule-local pending state.
 Independent `requestChoice` Effects from different enabled rules are serialized
 by the engine in rule-priority order. All `additionalChoices` for the current
 rule complete first, then the next rule recomputes its request from the current
-hand. A choice response cannot dynamically request another choice.
+hand.
 
 Before finishing, run these commands from the prepared repository workspace and
 fix any failure:

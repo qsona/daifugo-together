@@ -202,7 +202,13 @@ export function* createSimulationRun(
           type: 'ruleInput',
           player: pending.player,
           choiceId: pending.choiceId,
-          cardIds: [...pending.optionCardIds].sort().slice(0, pending.count),
+          ...((pending.kind ?? 'cards') === 'player'
+            ? { playerId: [...(pending.optionPlayerIds ?? [])].sort()[0] ?? '' }
+            : {
+                cardIds: [...(pending.optionCardIds ?? [])]
+                  .sort()
+                  .slice(0, pending.count ?? 0),
+              }),
         };
       } else {
         const player = state.currentGame.public.turn;

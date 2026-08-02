@@ -169,11 +169,9 @@ export type CardSelector =
 
 export type MemoryScope = 'game' | 'set';
 
-export interface RuleInput {
-  kind: 'cards';
-  choiceId: string;
-  cardIds: CardId[];
-}
+export type RuleInput =
+  | { kind: 'cards'; choiceId: string; cardIds: CardId[] }
+  | { kind: 'player'; choiceId: string; playerId: PlayerId };
 
 export interface CardChoiceRequest {
   player: PlayerId;
@@ -183,6 +181,15 @@ export interface CardChoiceRequest {
   count: number;
   messageKey: string;
 }
+
+export interface PlayerChoiceRequest {
+  player: PlayerId;
+  choiceId: string;
+  players: PlayerId[];
+  messageKey: string;
+}
+
+export type ChoiceRequestPayload = CardChoiceRequest | PlayerChoiceRequest;
 
 /**
  * Declarative state changes accepted from contract v1 rules.
@@ -208,8 +215,8 @@ export type Effect =
   | { type: 'clearField' }
   | ({
       type: 'requestChoice';
-      additionalChoices?: CardChoiceRequest[];
-    } & CardChoiceRequest)
+      additionalChoices?: ChoiceRequestPayload[];
+    } & ChoiceRequestPayload)
   | { type: 'skipTurns'; player: PlayerId; count: number }
   | { type: 'reverseTurnOrder' }
   | {

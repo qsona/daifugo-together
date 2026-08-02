@@ -299,7 +299,11 @@ export function attachRoomSocketGateway(
           game.public.phase === 'awaitingChoice' &&
           pending?.player === memberId
         ) {
-          return [...pending.optionCardIds].sort().slice(0, pending.count);
+          return (pending.kind ?? 'cards') === 'cards'
+            ? [...(pending.optionCardIds ?? [])]
+                .sort()
+                .slice(0, pending.count ?? 0)
+            : [];
         }
         const effectiveRules = () =>
           options.effectiveRuleChainForSet?.(engine.setId, engine.ruleChain) ??
@@ -663,7 +667,9 @@ export function attachRoomSocketGateway(
           memberId: current.member.memberId,
           turnSeq: parsed.data.turnSeq,
           choiceId: parsed.data.choiceId,
-          cardIds: [...parsed.data.cardIds],
+          ...('playerId' in parsed.data
+            ? { playerId: parsed.data.playerId }
+            : { cardIds: [...parsed.data.cardIds] }),
           now: now(),
         });
         const error = roomFailure(transition);

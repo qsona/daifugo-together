@@ -696,20 +696,16 @@ function reducePlay(
               play: interpretedPlay,
               strength: evaluated.strength,
               playedBy: action.player,
-              ...(requests.length > 1
-                ? {
-                    continuation: {
-                      remainingChoices: requests.filter(
-                        (candidate, index) =>
-                          index > 0 && candidate.ruleId === request.ruleId,
-                      ),
-                      remainingRuleIds: config.ruleChain
-                        .filter(({ ruleId }) => ruleId !== request.ruleId)
-                        .map(({ ruleId }) => ruleId),
-                      clearRequested: false,
-                    },
-                  }
-                : {}),
+              continuation: {
+                remainingChoices: requests.filter(
+                  (candidate, index) =>
+                    index > 0 && candidate.ruleId === request.ruleId,
+                ),
+                remainingRuleIds: config.ruleChain
+                  .filter(({ ruleId }) => ruleId !== request.ruleId)
+                  .map(({ ruleId }) => ruleId),
+                clearRequested: false,
+              },
             },
           },
         },
@@ -755,15 +751,35 @@ function reduceRuleInput(
   ) {
     return reject(state, action.player, 'NO_PENDING_CHOICE');
   }
-  const unique = new Set(action.cardIds);
-  const options = new Set(pending.optionCardIds);
-  if (
-    action.cardIds.length !== pending.count ||
-    unique.size !== action.cardIds.length ||
-    action.cardIds.some((cardId) => !options.has(cardId))
-  ) {
+  const pendingKind = pending.kind ?? 'cards';
+  const validCards =
+    pendingKind === 'cards' &&
+    'cardIds' in action &&
+    action.cardIds !== undefined &&
+    action.cardIds.length === pending.count &&
+    new Set(action.cardIds).size === action.cardIds.length &&
+    action.cardIds.every((cardId) =>
+      (pending.optionCardIds ?? []).includes(cardId),
+    );
+  const validPlayer =
+    pendingKind === 'player' &&
+    'playerId' in action &&
+    action.playerId !== undefined &&
+    (pending.optionPlayerIds ?? []).includes(action.playerId);
+  if (!validCards && !validPlayer) {
     return reject(state, action.player, 'INVALID_RULE_CHOICE');
   }
+  const inputValue = validPlayer
+    ? {
+        kind: 'player' as const,
+        choiceId: pending.choiceId,
+        playerId: action.playerId,
+      }
+    : {
+        kind: 'cards' as const,
+        choiceId: pending.choiceId,
+        cardIds: [...(('cardIds' in action && action.cardIds) || [])],
+      };
   const privateState = {
     excluded: state.private.excluded,
     memory: state.private.memory,
@@ -795,13 +811,10 @@ function reduceRuleInput(
       pending.play,
       pending.strength,
       {
+        previewChoice: true,
         input: {
           ruleId: pending.ruleId,
-          value: {
-            kind: 'cards',
-            choiceId: pending.choiceId,
-            cardIds: [...action.cardIds],
-          },
+          value: inputValue,
         },
       },
     );
@@ -818,6 +831,35 @@ function reduceRuleInput(
     const nextSameRuleChoice = pending.continuation.remainingChoices?.[0];
     const clearRequested =
       pending.continuation.clearRequested || currentEffects.clearRequested;
+    const dynamicRequest = currentEffects.choiceRequests?.[0];
+    if (dynamicRequest) {
+      return {
+        state: {
+          ...currentEffects.state,
+          public: { ...currentEffects.state.public, phase: 'awaitingChoice' },
+          private: {
+            ...currentEffects.state.private,
+            pendingChoice: {
+              ...dynamicRequest,
+              play: pending.play,
+              strength: pending.strength,
+              playedBy,
+              continuation: {
+                remainingChoices: [
+                  ...(currentEffects.choiceRequests ?? []).slice(1),
+                  ...(pending.continuation.remainingChoices ?? []),
+                ],
+                remainingRuleIds: pending.continuation.remainingRuleIds,
+                clearRequested,
+              },
+            },
+          },
+        },
+        events: [],
+        rejections: [],
+        setMemory: currentEffects.setMemory,
+      };
+    }
     if (nextSameRuleChoice) {
       const withEvents = appendEvents(
         currentEffects.state,
@@ -930,16 +972,39 @@ function reduceRuleInput(
     pending.play,
     pending.strength,
     {
+      previewChoice: true,
       input: {
         ruleId: pending.ruleId,
-        value: {
-          kind: 'cards',
-          choiceId: pending.choiceId,
-          cardIds: [...action.cardIds],
-        },
+        value: inputValue,
       },
     },
   );
+  const dynamicRequest = effects.choiceRequests?.[0];
+  if (dynamicRequest) {
+    return {
+      state: {
+        ...effects.state,
+        public: { ...effects.state.public, phase: 'awaitingChoice' },
+        private: {
+          ...effects.state.private,
+          pendingChoice: {
+            ...dynamicRequest,
+            play: pending.play,
+            strength: pending.strength,
+            playedBy,
+            continuation: {
+              remainingChoices: (effects.choiceRequests ?? []).slice(1),
+              remainingRuleIds: [],
+              clearRequested: false,
+            },
+          },
+        },
+      },
+      events: [],
+      rejections: [],
+      setMemory: effects.setMemory,
+    };
+  }
   return completeAfterPlay(
     config,
     effects.state,

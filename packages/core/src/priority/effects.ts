@@ -18,11 +18,13 @@ export interface EffectEmission {
   effect: Effect;
   resolvedCards?: CardId[];
   resolvedChoices?: {
+    kind: 'cards' | 'player';
     player: string;
     choiceId: string;
     messageKey: string;
-    optionCardIds: CardId[];
-    count: number;
+    optionCardIds?: CardId[];
+    optionPlayerIds?: string[];
+    count?: number;
   }[];
 }
 

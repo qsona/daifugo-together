@@ -28,6 +28,7 @@ import {
 } from '../rules/context.js';
 import type {
   CardChoiceRequest,
+  ChoiceRequestPayload,
   CardSelector,
   Effect,
   RuleInput,
@@ -43,12 +44,14 @@ const MEMORY_MAX_VALUE_BYTES = 1024;
 const MEMORY_MAX_NAMESPACE_BYTES = 16 * 1024;
 
 export interface ChoiceRequest {
+  kind: 'cards' | 'player';
   ruleId: string;
   player: string;
   choiceId: string;
   messageKey: string;
-  optionCardIds: CardId[];
-  count: number;
+  optionCardIds?: CardId[];
+  optionPlayerIds?: string[];
+  count?: number;
 }
 
 export interface EffectHookResult {
@@ -584,6 +587,27 @@ function cardChoiceRequestValid(value: unknown): value is CardChoiceRequest {
   );
 }
 
+function playerChoiceRequestValid(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    hasExactKeys(value, ['player', 'choiceId', 'players', 'messageKey']) &&
+    typeof value.player === 'string' &&
+    typeof value.choiceId === 'string' &&
+    /^[a-z][a-z0-9_]{0,63}$/u.test(value.choiceId) &&
+    Array.isArray(value.players) &&
+    value.players.length >= 1 &&
+    value.players.length <= 3 &&
+    value.players.every((player) => typeof player === 'string') &&
+    new Set(value.players).size === value.players.length &&
+    typeof value.messageKey === 'string' &&
+    /^[a-z][a-z0-9_.-]{0,63}$/u.test(value.messageKey)
+  );
+}
+
+function choiceRequestValid(value: unknown): value is ChoiceRequestPayload {
+  return cardChoiceRequestValid(value) || playerChoiceRequestValid(value);
+}
+
 function additionalChoiceRequestsValid(
   primary: { player: string; choiceId: string },
   value: unknown,
@@ -592,7 +616,7 @@ function additionalChoiceRequestsValid(
     value === undefined ||
     (Array.isArray(value) &&
       value.length <= 3 &&
-      value.every(cardChoiceRequestValid) &&
+      value.every(choiceRequestValid) &&
       new Set([primary.player, ...value.map(({ player }) => player)]).size ===
         value.length + 1 &&
       new Set([primary.choiceId, ...value.map(({ choiceId }) => choiceId)])
@@ -618,25 +642,16 @@ function effectPayloadValid(effect: unknown): effect is Effect {
         return (
           hasExactKeys(
             effect,
-            [
-              'type',
-              'player',
-              'choiceId',
-              'from',
-              'cards',
-              'count',
-              'messageKey',
-            ],
-            ['additionalChoices'],
+            ['type', 'player', 'choiceId', 'messageKey'],
+            ['from', 'cards', 'count', 'players', 'additionalChoices'],
           ) &&
-          cardChoiceRequestValid({
-            player: effect.player,
-            choiceId: effect.choiceId,
-            from: effect.from,
-            cards: effect.cards,
-            count: effect.count,
-            messageKey: effect.messageKey,
-          }) &&
+          choiceRequestValid(
+            Object.fromEntries(
+              Object.entries(effect).filter(
+                ([key]) => key !== 'type' && key !== 'additionalChoices',
+              ),
+            ),
+          ) &&
           additionalChoiceRequestsValid(
             {
               player: effect.player as string,
@@ -779,7 +794,7 @@ export function executeEffectHook(
     state,
     config.ruleChain,
     hook,
-    options.previewChoice !== true,
+    options.previewChoice !== true || options.input !== undefined,
   );
   const context = buildRuleContext(
     config,
@@ -847,7 +862,8 @@ export function executeEffectHook(
           effectIndex,
           effect,
           ...(valid &&
-          (effect.type === 'moveCards' || effect.type === 'requestChoice')
+          (effect.type === 'moveCards' ||
+            (effect.type === 'requestChoice' && !('players' in effect)))
             ? {
                 resolvedCards: resolveCardSelector(
                   invocation.state,
@@ -862,18 +878,33 @@ export function executeEffectHook(
                 resolvedChoices: [
                   effect,
                   ...(effect.additionalChoices ?? []),
-                ].map((request) => ({
-                  player: request.player,
-                  choiceId: request.choiceId,
-                  messageKey: request.messageKey,
-                  optionCardIds: resolveCardSelector(
-                    invocation.state,
-                    request.from,
-                    request.cards,
-                    contextForRule(context, ruleId).rng,
-                  ),
-                  count: request.count,
-                })),
+                ].map((request) =>
+                  'players' in request
+                    ? {
+                        kind: 'player' as const,
+                        player: request.player,
+                        choiceId: request.choiceId,
+                        messageKey: request.messageKey,
+                        optionPlayerIds: request.players.filter(
+                          (player) =>
+                            invocation.state.players[player]?.status ===
+                            'active',
+                        ),
+                      }
+                    : {
+                        kind: 'cards' as const,
+                        player: request.player,
+                        choiceId: request.choiceId,
+                        messageKey: request.messageKey,
+                        optionCardIds: resolveCardSelector(
+                          invocation.state,
+                          request.from,
+                          request.cards,
+                          contextForRule(context, ruleId).rng,
+                        ),
+                        count: request.count,
+                      },
+                ),
               }
             : {}),
         };
@@ -889,13 +920,14 @@ export function executeEffectHook(
                     collectedEffects.length !== 1
                   ? 'choice-request-must-be-alone'
                   : effect.type === 'requestChoice' &&
-                      (options.previewChoice !== true ||
-                        options.input !== undefined)
+                      options.previewChoice !== true
                     ? 'unexpected-choice-request'
                     : effect.type === 'requestChoice' &&
-                        (emission.resolvedChoices ?? []).some(
-                          (request) =>
-                            request.optionCardIds.length < request.count,
+                        (emission.resolvedChoices ?? []).some((request) =>
+                          request.kind === 'cards'
+                            ? (request.optionCardIds?.length ?? 0) <
+                              (request.count ?? 0)
+                            : (request.optionPlayerIds?.length ?? 0) === 0,
                         )
                       ? 'insufficient-choice-options'
                       : !effectAllowed(hook, effect)
@@ -920,13 +952,15 @@ export function executeEffectHook(
           }))
         : [];
     });
-    return {
-      state: invocation.state,
-      setMemory: runtime.setMemory,
-      events: [],
-      clearRequested: false,
-      ...(choiceRequests.length === 0 ? {} : { choiceRequests }),
-    };
+    if (choiceRequests.length > 0) {
+      return {
+        state: invocation.state,
+        setMemory: runtime.setMemory,
+        events: [],
+        clearRequested: false,
+        choiceRequests,
+      };
+    }
   }
   let nextState = invocation.state;
   let setMemory = runtime.setMemory;
