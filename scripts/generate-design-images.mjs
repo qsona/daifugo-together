@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * favicon / OGP の PNG を 2A 由来の SVG から生成する(E04 §2.1.2)。
+ * favicon / OGP の画像を 2A 由来の SVG から生成する(E04 §2.1.2)。
  *
  * 生成物はリポジトリにコミットする。ビルド時に毎回生成する必要はなく、
  * 実行時の外部サービス・外部フォント依存を持たないことを優先する。
@@ -69,6 +69,15 @@ async function generateOgp() {
     .toFile(join(outDir, 'ogp.png'));
 
   console.log(`  ogp.png (${String(OGP_WIDTH)}x${String(OGP_HEIGHT)}) 暫定版`);
+
+  await sharp(join(outDir, 'ogp.png'))
+    .flatten({ background: BASE_COLOR })
+    .jpeg({ quality: 90, chromaSubsampling: '4:4:4' })
+    .toFile(join(outDir, 'ogp.jpg'));
+
+  console.log(
+    `  ogp.jpg (${String(OGP_WIDTH)}x${String(OGP_HEIGHT)}) Xカード用`,
+  );
 }
 
 async function copyFaviconSvg() {

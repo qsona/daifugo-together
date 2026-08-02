@@ -51,6 +51,7 @@ const CONTENT_TYPES: Record<string, string> = {
   '.json': 'application/json; charset=utf-8',
   '.png': 'image/png',
   '.svg': 'image/svg+xml',
+  '.txt': 'text/plain; charset=utf-8',
   '.webmanifest': 'application/manifest+json; charset=utf-8',
   '.webp': 'image/webp',
   '.woff': 'font/woff',
@@ -171,6 +172,8 @@ function createStaticHandler(webDistDir: string) {
       'content-type',
       CONTENT_TYPES[extname(path)] ?? 'application/octet-stream',
     );
+    response.setHeader('content-length', String((await stat(path)).size));
+    response.setHeader('x-content-type-options', 'nosniff');
     response.setHeader('cache-control', 'no-cache');
     if (request.method === 'HEAD') {
       response.end();

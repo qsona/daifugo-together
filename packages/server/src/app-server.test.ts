@@ -369,20 +369,44 @@ describe('production app server', () => {
     expect(submit).toHaveBeenCalledTimes(2);
   });
 
-  it('PNGを正しいContent-Typeで配信する', async () => {
+  it('OGP画像をGET/HEADとも正しいContent-TypeとContent-Lengthで配信する', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'daifugo-web-dist-'));
     directories.push(directory);
-    writeFileSync(join(directory, 'ogp.png'), 'png fixture');
+    writeFileSync(join(directory, 'ogp.jpg'), 'jpeg fixture');
+    const app = createAppServer({ webDistDir: directory });
+    apps.push(app);
+    const port = await app.listen(0, '127.0.0.1');
+    const url = `http://127.0.0.1:${String(port)}/ogp.jpg?v=test`;
+
+    const get = await fetch(url);
+    expect(get.status).toBe(200);
+    expect(get.headers.get('content-type')).toBe('image/jpeg');
+    expect(get.headers.get('content-length')).toBe('12');
+    expect(get.headers.get('x-content-type-options')).toBe('nosniff');
+    await expect(get.text()).resolves.toBe('jpeg fixture');
+
+    const head = await fetch(url, { method: 'HEAD' });
+    expect(head.status).toBe(200);
+    expect(head.headers.get('content-type')).toBe('image/jpeg');
+    expect(head.headers.get('content-length')).toBe('12');
+    expect(head.headers.get('x-content-type-options')).toBe('nosniff');
+    await expect(head.text()).resolves.toBe('');
+  });
+
+  it('robots.txtをプレーンテキストで配信する', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'daifugo-web-dist-'));
+    directories.push(directory);
+    writeFileSync(join(directory, 'robots.txt'), 'User-agent: *\nAllow: /\n');
     const app = createAppServer({ webDistDir: directory });
     apps.push(app);
     const port = await app.listen(0, '127.0.0.1');
 
     await expect(
-      fetchText(`http://127.0.0.1:${String(port)}/ogp.png`),
+      fetchText(`http://127.0.0.1:${String(port)}/robots.txt`),
     ).resolves.toEqual({
       status: 200,
-      body: 'png fixture',
-      contentType: 'image/png',
+      body: 'User-agent: *\nAllow: /\n',
+      contentType: 'text/plain; charset=utf-8',
     });
   });
 

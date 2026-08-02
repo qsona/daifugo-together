@@ -22,15 +22,32 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon-180.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
 
-    <!-- OGP。og:image はスクレイパ向けに本番の絶対 URL を使う。 -->
+    <!-- OGP。画像URLはスクレイパ向けの絶対URLとし、更新時はクエリを変える。 -->
     <meta property="og:type" content="website" />
     <meta property="og:title" content="みんなでつくろう 大富豪" />
     <meta property="og:description" content="毎日どこかで、新ルール。" />
     <meta
       property="og:image"
-      content="https://daifugo-together.fly.dev/ogp.png"
+      content="https://daifugo-together.fly.dev/ogp.jpg?v=20260802-1"
+    />
+    <meta property="og:image:type" content="image/jpeg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="みんなでつくろう 大富豪 — 毎日どこかで、新ルール。"
     />
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="みんなでつくろう 大富豪" />
+    <meta name="twitter:description" content="毎日どこかで、新ルール。" />
+    <meta
+      name="twitter:image"
+      content="https://daifugo-together.fly.dev/ogp.jpg?v=20260802-1"
+    />
+    <meta
+      name="twitter:image:alt"
+      content="みんなでつくろう 大富豪 — 毎日どこかで、新ルール。"
+    />
   </head>
   <body>
     <div id="root"></div>
