@@ -72,12 +72,14 @@ function generateSets(hand: readonly Card[]): Play[] {
           continue;
         }
         for (const selected of combinations(cards, naturalCount)) {
-          sets.push({
-            kind: 'set',
-            cards: [...selected, ...jokers.slice(0, jokerCount)],
-            count,
-            repRank: rank,
-          });
+          for (const selectedJokers of combinations(jokers, jokerCount)) {
+            sets.push({
+              kind: 'set',
+              cards: [...selected, ...selectedJokers],
+              count,
+              repRank: rank,
+            });
+          }
         }
       }
     }
@@ -129,24 +131,27 @@ function generateSequences(hand: readonly Card[]): Play[] {
         const maxExtra = Math.min(spareJokers, naturalPositions.length - 1);
         for (let extra = 0; extra <= maxExtra; extra += 1) {
           for (const substituted of combinations(naturalPositions, extra)) {
-            const substitutedSet = new Set(substituted);
-            let jokerCursor = 0;
-            const cards: Card[] = [];
-            for (let position = start; position <= end; position += 1) {
-              const natural = byRankIndex.get(position);
-              if (natural && !substitutedSet.has(position)) {
-                cards.push(natural);
-              } else {
-                cards.push(jokers[jokerCursor]!);
-                jokerCursor += 1;
+            const jokerCount = missingCount + extra;
+            for (const selectedJokers of combinations(jokers, jokerCount)) {
+              const substitutedSet = new Set(substituted);
+              let jokerCursor = 0;
+              const cards: Card[] = [];
+              for (let position = start; position <= end; position += 1) {
+                const natural = byRankIndex.get(position);
+                if (natural && !substitutedSet.has(position)) {
+                  cards.push(natural);
+                } else {
+                  cards.push(selectedJokers[jokerCursor]!);
+                  jokerCursor += 1;
+                }
               }
+              sequences.push({
+                kind: 'sequence',
+                cards,
+                count,
+                repRank: CARD_RANKS[end]!,
+              });
             }
-            sequences.push({
-              kind: 'sequence',
-              cards,
-              count,
-              repRank: CARD_RANKS[end]!,
-            });
           }
         }
       }
@@ -166,13 +171,11 @@ const CANDIDATE_GENERATORS: readonly {
 ];
 
 function candidateKey(play: Play): string {
-  const naturalIds = play.cards
-    .filter((card) => card.kind === 'natural')
+  const cardIds = play.cards
     .map((card) => card.id)
     .sort()
     .join(',');
-  const jokerCount = play.cards.filter((card) => card.kind === 'joker').length;
-  return `${play.kind}|${play.count}|${play.repRank}|${naturalIds}|${jokerCount}`;
+  return `${play.kind}|${play.count}|${play.repRank}|${cardIds}`;
 }
 
 function dedupeCandidates(plays: readonly Play[]): Play[] {

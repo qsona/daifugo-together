@@ -197,7 +197,7 @@ describe('sequence candidate generation', () => {
 });
 
 describe('joker candidate generation', () => {
-  it('単体ジョーカーは repRank joker で、同一手のジョーカー単体は1候補に正規化される', () => {
+  it('2枚のジョーカーをそれぞれ単体の合法手として生成する', () => {
     const candidates = generateCandidates(
       [nat('spade', '7'), joker(0), joker(1)],
       ['jokers'],
@@ -206,8 +206,7 @@ describe('joker candidate generation', () => {
       (candidate) =>
         candidate.kind === 'single' && candidate.repRank === 'joker',
     );
-    expect(jokerSingles).toHaveLength(1);
-    expect(jokerSingles[0]?.cards[0]?.id).toBe('JK0');
+    expect(jokerSingles.map(idSet)).toEqual(['JK0', 'JK1']);
   });
 
   it('set のワイルド代用は自然札4枚とJoker2枚まで使え、JK2枚のみのペアは repRank joker', () => {
@@ -234,6 +233,14 @@ describe('joker candidate generation', () => {
     expect(
       sets.some(
         (candidate) =>
+          candidate.count === 2 &&
+          candidate.repRank === '7' &&
+          idSet(candidate) === 'JK1,S07',
+      ),
+    ).toBe(true);
+    expect(
+      sets.some(
+        (candidate) =>
           candidate.count === 5 &&
           candidate.repRank === '7' &&
           idSet(candidate) === 'C07,D07,H07,JK0,S07',
@@ -251,7 +258,7 @@ describe('joker candidate generation', () => {
     expect(jokerPair).toHaveLength(1);
     expect(jokerPair[0]).toMatchObject({ count: 2 });
     expect(sets.every((candidate) => candidate.count <= 6)).toBe(true);
-    // 同一 (kind, count, repRank, 自然ID集合, JK枚数) は1候補
+    // 同一 (kind, count, repRank, 実カードID集合) は1候補
     const keys = sets.map(
       (candidate) =>
         `${candidate.count}|${candidate.repRank}|${idSet(candidate)}`,
