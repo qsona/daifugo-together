@@ -1482,11 +1482,11 @@ function ConnectedApp({
             </Button>
           }
         >
-          <DialogBody>
-            {authResultDialog.registeredBefore
-              ? `今は「${authResultDialog.displayName}」の記録であそんでいます。`
-              : 'この端末で前にあそんでいた記録は、もう見られません。'}
-          </DialogBody>
+          {authResultDialog.registeredBefore ? (
+            <DialogBody>
+              {`今は「${authResultDialog.displayName}」の記録であそんでいます。`}
+            </DialogBody>
+          ) : null}
         </Dialog>
       )}
       {authResultDialog?.kind === 'expired' && (

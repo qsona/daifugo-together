@@ -2696,11 +2696,8 @@ describe('AU-01: 認証完了のアプリ統合', () => {
     const dialog = await screen.findByRole('dialog', {
       name: 'おかえりなさい、たろうさん',
     });
-    expect(
-      within(dialog).getByText(
-        'この端末で前にあそんでいた記録は、もう見られません。',
-      ),
-    ).toBeTruthy();
+    // 匿名からの切替では、前の記録に関する損失通知を出さない
+    expect(within(dialog).queryByText(/もう見られません/u)).toBeNull();
   });
 
   it('サインアウトは確認後に購読解除してから匿名セッションへ切り替える', async () => {
