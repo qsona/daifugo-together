@@ -56,7 +56,7 @@ export function conflictKeyOf(
     case 'clearField':
       return 'field';
     case 'requestChoice':
-      return 'choice';
+      return `choice:${ruleId}`;
     case 'skipTurns':
       return `turn:${effect.player}`;
     case 'reverseTurnOrder':

@@ -60,11 +60,13 @@ applying any `afterPlay` Effects. A valid `ruleInput` then invokes the same
 passing the response only to the requesting rule. The requesting rule returns
 ordinary Effects such as `moveCards` and `announce`.
 
-`requestChoice` must be the requesting rule's only Effect in preflight. At most
-one choice is adopted for an `afterPlay` batch; competing requests use the
-normal priority order. A rule may not request another choice while handling
-the response. These limits keep one transition serializable and deterministic
-without introducing nested continuations.
+`requestChoice` must be the requesting rule's only Effect in preflight. A rule
+may not request another choice while handling the response. When independent
+rules request a choice for the same play, the engine serializes those requests
+in normal rule-priority order and re-runs the remaining preflights after each
+response Effect. This lets later rules recompute their exact count from the
+updated hand. The single-request path retains the original batch behavior for
+backward compatibility. See the 2026-08-02 serialization amendment.
 
 ## State, replay, and compatibility
 

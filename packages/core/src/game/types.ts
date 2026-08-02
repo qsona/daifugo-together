@@ -142,6 +142,10 @@ export interface PrivateGameState {
     count: number;
     play: Play;
     strength: StrengthOrder;
+    continuation?: {
+      remainingRuleIds: RuleId[];
+      clearRequested: boolean;
+    };
   };
 }
 

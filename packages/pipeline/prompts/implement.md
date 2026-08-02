@@ -52,6 +52,9 @@ exactly from `meta.json`. The initial `afterPlay` call must return only one
 card choice, return the approved ordinary Effects (for example `moveCards`
 with a `specific` selector) instead of requesting another choice. Do not add
 rule-local pending state or implement input handling outside this contract.
+Independent `requestChoice` Effects from different enabled rules are serialized
+by the engine in rule-priority order; each rule still requests at most one
+choice and must compute its count from the current hand in its preflight call.
 
 Before finishing, run these commands from the prepared repository workspace and
 fix any failure:

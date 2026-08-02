@@ -41,19 +41,21 @@ const MEMORY_MAX_KEYS = 32;
 const MEMORY_MAX_VALUE_BYTES = 1024;
 const MEMORY_MAX_NAMESPACE_BYTES = 16 * 1024;
 
+export interface ChoiceRequest {
+  ruleId: string;
+  player: string;
+  choiceId: string;
+  messageKey: string;
+  optionCardIds: CardId[];
+  count: number;
+}
+
 export interface EffectHookResult {
   state: GameState;
   setMemory: RuleMemory;
   events: EngineEvent[];
   clearRequested: boolean;
-  choiceRequest?: {
-    ruleId: string;
-    player: string;
-    choiceId: string;
-    messageKey: string;
-    optionCardIds: CardId[];
-    count: number;
-  };
+  choiceRequests?: ChoiceRequest[];
 }
 
 function cardsInZone(state: GameState, zone: Zone): readonly Card[] {
@@ -833,28 +835,27 @@ export function executeEffectHook(
   }
   const batch = resolveEffectBatch(hook, emissions);
   if (options.previewChoice === true) {
-    const requested = batch.entries.find(
-      (entry) =>
-        entry.effect.type === 'requestChoice' &&
-        entry.resolution.status === 'adopted',
-    );
+    const choiceRequests = batch.applyOrder.flatMap((index) => {
+      const entry = batch.entries[index];
+      return entry?.effect.type === 'requestChoice'
+        ? [
+            {
+              ruleId: entry.ruleId,
+              player: entry.effect.player,
+              choiceId: entry.effect.choiceId,
+              messageKey: entry.effect.messageKey,
+              optionCardIds: entry.resolvedCards ?? [],
+              count: entry.effect.count,
+            },
+          ]
+        : [];
+    });
     return {
       state: invocation.state,
       setMemory: runtime.setMemory,
       events: [],
       clearRequested: false,
-      ...(requested?.effect.type === 'requestChoice'
-        ? {
-            choiceRequest: {
-              ruleId: requested.ruleId,
-              player: requested.effect.player,
-              choiceId: requested.effect.choiceId,
-              messageKey: requested.effect.messageKey,
-              optionCardIds: requested.resolvedCards ?? [],
-              count: requested.effect.count,
-            },
-          }
-        : {}),
+      ...(choiceRequests.length === 0 ? {} : { choiceRequests }),
     };
   }
   let nextState = invocation.state;

@@ -159,6 +159,39 @@ describe('effect priority and conflict resolution', () => {
     expect(batch.applyOrder).toEqual([0, 3]);
   });
 
+  it('異なるルールのrequestChoiceを競合させず優先順位順に採用する', () => {
+    const batch = resolveEffectBatch('afterPlay', [
+      emission('r-high', 0, 0, {
+        type: 'requestChoice',
+        player: 'p1',
+        choiceId: 'high_choice',
+        from: { kind: 'hand', player: 'p1' },
+        cards: { kind: 'all' },
+        count: 2,
+        messageKey: 'high_choice',
+      }),
+      emission('r-low', 1, 0, {
+        type: 'requestChoice',
+        player: 'p1',
+        choiceId: 'low_choice',
+        from: { kind: 'hand', player: 'p1' },
+        cards: { kind: 'all' },
+        count: 2,
+        messageKey: 'low_choice',
+      }),
+    ]);
+
+    expect(batch.entries.map((entry) => entry.conflictKey)).toEqual([
+      'choice:r-high',
+      'choice:r-low',
+    ]);
+    expect(batch.entries.map((entry) => entry.resolution)).toEqual([
+      { status: 'adopted' },
+      { status: 'adopted' },
+    ]);
+    expect(batch.applyOrder).toEqual([0, 1]);
+  });
+
   it('moveCardsの推移的なカード重複を1競合グループにする', () => {
     const batch = resolveEffectBatch('afterPlay', [
       emission(

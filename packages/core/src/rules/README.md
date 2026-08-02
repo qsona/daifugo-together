@@ -107,21 +107,24 @@ KV はルール・スコープごとに分離し、最大 32 キー、1 値 1KB�
 応答後、同じ `afterPlay(context, play, input)` が再び呼ばれます。
 `input.kind === 'cards'` と `input.choiceId` を確認し、
 `input.cardIds` を `moveCards` の `specific` selector に渡して通常の Effect
-として適用します。1回の `afterPlay` で要求できる choice は1件だけで、
-応答処理から別の choice を要求することはできません。
+として適用します。1ルールが1回の `afterPlay` で要求できる choice は1件だけで、
+応答処理から別の choice を要求することはできません。複数のルールが同じプレイで
+choiceを要求した場合は、ルール優先順位順に直列処理します。先行ルールのEffectを
+適用した後の状態から次のルールを再評価するため、残り手札に応じた要求枚数も
+各段階で再計算されます。
 
 ## 競合キー
 
-| Effect             | 競合単位                                            |
-| ------------------ | --------------------------------------------------- |
-| `clearField`       | `field`                                             |
-| `requestChoice`    | `choice`                                            |
-| `skipTurns`        | `turn:{player}`                                     |
-| `reverseTurnOrder` | `turnOrder`                                         |
-| `forceRank`        | `rank:{player}`                                     |
-| `moveCards`        | バッチ開始時に解決した CardId 集合の推移的な重なり  |
-| `setMemory`        | `memory:{ruleId}:{key}`                             |
-| `announce`         | 競合なし。非 announce Effect が全棄却なら同時に抑制 |
+| Effect             | 競合単位                                                  |
+| ------------------ | --------------------------------------------------------- |
+| `clearField`       | `field`                                                   |
+| `requestChoice`    | `choice:{ruleId}`（異なるルール間は優先順位順に直列処理） |
+| `skipTurns`        | `turn:{player}`                                           |
+| `reverseTurnOrder` | `turnOrder`                                               |
+| `forceRank`        | `rank:{player}`                                           |
+| `moveCards`        | バッチ開始時に解決した CardId 集合の推移的な重なり        |
+| `setMemory`        | `memory:{ruleId}:{key}`                                   |
+| `announce`         | 競合なし。非 announce Effect が全棄却なら同時に抑制       |
 
 競合はチェーンの最高優先ルールを採用します。同一ペイロードは `deduped`、同一ルール・同一キーの先行 Effect は `superseded` です。語彙を追加する変更では、この表と `conflictKeyOf` の exhaustive switch を同時に更新します。
 

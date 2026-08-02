@@ -678,8 +678,9 @@ function reducePlay(
       evaluated.strength,
       { previewChoice: true },
     );
-    if (preview.choiceRequest) {
-      const request = preview.choiceRequest;
+    const requests = preview.choiceRequests ?? [];
+    const request = requests[0];
+    if (request) {
       const withEvents = appendEvents(nextState, events);
       return {
         state: {
@@ -694,6 +695,16 @@ function reducePlay(
               ...request,
               play: interpretedPlay,
               strength: evaluated.strength,
+              ...(requests.length > 1
+                ? {
+                    continuation: {
+                      remainingRuleIds: config.ruleChain
+                        .filter(({ ruleId }) => ruleId !== request.ruleId)
+                        .map(({ ruleId }) => ruleId),
+                      clearRequested: false,
+                    },
+                  }
+                : {}),
             },
           },
         },
@@ -762,6 +773,105 @@ function reduceRuleInput(
     },
     private: privateState,
   };
+  if (pending.continuation) {
+    const currentConfig: GameConfig = {
+      ...config,
+      ruleChain: config.ruleChain.filter(
+        ({ ruleId }) => ruleId === pending.ruleId,
+      ),
+    };
+    const currentEffects = executeEffectHook(
+      currentConfig,
+      resumedState,
+      runtime,
+      'afterPlay',
+      pending.play,
+      pending.strength,
+      {
+        input: {
+          ruleId: pending.ruleId,
+          value: {
+            kind: 'cards',
+            choiceId: pending.choiceId,
+            cardIds: [...action.cardIds],
+          },
+        },
+      },
+    );
+    const remainingConfig: GameConfig = {
+      ...config,
+      ruleChain: config.ruleChain.filter(({ ruleId }) =>
+        pending.continuation?.remainingRuleIds.includes(ruleId),
+      ),
+    };
+    const continuedRuntime: RuleRuntime = {
+      ...runtime,
+      setMemory: currentEffects.setMemory,
+    };
+    const preview = executeEffectHook(
+      remainingConfig,
+      currentEffects.state,
+      continuedRuntime,
+      'afterPlay',
+      pending.play,
+      pending.strength,
+      { previewChoice: true },
+    );
+    const nextRequest = preview.choiceRequests?.[0];
+    const clearRequested =
+      pending.continuation.clearRequested || currentEffects.clearRequested;
+    if (nextRequest) {
+      const withEvents = appendEvents(
+        currentEffects.state,
+        currentEffects.events,
+      );
+      return {
+        state: {
+          ...withEvents,
+          public: {
+            ...withEvents.public,
+            phase: 'awaitingChoice',
+          },
+          private: {
+            ...withEvents.private,
+            pendingChoice: {
+              ...nextRequest,
+              play: pending.play,
+              strength: pending.strength,
+              continuation: {
+                remainingRuleIds: pending.continuation.remainingRuleIds.filter(
+                  (ruleId) => ruleId !== nextRequest.ruleId,
+                ),
+                clearRequested,
+              },
+            },
+          },
+        },
+        events: currentEffects.events,
+        rejections: [],
+        setMemory: currentEffects.setMemory,
+      };
+    }
+    const remainingEffects = executeEffectHook(
+      remainingConfig,
+      currentEffects.state,
+      continuedRuntime,
+      'afterPlay',
+      pending.play,
+      pending.strength,
+    );
+    return completeAfterPlay(
+      config,
+      remainingEffects.state,
+      action.player,
+      [...currentEffects.events, ...remainingEffects.events],
+      {
+        ...remainingEffects,
+        clearRequested: clearRequested || remainingEffects.clearRequested,
+      },
+      runtime,
+    );
+  }
   const effects = executeEffectHook(
     config,
     resumedState,

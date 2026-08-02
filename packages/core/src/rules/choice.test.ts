@@ -17,29 +17,32 @@ function card(id: string): Card {
   return found;
 }
 
-function fixture(module: RuleModule): {
+function fixture(moduleOrModules: RuleModule | RuleModule[]): {
   config: GameConfig;
   state: GameState;
   runtime: RuleRuntime;
 } {
-  const entry: RuleChainEntry = {
+  const modules = Array.isArray(moduleOrModules)
+    ? moduleOrModules
+    : [moduleOrModules];
+  const entries: RuleChainEntry[] = modules.map((module, position) => ({
     ruleId: module.meta.ruleId,
     name: module.meta.name,
-    position: 0,
+    position,
     priority: {
       score: 0,
-      activatedAt: 0,
+      activatedAt: position,
       ruleId: module.meta.ruleId,
     },
-    bundleHash: 'choice-fixture',
+    bundleHash: `choice-fixture-${String(position)}`,
     contractVersion: module.meta.contractVersion,
-  };
+  }));
   return {
     config: {
       gameIndex: 0,
       seats,
       gameSeed: 'choice-fixture',
-      ruleChain: [entry],
+      ruleChain: entries,
     },
     state: {
       public: {
@@ -87,7 +90,7 @@ function fixture(module: RuleModule): {
       },
     },
     runtime: {
-      port: createInProcessRuleChainPort([module]),
+      port: createInProcessRuleChainPort(modules),
       setHistory: [],
       setMemory: {},
     },
@@ -138,6 +141,54 @@ const choiceRule: RuleModule = {
           cards: { kind: 'all' },
           count: 1,
           messageKey: 'choose',
+        },
+      ];
+    },
+  },
+};
+
+const secondChoiceRule: RuleModule = {
+  meta: {
+    ruleId: 'r-choice-second',
+    name: 'second choice fixture',
+    description: 'second contract v2 choice fixture',
+    kind: 'original',
+    proposalId: 'choice-fixture-second',
+    contractVersion: 2,
+    messages: {
+      choose_second: '残りのカードを選んでください',
+    },
+  },
+  hooks: {
+    afterPlay(context, play, input) {
+      if (input?.kind === 'cards' && input.choiceId === 'discard_second') {
+        return [
+          {
+            type: 'moveCards',
+            from: { kind: 'hand', player: 'p1' },
+            to: { kind: 'discard' },
+            cards: { kind: 'specific', cardIds: [...input.cardIds] },
+          },
+        ];
+      }
+      if (
+        !play.cards.some(
+          (played) => played.kind === 'natural' && played.rank === '10',
+        )
+      ) {
+        return [];
+      }
+      const player = context.game.players.find(({ id }) => id === 'p1');
+      if (!player || player.hand.length === 0) return [];
+      return [
+        {
+          type: 'requestChoice',
+          player: 'p1',
+          choiceId: 'discard_second',
+          from: { kind: 'hand', player: 'p1' },
+          cards: { kind: 'all' },
+          count: Math.min(2, player.hand.length),
+          messageKey: 'choose_second',
         },
       ];
     },
@@ -256,5 +307,85 @@ describe('contract v2 rule choices', () => {
           JSON.stringify(event.detail).includes('contract-version'),
       ),
     ).toBe(true);
+  });
+
+  it('複数ルールのchoiceを優先順位順に直列化し、各選択後の手札から次の枚数を再計算する', () => {
+    const { config, state, runtime } = fixture([choiceRule, secondChoiceRule]);
+
+    const played = reduceGame(
+      config,
+      state,
+      { type: 'play', player: 'p1', cards: ['S10'] },
+      runtime,
+    );
+
+    expect(played.state.private.pendingChoice).toMatchObject({
+      ruleId: 'r-choice',
+      choiceId: 'discard',
+      count: 1,
+    });
+
+    const firstChoice = reduceGame(
+      config,
+      played.state,
+      {
+        type: 'ruleInput',
+        player: 'p1',
+        choiceId: 'discard',
+        cardIds: ['H03'],
+      },
+      runtime,
+    );
+
+    expect(firstChoice.rejections).toEqual([]);
+    expect(firstChoice.state.public.phase).toBe('awaitingChoice');
+    expect(firstChoice.state.public.turn).toBe('p1');
+    expect(firstChoice.state.players.p1?.hand.map(({ id }) => id)).toEqual([
+      'H04',
+    ]);
+    expect(firstChoice.state.private.pendingChoice).toMatchObject({
+      ruleId: 'r-choice-second',
+      choiceId: 'discard_second',
+      optionCardIds: ['H04'],
+      count: 1,
+    });
+    expect(firstChoice.state.private.hookCalls['r-choice:afterPlay']).toBe(1);
+    expect(
+      firstChoice.state.private.hookCalls['r-choice-second:afterPlay'],
+    ).toBeUndefined();
+    expect(firstChoice.events.some(({ type }) => type === 'turnChanged')).toBe(
+      false,
+    );
+
+    const secondChoice = reduceGame(
+      config,
+      firstChoice.state,
+      {
+        type: 'ruleInput',
+        player: 'p1',
+        choiceId: 'discard_second',
+        cardIds: ['H04'],
+      },
+      { ...runtime, setMemory: firstChoice.setMemory ?? {} },
+    );
+
+    expect(secondChoice.rejections).toEqual([]);
+    expect(secondChoice.state.public.phase).toBe('awaitingPlay');
+    expect(secondChoice.state.public.turn).toBe('p2');
+    expect(secondChoice.state.private.pendingChoice).toBeUndefined();
+    expect(secondChoice.state.players.p1?.hand).toEqual([]);
+    expect(secondChoice.state.public.discard.map(({ id }) => id)).toEqual([
+      'H03',
+      'H04',
+    ]);
+    expect(secondChoice.state.private.hookCalls).toMatchObject({
+      'r-choice:afterPlay': 1,
+      'r-choice-second:afterPlay': 1,
+    });
+    expect(
+      secondChoice.state.public.history.filter(
+        (event) => event.type === 'ruleFired',
+      ),
+    ).toHaveLength(2);
   });
 });

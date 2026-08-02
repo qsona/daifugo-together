@@ -305,7 +305,8 @@ export type Effect =
 `requestChoice → awaitingChoice → ruleInput → 同じ afterPlay の再呼び出し`
 を実装した。初期範囲は対象プレイヤー自身の残り手札から正確な枚数を選ぶ
 1段の入力で、7渡し・10捨てを表現できる。自由入力・宣言・入れ子の選択は
-引き続き対象外。詳細は
+引き続き対象外。同じプレイで異なるルールが1段ずつ要求した場合は、優先順位順に
+直列処理し、先行Effect適用後の状態から後続要求を再計算する。詳細は
 `docs/specs/2026-07-31-rule-choice-contract-v2-design.md`。
 
 以下は決定時に比較した選択肢:

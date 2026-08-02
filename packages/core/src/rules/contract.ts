@@ -189,8 +189,9 @@ export interface RuleInput {
  * | announce | yes | yes | yes | yes |
  *
  * Conflict keys are exhaustively implemented by `priority/conflictKeyOf`:
- * field, turn:{player}, turnOrder, rank:{player}, resolved card-set union,
- * and memory:{ruleId}:{key}. `announce` has no key and follows suppression.
+ * field, choice:{ruleId}, turn:{player}, turnOrder, rank:{player}, resolved
+ * card-set union, and memory:{ruleId}:{key}. Independent choice requests are
+ * serialized by rule priority. `announce` has no key and follows suppression.
  * Adding an Effect variant requires updating both this table and the exhaustive
  * switch; otherwise TypeScript compilation must fail.
  */
