@@ -1,0 +1,9 @@
+{
+  "ruleId": "r0023-k-skip",
+  "name": "K-Skip",
+  "description": "自然なランクKを含む手を出すと、その手に含まれるKの枚数と同じ人数分、現在の進行方向にいる後続プレイヤーの手番を飛ばす。",
+  "kind": "local",
+  "proposalId": "01KZ1G09RABJ4QMRPSNZYMZF9N",
+  "contractVersion": 1,
+  "messages": {}
+}
