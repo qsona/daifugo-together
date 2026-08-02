@@ -93,9 +93,9 @@ export default tseslint.config(
         {
           patterns: [
             {
-              regex: '^(?!(?:@daifugo/core|vitest)$).*',
+              regex: '^(?!(?:@daifugo/core|vitest|\\./rule\\.js)$).*',
               message:
-                'Generated rule tests may import only @daifugo/core and vitest.',
+                'Generated rule tests may import only @daifugo/core, vitest, and ./rule.js.',
             },
           ],
         },
