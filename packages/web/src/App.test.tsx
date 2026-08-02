@@ -2183,7 +2183,9 @@ describe('TU-05: ひとりで練習する部屋は待機室を挟まない', () 
     render(<App client={client} />);
 
     await user.click(screen.getByRole('button', { name: 'あそぶ' }));
-    await user.click(screen.getByRole('button', { name: 'ひとりで練習する' }));
+    await user.click(
+      screen.getByRole('button', { name: 'きほんルールで練習する' }),
+    );
 
     await waitFor(() => expect(createRoom).toHaveBeenCalledWith('basic'));
     await waitFor(() => expect(startRoom).toHaveBeenCalledOnce());
@@ -2201,7 +2203,9 @@ describe('TU-05: ひとりで練習する部屋は待機室を挟まない', () 
     render(<App client={client} />);
 
     await user.click(screen.getByRole('button', { name: 'あそぶ' }));
-    await user.click(screen.getByRole('button', { name: 'ひとりで練習する' }));
+    await user.click(
+      screen.getByRole('button', { name: 'きほんルールで練習する' }),
+    );
 
     await waitFor(() => expect(startRoom).toHaveBeenCalledOnce());
     await waitFor(() =>

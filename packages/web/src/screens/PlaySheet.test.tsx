@@ -17,28 +17,32 @@ describe('TU-01: あそぶ導線の選択', () => {
     expect(choices).toHaveLength(2);
     expect(choices[0]?.textContent).toBe('みんなのルールであそぶ');
     expect(choices[0]?.className).toContain('primary');
-    expect(choices[1]?.textContent).toContain('ひとりで練習する');
+    expect(choices[1]?.textContent).toContain('きほんルールで練習する');
     expect(choices[1]?.className).not.toContain('primary');
   });
 
-  it('ひとりで練習するには初心者アイコンとキャプションを添える', () => {
+  it('きほんルールで練習するには初心者アイコンとキャプションを添える', () => {
     render(<PlaySheet onCreate={vi.fn()} onJoin={vi.fn()} onClose={vi.fn()} />);
 
     // キャプションは説明として渡し、アクセシブル名には混ぜない。
-    const practice = screen.getByRole('button', { name: 'ひとりで練習する' });
+    const practice = screen.getByRole('button', {
+      name: 'きほんルールで練習する',
+    });
     expect(practice.querySelector('svg')).toBeTruthy();
     const caption = screen.getByText('大富豪がはじめての人はこちら');
     expect(practice.getAttribute('aria-describedby')).toBe(caption.id);
   });
 
-  it('ひとりで練習するを選ぶとすぐ きほん の部屋を作る', async () => {
+  it('きほんルールで練習するを選ぶとすぐ きほん の部屋を作る', async () => {
     const user = userEvent.setup();
     const onCreate = vi.fn();
     render(
       <PlaySheet onCreate={onCreate} onJoin={vi.fn()} onClose={vi.fn()} />,
     );
 
-    await user.click(screen.getByRole('button', { name: 'ひとりで練習する' }));
+    await user.click(
+      screen.getByRole('button', { name: 'きほんルールで練習する' }),
+    );
 
     expect(onCreate).toHaveBeenCalledWith('basic');
   });
@@ -77,7 +81,7 @@ describe('TU-01: あそぶ導線の選択', () => {
     await user.click(screen.getByRole('button', { name: 'もどる' }));
 
     expect(
-      screen.getByRole('button', { name: 'ひとりで練習する' }),
+      screen.getByRole('button', { name: 'きほんルールで練習する' }),
     ).toBeTruthy();
   });
 
@@ -218,7 +222,9 @@ describe('TU-01: あそぶ導線の選択', () => {
     expect(screen.getByRole('alert').textContent).toContain(
       'もう一度ためしてください',
     );
-    await user.click(screen.getByRole('button', { name: 'ひとりで練習する' }));
+    await user.click(
+      screen.getByRole('button', { name: 'きほんルールで練習する' }),
+    );
     expect(onCreate).toHaveBeenCalledWith('basic');
   });
 

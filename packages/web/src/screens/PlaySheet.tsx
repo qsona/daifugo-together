@@ -192,7 +192,7 @@ export function PlaySheet({
           >
             <span className={styles.modeStack}>
               <span className={styles.modeLabel} id={practiceLabelId}>
-                <span>ひとりで練習する</span>
+                <span>きほんルールで練習する</span>
                 <svg
                   className={styles.beginnerIcon}
                   viewBox="0 0 32 32"
