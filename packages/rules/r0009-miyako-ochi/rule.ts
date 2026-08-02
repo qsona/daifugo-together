@@ -1,6 +1,7 @@
-import type { RuleModule } from '@daifugo/core';
+import type { CardRank, RuleModule } from '@daifugo/core';
 
 const PREVIOUS_WINNER_KEY = 'previousWinner';
+const NO_FINISH_WITH_TWO_RULE_ID = 'r0004-no-finish-with-two';
 
 export const rule: RuleModule = {
   meta: {
@@ -14,12 +15,24 @@ export const rule: RuleModule = {
     messages: {},
   },
   hooks: {
-    afterPlay(context) {
+    afterPlay(context, play) {
       const actor = context.game.field.current?.by;
       const actorState = context.game.players.find(
         (player) => player.id === actor,
       );
       if (actorState?.standing !== 1) {
+        return [];
+      }
+
+      const forbiddenFinishRank: CardRank =
+        context.game.strength.revolution === true ? '3' : '2';
+      const isForbiddenFinish =
+        context.game.activeRuleIds.includes(NO_FINISH_WITH_TWO_RULE_ID) &&
+        play.cards.some(
+          (card) =>
+            card.kind === 'natural' && card.rank === forbiddenFinishRank,
+        );
+      if (isForbiddenFinish) {
         return [];
       }
 

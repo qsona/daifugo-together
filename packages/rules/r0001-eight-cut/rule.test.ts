@@ -38,6 +38,7 @@ function context(input: {
     contractVersion: 1,
     game: {
       gameIndex: 0,
+      activeRuleIds: ['r0001-eight-cut'],
       seats: ['p1', 'p2', 'p3', 'p4'],
       direction: 1,
       turn: actor,

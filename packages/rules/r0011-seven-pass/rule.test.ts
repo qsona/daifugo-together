@@ -57,6 +57,7 @@ function context(
     contractVersion: 2,
     game: {
       gameIndex: 0,
+      activeRuleIds: ['r0011-seven-pass'],
       seats,
       direction: options.direction ?? 1,
       turn: 'p1',

@@ -50,6 +50,7 @@ function buildGameView(
 ): GameView {
   return detachedFrozen({
     gameIndex: config.gameIndex,
+    activeRuleIds: config.ruleChain.map((entry) => entry.ruleId),
     seats: config.seats,
     direction: state.public.direction,
     turn: state.public.turn,

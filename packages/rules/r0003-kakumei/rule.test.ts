@@ -81,6 +81,7 @@ function context({
     contractVersion: 1,
     game: {
       gameIndex: 0,
+      activeRuleIds: ['r0003-kakumei'],
       seats: [PLAYER, 'p2', 'p3', 'p4'],
       direction: 1,
       turn: 'p2',
