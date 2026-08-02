@@ -1,15 +1,13 @@
 import type {
   Card,
-  CardId,
   CardRank,
-  Effect,
   Play,
-  PlayerId,
   PlayerStatus,
   RuleContext,
-  RuleInput,
 } from '@daifugo/core';
 import { describe, expect, it } from 'vitest';
+
+import { rule } from './rule.js';
 
 const seats = ['p1', 'p2', 'p3', 'p4'];
 const ranking: CardRank[] = [
@@ -82,89 +80,12 @@ function context(
   };
 }
 
-function nextActivePlayer(
-  ruleContext: RuleContext,
-  actor: PlayerId,
-): PlayerId | undefined {
-  const actorIndex = ruleContext.game.seats.indexOf(actor);
-  if (actorIndex < 0) return undefined;
-  for (let offset = 1; offset < ruleContext.game.seats.length; offset += 1) {
-    const index =
-      (actorIndex +
-        ruleContext.game.direction * offset +
-        ruleContext.game.seats.length) %
-      ruleContext.game.seats.length;
-    const candidate = ruleContext.game.seats[index];
-    if (
-      candidate &&
-      ruleContext.game.players.find(({ id }) => id === candidate)?.status ===
-        'active'
-    ) {
-      return candidate;
-    }
-  }
-  return undefined;
-}
-
-function validSelection(
-  cardIds: readonly CardId[],
-  handIds: readonly CardId[],
-  count: number,
-): boolean {
-  return (
-    cardIds.length === count &&
-    new Set(cardIds).size === count &&
-    cardIds.every((cardId) => handIds.includes(cardId))
-  );
-}
-
 function afterPlay(
   ruleContext: RuleContext,
   currentPlay: Play,
-  input?: RuleInput,
-): Effect[] {
-  const sevenCount = currentPlay.cards.filter(
-    (candidate) => candidate.kind === 'natural' && candidate.rank === '7',
-  ).length;
-  const actor = ruleContext.game.field.current?.by;
-  if (sevenCount === 0 || !actor) return [];
-  const actorState = ruleContext.game.players.find(({ id }) => id === actor);
-  const target = nextActivePlayer(ruleContext, actor);
-  if (!actorState || !target) return [];
-  const count = Math.min(sevenCount, actorState.hand.length);
-  if (count === 0) return [];
-
-  if (input) {
-    if (
-      input.choiceId !== 'seven_pass_choice' ||
-      !validSelection(
-        input.cardIds,
-        actorState.hand.map(({ id }) => id),
-        count,
-      )
-    ) {
-      return [];
-    }
-    return [
-      {
-        type: 'moveCards',
-        from: { kind: 'hand', player: actor },
-        to: { kind: 'hand', player: target },
-        cards: { kind: 'specific', cardIds: [...input.cardIds] },
-      },
-    ];
-  }
-  return [
-    {
-      type: 'requestChoice',
-      player: actor,
-      choiceId: 'seven_pass_choice',
-      from: { kind: 'hand', player: actor },
-      cards: { kind: 'all' },
-      count,
-      messageKey: 'seven_pass_choice',
-    },
-  ];
+  input?: { kind: 'cards'; choiceId: string; cardIds: string[] },
+) {
+  return rule.hooks.afterPlay?.(ruleContext, currentPlay, input) ?? [];
 }
 
 describe('7渡し', () => {
