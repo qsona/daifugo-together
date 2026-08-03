@@ -25,8 +25,8 @@ export function adminLoginHtml(
     h1 { margin: 0; font-size: 28px; letter-spacing: -.035em; }
     .lead { margin: 14px 0 24px; color: #aeb8d2; font-size: 14px; line-height: 1.75; }
     .error { margin: 0 0 18px; border: 1px solid #8b4052; border-radius: 12px; padding: 12px; color: #ffd3dc; background: rgba(139, 64, 82, .22); font-size: 13px; line-height: 1.6; }
-    button { width: 100%; border: 0; border-radius: 13px; padding: 14px 18px; color: #111827; background: #fff; font-size: 14px; font-weight: 800; cursor: pointer; }
-    button:hover { background: #e9edff; }
+    .login { display: block; width: 100%; border: 0; border-radius: 13px; padding: 14px 18px; color: #111827; background: #fff; font-size: 14px; font-weight: 800; text-align: center; text-decoration: none; cursor: pointer; }
+    .login:hover { background: #e9edff; }
     .note { margin: 18px 0 0; color: #7783a3; font-size: 12px; line-height: 1.7; }
   </style>
 </head>
@@ -37,9 +37,7 @@ export function adminLoginHtml(
     <h1>管理画面</h1>
     <p class="lead">運用状況、提案、ユーザー情報を確認するには、許可されたGoogleアカウントでログインしてください。</p>
     ${message ? `<p class="error">${message}</p>` : ''}
-    <form method="post" action="/admin/auth/google/begin">
-      <button type="submit">Googleでログイン</button>
-    </form>
+    <a class="login" href="/admin/auth/google/begin">Googleでログイン</a>
     <p class="note">この画面はBasic認証とGoogleログインの両方で保護されています。</p>
   </main>
 </body>

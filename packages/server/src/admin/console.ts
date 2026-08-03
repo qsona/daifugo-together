@@ -167,8 +167,8 @@ export class AdminConsole {
     request: IncomingMessage,
     response: ServerResponse,
   ): Promise<void> {
-    if (request.method !== 'POST') {
-      this.#methodNotAllowed(response, 'POST');
+    if (request.method !== 'GET' && request.method !== 'POST') {
+      this.#methodNotAllowed(response, 'GET, POST');
       return;
     }
     const result = await this.#auth.begin();

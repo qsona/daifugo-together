@@ -70,10 +70,11 @@ describe('AdminConsole', () => {
       headers: { authorization: basic() },
     });
     expect(login.status).toBe(200);
-    await expect(login.text()).resolves.toContain('Googleでログイン');
+    await expect(login.text()).resolves.toContain(
+      'href="/admin/auth/google/begin"',
+    );
 
     const begun = await fetch(`${baseUrl}/admin/auth/google/begin`, {
-      method: 'POST',
       headers: { authorization: basic() },
       redirect: 'manual',
     });
