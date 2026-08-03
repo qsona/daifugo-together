@@ -124,6 +124,7 @@
   --font-size-title-l: 22px;       /* セクション見出し */
   --font-size-title-m: 18px;       /* カード見出し・モーダル見出し */
   --font-size-title-s: 16px;       /* ボタンラベル・リスト項目名 */
+  --font-size-control: 16px;       /* 入力欄。iOS Safari のフォーカス時ズームを防ぐ */
   --font-size-body: 14px;          /* 本文の既定 */
   --font-size-caption: 12px;       /* 注記・補足 */
   --font-size-micro: 11px;         /* タグ・バッジ内(太字で使う) */

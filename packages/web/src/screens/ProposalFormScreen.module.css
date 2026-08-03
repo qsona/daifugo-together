@@ -49,6 +49,7 @@
   background: var(--color-bg-surface);
   color: var(--color-text-primary);
   font: inherit;
+  font-size: var(--font-size-control);
   padding: var(--space-3);
 }
 

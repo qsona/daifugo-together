@@ -89,6 +89,7 @@
       "title-l": { "value": "22px", "role": "セクション見出し" },
       "title-m": { "value": "18px", "role": "カード見出し・モーダル見出し" },
       "title-s": { "value": "16px", "role": "ボタンラベル・リスト項目名" },
+      "control": { "value": "16px", "role": "入力欄。iOS Safari のフォーカス時ズームを防ぐ" },
       "body": { "value": "14px", "role": "本文の既定" },
       "caption": { "value": "12px", "role": "注記・補足" },
       "micro": { "value": "11px", "role": "タグ・バッジ内(太字で使う)" }
