@@ -1,0 +1,12 @@
+{
+  "ruleId": "r0017-q-bomber",
+  "name": "Q-ボンバー",
+  "description": "自然なQを含む手を出すと、そのQの枚数分まで、全プレイヤーがそれぞれ自分の手札からカードを選び、選ばれたカードを捨て札へ移す。出した本人も対象に含む。",
+  "kind": "local",
+  "prefecture": "東京都",
+  "proposalId": "01KZ1F7X5MRKH0T7ENDPGS0W6E",
+  "contractVersion": 2,
+  "messages": {
+    "q_bomber_choice": "Q-ボンバーで捨てるカードを選んでください"
+  }
+}
