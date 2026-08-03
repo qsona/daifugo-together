@@ -766,7 +766,9 @@ export class PipelineJudgementService {
         item.approvedJudgementId !== source.id ||
         source.verdict !== 'approve' ||
         source.decidedBy !== 'developer' ||
-        (item.job.phase !== 'implementing' && item.job.phase !== 'pr_open') ||
+        (item.job.phase !== 'queued' &&
+          item.job.phase !== 'implementing' &&
+          item.job.phase !== 'pr_open') ||
         approvedScaffoldMeta.slug !== item.job.slug
       ) {
         return { status: 'conflict', error: 'stale_or_unamendable_spec' };

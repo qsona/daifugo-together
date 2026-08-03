@@ -329,6 +329,61 @@ describe('CX-01 judgement and VERDICT_CONFIRMATION', () => {
     ).toMatchObject({ status: 'already_confirmed', jobId });
   });
 
+  it('queuedの承認SPECを改訂し、払い出し時に最新SPECだけを返す', async () => {
+    const { persistence, proposal, local, pipeline } = await setup();
+    local.record(proposal.id, {
+      verdict: 'clean',
+      reason: '通常の提案',
+      evidence: null,
+      model: 'gpt-5.6-sol',
+      latencyMs: 5,
+    });
+    const recorded = pipeline.recordAi(proposal.id, aiApprove());
+    if (recorded.status !== 'recorded') throw new Error('AI judgement missing');
+    const approved = pipeline.approveSpec(proposal.id, {
+      judgementId: recorded.judgement.id,
+      actor: 'developer@example.test',
+      spec: spec(),
+      scaffoldMeta: scaffoldMeta(),
+    });
+    if (approved.status !== 'confirmed' || approved.jobId === undefined) {
+      throw new Error('approved job missing');
+    }
+    const amendedSpec = {
+      ...spec(),
+      summary: 'キュー取得前に改訂した最新の説明。',
+      testPoints: [...spec().testPoints, '改訂後の境界条件'],
+    };
+
+    const amended = pipeline.amendSpec(proposal.id, {
+      jobId: approved.jobId,
+      judgementId: approved.judgement.id,
+      actor: 'developer@example.test',
+      spec: amendedSpec,
+      scaffoldMeta: scaffoldMeta(),
+    });
+
+    expect(amended).toMatchObject({
+      status: 'confirmed',
+      jobId: approved.jobId,
+      judgement: {
+        decidedBy: 'developer',
+        sourceJudgementId: approved.judgement.id,
+        spec: { summary: amendedSpec.summary },
+      },
+    });
+    expect(persistence.pipeline.job(approved.jobId)?.phase).toBe('queued');
+    expect(persistence.pipeline.nextQueued()).toMatchObject({
+      job: { id: approved.jobId, phase: 'queued' },
+      approvedJudgementId:
+        amended.status === 'confirmed' ? amended.judgement.id : undefined,
+      spec: {
+        summary: amendedSpec.summary,
+        testPoints: expect.arrayContaining(['改訂後の境界条件']),
+      },
+    });
+  });
+
   it('AI却下は開発者が対象judgementを確定するまで状態を変えない', async () => {
     const { persistence, proposal, local, pipeline } = await setup();
     local.record(proposal.id, {
