@@ -1,0 +1,12 @@
+{
+  "ruleId": "r0027-bomberman",
+  "name": "ボンバーマン",
+  "description": "階段を出したプレイヤーは、その階段の構成枚数と残り手札枚数の小さい方と同じ枚数のカードを、自分の残り手札から必ず選んで捨て札へ移す。",
+  "kind": "original",
+  "proposalId": "01KZ41N2RPV012951SHW3G99KD",
+  "contractVersion": 2,
+  "engineFeatures": ["sequence"],
+  "messages": {
+    "bomberman_select_cards": "ボンバーマン：捨てるカードを選んでください。"
+  }
+}
