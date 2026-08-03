@@ -139,6 +139,30 @@ describe('RuleDexScreen', () => {
     expect(detail.textContent).toContain('1970年1月1日');
   });
 
+  it('通知から指定されたルールを一覧外から取得し、説明を展開する', async () => {
+    const focused = {
+      ...response().items[0]!,
+      id: 'r-notified',
+      name: 'お知らせのルール',
+      description: 'お知らせから直接読める説明',
+    };
+    const get = vi.fn(async () => focused);
+    render(
+      <RuleDexScreen
+        api={{ list: vi.fn(async () => response()), get }}
+        onBack={vi.fn()}
+        features={features}
+        initialRuleId="r-notified"
+      />,
+    );
+
+    const detail = await screen.findByRole('region', {
+      name: 'お知らせのルールの詳細',
+    });
+    expect(detail.textContent).toContain('お知らせから直接読める説明');
+    expect(get).toHaveBeenCalledWith('r-notified');
+  });
+
   it('フィルタ連打では古いレスポンスで新しい結果を上書きしない', async () => {
     let resolveFirst!: (value: ReturnType<typeof response>) => void;
     let resolveSecond!: (value: ReturnType<typeof response>) => void;

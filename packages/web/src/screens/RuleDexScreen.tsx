@@ -1,4 +1,5 @@
 import type {
+  RuleCatalogItem,
   RuleCatalogKind,
   RuleCatalogResponse,
   RuleCatalogStatus,
@@ -29,11 +30,13 @@ export function RuleDexScreen({
   onBack,
   features = FEATURES,
   notification,
+  initialRuleId,
 }: {
-  api: Pick<RuleCatalogApi, 'list'>;
+  api: Pick<RuleCatalogApi, 'list'> & Partial<Pick<RuleCatalogApi, 'get'>>;
   onBack: () => void;
   features?: FeatureFlags;
   notification?: ReactNode;
+  initialRuleId?: string | null;
 }) {
   const [status, setStatus] = useState<'' | RuleCatalogStatus>('');
   const [kind, setKind] = useState<'' | RuleCatalogKind>('');
@@ -43,7 +46,10 @@ export function RuleDexScreen({
   const [result, setResult] = useState<RuleCatalogResponse | null>(null);
   const [error, setError] = useState<'initial' | 'append' | null>(null);
   const [loading, setLoading] = useState(false);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(
+    initialRuleId ?? null,
+  );
+  const [focusedRule, setFocusedRule] = useState<RuleCatalogItem | null>(null);
   const requestSequence = useRef(0);
 
   const load = useCallback(
@@ -82,9 +88,26 @@ export function RuleDexScreen({
 
   useEffect(() => {
     setResult(null);
-    setExpandedId(null);
+    setExpandedId(initialRuleId ?? null);
     load(0, false);
-  }, [load]);
+  }, [initialRuleId, load]);
+  useEffect(() => {
+    if (!initialRuleId || !api.get) {
+      setFocusedRule(null);
+      return;
+    }
+    let active = true;
+    setFocusedRule(null);
+    void api.get(initialRuleId).then(
+      (rule) => {
+        if (active) setFocusedRule(rule);
+      },
+      () => undefined,
+    );
+    return () => {
+      active = false;
+    };
+  }, [api, initialRuleId]);
   useEffect(
     () => () => {
       requestSequence.current += 1;
@@ -163,7 +186,15 @@ export function RuleDexScreen({
           />
         )}
         <div className={styles.items}>
-          {result?.items
+          {(result
+            ? focusedRule &&
+              !result.items.some((rule) => rule.id === focusedRule.id)
+              ? [focusedRule, ...result.items]
+              : result.items
+            : focusedRule
+              ? [focusedRule]
+              : []
+          )
             .filter((rule) => features.elimination || rule.status === 'active')
             .map((rule) => {
               const listDescription =

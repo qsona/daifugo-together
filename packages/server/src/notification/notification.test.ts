@@ -127,6 +127,13 @@ describe('E16 notification center', () => {
           )
         : true,
     ).toBe(false);
+    expect(
+      secondPage.status === 200
+        ? secondPage.body.items.find(
+            ({ payload }) => payload.ruleId === 'r-debut-11',
+          )?.url
+        : null,
+    ).toBe('/rules?rule=r-debut-11');
     persistence.close();
   });
 

@@ -2094,6 +2094,7 @@ function ConnectedApp({
         api={ruleCatalogApi}
         onBack={() => go('menu')}
         notification={notificationBell}
+        initialRuleId={new URLSearchParams(window.location.search).get('rule')}
       />,
     );
   }

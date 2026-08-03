@@ -99,12 +99,14 @@ export function notificationPresentation(
         body: `「${proposalName}」が実装に進みました。`,
         url: '/proposals/mine',
       };
-    case 'rule_debut':
+    case 'rule_debut': {
+      const ruleId = payloadText(payload, 'ruleId', '');
       return {
         title: '新しいルールが登場！',
         body: `「${payloadText(payload, 'ruleName', '新しいルール')}」が遊べるようになりました。`,
-        url: '/rules',
+        url: ruleId ? `/rules?rule=${encodeURIComponent(ruleId)}` : '/rules',
       };
+    }
     case 'announcement':
       return {
         title: payloadText(payload, 'title', 'お知らせ'),
