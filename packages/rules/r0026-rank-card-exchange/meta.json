@@ -1,0 +1,11 @@
+{
+  "ruleId": "r0026-rank-card-exchange",
+  "name": "カード交換",
+  "description": "2ゲーム目以降の開始時、前ゲームの大富豪は自分の配られた手札から1枚を先に選び、そのカードと前ゲームの大貧民が持つ自然な強さ順で最も強い1枚を同時に交換する。",
+  "kind": "local",
+  "proposalId": "01KZ1KGGYDTKDM9AN9W4NQ3YNS",
+  "contractVersion": 2,
+  "messages": {
+    "exchange_card_choice": "大貧民に渡すカードを1枚選んでください"
+  }
+}

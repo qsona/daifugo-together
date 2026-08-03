@@ -66,5 +66,17 @@
   "r0023-k-skip": {
     "version": 1,
     "hash": "3f6f994c77636971ebbf8f13b26d644b577e8f7ac2a2f7dada8d86343dbad5e9"
+  },
+  "r0026-rank-card-exchange": {
+    "version": 1,
+    "hash": "cc1894d2c7d4ef54b2ed56e5a100538bf864e6ad6a0e1d90ef974e350147e5f8"
+  },
+  "r0027-bomberman": {
+    "version": 1,
+    "hash": "f9dbe44954addcafcf566a4031e822df4dc5096a4d225318bde46d4f3780af1e"
+  },
+  "r0028-poisoned-bun": {
+    "version": 1,
+    "hash": "c221bd55db19a3c267c1058c6f756dfa428c3ed5e85efd1cf760f9eab07d490c"
   }
 }

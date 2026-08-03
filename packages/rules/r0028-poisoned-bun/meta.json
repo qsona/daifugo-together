@@ -1,0 +1,11 @@
+{
+  "ruleId": "r0028-poisoned-bun",
+  "name": "毒まんじゅう",
+  "description": "大貧民がスペード3を含む手を出した直後、ジョーカー返しでない場合に自動発動し、その時点の大富豪の手札から最も強いカード1枚を捨て札へ移して「毒まんじゅう」のカットインを表示する。",
+  "kind": "original",
+  "proposalId": "01KZ4C5SSAPC6KTJ4NE9QWF26X",
+  "contractVersion": 1,
+  "messages": {
+    "activated": "毒まんじゅう！"
+  }
+}
