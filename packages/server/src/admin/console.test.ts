@@ -95,8 +95,11 @@ describe('AdminConsole', () => {
       }),
       redirect: 'manual',
     });
-    expect(callback.status).toBe(303);
-    expect(callback.headers.get('location')).toBe('/admin');
+    expect(callback.status).toBe(200);
+    expect(callback.headers.get('location')).toBeNull();
+    await expect(callback.text()).resolves.toContain(
+      '<meta http-equiv="refresh" content="0;url=/admin">',
+    );
     const sessionCookie = callback.headers
       .getSetCookie()
       .find((cookie) => cookie.startsWith('__Host-daifugo-admin-session='))

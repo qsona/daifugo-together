@@ -213,15 +213,25 @@ export class AdminConsole {
         `${SESSION_COOKIE}=${encodeURIComponent(result.session)}; Path=/; Max-Age=28800; HttpOnly; Secure; SameSite=Strict`,
       );
     }
-    response.statusCode = 303;
-    response.setHeader(
-      'location',
-      result.status === 'authorized'
-        ? '/admin'
-        : `/admin?auth=${result.status}`,
-    );
     response.setHeader('set-cookie', cookies);
-    response.end();
+    if (result.status !== 'authorized') {
+      response.statusCode = 303;
+      response.setHeader('location', `/admin?auth=${result.status}`);
+      response.end();
+      return;
+    }
+    // A Strict cookie set on Google's cross-site form POST is not included by
+    // every browser in the immediate 303 redirect. Finish the POST on our
+    // origin first, then start a same-site navigation from this document.
+    response.statusCode = 200;
+    response.setHeader('content-type', 'text/html; charset=utf-8');
+    response.setHeader(
+      'content-security-policy',
+      "default-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+    );
+    response.end(`<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=/admin"><title>ログイン完了</title></head>
+<body><p>ログインしました。<a href="/admin">管理画面へ進む</a></p></body></html>`);
   }
 
   #logout(request: IncomingMessage, response: ServerResponse): void {
