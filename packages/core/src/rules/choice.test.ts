@@ -148,6 +148,54 @@ const choiceRule: RuleModule = {
   },
 };
 
+const miniGameRule: RuleModule = {
+  meta: {
+    ruleId: 'r-mini-game',
+    name: 'mini game fixture',
+    description: 'server-authoritative mini game fixture',
+    kind: 'original',
+    proposalId: 'mini-game-fixture',
+    contractVersion: 2,
+    messages: { start: 'start', discard: 'discard' },
+  },
+  hooks: {
+    afterPlay(context, play, input) {
+      if (!play.cards.some((played) => played.id === 'S10')) return [];
+      if (input?.kind === 'miniGameResult') {
+        const winner = context.game.players.find(
+          (player) => player.id === input.winnerPlayerId,
+        );
+        if (!winner || winner.hand.length === 0) return [];
+        return [
+          {
+            type: 'requestChoice',
+            player: winner.id,
+            choiceId: 'mini_game_discard',
+            from: { kind: 'hand', player: winner.id },
+            cards: { kind: 'all' },
+            count: 1,
+            messageKey: 'discard',
+          },
+        ];
+      }
+      if (input !== undefined) return [];
+      return [
+        {
+          type: 'requestChoice',
+          kind: 'miniGame',
+          player: 'p1',
+          choiceId: 'mini_game',
+          miniGame: 'bomb_throw_15',
+          participants: ['p1', 'p2', 'p3', 'p4'],
+          durationMs: 12_000,
+          seed: 'fixture-seed',
+          messageKey: 'start',
+        },
+      ];
+    },
+  },
+};
+
 const secondChoiceRule: RuleModule = {
   meta: {
     ruleId: 'r-choice-second',
@@ -682,5 +730,67 @@ describe('contract v2 rule choices', () => {
     expect(transition.state.public.discard.map(({ id }) => id)).toEqual([
       'H03',
     ]);
+  });
+
+  it('ミニゲーム結果をクライアント入力で偽装できず、権威tickの確定結果だけをルールへ返す', () => {
+    const { config, state, runtime } = fixture(miniGameRule);
+    let transition = reduceGame(
+      config,
+      state,
+      { type: 'play', player: 'p1', cards: ['S10'] },
+      runtime,
+    );
+    const miniGame = transition.state.private.pendingChoice?.miniGameState;
+    expect(transition.rejections).toEqual([]);
+    expect(transition.state.private.pendingChoice).toMatchObject({
+      kind: 'miniGame',
+      choiceId: 'mini_game',
+      participants: ['p1', 'p2', 'p3', 'p4'],
+    });
+    expect(miniGame).toBeDefined();
+
+    const forged = reduceGame(
+      config,
+      transition.state,
+      {
+        type: 'ruleInput',
+        player: 'p1',
+        choiceId: 'mini_game',
+        miniGameId: miniGame!.id,
+        winnerPlayerId: 'p1',
+        scores: { p1: { score: 99, hitsTaken: 0 } },
+      },
+      runtime,
+    );
+    expect(forged.rejections[0]).toMatchObject({
+      code: 'INVALID_RULE_CHOICE',
+    });
+
+    for (let index = 0; index < 75; index += 1) {
+      const activeMiniGame =
+        transition.state.private.pendingChoice?.miniGameState;
+      expect(activeMiniGame).toBeDefined();
+      transition = reduceGame(
+        config,
+        transition.state,
+        {
+          type: 'miniGameTick',
+          player: 'p1',
+          miniGameId: activeMiniGame!.id,
+          automatedPlayerIds: ['p1', 'p2', 'p3', 'p4'],
+        },
+        { ...runtime, setMemory: transition.setMemory ?? {} },
+      );
+      expect(transition.rejections).toEqual([]);
+    }
+
+    expect(transition.state.private.pendingChoice).toMatchObject({
+      kind: 'cards',
+      choiceId: 'mini_game_discard',
+      count: 1,
+    });
+    expect(
+      transition.state.private.pendingChoice?.miniGameState,
+    ).toBeUndefined();
   });
 });

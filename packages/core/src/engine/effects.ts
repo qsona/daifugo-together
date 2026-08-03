@@ -38,13 +38,17 @@ import type {
 import { safeCollectEffects, safeModifyStrength } from '../rules/safe-port.js';
 import type { Play } from '../play/play.js';
 import { finishPlayer, forceStanding } from './standing.js';
+import {
+  createBombThrowMiniGame,
+  type BombThrowMiniGameState,
+} from '../minigame/bomb-throw.js';
 
 const MEMORY_MAX_KEYS = 32;
 const MEMORY_MAX_VALUE_BYTES = 1024;
 const MEMORY_MAX_NAMESPACE_BYTES = 16 * 1024;
 
 export interface ChoiceRequest {
-  kind: 'cards' | 'player';
+  kind: 'cards' | 'player' | 'miniGame';
   ruleId: string;
   player: string;
   choiceId: string;
@@ -52,6 +56,11 @@ export interface ChoiceRequest {
   optionCardIds?: CardId[];
   optionPlayerIds?: string[];
   count?: number;
+  miniGame?: 'bomb_throw_15';
+  participants?: string[];
+  durationMs?: number;
+  seed?: string;
+  miniGameState?: BombThrowMiniGameState;
 }
 
 export interface EffectHookResult {
@@ -604,8 +613,45 @@ function playerChoiceRequestValid(value: unknown): boolean {
   );
 }
 
+function miniGameChoiceRequestValid(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    hasExactKeys(value, [
+      'kind',
+      'player',
+      'choiceId',
+      'miniGame',
+      'participants',
+      'durationMs',
+      'seed',
+      'messageKey',
+    ]) &&
+    value.kind === 'miniGame' &&
+    typeof value.player === 'string' &&
+    typeof value.choiceId === 'string' &&
+    /^[a-z][a-z0-9_]{0,63}$/u.test(value.choiceId) &&
+    value.miniGame === 'bomb_throw_15' &&
+    Array.isArray(value.participants) &&
+    value.participants.length >= 2 &&
+    value.participants.length <= 4 &&
+    value.participants.every((player) => typeof player === 'string') &&
+    new Set(value.participants).size === value.participants.length &&
+    value.participants.includes(value.player) &&
+    value.durationMs === 12_000 &&
+    typeof value.seed === 'string' &&
+    value.seed.length >= 1 &&
+    value.seed.length <= 64 &&
+    typeof value.messageKey === 'string' &&
+    /^[a-z][a-z0-9_.-]{0,63}$/u.test(value.messageKey)
+  );
+}
+
 function choiceRequestValid(value: unknown): value is ChoiceRequestPayload {
-  return cardChoiceRequestValid(value) || playerChoiceRequestValid(value);
+  return (
+    cardChoiceRequestValid(value) ||
+    playerChoiceRequestValid(value) ||
+    miniGameChoiceRequestValid(value)
+  );
 }
 
 function additionalChoiceRequestsValid(
@@ -643,7 +689,18 @@ function effectPayloadValid(effect: unknown): effect is Effect {
           hasExactKeys(
             effect,
             ['type', 'player', 'choiceId', 'messageKey'],
-            ['from', 'cards', 'count', 'players', 'additionalChoices'],
+            [
+              'from',
+              'cards',
+              'count',
+              'players',
+              'miniGame',
+              'participants',
+              'durationMs',
+              'seed',
+              'kind',
+              'additionalChoices',
+            ],
           ) &&
           choiceRequestValid(
             Object.fromEntries(
@@ -863,7 +920,9 @@ export function executeEffectHook(
           effect,
           ...(valid &&
           (effect.type === 'moveCards' ||
-            (effect.type === 'requestChoice' && !('players' in effect)))
+            (effect.type === 'requestChoice' &&
+              !('players' in effect) &&
+              !('miniGame' in effect)))
             ? {
                 resolvedCards: resolveCardSelector(
                   invocation.state,
@@ -879,31 +938,56 @@ export function executeEffectHook(
                   effect,
                   ...(effect.additionalChoices ?? []),
                 ].map((request) =>
-                  'players' in request
+                  'miniGame' in request
                     ? {
-                        kind: 'player' as const,
+                        kind: 'miniGame' as const,
                         player: request.player,
                         choiceId: request.choiceId,
                         messageKey: request.messageKey,
-                        optionPlayerIds: request.players.filter(
+                        miniGame: request.miniGame,
+                        participants: request.participants.filter(
                           (player) =>
                             invocation.state.players[player]?.status ===
                             'active',
                         ),
+                        durationMs: request.durationMs,
+                        seed: request.seed,
+                        miniGameState: createBombThrowMiniGame({
+                          id: `${ruleId}:${request.choiceId}:${request.seed}`,
+                          seed: request.seed,
+                          participants: request.participants.filter(
+                            (player) =>
+                              invocation.state.players[player]?.status ===
+                              'active',
+                          ),
+                          durationMs: request.durationMs,
+                        }),
                       }
-                    : {
-                        kind: 'cards' as const,
-                        player: request.player,
-                        choiceId: request.choiceId,
-                        messageKey: request.messageKey,
-                        optionCardIds: resolveCardSelector(
-                          invocation.state,
-                          request.from,
-                          request.cards,
-                          contextForRule(context, ruleId).rng,
-                        ),
-                        count: request.count,
-                      },
+                    : 'players' in request
+                      ? {
+                          kind: 'player' as const,
+                          player: request.player,
+                          choiceId: request.choiceId,
+                          messageKey: request.messageKey,
+                          optionPlayerIds: request.players.filter(
+                            (player) =>
+                              invocation.state.players[player]?.status ===
+                              'active',
+                          ),
+                        }
+                      : {
+                          kind: 'cards' as const,
+                          player: request.player,
+                          choiceId: request.choiceId,
+                          messageKey: request.messageKey,
+                          optionCardIds: resolveCardSelector(
+                            invocation.state,
+                            request.from,
+                            request.cards,
+                            contextForRule(context, ruleId).rng,
+                          ),
+                          count: request.count,
+                        },
                 ),
               }
             : {}),
@@ -927,7 +1011,9 @@ export function executeEffectHook(
                           request.kind === 'cards'
                             ? (request.optionCardIds?.length ?? 0) <
                               (request.count ?? 0)
-                            : (request.optionPlayerIds?.length ?? 0) === 0,
+                            : request.kind === 'player'
+                              ? (request.optionPlayerIds?.length ?? 0) === 0
+                              : (request.participants?.length ?? 0) < 2,
                         )
                       ? 'insufficient-choice-options'
                       : !effectAllowed(hook, effect)

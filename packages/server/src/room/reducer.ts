@@ -553,8 +553,15 @@ function deadlineAtForTurn(
   ) {
     return null;
   }
+  if (engine.currentGame?.private.pendingChoice?.kind === 'miniGame') {
+    return null;
+  }
+  const activePlayer =
+    engine.currentGame?.public.phase === 'awaitingChoice'
+      ? engine.currentGame.private.pendingChoice?.player
+      : engine.currentGame?.public.turn;
   const member = members.find(
-    (candidate) => candidate.memberId === engine.currentGame?.public.turn,
+    (candidate) => candidate.memberId === activePlayer,
   );
   if (!member || member.isAI || member.departed) {
     return null;
@@ -1130,6 +1137,96 @@ function gameAction(
   );
 }
 
+function miniGameAction(
+  state: RoomState,
+  action: Extract<RoomAction, { type: 'miniGameInput' | 'miniGameTick' }>,
+  options: RoomReducerOptions,
+): RoomTransition {
+  if (state.phase !== 'playing' || !state.engine?.currentGame) {
+    return rejected(state, 'NOT_PLAYING');
+  }
+  const pending = state.engine.currentGame.private.pendingChoice;
+  if (
+    pending?.kind !== 'miniGame' ||
+    !pending.miniGameState ||
+    pending.miniGameState.id !== action.miniGameId
+  ) {
+    return rejected(state, 'ILLEGAL_PLAY');
+  }
+  const actor =
+    action.type === 'miniGameInput'
+      ? state.members.find((member) => member.memberId === action.memberId)
+      : state.members.find((member) => member.memberId === pending.player);
+  if (
+    !actor ||
+    actor.seatId === null ||
+    !pending.participants?.includes(actor.memberId) ||
+    (action.type === 'miniGameInput' &&
+      (actor.isAI || actor.aiActing || !actor.connected))
+  ) {
+    return rejected(state, 'NOT_YOUR_TURN');
+  }
+  const automatedPlayerIds = (pending.participants ?? []).filter((playerId) => {
+    const member = state.members.find(
+      (candidate) => candidate.memberId === playerId,
+    );
+    return !member || member.isAI || member.aiActing || !member.connected;
+  });
+  const setAction: Parameters<typeof reduceSet>[1] =
+    action.type === 'miniGameInput'
+      ? {
+          type: 'miniGameCommand',
+          player: actor.memberId,
+          miniGameId: action.miniGameId,
+          ...(action.direction === undefined
+            ? {}
+            : { direction: action.direction }),
+          ...(action.throwBomb === undefined
+            ? {}
+            : { throwBomb: action.throwBomb }),
+        }
+      : {
+          type: 'miniGameTick',
+          player: actor.memberId,
+          miniGameId: action.miniGameId,
+          automatedPlayerIds,
+        };
+  const transition = reduceSet(
+    state.engine,
+    setAction,
+    rulePort(options, state.engine.setId),
+  );
+  reportRuleIncidents(options, state.engine.setId, transition.events);
+  if (
+    transition.rejections.length > 0 ||
+    transition.acceptedAction === undefined
+  ) {
+    return rejected(state, 'ILLEGAL_PLAY');
+  }
+  return committed(
+    state,
+    {
+      engine: transition.state,
+      turnDeadlineAt:
+        action.type === 'miniGameTick'
+          ? deadlineAtForTurn(
+              transition.state,
+              state.members,
+              state.mode,
+              action.now,
+              options,
+            )
+          : state.turnDeadlineAt,
+    },
+    publicEngineEvents(
+      state.members,
+      state.fixedRules ?? [],
+      transition.events,
+      options.resolveRuleMessage,
+    ),
+  );
+}
+
 function advanceIntermission(
   state: RoomState,
   action: { now: number },
@@ -1341,6 +1438,9 @@ export function reduceRoom(
     case 'pass':
     case 'autoAct':
       return gameAction(state, action, options);
+    case 'miniGameInput':
+    case 'miniGameTick':
+      return miniGameAction(state, action, options);
     case 'advanceIntermission':
       return advanceIntermission(state, action, options);
     case 'readyIntermission':

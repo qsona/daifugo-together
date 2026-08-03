@@ -198,18 +198,29 @@ export function* createSimulationRun(
         if (!pending) {
           throw new Error('Simulation choice phase has no pending choice');
         }
-        action = {
-          type: 'ruleInput',
-          player: pending.player,
-          choiceId: pending.choiceId,
-          ...((pending.kind ?? 'cards') === 'player'
-            ? { playerId: [...(pending.optionPlayerIds ?? [])].sort()[0] ?? '' }
+        action =
+          pending.kind === 'miniGame' && pending.miniGameState
+            ? {
+                type: 'miniGameTick',
+                player: pending.player,
+                miniGameId: pending.miniGameState.id,
+                automatedPlayerIds: pending.participants ?? [],
+              }
             : {
-                cardIds: [...(pending.optionCardIds ?? [])]
-                  .sort()
-                  .slice(0, pending.count ?? 0),
-              }),
-        };
+                type: 'ruleInput',
+                player: pending.player,
+                choiceId: pending.choiceId,
+                ...((pending.kind ?? 'cards') === 'player'
+                  ? {
+                      playerId:
+                        [...(pending.optionPlayerIds ?? [])].sort()[0] ?? '',
+                    }
+                  : {
+                      cardIds: [...(pending.optionCardIds ?? [])]
+                        .sort()
+                        .slice(0, pending.count ?? 0),
+                    }),
+              };
       } else {
         const player = state.currentGame.public.turn;
         if (!player) {

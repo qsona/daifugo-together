@@ -251,7 +251,8 @@ function gameView(
     },
     turn:
       (game.public.phase === 'awaitingPlay' ||
-        game.public.phase === 'awaitingChoice') &&
+        (game.public.phase === 'awaitingChoice' &&
+          game.private.pendingChoice?.kind !== 'miniGame')) &&
       (game.private.pendingChoice?.player ?? game.public.turn)
         ? {
             seat: requiredSeat(
@@ -268,6 +269,50 @@ function gameView(
     previousResults: engine.results.map((result) => resultView(result, seats)),
     yourHand: sortCards(game.players[memberId]?.hand ?? []),
     legalMoves: playerSnapshot.legalMoves,
+    miniGame: game.private.pendingChoice?.miniGameState
+      ? {
+          id: game.private.pendingChoice.miniGameState.id,
+          kind: game.private.pendingChoice.miniGameState.kind,
+          phase: game.private.pendingChoice.miniGameState.phase,
+          elapsedMs: game.private.pendingChoice.miniGameState.elapsedMs,
+          durationMs: game.private.pendingChoice.miniGameState.durationMs,
+          width: game.private.pendingChoice.miniGameState.width,
+          height: game.private.pendingChoice.miniGameState.height,
+          obstacles: game.private.pendingChoice.miniGameState.obstacles,
+          players: Object.values(
+            game.private.pendingChoice.miniGameState.players,
+          ).map((player) => ({
+            seat: requiredSeat(seats, player.playerId),
+            x: player.x,
+            y: player.y,
+            direction: player.direction,
+            score: player.score,
+            hitsTaken: player.hitsTaken,
+            invulnerable:
+              player.invulnerableUntilMs >
+              game.private.pendingChoice!.miniGameState!.elapsedMs,
+          })),
+          bombs: game.private.pendingChoice.miniGameState.bombs.map((bomb) => ({
+            id: bomb.id,
+            seat: requiredSeat(seats, bomb.ownerPlayerId),
+            x: bomb.x,
+            y: bomb.y,
+          })),
+          blasts: game.private.pendingChoice.miniGameState.blasts.map(
+            (blast) => ({
+              seat: requiredSeat(seats, blast.ownerPlayerId),
+              x: blast.x,
+              y: blast.y,
+            }),
+          ),
+          winnerSeat: game.private.pendingChoice.miniGameState.winnerPlayerId
+            ? requiredSeat(
+                seats,
+                game.private.pendingChoice.miniGameState.winnerPlayerId,
+              )
+            : null,
+        }
+      : null,
     pendingChoice: game.private.pendingChoice
       ? {
           kind: game.private.pendingChoice.kind ?? 'cards',

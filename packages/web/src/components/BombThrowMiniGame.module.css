@@ -1,0 +1,237 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  color: var(--color-text-on-fill);
+  background: var(--color-overlay);
+  backdrop-filter: blur(8px);
+}
+
+.panel {
+  width: min(100%, 560px);
+  padding: 14px;
+  border: var(--border-bold) solid var(--color-gold-400);
+  border-radius: var(--radius-l);
+  background: linear-gradient(
+    155deg,
+    var(--color-navy-800),
+    var(--color-navy-900) 68%
+  );
+  box-shadow: var(--shadow-hard-l);
+}
+
+.header,
+.scoreboard,
+.controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.header h2,
+.eyebrow {
+  margin: 0;
+}
+
+.eyebrow {
+  color: var(--color-gold-400);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+}
+
+.timer {
+  min-width: 78px;
+  color: var(--color-navy-900);
+  padding: 8px 10px;
+  border-radius: var(--radius-m);
+  text-align: center;
+  background: var(--color-gold-400);
+  font-variant-numeric: tabular-nums;
+}
+
+.arena {
+  position: relative;
+  display: grid;
+  aspect-ratio: 1;
+  margin: 12px 0;
+  overflow: hidden;
+  border: var(--border-heavy) solid var(--color-navy-900);
+  border-radius: var(--radius-l);
+  background: var(--color-green-700);
+}
+
+.cell {
+  border: var(--border-thin) solid var(--color-green-600);
+  background: none;
+}
+
+.obstacle,
+.bomb,
+.blast,
+.player {
+  z-index: 2;
+  display: grid;
+  place-self: center;
+  place-items: center;
+  width: 76%;
+  aspect-ratio: 1;
+}
+
+.obstacle {
+  border: var(--border-bold) solid var(--color-cream-200);
+  border-radius: var(--radius-s);
+  color: var(--color-cream-200);
+  background: repeating-linear-gradient(
+    45deg,
+    var(--color-red-600) 0 4px,
+    var(--color-red-700) 4px 8px
+  );
+  box-shadow: none;
+}
+
+.bomb {
+  width: 58%;
+  border: var(--border-heavy) solid var(--color-navy-900);
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 35% 28%,
+    var(--color-navy-600),
+    var(--color-navy-900) 60%
+  );
+  box-shadow: var(--shadow-hard-s);
+}
+
+.bomb::after {
+  content: '';
+  width: 45%;
+  height: 18%;
+  translate: 60% -225%;
+  rotate: -42deg;
+  border-radius: var(--radius-pill);
+  background: var(--color-gold-400);
+  box-shadow: none;
+}
+
+.blast {
+  z-index: 4;
+  width: 92%;
+  color: var(--color-white);
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    var(--color-white),
+    var(--color-gold-400) 25%,
+    var(--color-red-500) 62%,
+    transparent 67%
+  );
+  filter: none;
+  font-size: 1.5rem;
+}
+
+.player {
+  z-index: 3;
+  width: 70%;
+  border: var(--border-heavy) solid var(--color-cream-100);
+  border-radius: var(--radius-m);
+  color: var(--color-navy-900);
+  background: var(--color-cream-200);
+  box-shadow: var(--shadow-hard-s);
+  font-size: clamp(1rem, 6vw, 2.1rem);
+  font-weight: 900;
+  transition:
+    grid-column 150ms linear,
+    grid-row 150ms linear;
+}
+
+.player[data-seat='1'],
+.player[data-seat='2'] {
+  color: var(--color-red-600);
+}
+
+.invulnerable {
+  opacity: 0.45;
+  filter: brightness(1.6);
+}
+
+.curtain {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  display: grid;
+  place-content: center;
+  padding: 20px;
+  text-align: center;
+  font-size: clamp(1.25rem, 6vw, 2rem);
+  font-weight: 1000;
+  text-shadow: var(--shadow-hard-m);
+  background: var(--color-overlay);
+}
+
+.winnerSuit {
+  display: block;
+  color: var(--color-gold-400);
+  font-size: 3rem;
+}
+
+.scoreboard {
+  justify-content: center;
+  flex-wrap: wrap;
+  font-size: 0.8rem;
+}
+
+.scoreboard span {
+  padding: 4px 8px;
+  border: var(--border-thin) solid var(--color-navy-600);
+  border-radius: var(--radius-pill);
+}
+
+.controls {
+  margin-top: 12px;
+}
+
+.dpad {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 5px;
+  flex: 1;
+}
+
+.dpad button,
+.throwButton {
+  min-height: 48px;
+  touch-action: none;
+  border: 0;
+  border-radius: var(--radius-m);
+  color: var(--color-white);
+  font: inherit;
+  font-weight: 900;
+  background: var(--color-navy-600);
+  box-shadow: var(--shadow-hard-s);
+}
+
+.throwButton {
+  min-width: 108px;
+  background: var(--color-red-600);
+}
+
+.spectating {
+  margin: 12px 0 0;
+  text-align: center;
+  color: var(--color-cream-200);
+}
+
+@media (max-height: 700px) {
+  .panel {
+    width: min(100%, 430px);
+  }
+
+  .arena {
+    max-height: 58vh;
+    margin: 7px auto;
+  }
+}

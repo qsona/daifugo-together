@@ -161,6 +161,15 @@ export type RoomAction =
     }
   | { type: 'pass'; memberId: string; turnSeq: number; now: number }
   | {
+      type: 'miniGameInput';
+      memberId: string;
+      miniGameId: string;
+      direction?: 'up' | 'down' | 'left' | 'right' | 'stop';
+      throwBomb?: boolean;
+      now: number;
+    }
+  | { type: 'miniGameTick'; miniGameId: string; now: number }
+  | {
       type: 'autoAct';
       memberId: string;
       turnSeq: number;

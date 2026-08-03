@@ -186,6 +186,18 @@ export class MultiplayerClient {
     );
   }
 
+  async miniGameInput(
+    miniGameId: string,
+    input: {
+      direction?: 'up' | 'down' | 'left' | 'right' | 'stop';
+      throwBomb?: boolean;
+    },
+  ): Promise<void> {
+    await this.#request((ack) =>
+      this.#socket.emit('game:miniGameInput', { miniGameId, ...input }, ack),
+    );
+  }
+
   async pass(turnSeq: number): Promise<void> {
     await this.#request((ack) =>
       this.#socket.emit('game:pass', { turnSeq }, ack),

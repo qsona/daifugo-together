@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { createBombThrowMiniGame } from '@daifugo/core';
 
 import { createRoomState, reduceRoom } from './reducer.js';
 import { RoomManager } from './manager.js';
@@ -76,6 +77,75 @@ function setResult(base: RoomState, respondBy: number): RoomState {
 }
 
 describe('RoomTimerCoordinator', () => {
+  it('ミニゲーム中は通常手番timerより優先して200msごとに権威tickを送る', () => {
+    const started = reduceRoom(
+      state(),
+      {
+        type: 'start',
+        memberId: 'member-1',
+        now: 1_000,
+        setSeed: 'mini-game-timer-set',
+      },
+      { random: () => 0.999_999 },
+    ).state;
+    const participantIds = started.members
+      .filter((member) => member.seatId !== null)
+      .slice(0, 2)
+      .map((member) => member.memberId);
+    const miniGameState = createBombThrowMiniGame({
+      id: 'mini-game-1',
+      seed: 'seed',
+      participants: participantIds,
+    });
+    const withMiniGame: RoomState = {
+      ...started,
+      engine: {
+        ...started.engine!,
+        currentGame: {
+          ...started.engine!.currentGame!,
+          public: {
+            ...started.engine!.currentGame!.public,
+            phase: 'awaitingChoice',
+          },
+          private: {
+            ...started.engine!.currentGame!.private,
+            pendingChoice: {
+              kind: 'miniGame',
+              ruleId: 'r-mini-game',
+              player: participantIds[0]!,
+              choiceId: 'mini_game',
+              messageKey: 'start',
+              participants: participantIds,
+              miniGame: 'bomb_throw_15',
+              durationMs: 12_000,
+              seed: 'seed',
+              miniGameState,
+            },
+          },
+        },
+      },
+      turnDeadlineAt: null,
+    };
+    const room = authority(withMiniGame);
+    const timers: FakeTimer[] = [];
+    const coordinator = new RoomTimerCoordinator(room.api, {
+      now: () => 2_000,
+      decideTurn: async () => null,
+      setTimer: (callback, delayMs) => {
+        const timer = { callback, delayMs, cleared: false };
+        timers.push(timer);
+        return timer;
+      },
+    });
+
+    coordinator.sync(withMiniGame);
+    expect(timers[0]?.delayMs).toBe(200);
+    timers[0]?.callback();
+    expect(room.actions).toEqual([
+      { type: 'miniGameTick', miniGameId: 'mini-game-1', now: 2_000 },
+    ]);
+  });
+
   it('ゲーム間リザルトをサーバー確定時刻まで待ち、再syncで15秒へ戻さない', () => {
     const started = reduceRoom(
       state(),

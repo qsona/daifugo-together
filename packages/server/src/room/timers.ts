@@ -32,7 +32,8 @@ export interface RoomTimerAuthority {
           reason: 'lobbyExpired' | 'abandoned';
           now: number;
           expectedAt: number;
-        },
+        }
+      | { type: 'miniGameTick'; miniGameId: string; now: number },
   ): RoomTransition | undefined;
 }
 
@@ -73,7 +74,7 @@ interface LifecycleTimerSpecification {
 
 interface ScheduledRoomTimer {
   fingerprint: string;
-  kind: 'intermission' | 'setResult' | 'turn' | 'lifecycle';
+  kind: 'intermission' | 'setResult' | 'turn' | 'miniGame' | 'lifecycle';
   handle: unknown;
 }
 
@@ -178,6 +179,17 @@ export class RoomTimerCoordinator {
         kind: ScheduledRoomTimer['kind'];
       }
     | undefined {
+    const miniGame =
+      state.phase === 'playing' && state.engine?.phase.name === 'gameInProgress'
+        ? state.engine.currentGame?.private.pendingChoice?.miniGameState
+        : undefined;
+    if (miniGame) {
+      return {
+        fingerprint: `${state.engine!.setId}:miniGame:${miniGame.id}:${miniGame.elapsedMs}`,
+        delayMs: 200,
+        kind: 'miniGame',
+      };
+    }
     if (
       state.phase === 'playing' &&
       state.engine?.phase.name === 'interimResult'
@@ -200,15 +212,19 @@ export class RoomTimerCoordinator {
         kind: 'setResult',
       };
     }
+    const turnMemberId =
+      state.engine?.currentGame?.public.phase === 'awaitingChoice'
+        ? state.engine.currentGame.private.pendingChoice?.player
+        : state.engine?.currentGame?.public.turn;
     if (
       this.#decideTurn &&
       state.phase === 'playing' &&
       state.engine?.phase.name === 'gameInProgress' &&
       (state.engine.currentGame?.public.phase === 'awaitingPlay' ||
         state.engine.currentGame?.public.phase === 'awaitingChoice') &&
-      state.engine.currentGame.public.turn
+      turnMemberId
     ) {
-      const memberId = state.engine.currentGame.public.turn;
+      const memberId = turnMemberId;
       const member = state.members.find(
         (candidate) => candidate.memberId === memberId,
       );
@@ -257,16 +273,24 @@ export class RoomTimerCoordinator {
         return;
       }
       const transition =
-        previous.phase === 'setResult'
+        scheduled.kind === 'miniGame'
           ? this.#authority.apply(roomId, {
-              type: 'expireSetResult',
+              type: 'miniGameTick',
+              miniGameId:
+                previous.engine?.currentGame?.private.pendingChoice
+                  ?.miniGameState?.id ?? '',
               now: this.#now(),
-              setSeed: this.#createSetSeed(),
             })
-          : this.#authority.apply(roomId, {
-              type: 'advanceIntermission',
-              now: this.#now(),
-            });
+          : previous.phase === 'setResult'
+            ? this.#authority.apply(roomId, {
+                type: 'expireSetResult',
+                now: this.#now(),
+                setSeed: this.#createSetSeed(),
+              })
+            : this.#authority.apply(roomId, {
+                type: 'advanceIntermission',
+                now: this.#now(),
+              });
       if (!transition?.accepted) {
         const latest = this.#authority.get(roomId);
         if (latest) this.sync(latest);
@@ -291,7 +315,11 @@ export class RoomTimerCoordinator {
       if (!previous || this.#closed || !this.#decideTurn) return;
       const specification = this.#specification(previous);
       if (specification?.fingerprint !== fingerprint) return;
-      const memberId = previous.engine?.currentGame?.public.turn;
+      const game = previous.engine?.currentGame;
+      const memberId =
+        game?.public.phase === 'awaitingChoice'
+          ? game.private.pendingChoice?.player
+          : game?.public.turn;
       if (!memberId) return;
       const cards = await this.#decideTurn(previous, memberId);
       const latest = this.#authority.get(roomId);

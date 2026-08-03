@@ -3,6 +3,7 @@ export * from './engine/reducer.js';
 export * from './engine/effects.js';
 export * from './game/start-game.js';
 export * from './game/types.js';
+export * from './minigame/bomb-throw.js';
 export * from './notification.js';
 export * from './play/candidates.js';
 export * from './play/play.js';

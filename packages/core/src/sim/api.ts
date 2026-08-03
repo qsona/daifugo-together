@@ -155,21 +155,28 @@ export function createSimulationApi(
         const resumed = reduceGame(
           config,
           transition.state,
-          {
-            type: 'ruleInput',
-            player: pending.player,
-            choiceId: pending.choiceId,
-            ...((pending.kind ?? 'cards') === 'player'
-              ? {
-                  playerId:
-                    [...(pending.optionPlayerIds ?? [])].sort()[0] ?? '',
-                }
-              : {
-                  cardIds: [...(pending.optionCardIds ?? [])]
-                    .sort()
-                    .slice(0, pending.count ?? 0),
-                }),
-          },
+          pending.kind === 'miniGame' && pending.miniGameState
+            ? {
+                type: 'miniGameTick',
+                player: pending.player,
+                miniGameId: pending.miniGameState.id,
+                automatedPlayerIds: pending.participants ?? [],
+              }
+            : {
+                type: 'ruleInput',
+                player: pending.player,
+                choiceId: pending.choiceId,
+                ...((pending.kind ?? 'cards') === 'player'
+                  ? {
+                      playerId:
+                        [...(pending.optionPlayerIds ?? [])].sort()[0] ?? '',
+                    }
+                  : {
+                      cardIds: [...(pending.optionCardIds ?? [])]
+                        .sort()
+                        .slice(0, pending.count ?? 0),
+                    }),
+              },
           {
             ...runtimeFor(position),
             setMemory: transition.setMemory ?? position.setMemory,

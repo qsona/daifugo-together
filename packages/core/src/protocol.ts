@@ -4,6 +4,7 @@ import type { Card, Suit } from './cards/card.js';
 import type { NotificationView } from './notification.js';
 import type { Play } from './play/play.js';
 import type { Standing, Title } from './game/types.js';
+import type { BombThrowDirection } from './minigame/bomb-throw.js';
 
 export type SeatId = 0 | 1 | 2 | 3;
 
@@ -177,8 +178,30 @@ export interface MultiplayerGameView {
   previousResults: GameResultView[];
   yourHand: Card[];
   legalMoves: Play[] | null;
+  miniGame?: {
+    id: string;
+    kind: 'bomb_throw_15';
+    phase: 'countdown' | 'playing' | 'result';
+    elapsedMs: number;
+    durationMs: number;
+    width: number;
+    height: number;
+    obstacles: { x: number; y: number }[];
+    players: {
+      seat: SeatId;
+      x: number;
+      y: number;
+      direction: BombThrowDirection;
+      score: number;
+      hitsTaken: number;
+      invulnerable: boolean;
+    }[];
+    bombs: { id: string; seat: SeatId; x: number; y: number }[];
+    blasts: { x: number; y: number; seat: SeatId }[];
+    winnerSeat: SeatId | null;
+  } | null;
   pendingChoice?: {
-    kind?: 'cards' | 'player';
+    kind?: 'cards' | 'player' | 'miniGame';
     ruleId: string;
     choiceId: string;
     message: string | null;
@@ -262,6 +285,16 @@ export const clientPayloadSchemas = {
       })
       .strict(),
   ]),
+  'game:miniGameInput': z
+    .object({
+      miniGameId: z.string().min(1).max(200),
+      direction: z.enum(['up', 'down', 'left', 'right', 'stop']).optional(),
+      throwBomb: z.boolean().optional(),
+    })
+    .strict()
+    .refine(
+      (value) => value.direction !== undefined || value.throwBomb === true,
+    ),
   'game:pass': z.object({ turnSeq: turnSeqSchema }).strict(),
   'game:readyNext': emptyPayloadSchema,
   'sync:request': emptyPayloadSchema,
@@ -315,6 +348,10 @@ export interface ClientToServerEvents {
   ) => void;
   'game:ruleInput': (
     payload: ClientPayload<'game:ruleInput'>,
+    ack: (result: Ack<Record<string, never>>) => void,
+  ) => void;
+  'game:miniGameInput': (
+    payload: ClientPayload<'game:miniGameInput'>,
     ack: (result: Ack<Record<string, never>>) => void,
   ) => void;
   'game:pass': (

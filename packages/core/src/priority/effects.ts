@@ -2,6 +2,7 @@ import type { CardId } from '../cards/card.js';
 import type { RuleId } from '../game/types.js';
 import type { Effect, PriorityKey, RuleChainEntry } from '../rules/contract.js';
 import type { EffectHook } from '../rules/chain.js';
+import type { BombThrowMiniGameState } from '../minigame/bomb-throw.js';
 
 export type Resolution =
   | { status: 'adopted' }
@@ -18,13 +19,18 @@ export interface EffectEmission {
   effect: Effect;
   resolvedCards?: CardId[];
   resolvedChoices?: {
-    kind: 'cards' | 'player';
+    kind: 'cards' | 'player' | 'miniGame';
     player: string;
     choiceId: string;
     messageKey: string;
     optionCardIds?: CardId[];
     optionPlayerIds?: string[];
     count?: number;
+    miniGame?: 'bomb_throw_15';
+    participants?: string[];
+    durationMs?: number;
+    seed?: string;
+    miniGameState?: BombThrowMiniGameState;
   }[];
 }
 

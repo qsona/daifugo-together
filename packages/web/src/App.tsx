@@ -23,6 +23,7 @@ import { ConnectDialog } from './components/ConnectDialog';
 import { Button } from './components/Button';
 import { Dialog, DialogBody } from './components/Dialog';
 import { Toast } from './components/Toast';
+import { BombThrowMiniGame } from './components/BombThrowMiniGame';
 import { RuleDetailModal } from './components/RuleDetailModal';
 import type { RuleVote, SetFunRating } from './screens/SetResultScreen';
 import {
@@ -1848,6 +1849,22 @@ function ConnectedApp({
               {pendingPlayerChoice.message ?? '相手を選んでください'}
             </DialogBody>
           </Dialog>
+        )}
+        {game.miniGame && (
+          <BombThrowMiniGame
+            game={game.miniGame}
+            yourSeat={room.you.seatId}
+            names={Object.fromEntries(
+              room.members.flatMap((member) =>
+                member.seatId === null
+                  ? []
+                  : [[member.seatId, member.displayName] as const],
+              ),
+            )}
+            onCommand={(input) => {
+              invoke(client.miniGameInput(game.miniGame!.id, input));
+            }}
+          />
         )}
         {rulesOverlay}
         {leaveDialog}

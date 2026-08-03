@@ -171,7 +171,14 @@ export type MemoryScope = 'game' | 'set';
 
 export type RuleInput =
   | { kind: 'cards'; choiceId: string; cardIds: CardId[] }
-  | { kind: 'player'; choiceId: string; playerId: PlayerId };
+  | { kind: 'player'; choiceId: string; playerId: PlayerId }
+  | {
+      kind: 'miniGameResult';
+      choiceId: string;
+      miniGameId: string;
+      winnerPlayerId: PlayerId;
+      scores: Record<PlayerId, { score: number; hitsTaken: number }>;
+    };
 
 export interface CardChoiceRequest {
   player: PlayerId;
@@ -189,7 +196,19 @@ export interface PlayerChoiceRequest {
   messageKey: string;
 }
 
-export type ChoiceRequestPayload = CardChoiceRequest | PlayerChoiceRequest;
+export interface MiniGameChoiceRequest {
+  kind: 'miniGame';
+  player: PlayerId;
+  choiceId: string;
+  miniGame: 'bomb_throw_15';
+  participants: PlayerId[];
+  durationMs: number;
+  seed: string;
+  messageKey: string;
+}
+
+export type ChoiceRequestPayload =
+  CardChoiceRequest | PlayerChoiceRequest | MiniGameChoiceRequest;
 
 /**
  * Declarative state changes accepted from contract v1 rules.

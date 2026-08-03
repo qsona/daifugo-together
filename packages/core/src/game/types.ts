@@ -4,6 +4,10 @@ import type { StrengthOrder } from '../play/strength.js';
 import type { RngState } from '../rng/rng.js';
 import type { Effect, RuleChainEntry, Zone } from '../rules/contract.js';
 import type { EffectHook } from '../rules/chain.js';
+import type {
+  BombThrowDirection,
+  BombThrowMiniGameState,
+} from '../minigame/bomb-throw.js';
 
 export type PlayerId = string;
 export type RuleId = string;
@@ -140,7 +144,7 @@ export interface PrivateGameState {
   hookCalls: Record<string, number>;
   pendingChoice?: {
     hook?: 'afterPlay' | 'onGameStart';
-    kind?: 'cards' | 'player';
+    kind?: 'cards' | 'player' | 'miniGame';
     ruleId: RuleId;
     player: PlayerId;
     choiceId: string;
@@ -148,13 +152,18 @@ export interface PrivateGameState {
     optionCardIds?: CardId[];
     optionPlayerIds?: PlayerId[];
     count?: number;
+    miniGame?: 'bomb_throw_15';
+    participants?: PlayerId[];
+    durationMs?: number;
+    seed?: string;
+    miniGameState?: BombThrowMiniGameState;
     play?: Play;
     strength?: StrengthOrder;
     playedBy?: PlayerId;
     continuation?: {
       remainingRuleIds: RuleId[];
       remainingChoices?: {
-        kind: 'cards' | 'player';
+        kind: 'cards' | 'player' | 'miniGame';
         ruleId: RuleId;
         player: PlayerId;
         choiceId: string;
@@ -162,6 +171,11 @@ export interface PrivateGameState {
         optionCardIds?: CardId[];
         optionPlayerIds?: PlayerId[];
         count?: number;
+        miniGame?: 'bomb_throw_15';
+        participants?: PlayerId[];
+        durationMs?: number;
+        seed?: string;
+        miniGameState?: BombThrowMiniGameState;
       }[];
       clearRequested: boolean;
     };
@@ -195,6 +209,30 @@ export type GameAction =
       choiceId: string;
       playerId: PlayerId;
       cardIds?: never;
+    }
+  | {
+      type: 'ruleInput';
+      player: PlayerId;
+      choiceId: string;
+      miniGameId: string;
+      winnerPlayerId: PlayerId;
+      scores: Record<PlayerId, { score: number; hitsTaken: number }>;
+      cardIds?: never;
+      playerId?: never;
+    }
+  | {
+      type: 'miniGameCommand';
+      player: PlayerId;
+      miniGameId: string;
+      direction?: BombThrowDirection;
+      throwBomb?: boolean;
+    }
+  | {
+      type: 'miniGameTick';
+      player: PlayerId;
+      miniGameId: string;
+      deltaMs?: number;
+      automatedPlayerIds?: PlayerId[];
     };
 
 export type ActionRejectionCode =
@@ -279,7 +317,7 @@ export interface PlayerSnapshot {
   effectiveRules: { ruleId: RuleId; name: string }[];
   history: PublicGameEvent[];
   pendingChoice?: {
-    kind?: 'cards' | 'player';
+    kind?: 'cards' | 'player' | 'miniGame';
     ruleId: RuleId;
     player: PlayerId;
     choiceId: string;

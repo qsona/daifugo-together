@@ -183,19 +183,66 @@ function replayAction(
       ? { type: 'play', player: action.memberId, cards: action.cards }
       : action.type === 'pass'
         ? { type: 'pass', player: action.memberId }
-        : action.type === 'autoAct'
-          ? action.cards
-            ? { type: 'play', player: action.memberId, cards: action.cards }
-            : { type: 'pass', player: action.memberId }
-          : action.type === 'advanceIntermission'
-            ? { type: 'advance' }
-            : action.type === 'readyIntermission' &&
-                previous.engine?.phase.name === 'interimResult' &&
-                next.engine?.phase.name !== 'interimResult'
-              ? { type: 'advance' }
-              : action.type === 'requestDrain'
-                ? { type: 'requestDrain' }
-                : undefined;
+        : action.type === 'ruleInput'
+          ? {
+              type: 'ruleInput',
+              player: action.memberId,
+              choiceId: action.choiceId,
+              ...('playerId' in action && action.playerId !== undefined
+                ? { playerId: action.playerId }
+                : { cardIds: action.cardIds ?? [] }),
+            }
+          : action.type === 'miniGameInput'
+            ? {
+                type: 'miniGameCommand',
+                player: action.memberId,
+                miniGameId: action.miniGameId,
+                ...(action.direction === undefined
+                  ? {}
+                  : { direction: action.direction }),
+                ...(action.throwBomb === undefined
+                  ? {}
+                  : { throwBomb: action.throwBomb }),
+              }
+            : action.type === 'miniGameTick'
+              ? {
+                  type: 'miniGameTick',
+                  player:
+                    previous.engine?.currentGame?.private.pendingChoice
+                      ?.player ?? '',
+                  miniGameId: action.miniGameId,
+                  automatedPlayerIds:
+                    previous.engine?.currentGame?.private.pendingChoice?.participants?.filter(
+                      (playerId) => {
+                        const member = previous.members.find(
+                          (candidate) => candidate.memberId === playerId,
+                        );
+                        return (
+                          !member ||
+                          member.isAI ||
+                          member.aiActing ||
+                          !member.connected
+                        );
+                      },
+                    ) ?? [],
+                }
+              : action.type === 'autoAct'
+                ? action.cards
+                  ? {
+                      type: 'play',
+                      player: action.memberId,
+                      cards: action.cards,
+                    }
+                  : { type: 'pass', player: action.memberId }
+                : action.type === 'advanceIntermission'
+                  ? { type: 'advance' }
+                  : action.type === 'readyIntermission' &&
+                      previous.engine?.phase.name === 'interimResult' &&
+                      next.engine?.phase.name !== 'interimResult'
+                    ? { type: 'advance' }
+                    : action.type === 'requestDrain'
+                      ? { type: 'requestDrain' }
+                      : undefined;
   return coreAction ? { seq, action: coreAction } : undefined;
 }
 

@@ -30,6 +30,12 @@ import {
   finishPlayer,
   forceFinishByHandCount,
 } from './standing.js';
+import {
+  advanceBombThrowMiniGame,
+  applyBombThrowCommand,
+  bombThrowComplete,
+  bombThrowResult,
+} from '../minigame/bomb-throw.js';
 
 const TURN_LIMIT = 1000;
 
@@ -918,20 +924,36 @@ function reduceRuleInput(
     'playerId' in action &&
     action.playerId !== undefined &&
     (pending.optionPlayerIds ?? []).includes(action.playerId);
-  if (!validCards && !validPlayer) {
+  const canonicalMiniGameResult = pending.miniGameState
+    ? bombThrowResult(pending.miniGameState)
+    : null;
+  const validMiniGame =
+    pendingKind === 'miniGame' &&
+    pending.miniGameState !== undefined &&
+    bombThrowComplete(pending.miniGameState) &&
+    'miniGameId' in action &&
+    action.miniGameId === pending.miniGameState.id;
+  if (!validCards && !validPlayer && !validMiniGame) {
     return reject(state, action.player, 'INVALID_RULE_CHOICE');
   }
-  const inputValue = validPlayer
-    ? {
-        kind: 'player' as const,
-        choiceId: pending.choiceId,
-        playerId: action.playerId,
-      }
-    : {
-        kind: 'cards' as const,
-        choiceId: pending.choiceId,
-        cardIds: [...(('cardIds' in action && action.cardIds) || [])],
-      };
+  const inputValue: RuleInput =
+    validMiniGame && canonicalMiniGameResult
+      ? {
+          kind: 'miniGameResult',
+          choiceId: pending.choiceId,
+          ...canonicalMiniGameResult,
+        }
+      : validPlayer
+        ? {
+            kind: 'player' as const,
+            choiceId: pending.choiceId,
+            playerId: action.playerId,
+          }
+        : {
+            kind: 'cards' as const,
+            choiceId: pending.choiceId,
+            cardIds: [...(('cardIds' in action && action.cardIds) || [])],
+          };
   const privateState = {
     excluded: state.private.excluded,
     memory: state.private.memory,
@@ -1179,12 +1201,95 @@ function reduceRuleInput(
   );
 }
 
+function reduceMiniGameCommand(
+  state: GameState,
+  action: Extract<GameAction, { type: 'miniGameCommand' }>,
+): GameTransition {
+  const pending = state.private.pendingChoice;
+  if (
+    state.public.phase !== 'awaitingChoice' ||
+    pending?.kind !== 'miniGame' ||
+    !pending.miniGameState ||
+    pending.miniGameState.id !== action.miniGameId ||
+    !pending.participants?.includes(action.player)
+  ) {
+    return reject(state, action.player, 'NO_PENDING_CHOICE');
+  }
+  const miniGameState = applyBombThrowCommand(pending.miniGameState, {
+    playerId: action.player,
+    ...(action.direction === undefined ? {} : { direction: action.direction }),
+    ...(action.throwBomb === undefined ? {} : { throwBomb: action.throwBomb }),
+  });
+  return {
+    state: {
+      ...state,
+      private: {
+        ...state.private,
+        pendingChoice: { ...pending, miniGameState },
+      },
+    },
+    events: [],
+    rejections: [],
+  };
+}
+
+function reduceMiniGameTick(
+  config: GameConfig,
+  state: GameState,
+  action: Extract<GameAction, { type: 'miniGameTick' }>,
+  runtime: RuleRuntime,
+): GameTransition {
+  const pending = state.private.pendingChoice;
+  if (
+    state.public.phase !== 'awaitingChoice' ||
+    pending?.kind !== 'miniGame' ||
+    !pending.miniGameState ||
+    pending.miniGameState.id !== action.miniGameId
+  ) {
+    return reject(state, action.player, 'NO_PENDING_CHOICE');
+  }
+  const miniGameState = advanceBombThrowMiniGame(pending.miniGameState, {
+    ...(action.deltaMs === undefined ? {} : { deltaMs: action.deltaMs }),
+    automatedPlayerIds: action.automatedPlayerIds ?? [],
+  });
+  const nextState: GameState = {
+    ...state,
+    private: {
+      ...state.private,
+      pendingChoice: { ...pending, miniGameState },
+    },
+  };
+  if (!bombThrowComplete(miniGameState)) {
+    return { state: nextState, events: [], rejections: [] };
+  }
+  const result = bombThrowResult(miniGameState);
+  return reduceRuleInput(
+    config,
+    nextState,
+    {
+      type: 'ruleInput',
+      player: pending.player,
+      choiceId: pending.choiceId,
+      miniGameId: result.miniGameId,
+      winnerPlayerId: result.winnerPlayerId,
+      scores: result.scores,
+    },
+    runtime,
+  );
+}
+
 export function reduceGame(
   config: GameConfig,
   state: GameState,
   action: GameAction,
   runtime: RuleRuntime = noRuleRuntime(),
 ): GameTransition {
+  if (action.type === 'miniGameCommand') {
+    return reduceMiniGameCommand(state, action);
+  }
+  if (action.type === 'miniGameTick') {
+    return reduceMiniGameTick(config, state, action, runtime);
+  }
   if (action.type === 'ruleInput') {
     return reduceRuleInput(config, state, action, runtime);
   }
