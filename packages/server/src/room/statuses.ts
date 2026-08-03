@@ -10,8 +10,9 @@ import {
 
 /*
  * フェーズ1の継続状態アダプタ。
- * ルール契約(rule.ts の語彙)を変えずに配信したいので、状態を持つコアルール3件だけを
- * サーバー側から読む。ルールIDの知識はこの表 1 箇所に閉じ込めてあるので、
+ * ルール契約(rule.ts の語彙)を変えずに配信したいので、メモリ状態を持つコアルール3件を
+ * サーバー側から読む。進行方向を直接持つ9リバースもここで扱う。
+ * ルールIDの知識はこの表 1 箇所に閉じ込めてあるので、
  * フェーズ2でルール契約へ省略可能フック(presentStatus)が入ったら、
  * 表ごと「チェーンを回してルール自身に聞く」実装へ差し替えられる。
  */
@@ -19,6 +20,7 @@ const STATUS_RULE_IDS = {
   revolution: 'r0003-kakumei',
   elevenBack: 'r0005-eleven-back',
   binding: 'r0008-shibari-double-shibari',
+  nineReverse: 'r0020-nine-reverse',
 } as const;
 
 /** r0003 / r0005 が継続中フラグを書き込むゲームメモリのキー。 */
@@ -107,6 +109,13 @@ export function gameStatusViews(
     if (
       entry.ruleId === STATUS_RULE_IDS.revolution &&
       isMemoryActive(state, entry.ruleId)
+    ) {
+      found.push({ view: { ...base, scope: 'game' }, position });
+      return;
+    }
+    if (
+      entry.ruleId === STATUS_RULE_IDS.nineReverse &&
+      state.public.direction === -1
     ) {
       found.push({ view: { ...base, scope: 'game' }, position });
       return;

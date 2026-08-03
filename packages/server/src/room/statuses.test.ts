@@ -23,6 +23,7 @@ import { viewFor } from './view.js';
 const REVOLUTION = 'r0003-kakumei';
 const ELEVEN_BACK = 'r0005-eleven-back';
 const BINDING = 'r0008-shibari-double-shibari';
+const NINE_REVERSE = 'r0020-nine-reverse';
 const SEATS = ['p1', 'p2', 'p3', 'p4'];
 
 const CARD_BY_ID = new Map(
@@ -61,8 +62,9 @@ function entry(
 const REVOLUTION_ENTRY = entry(REVOLUTION, '革命', 0);
 const ELEVEN_BACK_ENTRY = entry(ELEVEN_BACK, 'イレブンバック', 1);
 const BINDING_ENTRY = entry(BINDING, 'しばり', 2);
+const NINE_REVERSE_ENTRY = entry(NINE_REVERSE, '9-リバース', 3);
 /** ジョーカー入りの山にするためだけの宣言。対応するルールモジュールは登録しない。 */
-const JOKER_ENTRY = entry('fixture-jokers', 'ジョーカー', 3, ['jokers']);
+const JOKER_ENTRY = entry('fixture-jokers', 'ジョーカー', 4, ['jokers']);
 
 function runtime(ruleChain: readonly RuleChainEntry[]): RuleRuntime {
   return {
@@ -232,6 +234,31 @@ describe('継続状態の導出', () => {
     const cleared = passUntilFieldCleared(current);
     expect(statuses(cleared)).toEqual([]);
     expect(strengthInverted(cleared)).toBe(false);
+  });
+
+  it('9リバースは逆方向の間は局スコープで残り、次の9で通常方向に戻ると消える', () => {
+    const chain = [NINE_REVERSE_ENTRY];
+    let current = table(chain, {
+      p1: ['S09', 'H09'],
+      p2: ['S05'],
+      p3: ['H05'],
+      p4: ['D05'],
+    });
+
+    current = play(current, 'p1', ['S09']);
+    expect(current.state.public.direction).toBe(-1);
+    expect(statuses(current)).toEqual([
+      { ruleId: NINE_REVERSE, name: '9-リバース', scope: 'game' },
+    ]);
+
+    current = passUntilFieldCleared(current);
+    expect(statuses(current)).toEqual([
+      { ruleId: NINE_REVERSE, name: '9-リバース', scope: 'game' },
+    ]);
+
+    current = play(current, 'p1', ['H09']);
+    expect(current.state.public.direction).toBe(1);
+    expect(statuses(current)).toEqual([]);
   });
 
   it('同じスート構成が2手続くと縛りが出て、場が流れると消える', () => {
