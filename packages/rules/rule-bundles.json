@@ -47,6 +47,14 @@
     "version": 1,
     "hash": "98d44d536a06289bc32e3527f6fb615d5893be6fbbe1591d6f005aa9dd266b1f"
   },
+  "r0017-q-bomber": {
+    "version": 1,
+    "hash": "bccc37f6626a6e50d00134f7a60f63650b2f132f4bf2ec8c3110aac0c2a31026"
+  },
+  "r0018-black-market": {
+    "version": 1,
+    "hash": "d8d891eb61eb7cc5649988eeaa0152764f1c04044cdbcfbd30bf16242f4ce963"
+  },
   "r0019-6-modoshi": {
     "version": 1,
     "hash": "48d02d740cbc69beefaecc89f7c12508de311970f4d06c860c2ee8ed416a7eb2"
@@ -54,5 +62,9 @@
   "r0020-nine-reverse": {
     "version": 1,
     "hash": "f26e1e348d37c5db0f634c605844415d3fd4556022e43c1ef6a0074023d92a79"
+  },
+  "r0023-k-skip": {
+    "version": 1,
+    "hash": "3f6f994c77636971ebbf8f13b26d644b577e8f7ac2a2f7dada8d86343dbad5e9"
   }
 }

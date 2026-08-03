@@ -1,0 +1,13 @@
+{
+  "ruleId": "r0018-black-market",
+  "name": "ブラックマーケット",
+  "description": "自然なAを3枚組で出すと、出したプレイヤーが交換相手1人と自分の残り手札2枚を選び、その2枚と相手の手札で自然な強さ順が最も強い2枚を同時に交換する。",
+  "kind": "local",
+  "prefecture": "東京都",
+  "proposalId": "01KZ1FD5DANCDY208648PASMF0",
+  "contractVersion": 2,
+  "messages": {
+    "black_market_target": "交換する相手を選んでください",
+    "black_market_cards": "相手に渡すカードを2枚選んでください"
+  }
+}
