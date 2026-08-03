@@ -35,6 +35,7 @@ import { FixedWindowRateLimiter } from './room/rate-limit.js';
 import type { AuthService } from './auth/service.js';
 import type { NotificationService } from './notification/service.js';
 import type { PushService } from './push/service.js';
+import type { AdminConsole } from './admin/console.js';
 
 const RELEASE_REMINDER_MS = 48 * 60 * 60 * 1_000;
 const AUTH_FLOW_COOKIE = '__Host-daifugo-auth-flow';
@@ -78,6 +79,7 @@ export interface AppServerOptions {
     PushService,
     'config' | 'subscribe' | 'unsubscribe' | 'markInstalled'
   >;
+  adminConsole?: Pick<AdminConsole, 'handle'>;
   adminScreening?: {
     token: string;
     service: Pick<LocalScreeningService, 'pending' | 'record'>;
@@ -1140,7 +1142,10 @@ export function createAppServer(options: AppServerOptions): AppServer {
       response.end();
       return;
     }
-    void handleAuth(request, response)
+    void (
+      options.adminConsole?.handle(request, response) ?? Promise.resolve(false)
+    )
+      .then((handled) => (handled ? true : handleAuth(request, response)))
       .then((handled) => (handled ? true : handleAdminRules(request, response)))
       .then((handled) =>
         handled ? true : handleAdminScreening(request, response),

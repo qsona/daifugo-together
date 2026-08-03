@@ -22,6 +22,12 @@ import { NotificationService } from './notification/service.js';
 import { PushSender, WebPushTransport } from './push/sender.js';
 import { PushService } from './push/service.js';
 import type { RoomSocketGateway } from './room/socket-gateway.js';
+import {
+  AdminAuthService,
+  createGoogleAdminAuthProvider,
+} from './admin/auth.js';
+import { AdminConsole } from './admin/console.js';
+import { loadTrafficDashboardWithToken } from './operations/dashboard-local.js';
 
 function errorFields(error: unknown): Record<string, unknown> {
   return error instanceof Error
@@ -80,6 +86,86 @@ try {
   });
 } catch (error) {
   writeLog('error', 'google_auth_provider_unavailable', errorFields(error));
+}
+const adminBasicUsername = process.env.ADMIN_BASIC_USERNAME;
+const adminBasicPassword = process.env.ADMIN_BASIC_PASSWORD;
+const adminAllowedEmail = process.env.ADMIN_ALLOWED_EMAIL;
+const adminSessionSecret = process.env.ADMIN_SESSION_SECRET;
+const adminConfiguration = [
+  adminBasicUsername,
+  adminBasicPassword,
+  adminAllowedEmail,
+  adminSessionSecret,
+];
+if (
+  adminConfiguration.some((value) => value !== undefined) &&
+  adminConfiguration.some((value) => value === undefined)
+) {
+  throw new Error(
+    'ADMIN_BASIC_USERNAME, ADMIN_BASIC_PASSWORD, ADMIN_ALLOWED_EMAIL, and ADMIN_SESSION_SECRET must be configured together',
+  );
+}
+let adminConsole: AdminConsole | undefined;
+if (
+  adminBasicUsername &&
+  adminBasicPassword &&
+  adminAllowedEmail &&
+  adminSessionSecret
+) {
+  let adminAuthProvider;
+  try {
+    adminAuthProvider = await createGoogleAdminAuthProvider({
+      ...(process.env.GOOGLE_CLIENT_ID
+        ? { clientId: process.env.GOOGLE_CLIENT_ID }
+        : {}),
+      ...(process.env.GOOGLE_CLIENT_SECRET
+        ? { clientSecret: process.env.GOOGLE_CLIENT_SECRET }
+        : {}),
+    });
+  } catch (error) {
+    writeLog(
+      'error',
+      'google_admin_auth_provider_unavailable',
+      errorFields(error),
+    );
+  }
+  const flyMetricsToken = process.env.FLY_METRICS_TOKEN;
+  const flyApp = process.env.FLY_APP_NAME ?? 'daifugo-together';
+  const flyOrganization = process.env.FLY_ORG_SLUG ?? 'personal';
+  let trafficCache:
+    | {
+        fetchedAt: number;
+        value: Awaited<ReturnType<typeof loadTrafficDashboardWithToken>>;
+      }
+    | undefined;
+  const traffic = flyMetricsToken
+    ? async () => {
+        const now = Date.now();
+        if (trafficCache && now - trafficCache.fetchedAt < 45_000) {
+          return trafficCache.value;
+        }
+        const value = await loadTrafficDashboardWithToken(
+          flyApp,
+          flyOrganization,
+          flyMetricsToken,
+          now,
+        );
+        trafficCache = { fetchedAt: now, value };
+        return value;
+      }
+    : undefined;
+  adminConsole = new AdminConsole({
+    repository: persistence.admin,
+    auth: new AdminAuthService({
+      ...(adminAuthProvider ? { provider: adminAuthProvider } : {}),
+      publicOrigin,
+      allowedEmail: adminAllowedEmail,
+      sessionSecret: adminSessionSecret,
+    }),
+    basicUsername: adminBasicUsername,
+    basicPassword: adminBasicPassword,
+    ...(traffic ? { traffic } : {}),
+  });
 }
 const codeRules = await loadRuleCodeBundles();
 let refreshWaitingRules = (): void => undefined;
@@ -183,6 +269,7 @@ const roomManager = new RoomManager({
 });
 const app = createAppServer({
   webDistDir: resolve(process.env.WEB_DIST_DIR ?? 'packages/web/dist'),
+  ...(adminConsole ? { adminConsole } : {}),
   checkDatabase: () => persistence.checkHealth(),
   auth: new AuthService(persistence.auth, {
     ...(authProvider ? { provider: authProvider } : {}),

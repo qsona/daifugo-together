@@ -37,6 +37,7 @@ import { RuleRepository } from './rules/repository.js';
 import { AuthRepository } from './auth/repository.js';
 import { NotificationRepository } from './notification/repository.js';
 import { PushRepository } from './push/repository.js';
+import { AdminRepository } from './admin/repository.js';
 
 const users = sqliteTable('users', {
   userId: text('user_id').primaryKey(),
@@ -211,6 +212,7 @@ export class SqlitePersistence implements RoomPersistencePort {
   readonly rules: RuleRepository;
   readonly notifications: NotificationRepository;
   readonly push: PushRepository;
+  readonly admin: AdminRepository;
 
   constructor(path: string, sessionOptions: SessionStoreOptions = {}) {
     if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
@@ -408,6 +410,7 @@ export class SqlitePersistence implements RoomPersistencePort {
     this.push = new PushRepository(this.#sqlite);
     this.evaluations = new EvaluationRepository(this.#sqlite);
     this.operations = new OperationsRepository(this.#sqlite);
+    this.admin = new AdminRepository(this.#sqlite, this.operations);
   }
 
   roomManagerOptions(): Pick<RoomManagerOptions, 'persistence'> {

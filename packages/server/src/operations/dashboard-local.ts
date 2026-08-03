@@ -156,6 +156,12 @@ export async function loadDatabaseDashboard(
   return parseLastJsonLine<DatabaseDashboardSnapshot>(output);
 }
 
+function metricsAuthorization(token: string): string {
+  const value = token.trim();
+  if (value.startsWith('FlyV1 ') || value.startsWith('Bearer ')) return value;
+  return value.startsWith('fm2_') ? `FlyV1 ${value}` : `Bearer ${value}`;
+}
+
 async function prometheusWindow(
   app: string,
   organization: string,
@@ -170,7 +176,7 @@ async function prometheusWindow(
     `sum(increase(fly_edge_http_responses_count{app="${promLabel(app)}"}[${String(rangeSeconds)}s])) by (status)`,
   );
   const response = await fetch(url, {
-    headers: { authorization: `FlyV1 ${token}` },
+    headers: { authorization: metricsAuthorization(token) },
   });
   if (!response.ok) {
     throw new Error(
@@ -188,6 +194,16 @@ export async function loadTrafficDashboard(
 ): Promise<{ windows: Record<WindowKey, TrafficWindow> }> {
   const token = (await flyctl(['auth', 'token'], flyctlPath)).trim();
   if (!token) throw new Error('Fly.ioの認証トークンを取得できませんでした');
+  return loadTrafficDashboardWithToken(app, organization, token, now);
+}
+
+export async function loadTrafficDashboardWithToken(
+  app: string,
+  organization: string,
+  token: string,
+  now = Date.now(),
+): Promise<{ windows: Record<WindowKey, TrafficWindow> }> {
+  if (!token.trim()) throw new Error('Fly.ioの認証トークンが空です');
   const jstOffsetMs = 9 * 60 * 60 * 1_000;
   const dayMs = 24 * 60 * 60 * 1_000;
   const today = Math.floor((now + jstOffsetMs) / dayMs) * dayMs - jstOffsetMs;
