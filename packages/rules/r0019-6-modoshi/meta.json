@@ -1,0 +1,10 @@
+{
+  "ruleId": "r0019-6-modoshi",
+  "name": "6戻し",
+  "description": "イレブンバックによる一時的な強さ反転中にランク6を含む手を出すと、その反転を解除し、強さ順を永続的な革命状態に対応する順序へ戻す。",
+  "kind": "local",
+  "prefecture": "東京都",
+  "proposalId": "01KZ1FFN0PRM9V6DF8BQX2TWXE",
+  "contractVersion": 1,
+  "messages": {}
+}
