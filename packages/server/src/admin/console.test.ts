@@ -6,6 +6,7 @@ import { afterEach, describe, expect, test } from 'vitest';
 
 import { createAppServer, type AppServer } from '../app-server.js';
 import { SqlitePersistence } from '../persistence.js';
+import { NotificationService } from '../notification/service.js';
 import { AdminAuthService, FakeAdminAuthProvider } from './auth.js';
 import { AdminConsole } from './console.js';
 
@@ -35,7 +36,7 @@ describe('AdminConsole', () => {
       createToken: () => 'user-token-that-is-valid',
     });
     persistenceInstances.push(persistence);
-    persistence.sessions.resolve(undefined);
+    const user = persistence.sessions.resolve(undefined);
     const provider = new FakeAdminAuthProvider();
     provider.setIdentity('allowed-code', {
       subject: 'admin-subject',
@@ -54,6 +55,9 @@ describe('AdminConsole', () => {
       }),
       basicUsername: 'mori',
       basicPassword: 'basic-password-that-is-long-enough',
+      notifications: new NotificationService(persistence.notifications, {
+        now: () => 123,
+      }),
     });
     const app = createAppServer({ webDistDir: directory, adminConsole });
     apps.push(app);
@@ -125,6 +129,65 @@ describe('AdminConsole', () => {
     await expect(overview.json()).resolves.toMatchObject({
       database: { users: { total: 1, guests: 1 } },
       traffic: null,
+    });
+
+    const rejected = await fetch(`${baseUrl}/admin/api/announcements`, {
+      method: 'POST',
+      headers: {
+        authorization: basic(),
+        cookie: sessionCookie ?? '',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        title: '外部リンク',
+        body: '許可されないリンクです',
+        url: 'https://example.com',
+      }),
+    });
+    expect(rejected.status).toBe(400);
+    await expect(rejected.json()).resolves.toEqual({
+      error: 'invalid_announcement_url',
+    });
+
+    const published = await fetch(`${baseUrl}/admin/api/announcements`, {
+      method: 'POST',
+      headers: {
+        authorization: basic(),
+        cookie: sessionCookie ?? '',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        title: '新しいお知らせ',
+        body: 'みんなに届く本文です。',
+        url: '/rules',
+      }),
+    });
+    expect(published.status).toBe(201);
+    await expect(published.json()).resolves.toMatchObject({
+      item: {
+        title: '新しいお知らせ',
+        recipientCount: 1,
+        createdBy: 'mori.jmk@gmail.com',
+      },
+    });
+    expect(
+      persistence.notifications.list(user.userId, 123).items[0],
+    ).toMatchObject({
+      type: 'announcement',
+      title: '新しいお知らせ',
+      body: 'みんなに届く本文です。',
+      url: '/rules',
+    });
+
+    const history = await fetch(`${baseUrl}/admin/api/announcements`, {
+      headers: {
+        authorization: basic(),
+        cookie: sessionCookie ?? '',
+      },
+    });
+    expect(history.status).toBe(200);
+    await expect(history.json()).resolves.toMatchObject({
+      items: [{ title: '新しいお知らせ', recipientCount: 1 }],
     });
   });
 

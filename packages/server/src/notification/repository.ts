@@ -21,6 +21,26 @@ type NotificationRow = {
   opened_via: NotificationOpenedVia | null;
 };
 
+export interface AnnouncementView {
+  id: number;
+  title: string;
+  body: string;
+  url: string;
+  createdBy: string;
+  recipientCount: number;
+  createdAt: number;
+}
+
+type AnnouncementRow = {
+  id: number;
+  title: string;
+  body: string;
+  url: string;
+  created_by: string;
+  recipient_count: number;
+  created_at: number;
+};
+
 function parsedPayload(value: string): Record<string, unknown> {
   try {
     const parsed: unknown = JSON.parse(value);
@@ -50,6 +70,18 @@ function view(row: NotificationRow): NotificationView {
   };
 }
 
+function announcementView(row: AnnouncementRow): AnnouncementView {
+  return {
+    id: row.id,
+    title: row.title,
+    body: row.body,
+    url: row.url,
+    createdBy: row.created_by,
+    recipientCount: row.recipient_count,
+    createdAt: row.created_at,
+  };
+}
+
 export class NotificationRepository {
   readonly #sqlite: Database.Database;
 
@@ -66,7 +98,7 @@ export class NotificationRepository {
 
   create(input: {
     userId: string;
-    type: Exclude<NotificationType, 'rule_debut'>;
+    type: Exclude<NotificationType, 'rule_debut' | 'announcement'>;
     payload: Readonly<Record<string, unknown>>;
     dedupeKey: string;
     now: number;
@@ -91,6 +123,81 @@ export class NotificationRepository {
       )
       .get(input.userId, input.type, input.dedupeKey) as NotificationRow;
     return { created: result.changes === 1, item: view(row) };
+  }
+
+  createAnnouncement(input: {
+    title: string;
+    body: string;
+    url: string;
+    createdBy: string;
+    now: number;
+  }): {
+    announcement: AnnouncementView;
+    recipients: Array<{ userId: string; item: NotificationView }>;
+  } {
+    return this.#sqlite.transaction(() => {
+      const recipientCount = (
+        this.#sqlite.prepare('SELECT COUNT(*) AS count FROM users').get() as {
+          count: number;
+        }
+      ).count;
+      const inserted = this.#sqlite
+        .prepare(
+          `INSERT INTO announcements (
+             title, body, url, created_by, recipient_count, created_at
+           ) VALUES (?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          input.title,
+          input.body,
+          input.url,
+          input.createdBy,
+          recipientCount,
+          input.now,
+        );
+      const announcementId = Number(inserted.lastInsertRowid);
+      const payload = JSON.stringify({
+        announcementId,
+        title: input.title,
+        body: input.body,
+        url: input.url,
+      });
+      this.#sqlite
+        .prepare(
+          `INSERT INTO notifications (
+             user_id, type, payload, dedupe_key, created_at
+           )
+           SELECT user_id, 'announcement', ?, ?, ? FROM users`,
+        )
+        .run(payload, String(announcementId), input.now);
+      const announcement = this.#sqlite
+        .prepare('SELECT * FROM announcements WHERE id = ?')
+        .get(announcementId) as AnnouncementRow;
+      const rows = this.#sqlite
+        .prepare(
+          `SELECT * FROM notifications
+           WHERE type = 'announcement' AND dedupe_key = ?`,
+        )
+        .all(String(announcementId)) as NotificationRow[];
+      return {
+        announcement: announcementView(announcement),
+        recipients: rows.map((row) => ({
+          userId: row.user_id,
+          item: view(row),
+        })),
+      };
+    })();
+  }
+
+  listAnnouncements(limit = 50): AnnouncementView[] {
+    const rows = this.#sqlite
+      .prepare(
+        `SELECT * FROM announcements
+         ORDER BY created_at DESC, id DESC
+         LIMIT ?`,
+      )
+      .all(limit) as AnnouncementRow[];
+    return rows.map(announcementView);
   }
 
   materializeBroadcasts(userId: string, now: number): number {

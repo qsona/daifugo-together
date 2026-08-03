@@ -31,7 +31,7 @@ describe('E17 Web Push', () => {
     expect(isNightInJapan(Date.UTC(2026, 7, 1, 22, 0))).toBe(false); // 07:00
   });
 
-  it('購読済みユーザーへ終端結果3種だけを送り、センターと同じ文面・opened URLを使う', async () => {
+  it('購読済みユーザーへ終端結果3種と全体お知らせを送り、センターと同じ文面・opened URLを使う', async () => {
     const persistence = new SqlitePersistence(':memory:');
     const session = persistence.sessions.resolve(undefined);
     persistence.auth.complete(session.userId, 'google-push', 1);
@@ -50,13 +50,19 @@ describe('E17 Web Push', () => {
     await sender.send(session.userId, item('proposal_failed'));
     await sender.send(session.userId, item('proposal_implementing'));
     await sender.send(session.userId, item('rule_debut'));
-    expect(transport.sent).toHaveLength(3);
+    await sender.send(session.userId, item('announcement'));
+    expect(transport.sent).toHaveLength(4);
     expect(
       transport.sent.map(
         ({ payload }) =>
           (JSON.parse(payload) as { type: NotificationView['type'] }).type,
       ),
-    ).toEqual(['proposal_released', 'proposal_rejected', 'proposal_failed']);
+    ).toEqual([
+      'proposal_released',
+      'proposal_rejected',
+      'proposal_failed',
+      'announcement',
+    ]);
     expect(JSON.parse(transport.sent[0]!.payload)).toEqual({
       type: 'proposal_released',
       title: '提案がルールになったよ！',
@@ -116,6 +122,46 @@ describe('E17 Web Push', () => {
     expect(payload).toMatchObject({
       title: centerItem?.title,
       body: centerItem?.body,
+    });
+    persistence.close();
+  });
+
+  it('管理画面のお知らせを購読端末へ同じ本文とアプリ内URLで送る', async () => {
+    const persistence = new SqlitePersistence(':memory:');
+    const session = persistence.sessions.resolve(undefined);
+    persistence.auth.complete(session.userId, 'google-announcement', 1);
+    persistence.push.upsert(
+      session.userId,
+      {
+        endpoint: 'https://push.example.test/announcement',
+        p256dh: 'key',
+        auth: 'auth',
+      },
+      2,
+    );
+    const transport = new FakePushTransport();
+    const notifications = new NotificationService(persistence.notifications, {
+      now: () => 3,
+      push: new PushSender(persistence.push, {
+        transport,
+        now: () => Date.UTC(2026, 7, 1, 3, 0),
+      }),
+    });
+
+    notifications.publishAnnouncement({
+      title: 'メンテナンスのお知らせ',
+      body: '本日20時からメンテナンスを行います。',
+      url: '/notifications',
+      createdBy: 'admin@example.com',
+    });
+
+    await expect.poll(() => transport.sent.length).toBe(1);
+    expect(JSON.parse(transport.sent[0]!.payload)).toEqual({
+      type: 'announcement',
+      title: 'メンテナンスのお知らせ',
+      body: '本日20時からメンテナンスを行います。',
+      url: '/notifications?src=push&nid=1',
+      notificationId: 1,
     });
     persistence.close();
   });

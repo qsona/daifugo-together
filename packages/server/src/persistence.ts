@@ -298,6 +298,15 @@ export class SqlitePersistence implements RoomPersistencePort {
         ON notifications(user_id, created_at DESC);
       CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_dedupe
         ON notifications(user_id, type, dedupe_key);
+      CREATE TABLE IF NOT EXISTS announcements (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        body TEXT NOT NULL,
+        url TEXT NOT NULL,
+        created_by TEXT NOT NULL,
+        recipient_count INTEGER NOT NULL,
+        created_at INTEGER NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS push_subscriptions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id TEXT NOT NULL REFERENCES users(user_id),

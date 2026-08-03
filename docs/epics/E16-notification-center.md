@@ -19,6 +19,7 @@
 1. ヘッダーのベルアイコン+未読数バッジと、通知一覧画面(新しい順・通知ごとの既読)。
 2. 提案の状態変化(リリース・却下・実装失敗・実装中入り)と新ルール登場を通知として配る仕組み。
 3. 通知タップ→該当画面への遷移と、その計測(通知経由再訪数。施策提案 §1.2 の補助指標)。
+4. 管理画面から、送信時点の全ユーザーへ任意のお知らせを配信する仕組み(2026-08-03 追加)。
 
 外部サービス・追加インフラはゼロ。既存の単一 Node プロセス + SQLite + Socket.IO に完全に閉じる(E12 の運用物最小方針)。
 
@@ -85,6 +86,7 @@ export interface NotificationTypeDefinition {
 | `proposal_failed` | 実装失敗 | `implementing → failed` | 提案者 | センター+Push | 高 | **E16 で実装** |
 | `proposal_implementing` | 審査中→実装中 | `screening → implementing` | 提案者 | センターのみ | 中 | **E16 で実装** |
 | `rule_debut` | 新ルール登場 | 他者の提案ルールが有効化 | 全ユーザー | センターのみ | 低 | **E16 で実装** |
+| `announcement` | 運営からのお知らせ | 管理画面で配信 | 送信時点の全ユーザー | センター+Push | 高 | **2026-08-03 実装** |
 | `friend_invite` | フレンドの部屋への誘い | E18 | フレンド | センター+Push | 高 | **予約**(詳細は E18) |
 | `friend_request` | フレンド申請が届いた | E18 | 申請された人 | センターのみ | 中 | **予約**(詳細は E18) |
 | `friend_accepted` | フレンド申請が承認された | E18 | 申請した人 | センターのみ | 中 | **予約**(詳細は E18) |
@@ -92,7 +94,7 @@ export interface NotificationTypeDefinition {
 
 - 提案書の「提案却下/実装失敗」行は、実装済みの状態機械が `rejected` と `failed` を別遷移で持つ(E05 §2.2)ため、**同優先度の 2 種別コード**に分ける。ユーザー向けの見え方は同格。
 - `payload` は種別ごとに最小限(例: `proposal_released` は `{ proposalId, ruleId, ruleName }`)。表示文はクライアントの種別→文言マッピングで組み立てる(E05 §3.3 の reason 表示と同じ流儀。文言は `docs/design/UI文言・情報量ガイド.md` に従う)。**個人情報は表示名以外含めない**(E17 §2.6 の Push 文面制約とペイロードを共通化するため、センター側から同じ規律で作る)。
-- タップ時の遷移先: `proposal_*` → マイ提案(画面 7、`/proposals/mine`)。`rule_debut` → **ルール図鑑(`/rules`)を開く**(該当ルールへのスクロール・ハイライトは任意の演出。図鑑への個別ルール深リンクは現状の `SCREEN_PATHS` に無く、本 Epic の必須要件にしない)。予約種別の遷移先は各 Epic が定義。
+- タップ時の遷移先: `proposal_*` → マイ提案(画面 7、`/proposals/mine`)。`rule_debut` → **ルール図鑑(`/rules`)を開く**(該当ルールへのスクロール・ハイライトは任意の演出。図鑑への個別ルール深リンクは現状の `SCREEN_PATHS` に無く、本 Epic の必須要件にしない)。`announcement` → 管理画面で指定したアプリ内パス(既定 `/notifications`)。予約種別の遷移先は各 Epic が定義。
 
 ### 2.3 データモデル
 
@@ -114,10 +116,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_dedupe
   ON notifications(user_id, type, dedupe_key);
 ```
 
-- `dedupe_key` はイベント固有 ID(提案系 = `proposalId`、`rule_debut` = `ruleId`)。パイプラインの at-least-once 再実行(E05 §2.2 の `noop` 設計)で同じ通知が二重に積まれない。
+- `dedupe_key` はイベント固有 ID(提案系 = `proposalId`、`rule_debut` = `ruleId`、`announcement` = 配信 ID)。パイプラインの at-least-once 再実行(E05 §2.2 の `noop` 設計)で同じ通知が二重に積まれない。
 - 既存の起動時マイグレーション方式(`persistence.ts` の `CREATE TABLE IF NOT EXISTS` + `PRAGMA table_info` による列追加)に従う。
 - **個人宛(audience=user)**: イベント発生時に対象ユーザーの行を 1 件 INSERT(fan-out on write)。対象は常に 1 人(提案者)なので書き込みは増えない。
-- **全ユーザー宛(audience=broadcast、現状 `rule_debut` のみ)**: 全 `users` 行への一斉 INSERT は行わない(一見客の匿名行を含め無際限に膨らむ)。代わりに**取得時の遅延実体化**とする: 通知一覧の取得または Socket.IO 接続時に、そのユーザーの `users.notifications_seeded_at`(新設列。NULL=未実体化)以降に**初回有効化**されたルールを `rules` から引き、`rule_debut` 行を最大 10 件 INSERT してカーソルを進める。同一ミリ秒に 10 件を超えて有効化されても漏らさないよう、実装上のカーソルは `notifications_seeded_at` + `notifications_seeded_rule_id` の複合とする。「有効化時点」の基準列は **`rules.activated_at`**(実装済み: 初回有効化時に `COALESCE(activated_at, now)` で 1 回だけ書かれ、以後更新されない — 2026-07-29 に `rules/repository.ts` で確認)。したがって disable→再 enable・ロールバック復帰では `activated_at` が動かず**再 debut しない**(冪等キー = `ruleId` も二重発行を防ぐ)。初回実体化はその時点から(過去のルールで新規ユーザーを埋めない)。自分の提案のルールは除外(`proposal_released` と重複するため)。なお `activated_at` のバックフィルは `status='active'` 行のみのため、移行前から disabled の旧ルールは NULL のまま残り、後日再 enable されるとその時刻で debut 扱いになりうる — 発生条件は極めて狭く、「再登場のおしらせ」として実害もないため許容する。これにより行数は「実際に再訪したユーザー × 直近のルール」に自然に絞られる。
+- **新ルール全体通知(`rule_debut`)**: 全 `users` 行への一斉 INSERT は行わない(一見客の匿名行を含め無際限に膨らむ)。代わりに**取得時の遅延実体化**とする: 通知一覧の取得または Socket.IO 接続時に、そのユーザーの `users.notifications_seeded_at`(新設列。NULL=未実体化)以降に**初回有効化**されたルールを `rules` から引き、`rule_debut` 行を最大 10 件 INSERT してカーソルを進める。同一ミリ秒に 10 件を超えて有効化されても漏らさないよう、実装上のカーソルは `notifications_seeded_at` + `notifications_seeded_rule_id` の複合とする。「有効化時点」の基準列は **`rules.activated_at`**(実装済み: 初回有効化時に `COALESCE(activated_at, now)` で 1 回だけ書かれ、以後更新されない — 2026-07-29 に `rules/repository.ts` で確認)。したがって disable→再 enable・ロールバック復帰では `activated_at` が動かず**再 debut しない**(冪等キー = `ruleId` も二重発行を防ぐ)。初回実体化はその時点から(過去のルールで新規ユーザーを埋めない)。自分の提案のルールは除外(`proposal_released` と重複するため)。なお `activated_at` のバックフィルは `status='active'` 行のみのため、移行前から disabled の旧ルールは NULL のまま残り、後日再 enable されるとその時刻で debut 扱いになりうる — 発生条件は極めて狭く、「再登場のおしらせ」として実害もないため許容する。これにより行数は「実際に再訪したユーザー × 直近のルール」に自然に絞られる。
+- **管理画面のお知らせ(`announcement`)**: 即時の未読バッジ・Socket.IO・Web Pushを同一通知から届けるため、配信トランザクションで送信時点の全 `users` 行に通知を実体化する。配信履歴と監査用の配信者メール、対象人数は `announcements` に保存する。配信後に作成されたユーザーへ過去のお知らせは追加しない。
 - 保持期間: 初期は無制限(行は小さい)。将来の削除は E10 の CLI 流儀で(§5)。
 
 ### 2.4 イベントソース(実コード上の発火点)

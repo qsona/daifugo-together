@@ -25,6 +25,7 @@ import type { RoomSocketGateway } from './room/socket-gateway.js';
 import {
   AdminAuthService,
   createGoogleAdminAuthProvider,
+  type AdminAuthProvider,
 } from './admin/auth.js';
 import { AdminConsole } from './admin/console.js';
 import { loadTrafficDashboardWithToken } from './operations/dashboard-local.js';
@@ -105,14 +106,15 @@ if (
     'ADMIN_BASIC_USERNAME, ADMIN_BASIC_PASSWORD, ADMIN_ALLOWED_EMAIL, and ADMIN_SESSION_SECRET must be configured together',
   );
 }
-let adminConsole: AdminConsole | undefined;
+let createAdminConsole:
+  ((notifications: NotificationService) => AdminConsole) | undefined;
 if (
   adminBasicUsername &&
   adminBasicPassword &&
   adminAllowedEmail &&
   adminSessionSecret
 ) {
-  let adminAuthProvider;
+  let adminAuthProvider: AdminAuthProvider | undefined;
   try {
     adminAuthProvider = await createGoogleAdminAuthProvider({
       ...(process.env.GOOGLE_CLIENT_ID
@@ -154,18 +156,20 @@ if (
         return value;
       }
     : undefined;
-  adminConsole = new AdminConsole({
-    repository: persistence.admin,
-    auth: new AdminAuthService({
-      ...(adminAuthProvider ? { provider: adminAuthProvider } : {}),
-      publicOrigin,
-      allowedEmail: adminAllowedEmail,
-      sessionSecret: adminSessionSecret,
-    }),
-    basicUsername: adminBasicUsername,
-    basicPassword: adminBasicPassword,
-    ...(traffic ? { traffic } : {}),
-  });
+  createAdminConsole = (notifications) =>
+    new AdminConsole({
+      repository: persistence.admin,
+      auth: new AdminAuthService({
+        ...(adminAuthProvider ? { provider: adminAuthProvider } : {}),
+        publicOrigin,
+        allowedEmail: adminAllowedEmail,
+        sessionSecret: adminSessionSecret,
+      }),
+      basicUsername: adminBasicUsername,
+      basicPassword: adminBasicPassword,
+      notifications,
+      ...(traffic ? { traffic } : {}),
+    });
 }
 const codeRules = await loadRuleCodeBundles();
 let refreshWaitingRules = (): void => undefined;
@@ -205,6 +209,7 @@ const notifications = new NotificationService(persistence.notifications, {
   onError: (error) =>
     writeLog('error', 'notification_delivery_failed', errorFields(error)),
 });
+const adminConsole = createAdminConsole?.(notifications);
 const rules = new RuleRegistryService(persistence.rules, codeRules, {
   proposals: persistence.proposals,
   pipeline: persistence.pipeline,

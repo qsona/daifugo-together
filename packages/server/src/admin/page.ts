@@ -55,7 +55,7 @@ export const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
     * { box-sizing: border-box; }
     body { margin: 0; min-height: 100vh; color: var(--text); background: var(--bg); }
     body::before { content:""; position:fixed; inset:0; pointer-events:none; background:radial-gradient(circle at 92% 0%,rgba(123,108,255,.19),transparent 32%),radial-gradient(circle at 0% 100%,rgba(67,211,176,.1),transparent 28%); }
-    button,input,select { font:inherit; }
+    button,input,select,textarea { font:inherit; }
     .shell { position:relative; display:grid; grid-template-columns:228px minmax(0,1fr); min-height:100vh; }
     aside { position:sticky; top:0; height:100vh; padding:26px 18px; border-right:1px solid var(--line); background:rgba(10,15,30,.88); backdrop-filter:blur(14px); }
     .brand { padding:0 10px 25px; }
@@ -125,9 +125,19 @@ export const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
     .user-stats strong { display:block; font-size:17px; }
     .user-stats span { color:#8490ad; font-size:9px; }
     .more { display:none; width:100%; margin-top:12px; border:1px solid #364260; border-radius:11px; padding:11px; color:#dfe4f5; background:#131b30; cursor:pointer; }
+    .announcement-layout { display:grid; grid-template-columns:minmax(300px,.8fr) minmax(0,1.2fr); gap:14px; align-items:start; }
+    .announcement-form { display:grid; gap:13px; }
+    .announcement-form label { display:grid; gap:7px; color:#aeb8d2; font-size:12px; font-weight:700; }
+    .announcement-form input,.announcement-form textarea { width:100%; border:1px solid #34405f; border-radius:11px; padding:11px 12px; color:#fff; background:#0d1427; outline:none; resize:vertical; }
+    .announcement-form input:focus,.announcement-form textarea:focus { border-color:var(--accent); }
+    .announcement-form small { color:#8490ad; font-size:11px; line-height:1.6; font-weight:400; }
+    .send { border:0; border-radius:11px; padding:12px 16px; color:#0a1320; background:var(--mint); cursor:pointer; font-weight:900; }
+    .send:disabled { cursor:wait; opacity:.6; }
+    .announcement-status { min-height:20px; margin:0; color:#8ee8d2; font-size:12px; }
+    .announcement-history { display:grid; gap:10px; }
     .empty { padding:34px; color:#8995b3; text-align:center; }
-    @media (max-width:960px) { .periods,.overview-lower { grid-template-columns:1fr; } .user-grid { grid-template-columns:1fr; } }
-    @media (max-width:720px) { .shell { display:block; } aside { position:relative; height:auto; padding:14px; border-right:0; border-bottom:1px solid var(--line); } .brand { padding:3px 5px 12px; } nav { grid-template-columns:repeat(3,1fr); } .nav { justify-content:center; padding:9px 5px; font-size:12px; } .nav-icon { display:none; } .aside-foot { display:none; } main { padding:22px 14px 50px; } header { align-items:flex-end; } .header-actions .live { display:none; } .summary { grid-template-columns:repeat(2,1fr); } .status-grid { grid-template-columns:repeat(2,1fr); } }
+    @media (max-width:960px) { .periods,.overview-lower,.announcement-layout { grid-template-columns:1fr; } .user-grid { grid-template-columns:1fr; } }
+    @media (max-width:720px) { .shell { display:block; } aside { position:relative; height:auto; padding:14px; border-right:0; border-bottom:1px solid var(--line); } .brand { padding:3px 5px 12px; } nav { grid-template-columns:repeat(4,1fr); } .nav { justify-content:center; padding:9px 5px; font-size:12px; } .nav-icon { display:none; } .aside-foot { display:none; } main { padding:22px 14px 50px; } header { align-items:flex-end; } .header-actions .live { display:none; } .summary { grid-template-columns:repeat(2,1fr); } .status-grid { grid-template-columns:repeat(2,1fr); } }
     @media (max-width:430px) { .period { padding:14px; } .metric { min-height:78px; padding:10px; } .metric strong { font-size:22px; } .user-stats { grid-template-columns:repeat(2,1fr); } }
   </style>
 </head>
@@ -139,6 +149,7 @@ export const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
         <button class="nav active" data-view="overview"><span class="nav-icon">01</span>概要</button>
         <button class="nav" data-view="proposals"><span class="nav-icon">02</span>提案</button>
         <button class="nav" data-view="users"><span class="nav-icon">03</span>ユーザー</button>
+        <button class="nav" data-view="announcements"><span class="nav-icon">04</span>お知らせ</button>
       </nav>
       <div class="aside-foot"><form method="post" action="/admin/logout"><button class="logout">ログアウト</button></form></div>
     </aside>
@@ -163,21 +174,40 @@ export const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
         <div class="toolbar"><input id="user-query" type="search" placeholder="表示名・ユーザーIDで検索"><select id="user-registration"><option value="all">すべてのユーザー</option><option value="registered">Google登録済み</option><option value="guest">ゲスト</option></select></div>
         <p class="result-meta" id="user-meta"></p><div class="user-grid" id="user-list"></div><button class="more" id="user-more">さらに表示</button>
       </section>
+      <section class="view" id="view-announcements">
+        <div class="announcement-layout">
+          <article class="panel">
+            <h2>全ユーザーへ配信</h2>
+            <form class="announcement-form" id="announcement-form">
+              <label>タイトル<input id="announcement-title" name="title" maxlength="80" required placeholder="メンテナンスのお知らせ"></label>
+              <label>本文<textarea id="announcement-body" name="body" maxlength="500" rows="6" required placeholder="ユーザーに伝える内容を入力"></textarea></label>
+              <label>開く画面<input id="announcement-url" name="url" maxlength="500" value="/notifications" required><small>アプリ内のパスを指定します（例: /rules）。未指定時はお知らせBoxを開きます。</small></label>
+              <small>送信時点の全ユーザーのお知らせBoxへ追加します。Web Pushは購読中の端末へも送りますが、21:00〜翌7:00（日本時間）は送信されません。</small>
+              <button class="send" id="announcement-send" type="submit">内容を確認して配信</button>
+              <p class="announcement-status" id="announcement-status" role="status"></p>
+            </form>
+          </article>
+          <article class="panel">
+            <h2>配信履歴</h2>
+            <div class="announcement-history" id="announcement-list"></div>
+          </article>
+        </div>
+      </section>
     </main>
   </div>
   <script>
     const nf = new Intl.NumberFormat("ja-JP");
     const dt = new Intl.DateTimeFormat("ja-JP", { timeZone:"Asia/Tokyo", month:"numeric", day:"numeric", hour:"2-digit", minute:"2-digit" });
     const labels = { screening:"審査中", implementing:"実装中", released:"公開済み", rejected:"却下", failed:"実装失敗" };
-    const views = { overview:["運用概要","本番の利用状況を確認します。"], proposals:["提案","提案内容と処理状況を確認します。"], users:["ユーザー","登録・プレイ状況を確認します。"] };
+    const views = { overview:["運用概要","本番の利用状況を確認します。"], proposals:["提案","提案内容と処理状況を確認します。"], users:["ユーザー","登録・プレイ状況を確認します。"], announcements:["お知らせ配信","全ユーザーのお知らせBoxと購読端末へ配信します。"] };
     const state = { proposalOffset:0, userOffset:0, proposalTotal:0, userTotal:0, busy:false };
     const el = (id) => document.getElementById(id);
     const text = (tag, value, className) => { const node=document.createElement(tag); node.textContent=value; if(className) node.className=className; return node; };
     const date = (value) => value ? dt.format(new Date(value)) : "—";
     const shortId = (value) => value.length > 14 ? value.slice(0,8)+"…"+value.slice(-4) : value;
 
-    async function api(path) {
-      const response = await fetch(path, { cache:"no-store" });
+    async function api(path, options={}) {
+      const response = await fetch(path, { cache:"no-store", ...options });
       if (response.status === 401) { location.reload(); throw new Error("ログインが必要です"); }
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || "取得に失敗しました");
@@ -223,10 +253,16 @@ export const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       const data=await api("/admin/api/users?"+q);state.userTotal=data.total;data.items.forEach(item=>el("user-list").append(userNode(item)));state.userOffset+=data.items.length;
       el("user-meta").textContent=nf.format(data.total)+"人";if(data.total===0)el("user-list").append(text("div","該当するユーザーはいません。","empty"));el("user-more").style.display=state.userOffset<data.total?"block":"none";
     }
+    function announcementNode(item) {
+      const root=text("article","","item");const top=text("div","","item-top");const heading=document.createElement("div");heading.append(text("h3",item.title),text("span","#"+item.id,"item-id"));top.append(heading,text("span",nf.format(item.recipientCount)+"人","badge registered"));root.append(top,text("p",item.body,"body"));const meta=text("div","","meta");["配信 "+date(item.createdAt),"配信者 "+item.createdBy,"遷移先 "+item.url].forEach(value=>meta.append(text("span",value)));root.append(meta);return root;
+    }
+    async function loadAnnouncements() {
+      const data=await api("/admin/api/announcements");el("announcement-list").replaceChildren();data.items.forEach(item=>el("announcement-list").append(announcementNode(item)));if(data.items.length===0)el("announcement-list").append(text("div","配信履歴はありません。","empty"));
+    }
     async function run(task){if(state.busy)return;state.busy=true;el("refresh").disabled=true;clearError();try{await task();el("live").textContent="本番取得済み";}catch(error){showError(error);el("live").textContent="取得失敗";}finally{state.busy=false;el("refresh").disabled=false;}}
     function currentView(){return document.querySelector(".nav.active").dataset.view;}
-    document.querySelectorAll(".nav").forEach(button=>button.addEventListener("click",()=>{document.querySelectorAll(".nav,.view").forEach(node=>node.classList.remove("active"));button.classList.add("active");el("view-"+button.dataset.view).classList.add("active");el("title").textContent=views[button.dataset.view][0];el("subtitle").textContent=views[button.dataset.view][1];if(button.dataset.view==="proposals"&&!el("proposal-list").children.length)void run(()=>loadProposals());if(button.dataset.view==="users"&&!el("user-list").children.length)void run(()=>loadUsers());}));
-    let proposalTimer,userTimer;el("proposal-query").addEventListener("input",()=>{clearTimeout(proposalTimer);proposalTimer=setTimeout(()=>void run(()=>loadProposals()),300);});el("proposal-status").addEventListener("change",()=>void run(()=>loadProposals()));el("user-query").addEventListener("input",()=>{clearTimeout(userTimer);userTimer=setTimeout(()=>void run(()=>loadUsers()),300);});el("user-registration").addEventListener("change",()=>void run(()=>loadUsers()));el("proposal-more").addEventListener("click",()=>void run(()=>loadProposals(false)));el("user-more").addEventListener("click",()=>void run(()=>loadUsers(false)));el("refresh").addEventListener("click",()=>void run(()=>currentView()==="overview"?loadOverview():currentView()==="proposals"?loadProposals():loadUsers()));
+    document.querySelectorAll(".nav").forEach(button=>button.addEventListener("click",()=>{document.querySelectorAll(".nav,.view").forEach(node=>node.classList.remove("active"));button.classList.add("active");el("view-"+button.dataset.view).classList.add("active");el("title").textContent=views[button.dataset.view][0];el("subtitle").textContent=views[button.dataset.view][1];if(button.dataset.view==="proposals"&&!el("proposal-list").children.length)void run(()=>loadProposals());if(button.dataset.view==="users"&&!el("user-list").children.length)void run(()=>loadUsers());if(button.dataset.view==="announcements"&&!el("announcement-list").children.length)void run(loadAnnouncements);}));
+    let proposalTimer,userTimer;el("proposal-query").addEventListener("input",()=>{clearTimeout(proposalTimer);proposalTimer=setTimeout(()=>void run(()=>loadProposals()),300);});el("proposal-status").addEventListener("change",()=>void run(()=>loadProposals()));el("user-query").addEventListener("input",()=>{clearTimeout(userTimer);userTimer=setTimeout(()=>void run(()=>loadUsers()),300);});el("user-registration").addEventListener("change",()=>void run(()=>loadUsers()));el("proposal-more").addEventListener("click",()=>void run(()=>loadProposals(false)));el("user-more").addEventListener("click",()=>void run(()=>loadUsers(false)));el("announcement-form").addEventListener("submit",async event=>{event.preventDefault();const title=el("announcement-title").value.trim();const body=el("announcement-body").value.trim();const url=el("announcement-url").value.trim()||"/notifications";if(!confirm("「"+title+"」を全ユーザーへ配信します。よろしいですか？"))return;const send=el("announcement-send");send.disabled=true;el("announcement-status").textContent="配信しています…";clearError();try{const data=await api("/admin/api/announcements",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({title,body,url})});el("announcement-status").textContent=nf.format(data.item.recipientCount)+"人のお知らせBoxへ配信しました。";el("announcement-form").reset();el("announcement-url").value="/notifications";await loadAnnouncements();}catch(error){el("announcement-status").textContent="";showError(error);}finally{send.disabled=false;}});el("refresh").addEventListener("click",()=>void run(()=>currentView()==="overview"?loadOverview():currentView()==="proposals"?loadProposals():currentView()==="users"?loadUsers():loadAnnouncements()));
     void run(loadOverview);setInterval(()=>{if(currentView()==="overview")void run(loadOverview);},60_000);
   </script>
 </body>

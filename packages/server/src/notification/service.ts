@@ -8,6 +8,7 @@ import type {
 import type { StoredProposal } from '../proposal/repository.js';
 import type { PushSender } from '../push/sender.js';
 import { NotificationRepository } from './repository.js';
+import type { AnnouncementView } from './repository.js';
 
 export interface NotificationEmitter {
   emitNew(userId: string, item: NotificationView): void;
@@ -41,7 +42,7 @@ export class NotificationService {
   }
 
   publishProposal(
-    type: Exclude<NotificationType, 'rule_debut'>,
+    type: Exclude<NotificationType, 'rule_debut' | 'announcement'>,
     proposal: Pick<StoredProposal, 'id' | 'authorId' | 'name' | 'ruleId'>,
   ): NotificationView | null {
     try {
@@ -70,6 +71,31 @@ export class NotificationService {
       this.#onError(error);
       return null;
     }
+  }
+
+  publishAnnouncement(input: {
+    title: string;
+    body: string;
+    url: string;
+    createdBy: string;
+  }): AnnouncementView {
+    const result = this.#repository.createAnnouncement({
+      ...input,
+      now: this.#now(),
+    });
+    for (const { userId, item } of result.recipients) {
+      try {
+        this.#emit.emitNew(userId, item);
+      } catch (error) {
+        this.#onError(error);
+      }
+      void this.#push?.send(userId, item).catch(this.#onError);
+    }
+    return result.announcement;
+  }
+
+  listAnnouncements(): AnnouncementView[] {
+    return this.#repository.listAnnouncements();
   }
 
   sync(userId: string): number {

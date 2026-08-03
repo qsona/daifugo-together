@@ -156,4 +156,50 @@ describe('E16 notification center', () => {
     expect(send).toHaveBeenCalledOnce();
     persistence.close();
   });
+
+  it('管理者のお知らせを送信時点の全ユーザーへ保存して配信する', () => {
+    const persistence = new SqlitePersistence(':memory:');
+    const first = persistence.sessions.resolve(undefined);
+    const second = persistence.sessions.resolve(undefined);
+    const emitNew = vi.fn();
+    const send = vi.fn(async () => undefined);
+    const service = new NotificationService(persistence.notifications, {
+      now: () => 1_000,
+      emit: { emitNew, sync: vi.fn() },
+      push: { send },
+    });
+
+    const announcement = service.publishAnnouncement({
+      title: 'メンテナンスのお知らせ',
+      body: '本日20時から短時間のメンテナンスを行います。',
+      url: '/notifications',
+      createdBy: 'admin@example.com',
+    });
+
+    expect(announcement).toMatchObject({
+      id: 1,
+      recipientCount: 2,
+      createdBy: 'admin@example.com',
+    });
+    for (const session of [first, second]) {
+      expect(service.list(session.userToken)).toMatchObject({
+        status: 200,
+        body: {
+          unreadCount: 1,
+          items: [
+            {
+              type: 'announcement',
+              title: 'メンテナンスのお知らせ',
+              body: '本日20時から短時間のメンテナンスを行います。',
+              url: '/notifications',
+            },
+          ],
+        },
+      });
+    }
+    expect(emitNew).toHaveBeenCalledTimes(2);
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(service.listAnnouncements()).toEqual([announcement]);
+    persistence.close();
+  });
 });

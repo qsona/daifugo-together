@@ -4,6 +4,7 @@ export const NOTIFICATION_TYPES = [
   'proposal_failed',
   'proposal_implementing',
   'rule_debut',
+  'announcement',
 ] as const;
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
@@ -46,6 +47,24 @@ function payloadText(
     : fallback;
 }
 
+function payloadPath(
+  payload: Readonly<Record<string, unknown>>,
+  key: string,
+  fallback: string,
+): string {
+  const value = payload[key];
+  if (typeof value !== 'string' || !value.startsWith('/')) return fallback;
+  try {
+    const base = 'https://notification.invalid';
+    const parsed = new URL(value, base);
+    return parsed.origin === base
+      ? `${parsed.pathname}${parsed.search}${parsed.hash}`
+      : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 /**
  * 通知センターと Web Push が共有する唯一の表示文マッピング。
  * Push はこの結果を複製し、独自の情報や文面を足さない。
@@ -85,6 +104,12 @@ export function notificationPresentation(
         title: '新しいルールが登場！',
         body: `「${payloadText(payload, 'ruleName', '新しいルール')}」が遊べるようになりました。`,
         url: '/rules',
+      };
+    case 'announcement':
+      return {
+        title: payloadText(payload, 'title', 'お知らせ'),
+        body: payloadText(payload, 'body', '新しいお知らせがあります。'),
+        url: payloadPath(payload, 'url', '/notifications'),
       };
   }
 }

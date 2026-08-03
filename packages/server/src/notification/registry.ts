@@ -40,6 +40,12 @@ export const NOTIFICATION_TYPE_REGISTRY: Readonly<
     audience: 'broadcast',
     channel: 'center',
   },
+  announcement: {
+    type: 'announcement',
+    priority: 'high',
+    audience: 'broadcast',
+    channel: 'center_push',
+  },
 };
 
 // Reserved extension codes owned by later Epics:

@@ -4,6 +4,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { AdminAuthService } from './auth.js';
 import { ADMIN_DASHBOARD_HTML, adminLoginHtml } from './page.js';
 import type { AdminRepository } from './repository.js';
+import type { NotificationService } from '../notification/service.js';
 import type { TrafficWindow } from '../operations/dashboard-local.js';
 
 const FLOW_COOKIE = '__Host-daifugo-admin-flow';
@@ -52,6 +53,55 @@ async function readFormBody(
   return new URLSearchParams(Buffer.concat(chunks).toString('utf8'));
 }
 
+async function readJsonBody(
+  request: IncomingMessage,
+  maxBytes = 8 * 1_024,
+): Promise<unknown> {
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of request) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    size += buffer.length;
+    if (size > maxBytes) throw new Error('request_too_large');
+    chunks.push(buffer);
+  }
+  return JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown;
+}
+
+function announcementInput(body: unknown): {
+  title: string;
+  body: string;
+  url: string;
+} {
+  if (typeof body !== 'object' || body === null || Array.isArray(body)) {
+    throw new Error('invalid_announcement');
+  }
+  const record = body as Record<string, unknown>;
+  const title = typeof record.title === 'string' ? record.title.trim() : '';
+  const message = typeof record.body === 'string' ? record.body.trim() : '';
+  const rawUrl = typeof record.url === 'string' ? record.url.trim() : '';
+  if (title.length === 0 || title.length > 80) {
+    throw new Error('invalid_announcement_title');
+  }
+  if (message.length === 0 || message.length > 500) {
+    throw new Error('invalid_announcement_body');
+  }
+  if (rawUrl.length > 500) throw new Error('invalid_announcement_url');
+  const base = 'https://admin.invalid';
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl || '/notifications', base);
+  } catch {
+    throw new Error('invalid_announcement_url');
+  }
+  if (parsed.origin !== base) throw new Error('invalid_announcement_url');
+  return {
+    title,
+    body: message,
+    url: `${parsed.pathname}${parsed.search}${parsed.hash}`,
+  };
+}
+
 function numericParameter(
   parameters: URLSearchParams,
   name: string,
@@ -66,6 +116,9 @@ export class AdminConsole {
   readonly #basicUsername: string;
   readonly #basicPassword: string;
   readonly #traffic: (() => Promise<TrafficSnapshot>) | undefined;
+  readonly #notifications:
+    | Pick<NotificationService, 'publishAnnouncement' | 'listAnnouncements'>
+    | undefined;
   readonly #now: () => number;
 
   constructor(options: {
@@ -74,6 +127,10 @@ export class AdminConsole {
     basicUsername: string;
     basicPassword: string;
     traffic?: () => Promise<TrafficSnapshot>;
+    notifications?: Pick<
+      NotificationService,
+      'publishAnnouncement' | 'listAnnouncements'
+    >;
     now?: () => number;
   }) {
     if (options.basicUsername.trim().length === 0) {
@@ -87,6 +144,7 @@ export class AdminConsole {
     this.#basicUsername = options.basicUsername;
     this.#basicPassword = options.basicPassword;
     this.#traffic = options.traffic;
+    this.#notifications = options.notifications;
     this.#now = options.now ?? Date.now;
   }
 
@@ -278,10 +336,47 @@ export class AdminConsole {
     response: ServerResponse,
     url: URL,
   ): Promise<void> {
-    if (
-      this.#auth.sessionEmail(cookieValue(request, SESSION_COOKIE)) === null
-    ) {
+    const adminEmail = this.#auth.sessionEmail(
+      cookieValue(request, SESSION_COOKIE),
+    );
+    if (adminEmail === null) {
       this.#json(response, 401, { error: 'google_login_required' });
+      return;
+    }
+    if (url.pathname === '/admin/api/announcements') {
+      if (!this.#notifications) {
+        this.#json(response, 503, {
+          error: 'notification_service_unavailable',
+        });
+        return;
+      }
+      if (request.method === 'GET') {
+        this.#json(response, 200, {
+          items: this.#notifications.listAnnouncements(),
+        });
+        return;
+      }
+      if (request.method === 'POST') {
+        try {
+          const input = announcementInput(await readJsonBody(request));
+          const item = this.#notifications.publishAnnouncement({
+            ...input,
+            createdBy: adminEmail,
+          });
+          this.#json(response, 201, { item });
+        } catch (error) {
+          const code =
+            error instanceof Error &&
+            error.message.startsWith('invalid_announcement')
+              ? error.message
+              : 'invalid_request';
+          this.#json(response, 400, {
+            error: code,
+          });
+        }
+        return;
+      }
+      this.#methodNotAllowed(response, 'GET, POST');
       return;
     }
     if (request.method !== 'GET') {
