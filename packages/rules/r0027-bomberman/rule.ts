@@ -1,5 +1,7 @@
 import type { RuleModule } from '@daifugo/core';
 
+const CHOICE_ID = 'bomberman_discard';
+
 export const rule: RuleModule = {
   meta: {
     ruleId: 'r0027-bomberman',
@@ -27,8 +29,7 @@ export const rule: RuleModule = {
       const count = Math.min(play.count, hand?.length ?? 0);
       if (count === 0) return [];
 
-      const choiceId = `bomberman-discard:${player}`;
-      if (input?.kind === 'cards' && input.choiceId === choiceId) {
+      if (input?.kind === 'cards' && input.choiceId === CHOICE_ID) {
         return [
           {
             type: 'moveCards',
@@ -43,7 +44,7 @@ export const rule: RuleModule = {
         {
           type: 'requestChoice',
           player,
-          choiceId,
+          choiceId: CHOICE_ID,
           from: { kind: 'hand', player },
           cards: { kind: 'all' },
           count,

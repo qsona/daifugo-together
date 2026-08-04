@@ -18,6 +18,7 @@ import { buildRuleContext, prepareRuleInvocation } from '../rules/context.js';
 import { safeModifyStrength } from '../rules/safe-port.js';
 import type { Standings } from '../rules/contract.js';
 import { buildPlayerSnapshot } from '../snapshot/snapshot.js';
+import { outstandingChoiceRequests } from '../game/pending-choice.js';
 
 export interface CreateSimulationApiInput {
   config: GameConfig;
@@ -152,6 +153,7 @@ export function createSimulationApi(
         if (pending === undefined) {
           throw new Error('Simulation choice phase has no pending choice');
         }
+        const request = outstandingChoiceRequests(pending)[0] ?? pending;
         const resumed = reduceGame(
           config,
           transition.state,
@@ -164,17 +166,17 @@ export function createSimulationApi(
               }
             : {
                 type: 'ruleInput',
-                player: pending.player,
-                choiceId: pending.choiceId,
-                ...((pending.kind ?? 'cards') === 'player'
+                player: request.player,
+                choiceId: request.choiceId,
+                ...((request.kind ?? 'cards') === 'player'
                   ? {
                       playerId:
-                        [...(pending.optionPlayerIds ?? [])].sort()[0] ?? '',
+                        [...(request.optionPlayerIds ?? [])].sort()[0] ?? '',
                     }
                   : {
-                      cardIds: [...(pending.optionCardIds ?? [])]
+                      cardIds: [...(request.optionCardIds ?? [])]
                         .sort()
-                        .slice(0, pending.count ?? 0),
+                        .slice(0, request.count ?? 0),
                     }),
               },
           {

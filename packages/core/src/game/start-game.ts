@@ -266,6 +266,9 @@ export function startGame(
     const requests = preview.choiceRequests ?? [];
     const request = requests[0];
     if (request) {
+      const sameRuleRequests = requests.filter(
+        (candidate) => candidate.ruleId === request.ruleId,
+      );
       return {
         state: {
           ...state,
@@ -275,11 +278,14 @@ export function startGame(
             pendingChoice: {
               ...request,
               hook: 'onGameStart',
+              ...(request.simultaneous === true
+                ? {
+                    simultaneousChoices: sameRuleRequests,
+                    submittedChoices: [],
+                  }
+                : {}),
               continuation: {
-                remainingChoices: requests.filter(
-                  (candidate, index) =>
-                    index > 0 && candidate.ruleId === request.ruleId,
-                ),
+                remainingChoices: sameRuleRequests.slice(1),
                 remainingRuleIds: config.ruleChain
                   .filter(({ ruleId }) => ruleId !== request.ruleId)
                   .map(({ ruleId }) => ruleId),

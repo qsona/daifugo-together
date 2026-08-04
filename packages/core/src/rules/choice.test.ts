@@ -294,6 +294,26 @@ const multiPlayerChoiceRule: RuleModule = {
   },
 };
 
+const simultaneousMultiPlayerChoiceRule: RuleModule = {
+  ...multiPlayerChoiceRule,
+  meta: {
+    ...multiPlayerChoiceRule.meta,
+    ruleId: 'r-choice-multi-simultaneous',
+    proposalId: 'choice-fixture-multi-simultaneous',
+  },
+  hooks: {
+    afterPlay(context, play, input) {
+      return (
+        multiPlayerChoiceRule.hooks.afterPlay?.(context, play, input) ?? []
+      ).map((effect) =>
+        effect.type === 'requestChoice'
+          ? { ...effect, simultaneous: true }
+          : effect,
+      );
+    },
+  },
+};
+
 const dynamicPlayerChoiceRule: RuleModule = {
   meta: {
     ruleId: 'r-choice-dynamic-player',
@@ -681,6 +701,87 @@ describe('contract v2 rule choices', () => {
     ]);
     expect(transition.state.players.p2?.hand.map(({ id }) => id)).toEqual([
       'H05',
+    ]);
+  });
+
+  it('simultaneous choiceは全員へ同時提示し、全回答を非公開で集めてから一括適用する', () => {
+    const { config, state, runtime } = fixture(
+      simultaneousMultiPlayerChoiceRule,
+    );
+    state.players.p2?.hand.push(card('H05'));
+    state.players.p3?.hand.push(card('H06'));
+    state.players.p4?.hand.push(card('H07'));
+    const snapshotContext = {
+      setId: 'simultaneous-choice-set',
+      setPhase: { name: 'gameInProgress' as const, gameIndex: 0 },
+      members: seats.map((id) => ({ id, displayName: id, isAI: false })),
+      setResults: [],
+    };
+
+    let transition = reduceGame(
+      config,
+      state,
+      { type: 'play', player: 'p1', cards: ['S10'] },
+      runtime,
+    );
+    expect(
+      buildPlayerSnapshot(
+        config,
+        transition.state,
+        snapshotContext,
+        'p2',
+        runtime,
+      ).pendingChoice,
+    ).toMatchObject({ player: 'p2', choiceId: 'discard_p2' });
+
+    transition = reduceGame(
+      config,
+      transition.state,
+      {
+        type: 'ruleInput',
+        player: 'p2',
+        choiceId: 'discard_p2',
+        cardIds: ['S05'],
+      },
+      runtime,
+    );
+    expect(transition.rejections).toEqual([]);
+    expect(transition.state.public.discard).toEqual([]);
+    expect(transition.state.players.p2?.hand.map(({ id }) => id)).toEqual([
+      'S05',
+      'H05',
+    ]);
+    expect(
+      buildPlayerSnapshot(
+        config,
+        transition.state,
+        snapshotContext,
+        'p2',
+        runtime,
+      ).pendingChoice,
+    ).toBeNull();
+
+    const rest = [
+      ['p4', 'discard_p4', 'S07'],
+      ['p1', 'discard_p1', 'H03'],
+      ['p3', 'discard_p3', 'S06'],
+    ] as const;
+    for (const [player, choiceId, cardId] of rest) {
+      transition = reduceGame(
+        config,
+        transition.state,
+        { type: 'ruleInput', player, choiceId, cardIds: [cardId] },
+        { ...runtime, setMemory: transition.setMemory ?? {} },
+      );
+    }
+
+    expect(transition.rejections).toEqual([]);
+    expect(transition.state.public.phase).toBe('awaitingPlay');
+    expect(transition.state.public.discard.map(({ id }) => id)).toEqual([
+      'H03',
+      'S05',
+      'S06',
+      'S07',
     ]);
   });
 

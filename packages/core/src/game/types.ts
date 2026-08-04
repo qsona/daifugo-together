@@ -137,6 +137,35 @@ export interface PublicGameState {
   turnCount: number;
 }
 
+export interface PendingChoiceRequest {
+  kind?: 'cards' | 'player' | 'miniGame';
+  ruleId: RuleId;
+  player: PlayerId;
+  choiceId: string;
+  messageKey: string;
+  optionCardIds?: CardId[];
+  optionPlayerIds?: PlayerId[];
+  count?: number;
+  miniGame?: 'bomb_throw_15';
+  participants?: PlayerId[];
+  durationMs?: number;
+  seed?: string;
+  miniGameState?: BombThrowMiniGameState;
+  simultaneous?: boolean;
+}
+
+export type SubmittedRuleChoice =
+  | {
+      player: PlayerId;
+      choiceId: string;
+      cardIds: CardId[];
+    }
+  | {
+      player: PlayerId;
+      choiceId: string;
+      playerId: PlayerId;
+    };
+
 export interface PrivateGameState {
   excluded: Card[];
   memory: RuleMemory;
@@ -150,41 +179,16 @@ export interface PrivateGameState {
     params?: Record<string, string>;
     players: PlayerId[];
   }[];
-  pendingChoice?: {
+  pendingChoice?: PendingChoiceRequest & {
     hook?: 'afterPlay' | 'onGameStart';
-    kind?: 'cards' | 'player' | 'miniGame';
-    ruleId: RuleId;
-    player: PlayerId;
-    choiceId: string;
-    messageKey: string;
-    optionCardIds?: CardId[];
-    optionPlayerIds?: PlayerId[];
-    count?: number;
-    miniGame?: 'bomb_throw_15';
-    participants?: PlayerId[];
-    durationMs?: number;
-    seed?: string;
-    miniGameState?: BombThrowMiniGameState;
     play?: Play;
     strength?: StrengthOrder;
     playedBy?: PlayerId;
+    simultaneousChoices?: PendingChoiceRequest[];
+    submittedChoices?: SubmittedRuleChoice[];
     continuation?: {
       remainingRuleIds: RuleId[];
-      remainingChoices?: {
-        kind: 'cards' | 'player' | 'miniGame';
-        ruleId: RuleId;
-        player: PlayerId;
-        choiceId: string;
-        messageKey: string;
-        optionCardIds?: CardId[];
-        optionPlayerIds?: PlayerId[];
-        count?: number;
-        miniGame?: 'bomb_throw_15';
-        participants?: PlayerId[];
-        durationMs?: number;
-        seed?: string;
-        miniGameState?: BombThrowMiniGameState;
-      }[];
+      remainingChoices?: PendingChoiceRequest[];
       clearRequested: boolean;
     };
   };

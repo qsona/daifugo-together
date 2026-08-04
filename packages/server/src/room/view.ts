@@ -3,6 +3,7 @@ import {
   createDeck,
   NO_RULE_CHAIN_PORT,
   orderPlayCards,
+  pendingChoiceRequestForPlayer,
   POINTS_BY_STANDING,
   sortCards,
   type GameResult,
@@ -204,6 +205,10 @@ function gameView(
     return null;
   }
   const current = game.public.field.current;
+  const pending = game.private.pendingChoice;
+  const displayedPending = pending?.simultaneousChoices
+    ? pendingChoiceRequestForPlayer(pending, memberId)
+    : pending;
   const gameIndex =
     engine.phase.name === 'setResult' ? 0 : engine.phase.gameIndex;
   const playerSnapshot = buildPlayerSnapshot(
@@ -256,12 +261,16 @@ function gameView(
     turn:
       (game.public.phase === 'awaitingPlay' ||
         (game.public.phase === 'awaitingChoice' &&
-          game.private.pendingChoice?.kind !== 'miniGame')) &&
-      (game.private.pendingChoice?.player ?? game.public.turn)
+          displayedPending?.kind !== 'miniGame')) &&
+      (game.public.phase === 'awaitingChoice'
+        ? displayedPending?.player
+        : game.public.turn)
         ? {
             seat: requiredSeat(
               seats,
-              game.private.pendingChoice?.player ?? game.public.turn ?? '',
+              game.public.phase === 'awaitingChoice'
+                ? (displayedPending?.player ?? '')
+                : (game.public.turn ?? ''),
             ),
             turnSeq: state.turnSeq,
             deadlineAt: state.turnDeadlineAt,
@@ -327,34 +336,32 @@ function gameView(
             : null,
         }
       : null,
-    pendingChoice: game.private.pendingChoice
+    pendingChoice: displayedPending
       ? {
-          kind: game.private.pendingChoice.kind ?? 'cards',
-          ruleId: game.private.pendingChoice.ruleId,
-          choiceId: game.private.pendingChoice.choiceId,
+          kind: displayedPending.kind ?? 'cards',
+          ruleId: displayedPending.ruleId,
+          choiceId: displayedPending.choiceId,
           message:
             resolveRuleMessage?.(
-              game.private.pendingChoice.ruleId,
-              game.private.pendingChoice.messageKey,
+              displayedPending.ruleId,
+              displayedPending.messageKey,
             ) ?? null,
-          seat: requiredSeat(seats, game.private.pendingChoice.player),
-          count: game.private.pendingChoice.count ?? 0,
+          seat: requiredSeat(seats, displayedPending.player),
+          count: displayedPending.count ?? 0,
           cards:
-            game.private.pendingChoice.player === memberId &&
-            (game.private.pendingChoice.kind ?? 'cards') === 'cards'
+            displayedPending.player === memberId &&
+            (displayedPending.kind ?? 'cards') === 'cards'
               ? (playerSnapshot.pendingChoice?.cards ?? [])
               : null,
           players:
-            game.private.pendingChoice.player === memberId &&
-            game.private.pendingChoice.kind === 'player'
-              ? (game.private.pendingChoice.optionPlayerIds ?? []).map(
-                  (player) => ({
-                    seat: requiredSeat(seats, player),
-                    displayName:
-                      state.members.find((member) => member.memberId === player)
-                        ?.displayName ?? player,
-                  }),
-                )
+            displayedPending.player === memberId &&
+            displayedPending.kind === 'player'
+              ? (displayedPending.optionPlayerIds ?? []).map((player) => ({
+                  seat: requiredSeat(seats, player),
+                  displayName:
+                    state.members.find((member) => member.memberId === player)
+                      ?.displayName ?? player,
+                }))
               : null,
         }
       : null,

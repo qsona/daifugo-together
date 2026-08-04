@@ -70,7 +70,14 @@ export const rule: RuleModule = {
       });
       const [first, ...additionalChoices] = choices;
       return first
-        ? [{ type: 'requestChoice', ...first, additionalChoices }]
+        ? [
+            {
+              type: 'requestChoice',
+              ...first,
+              additionalChoices,
+              simultaneous: true,
+            },
+          ]
         : [];
     },
   },

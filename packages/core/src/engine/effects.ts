@@ -61,6 +61,7 @@ export interface ChoiceRequest {
   durationMs?: number;
   seed?: string;
   miniGameState?: BombThrowMiniGameState;
+  simultaneous?: boolean;
 }
 
 export interface EffectHookResult {
@@ -700,12 +701,16 @@ function effectPayloadValid(effect: unknown): effect is Effect {
               'seed',
               'kind',
               'additionalChoices',
+              'simultaneous',
             ],
           ) &&
           choiceRequestValid(
             Object.fromEntries(
               Object.entries(effect).filter(
-                ([key]) => key !== 'type' && key !== 'additionalChoices',
+                ([key]) =>
+                  key !== 'type' &&
+                  key !== 'additionalChoices' &&
+                  key !== 'simultaneous',
               ),
             ),
           ) &&
@@ -715,7 +720,16 @@ function effectPayloadValid(effect: unknown): effect is Effect {
               choiceId: effect.choiceId as string,
             },
             effect.additionalChoices,
-          )
+          ) &&
+          (effect.simultaneous === undefined ||
+            typeof effect.simultaneous === 'boolean') &&
+          (effect.simultaneous !== true ||
+            (Array.isArray(effect.additionalChoices) &&
+              effect.additionalChoices.length > 0 &&
+              !('miniGame' in effect) &&
+              effect.additionalChoices.every(
+                (request) => isRecord(request) && !('miniGame' in request),
+              )))
         );
       case 'skipTurns':
         return (
@@ -969,6 +983,9 @@ export function executeEffectHook(
                           ),
                           durationMs: request.durationMs,
                         }),
+                        ...(effect.simultaneous === true
+                          ? { simultaneous: true }
+                          : {}),
                       }
                     : 'players' in request
                       ? {
@@ -981,6 +998,9 @@ export function executeEffectHook(
                               invocation.state.players[player]?.status ===
                               'active',
                           ),
+                          ...(effect.simultaneous === true
+                            ? { simultaneous: true }
+                            : {}),
                         }
                       : {
                           kind: 'cards' as const,
@@ -994,6 +1014,9 @@ export function executeEffectHook(
                             contextForRule(context, ruleId).rng,
                           ),
                           count: request.count,
+                          ...(effect.simultaneous === true
+                            ? { simultaneous: true }
+                            : {}),
                         },
                 ),
               }

@@ -235,6 +235,11 @@ export type Effect =
   | ({
       type: 'requestChoice';
       additionalChoices?: ChoiceRequestPayload[];
+      /**
+       * Collect every additional choice without applying any response until
+       * all players have committed. Submitted values stay private meanwhile.
+       */
+      simultaneous?: boolean;
     } & ChoiceRequestPayload)
   | { type: 'skipTurns'; player: PlayerId; count: number }
   | { type: 'reverseTurnOrder' }

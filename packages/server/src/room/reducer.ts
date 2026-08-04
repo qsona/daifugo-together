@@ -1,5 +1,6 @@
 import {
   orderPlayCards,
+  pendingChoiceRequestForPlayer,
   reduceSet,
   startSetTransition,
   type EngineEvent,
@@ -20,6 +21,7 @@ import type {
   RoomTransition,
   SeatId,
 } from './types.js';
+import { nextRoomChoiceRequest } from './pending-choice.js';
 
 const DEFAULT_GAMES_PER_SET = 3;
 const DEFAULT_INTERIM_MS = 15_000;
@@ -558,7 +560,8 @@ function deadlineAtForTurn(
   }
   const activePlayer =
     engine.currentGame?.public.phase === 'awaitingChoice'
-      ? engine.currentGame.private.pendingChoice?.player
+      ? nextRoomChoiceRequest(engine.currentGame.private.pendingChoice, members)
+          ?.player
       : engine.currentGame?.public.turn;
   const member = members.find(
     (candidate) => candidate.memberId === activePlayer,
@@ -1031,8 +1034,13 @@ function gameAction(
     (member) => member.memberId === action.memberId,
   );
   const pending = state.engine.currentGame?.private.pendingChoice;
+  const actorPending = actor
+    ? pendingChoiceRequestForPlayer(pending, actor.memberId)
+    : undefined;
   const expectedPlayer =
-    action.type === 'ruleInput' ? pending?.player : currentPlayer;
+    action.type === 'ruleInput' || (action.type === 'autoAct' && pending)
+      ? actorPending?.player
+      : currentPlayer;
   if (!actor || actor.seatId === null || expectedPlayer !== actor.memberId) {
     return rejected(state, 'NOT_YOUR_TURN');
   }
@@ -1049,15 +1057,15 @@ function gameAction(
             ? { playerId: action.playerId }
             : { cardIds: action.cardIds ?? [] }),
         }
-      : action.type === 'autoAct' && pending
+      : action.type === 'autoAct' && actorPending
         ? {
             type: 'ruleInput',
             player: actor.memberId,
-            choiceId: pending.choiceId,
-            ...((pending.kind ?? 'cards') === 'player'
+            choiceId: actorPending.choiceId,
+            ...((actorPending.kind ?? 'cards') === 'player'
               ? {
                   playerId:
-                    [...(pending.optionPlayerIds ?? [])].sort()[0] ?? '',
+                    [...(actorPending.optionPlayerIds ?? [])].sort()[0] ?? '',
                 }
               : { cardIds: action.cards ?? [] }),
           }

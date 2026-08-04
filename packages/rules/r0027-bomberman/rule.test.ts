@@ -81,7 +81,7 @@ describe('ボンバーマン', () => {
       {
         type: 'requestChoice',
         player: 'p1',
-        choiceId: 'bomberman-discard:p1',
+        choiceId: 'bomberman_discard',
         from: { kind: 'hand', player: 'p1' },
         cards: { kind: 'all' },
         count: 3,
@@ -94,7 +94,7 @@ describe('ボンバーマン', () => {
     expect(
       rule.hooks.afterPlay?.(context(), sequence(), {
         kind: 'cards',
-        choiceId: 'bomberman-discard:p1',
+        choiceId: 'bomberman_discard',
         cardIds: ['H2', 'H4', 'H1'],
       }),
     ).toEqual([

@@ -12,6 +12,7 @@ import {
   clientPayloadSchemas,
   enumerateLegalPlays,
   NO_RULE_CHAIN_PORT,
+  pendingChoiceRequestForPlayer,
   type CardId,
   type RuleChainEntry,
   type RuleChainPort,
@@ -295,14 +296,12 @@ export function attachRoomSocketGateway(
           setMemory: engine.setMemory,
         };
         const pending = game.private.pendingChoice;
-        if (
-          game.public.phase === 'awaitingChoice' &&
-          pending?.player === memberId
-        ) {
-          return (pending.kind ?? 'cards') === 'cards'
-            ? [...(pending.optionCardIds ?? [])]
+        const memberPending = pendingChoiceRequestForPlayer(pending, memberId);
+        if (game.public.phase === 'awaitingChoice' && memberPending) {
+          return (memberPending.kind ?? 'cards') === 'cards'
+            ? [...(memberPending.optionCardIds ?? [])]
                 .sort()
-                .slice(0, pending.count ?? 0)
+                .slice(0, memberPending.count ?? 0)
             : [];
         }
         const effectiveRules = () =>

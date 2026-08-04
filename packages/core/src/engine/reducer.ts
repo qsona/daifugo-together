@@ -6,8 +6,10 @@ import type {
   GameConfig,
   GameState,
   GameTransition,
+  PendingChoiceRequest,
   PlayerId,
   PublicGameEvent,
+  SubmittedRuleChoice,
 } from '../game/types.js';
 import { completeGameStart } from '../game/start-game.js';
 import { evaluateCandidates, generateCandidates } from '../play/candidates.js';
@@ -19,11 +21,7 @@ import {
 import { rankPosition, type StrengthOrder } from '../play/strength.js';
 import { noRuleRuntime, type RuleRuntime } from '../rules/chain.js';
 import { engineFeaturesOf, type RuleInput } from '../rules/contract.js';
-import {
-  executeEffectHook,
-  type ChoiceRequest,
-  type EffectHookResult,
-} from './effects.js';
+import { executeEffectHook, type EffectHookResult } from './effects.js';
 import {
   activePlayers,
   finishGame,
@@ -692,6 +690,9 @@ function reducePlay(
     const requests = preview.choiceRequests ?? [];
     const request = requests[0];
     if (request) {
+      const sameRuleRequests = requests.filter(
+        (candidate) => candidate.ruleId === request.ruleId,
+      );
       const withEvents = appendEvents(nextState, events);
       return {
         state: {
@@ -707,11 +708,14 @@ function reducePlay(
               play: interpretedPlay,
               strength: evaluated.strength,
               playedBy: action.player,
+              ...(request.simultaneous === true
+                ? {
+                    simultaneousChoices: sameRuleRequests,
+                    submittedChoices: [],
+                  }
+                : {}),
               continuation: {
-                remainingChoices: requests.filter(
-                  (candidate, index) =>
-                    index > 0 && candidate.ruleId === request.ruleId,
-                ),
+                remainingChoices: sameRuleRequests.slice(1),
                 remainingRuleIds: config.ruleChain
                   .filter(({ ruleId }) => ruleId !== request.ruleId)
                   .map(({ ruleId }) => ruleId),
@@ -749,7 +753,7 @@ function reducePlay(
 
 function awaitGameStartChoice(
   state: GameState,
-  request: ChoiceRequest,
+  request: PendingChoiceRequest,
   continuation: NonNullable<
     NonNullable<GameState['private']['pendingChoice']>['continuation']
   >,
@@ -894,7 +898,7 @@ function reduceGameStartRuleInput(
   );
 }
 
-function reduceRuleInput(
+function reduceSingleRuleInput(
   config: GameConfig,
   state: GameState,
   action: Extract<GameAction, { type: 'ruleInput' }>,
@@ -1200,6 +1204,155 @@ function reduceRuleInput(
     effects,
     runtime,
   );
+}
+
+function simultaneousRequestForAction(
+  pending: NonNullable<GameState['private']['pendingChoice']>,
+  action: Extract<GameAction, { type: 'ruleInput' }>,
+): PendingChoiceRequest | undefined {
+  const submitted = pending.submittedChoices ?? [];
+  return pending.simultaneousChoices?.find(
+    (request) =>
+      request.player === action.player &&
+      request.choiceId === action.choiceId &&
+      !submitted.some(
+        (response) =>
+          response.player === request.player &&
+          response.choiceId === request.choiceId,
+      ),
+  );
+}
+
+function submittedChoice(
+  request: PendingChoiceRequest,
+  action: Extract<GameAction, { type: 'ruleInput' }>,
+): SubmittedRuleChoice | null {
+  const kind = request.kind ?? 'cards';
+  if (
+    kind === 'cards' &&
+    'cardIds' in action &&
+    action.cardIds !== undefined &&
+    action.cardIds.length === request.count &&
+    new Set(action.cardIds).size === action.cardIds.length &&
+    action.cardIds.every((cardId) =>
+      (request.optionCardIds ?? []).includes(cardId),
+    )
+  ) {
+    return {
+      player: action.player,
+      choiceId: action.choiceId,
+      cardIds: [...action.cardIds],
+    };
+  }
+  if (
+    kind === 'player' &&
+    'playerId' in action &&
+    action.playerId !== undefined &&
+    (request.optionPlayerIds ?? []).includes(action.playerId)
+  ) {
+    return {
+      player: action.player,
+      choiceId: action.choiceId,
+      playerId: action.playerId,
+    };
+  }
+  return null;
+}
+
+function reduceSimultaneousRuleInput(
+  config: GameConfig,
+  state: GameState,
+  action: Extract<GameAction, { type: 'ruleInput' }>,
+  runtime: RuleRuntime,
+): GameTransition {
+  const pending = state.private.pendingChoice!;
+  const request = simultaneousRequestForAction(pending, action);
+  if (!request) {
+    return reject(state, action.player, 'NO_PENDING_CHOICE');
+  }
+  const response = submittedChoice(request, action);
+  if (!response) {
+    return reject(state, action.player, 'INVALID_RULE_CHOICE');
+  }
+  const submittedChoices = [...(pending.submittedChoices ?? []), response];
+  const requests = pending.simultaneousChoices ?? [];
+  if (submittedChoices.length < requests.length) {
+    return {
+      state: {
+        ...state,
+        private: {
+          ...state.private,
+          pendingChoice: { ...pending, submittedChoices },
+        },
+      },
+      events: [],
+      rejections: [],
+      setMemory: runtime.setMemory,
+    };
+  }
+
+  const serialPending = { ...pending };
+  delete serialPending.simultaneousChoices;
+  delete serialPending.submittedChoices;
+  let currentState: GameState = {
+    ...state,
+    private: {
+      ...state.private,
+      pendingChoice: serialPending,
+    },
+  };
+  let currentRuntime = runtime;
+  const events: EngineEvent[] = [];
+  for (const expected of requests) {
+    const selected = submittedChoices.find(
+      (candidate) =>
+        candidate.player === expected.player &&
+        candidate.choiceId === expected.choiceId,
+    );
+    const activePending = currentState.private.pendingChoice;
+    if (
+      !selected ||
+      !activePending ||
+      activePending.player !== expected.player ||
+      activePending.choiceId !== expected.choiceId
+    ) {
+      return reject(state, action.player, 'INVALID_RULE_CHOICE');
+    }
+    const transition = reduceSingleRuleInput(
+      config,
+      currentState,
+      'cardIds' in selected
+        ? { type: 'ruleInput', ...selected }
+        : { type: 'ruleInput', ...selected },
+      currentRuntime,
+    );
+    if (transition.rejections.length > 0) {
+      return reject(state, action.player, 'INVALID_RULE_CHOICE');
+    }
+    currentState = transition.state;
+    currentRuntime = {
+      ...currentRuntime,
+      setMemory: transition.setMemory ?? currentRuntime.setMemory,
+    };
+    events.push(...transition.events);
+  }
+  return {
+    state: currentState,
+    events,
+    rejections: [],
+    setMemory: currentRuntime.setMemory,
+  };
+}
+
+function reduceRuleInput(
+  config: GameConfig,
+  state: GameState,
+  action: Extract<GameAction, { type: 'ruleInput' }>,
+  runtime: RuleRuntime,
+): GameTransition {
+  return state.private.pendingChoice?.simultaneousChoices
+    ? reduceSimultaneousRuleInput(config, state, action, runtime)
+    : reduceSingleRuleInput(config, state, action, runtime);
 }
 
 function reduceMiniGameCommand(

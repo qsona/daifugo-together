@@ -1,4 +1,8 @@
-import { enumerateLegalPlays, type RuleChainEntry } from '@daifugo/core';
+import {
+  BASE_STRENGTH_ORDER,
+  enumerateLegalPlays,
+  type RuleChainEntry,
+} from '@daifugo/core';
 import { describe, expect, it } from 'vitest';
 
 import { createRoomState, reduceRoom } from './reducer.js';
@@ -141,6 +145,158 @@ function finishSet(initial: RoomState): {
 }
 
 describe('pure room reducer', () => {
+  it('autoActは通常手番ではなく追加入力のAI本人として受け付ける', () => {
+    const basic = createRoomState({
+      roomId: 'ai-rule-choice',
+      inviteCode: '01004',
+      mode: 'basic',
+      owner: {
+        memberId: 'member-1',
+        userId: 'private-user-1',
+        displayName: 'ホスト',
+      },
+      now: 100,
+    });
+    const started = reduceRoom(
+      basic,
+      {
+        type: 'start',
+        memberId: 'member-1',
+        now: 1_000,
+        setSeed: 'ai-rule-choice-set',
+      },
+      { random: () => 0.999_999 },
+    ).state;
+    const ai = started.members.find((member) => member.isAI)!;
+    const game = started.engine!.currentGame!;
+    const card = game.players[ai.memberId]!.hand[0]!;
+    const withChoice: RoomState = {
+      ...started,
+      engine: {
+        ...started.engine!,
+        currentGame: {
+          ...game,
+          public: { ...game.public, phase: 'awaitingChoice' },
+          private: {
+            ...game.private,
+            pendingChoice: {
+              ruleId: 'r-ai-choice-fixture',
+              player: ai.memberId,
+              choiceId: 'ai-choice',
+              messageKey: 'choose',
+              optionCardIds: [card.id],
+              count: 1,
+              play: { kind: 'single', cards: [card], count: 1, repRank: '3' },
+              strength: BASE_STRENGTH_ORDER,
+              playedBy: game.public.turn!,
+            },
+          },
+        },
+      },
+    };
+
+    const transition = reduceRoom(withChoice, {
+      type: 'autoAct',
+      memberId: ai.memberId,
+      turnSeq: withChoice.turnSeq,
+      cards: [card.id],
+      reason: 'ai',
+      now: 2_000,
+    });
+
+    expect(transition.accepted).toBe(true);
+    expect(transition.state.turnSeq).toBe(withChoice.turnSeq + 1);
+  });
+
+  it('同時選択は各本人にだけ提示し、確定後は他の回答を見せず待機する', () => {
+    const started = start(fourHumanRoom());
+    const game = started.engine!.currentGame!;
+    const first = started.members[0]!.memberId;
+    const second = started.members[1]!.memberId;
+    const firstCard = game.players[first]!.hand[0]!;
+    const secondCard = game.players[second]!.hand[0]!;
+    const choices = [
+      {
+        kind: 'cards' as const,
+        ruleId: 'r-simultaneous-fixture',
+        player: first,
+        choiceId: 'choice-first',
+        messageKey: 'choose',
+        optionCardIds: [firstCard.id],
+        count: 1,
+        simultaneous: true,
+      },
+      {
+        kind: 'cards' as const,
+        ruleId: 'r-simultaneous-fixture',
+        player: second,
+        choiceId: 'choice-second',
+        messageKey: 'choose',
+        optionCardIds: [secondCard.id],
+        count: 1,
+        simultaneous: true,
+      },
+    ];
+    const withChoice: RoomState = {
+      ...started,
+      engine: {
+        ...started.engine!,
+        currentGame: {
+          ...game,
+          public: { ...game.public, phase: 'awaitingChoice' },
+          private: {
+            ...game.private,
+            pendingChoice: {
+              ...choices[0]!,
+              simultaneousChoices: choices,
+              submittedChoices: [],
+            },
+          },
+        },
+      },
+    };
+
+    expect(viewFor(withChoice, first).game?.pendingChoice).toMatchObject({
+      seat: started.members[0]!.seatId,
+      cards: [expect.objectContaining({ id: firstCard.id })],
+    });
+    expect(viewFor(withChoice, second).game?.pendingChoice).toMatchObject({
+      seat: started.members[1]!.seatId,
+      cards: [expect.objectContaining({ id: secondCard.id })],
+    });
+    expect(
+      viewFor(withChoice, started.members[2]!.memberId).game?.pendingChoice,
+    ).toBeNull();
+
+    const firstSubmitted: RoomState = {
+      ...withChoice,
+      engine: {
+        ...withChoice.engine!,
+        currentGame: {
+          ...withChoice.engine!.currentGame!,
+          private: {
+            ...withChoice.engine!.currentGame!.private,
+            pendingChoice: {
+              ...withChoice.engine!.currentGame!.private.pendingChoice!,
+              submittedChoices: [
+                {
+                  player: first,
+                  choiceId: 'choice-first',
+                  cardIds: [firstCard.id],
+                },
+              ],
+            },
+          },
+        },
+      },
+    };
+    expect(viewFor(firstSubmitted, first).game?.pendingChoice).toBeNull();
+    expect(viewFor(firstSubmitted, second).game?.pendingChoice).toMatchObject({
+      choiceId: 'choice-second',
+    });
+    expect(firstSubmitted.engine?.currentGame?.public.discard).toEqual([]);
+  });
+
   it('きほんの1人AI戦は人間のタイマーを外し、初戦だけ人間をseat 0に置く', () => {
     const basic = createRoomState({
       roomId: 'basic-tutorial',

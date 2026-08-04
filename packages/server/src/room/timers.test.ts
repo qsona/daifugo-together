@@ -77,6 +77,110 @@ function setResult(base: RoomState, respondBy: number): RoomState {
 }
 
 describe('RoomTimerCoordinator', () => {
+  it('同時選択では未回答AIを人間待ちでブロックせずautoActする', async () => {
+    const basic = createRoomState({
+      roomId: 'simultaneous-ai-choice',
+      inviteCode: '01005',
+      mode: 'basic',
+      owner: {
+        memberId: 'member-1',
+        userId: 'user-1',
+        displayName: 'ホスト',
+      },
+      now: 0,
+    });
+    const started = reduceRoom(
+      basic,
+      {
+        type: 'start',
+        memberId: 'member-1',
+        now: 1_000,
+        setSeed: 'simultaneous-ai-choice-set',
+      },
+      { random: () => 0.999_999 },
+    ).state;
+    const human = started.members.find((member) => !member.isAI)!;
+    const ai = started.members.find((member) => member.isAI)!;
+    const game = started.engine!.currentGame!;
+    const humanCard = game.players[human.memberId]!.hand[0]!;
+    const aiCard = game.players[ai.memberId]!.hand[0]!;
+    const choices = [
+      {
+        kind: 'cards' as const,
+        ruleId: 'r-simultaneous-fixture',
+        player: human.memberId,
+        choiceId: 'human-choice',
+        messageKey: 'choose',
+        optionCardIds: [humanCard.id],
+        count: 1,
+        simultaneous: true,
+      },
+      {
+        kind: 'cards' as const,
+        ruleId: 'r-simultaneous-fixture',
+        player: ai.memberId,
+        choiceId: 'ai-choice',
+        messageKey: 'choose',
+        optionCardIds: [aiCard.id],
+        count: 1,
+        simultaneous: true,
+      },
+    ];
+    const awaiting: RoomState = {
+      ...started,
+      engine: {
+        ...started.engine!,
+        currentGame: {
+          ...game,
+          public: { ...game.public, phase: 'awaitingChoice' },
+          private: {
+            ...game.private,
+            pendingChoice: {
+              ...choices[0]!,
+              simultaneousChoices: choices,
+              submittedChoices: [],
+            },
+          },
+        },
+      },
+    };
+    const room = authority(awaiting);
+    const timers: FakeTimer[] = [];
+    const decided: string[] = [];
+    const coordinator = new RoomTimerCoordinator(room.api, {
+      decideTurn: async (_state, memberId) => {
+        decided.push(memberId);
+        return [aiCard.id];
+      },
+      aiDelayMinMs: 0,
+      aiDelayMaxMs: 0,
+      basicAiDelayMinMs: 0,
+      basicAiDelayMaxMs: 0,
+      setTimer: (callback, delayMs) => {
+        const timer = { callback, delayMs, cleared: false };
+        timers.push(timer);
+        return timer;
+      },
+    });
+
+    coordinator.sync(awaiting);
+    expect(timers[0]?.delayMs).toBe(0);
+    timers[0]?.callback();
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+    expect(decided).toEqual([ai.memberId]);
+    expect(room.actions).toEqual([
+      {
+        type: 'autoAct',
+        memberId: ai.memberId,
+        turnSeq: awaiting.turnSeq,
+        cards: [aiCard.id],
+        reason: 'ai',
+        now: expect.any(Number),
+      },
+    ]);
+  });
+
   it('ミニゲーム中は通常手番timerより優先して200msごとに権威tickを送る', () => {
     const started = reduceRoom(
       state(),

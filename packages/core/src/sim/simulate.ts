@@ -11,6 +11,7 @@ import { createDeck } from '../cards/card.js';
 import { enumerateLegalPlays } from '../play/candidates.js';
 import type { Play } from '../play/play.js';
 import { randomInt, seedRng, type RngState } from '../rng/rng.js';
+import { outstandingChoiceRequests } from '../game/pending-choice.js';
 
 export interface SimulateOptions {
   games: number;
@@ -198,6 +199,7 @@ export function* createSimulationRun(
         if (!pending) {
           throw new Error('Simulation choice phase has no pending choice');
         }
+        const request = outstandingChoiceRequests(pending)[0] ?? pending;
         action =
           pending.kind === 'miniGame' && pending.miniGameState
             ? {
@@ -208,17 +210,17 @@ export function* createSimulationRun(
               }
             : {
                 type: 'ruleInput',
-                player: pending.player,
-                choiceId: pending.choiceId,
-                ...((pending.kind ?? 'cards') === 'player'
+                player: request.player,
+                choiceId: request.choiceId,
+                ...((request.kind ?? 'cards') === 'player'
                   ? {
                       playerId:
-                        [...(pending.optionPlayerIds ?? [])].sort()[0] ?? '',
+                        [...(request.optionPlayerIds ?? [])].sort()[0] ?? '',
                     }
                   : {
-                      cardIds: [...(pending.optionCardIds ?? [])]
+                      cardIds: [...(request.optionCardIds ?? [])]
                         .sort()
-                        .slice(0, pending.count ?? 0),
+                        .slice(0, request.count ?? 0),
                     }),
               };
       } else {

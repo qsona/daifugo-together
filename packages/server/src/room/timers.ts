@@ -4,6 +4,7 @@ import type { CardId } from '@daifugo/core';
 
 import type { RoomCloseReason } from './protocol.js';
 import type { RoomState, RoomTransition } from './types.js';
+import { nextRoomChoiceRequest } from './pending-choice.js';
 
 export interface RoomTimerAuthority {
   get(roomId: string): RoomState | undefined;
@@ -214,7 +215,10 @@ export class RoomTimerCoordinator {
     }
     const turnMemberId =
       state.engine?.currentGame?.public.phase === 'awaitingChoice'
-        ? state.engine.currentGame.private.pendingChoice?.player
+        ? nextRoomChoiceRequest(
+            state.engine.currentGame.private.pendingChoice,
+            state.members,
+          )?.player
         : state.engine?.currentGame?.public.turn;
     if (
       this.#decideTurn &&
@@ -318,7 +322,8 @@ export class RoomTimerCoordinator {
       const game = previous.engine?.currentGame;
       const memberId =
         game?.public.phase === 'awaitingChoice'
-          ? game.private.pendingChoice?.player
+          ? nextRoomChoiceRequest(game.private.pendingChoice, previous.members)
+              ?.player
           : game?.public.turn;
       if (!memberId) return;
       const cards = await this.#decideTurn(previous, memberId);

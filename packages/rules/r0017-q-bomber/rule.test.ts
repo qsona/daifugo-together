@@ -195,6 +195,7 @@ describe('Q-ボンバー', () => {
         player: 'p1',
         choiceId: 'q_bomber_0',
         count: 2,
+        simultaneous: true,
         additionalChoices: [
           { player: 'p2', choiceId: 'q_bomber_1', count: 2 },
           { player: 'p3', choiceId: 'q_bomber_2', count: 1 },
@@ -234,7 +235,7 @@ describe('Q-ボンバー', () => {
     ]);
   });
 
-  it('全員の本人選択を終えるまで手番を進めず、最後の1枚を捨てた人を通常どおり上がりにする', () => {
+  it('全員が順不同で同時に選べて、全員確定までカードを公開・移動しない', () => {
     const { config, state, runtime } = engineFixture();
     let transition = reduceGame(
       config,
@@ -243,8 +244,13 @@ describe('Q-ボンバー', () => {
       runtime,
     );
     expect(transition.state.private.pendingChoice).toMatchObject({
-      player: 'p1',
-      optionCardIds: ['H-3', 'C-4'],
+      simultaneousChoices: [
+        { player: 'p1', optionCardIds: ['H-3', 'C-4'] },
+        { player: 'p2', optionCardIds: ['S-5', 'H-5'] },
+        { player: 'p3', optionCardIds: ['S-6', 'H-6'] },
+        { player: 'p4', optionCardIds: ['S-7'] },
+      ],
+      submittedChoices: [],
     });
 
     const wrongHand = reduceGame(
@@ -261,10 +267,10 @@ describe('Q-ボンバー', () => {
     expect(wrongHand.rejections[0]?.code).toBe('INVALID_RULE_CHOICE');
 
     const responses = [
-      ['p1', 'q_bomber_0', 'H-3'],
       ['p2', 'q_bomber_1', 'S-5'],
-      ['p3', 'q_bomber_2', 'S-6'],
       ['p4', 'q_bomber_3', 'S-7'],
+      ['p1', 'q_bomber_0', 'H-3'],
+      ['p3', 'q_bomber_2', 'S-6'],
     ] as const;
     for (const [player, choiceId, cardId] of responses) {
       transition = reduceGame(
@@ -274,8 +280,12 @@ describe('Q-ボンバー', () => {
         { ...runtime, setMemory: transition.setMemory ?? {} },
       );
       expect(transition.rejections).toEqual([]);
-      if (player !== 'p4') {
+      if (player !== 'p3') {
         expect(transition.state.public.phase).toBe('awaitingChoice');
+        expect(transition.state.public.discard).toEqual([]);
+        expect(transition.state.players.p4?.hand.map(({ id }) => id)).toEqual([
+          'S-7',
+        ]);
         expect(
           transition.events.some(({ type }) => type === 'turnChanged'),
         ).toBe(false);

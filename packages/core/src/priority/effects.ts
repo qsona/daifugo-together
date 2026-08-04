@@ -31,6 +31,7 @@ export interface EffectEmission {
     durationMs?: number;
     seed?: string;
     miniGameState?: BombThrowMiniGameState;
+    simultaneous?: boolean;
   }[];
 }
 

@@ -2,6 +2,7 @@ export * from './cards/card.js';
 export * from './engine/reducer.js';
 export * from './engine/effects.js';
 export * from './game/start-game.js';
+export * from './game/pending-choice.js';
 export * from './game/types.js';
 export * from './minigame/bomb-throw.js';
 export * from './notification.js';

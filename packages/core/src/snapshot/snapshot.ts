@@ -11,6 +11,7 @@ import { BASE_STRENGTH_ORDER } from '../play/strength.js';
 import { noRuleRuntime, type RuleRuntime } from '../rules/chain.js';
 import { buildRuleContext, prepareRuleInvocation } from '../rules/context.js';
 import { safeModifyStrength } from '../rules/safe-port.js';
+import { pendingChoiceRequestForPlayer } from '../game/pending-choice.js';
 
 const TITLES: Record<Standing, PlayerSnapshot['players'][number]['title']> = {
   1: '大富豪',
@@ -58,9 +59,10 @@ export function buildPlayerSnapshot(
   const isTurn =
     state.public.phase === 'awaitingPlay' && state.public.turn === forPlayer;
   const pending = state.private.pendingChoice;
+  const playerPending = pendingChoiceRequestForPlayer(pending, forPlayer);
   const pendingCards =
-    pending?.player === forPlayer && (pending.kind ?? 'cards') === 'cards'
-      ? (pending.optionCardIds ?? []).flatMap((cardId) => {
+    playerPending && (playerPending.kind ?? 'cards') === 'cards'
+      ? (playerPending.optionCardIds ?? []).flatMap((cardId) => {
           const card = ownState.hand.find(
             (candidate) => candidate.id === cardId,
           );
@@ -131,19 +133,19 @@ export function buildPlayerSnapshot(
         : [],
     ),
     pendingChoice:
-      pending === undefined
+      pending === undefined || (pending.simultaneousChoices && !playerPending)
         ? null
         : {
-            kind: pending.kind ?? 'cards',
-            ruleId: pending.ruleId,
-            player: pending.player,
-            choiceId: pending.choiceId,
-            messageKey: pending.messageKey,
-            count: pending.count ?? 0,
+            kind: (playerPending ?? pending).kind ?? 'cards',
+            ruleId: (playerPending ?? pending).ruleId,
+            player: (playerPending ?? pending).player,
+            choiceId: (playerPending ?? pending).choiceId,
+            messageKey: (playerPending ?? pending).messageKey,
+            count: (playerPending ?? pending).count ?? 0,
             cards: pendingCards,
             players:
-              pending.player === forPlayer
-                ? [...(pending.optionPlayerIds ?? [])]
+              (playerPending ?? pending).player === forPlayer
+                ? [...((playerPending ?? pending).optionPlayerIds ?? [])]
                 : [],
           },
   });
