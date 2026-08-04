@@ -142,6 +142,14 @@ export interface PrivateGameState {
   memory: RuleMemory;
   rng: RngState;
   hookCalls: Record<string, number>;
+  /** Targeted announce Effects. Kept outside public history. */
+  ruleNotices?: {
+    id: number;
+    ruleId: RuleId;
+    messageKey: string;
+    params?: Record<string, string>;
+    players: PlayerId[];
+  }[];
   pendingChoice?: {
     hook?: 'afterPlay' | 'onGameStart';
     kind?: 'cards' | 'player' | 'miniGame';
@@ -316,6 +324,12 @@ export interface PlayerSnapshot {
   setResults: GameResult[];
   effectiveRules: { ruleId: RuleId; name: string }[];
   history: PublicGameEvent[];
+  privateRuleNotices: {
+    id: number;
+    ruleId: RuleId;
+    messageKey: string;
+    params?: Record<string, string>;
+  }[];
   pendingChoice?: {
     kind?: 'cards' | 'player' | 'miniGame';
     ruleId: RuleId;

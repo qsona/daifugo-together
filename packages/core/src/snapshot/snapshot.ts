@@ -116,6 +116,20 @@ export function buildPlayerSnapshot(
       name,
     })),
     history: [...state.public.history],
+    privateRuleNotices: (state.private.ruleNotices ?? []).flatMap((notice) =>
+      notice.players.includes(forPlayer)
+        ? [
+            {
+              id: notice.id,
+              ruleId: notice.ruleId,
+              messageKey: notice.messageKey,
+              ...(notice.params === undefined
+                ? {}
+                : { params: { ...notice.params } }),
+            },
+          ]
+        : [],
+    ),
     pendingChoice:
       pending === undefined
         ? null

@@ -959,6 +959,7 @@ function reduceRuleInput(
     memory: state.private.memory,
     rng: state.private.rng,
     hookCalls: state.private.hookCalls,
+    ruleNotices: state.private.ruleNotices ?? [],
   };
   const resumedState: GameState = {
     ...state,

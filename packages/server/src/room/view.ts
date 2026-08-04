@@ -192,7 +192,11 @@ function gameView(
   memberId: string,
   seats: ReadonlyMap<string, SeatId>,
   rulePort: RuleChainPort,
-  resolveRuleMessage?: (ruleId: string, messageKey: string) => string | null,
+  resolveRuleMessage?: (
+    ruleId: string,
+    messageKey: string,
+    params?: Readonly<Record<string, string>>,
+  ) => string | null,
 ): GameView | null {
   const engine = state.engine;
   const game = engine?.currentGame;
@@ -269,6 +273,16 @@ function gameView(
     previousResults: engine.results.map((result) => resultView(result, seats)),
     yourHand: sortCards(game.players[memberId]?.hand ?? []),
     legalMoves: playerSnapshot.legalMoves,
+    privateRuleNotices: playerSnapshot.privateRuleNotices.map((notice) => ({
+      id: notice.id,
+      ruleId: notice.ruleId,
+      name:
+        engine.ruleChain.find((rule) => rule.ruleId === notice.ruleId)?.name ??
+        notice.ruleId,
+      message:
+        resolveRuleMessage?.(notice.ruleId, notice.messageKey, notice.params) ??
+        null,
+    })),
     miniGame: game.private.pendingChoice?.miniGameState
       ? {
           id: game.private.pendingChoice.miniGameState.id,
@@ -407,7 +421,11 @@ export function viewFor(
   options: {
     reconnect?: boolean;
     rulePort?: RuleChainPort;
-    resolveRuleMessage?: (ruleId: string, messageKey: string) => string | null;
+    resolveRuleMessage?: (
+      ruleId: string,
+      messageKey: string,
+      params?: Readonly<Record<string, string>>,
+    ) => string | null;
   } = {},
 ): PlayerRoomView {
   if (state.phase === 'closed') {

@@ -1,6 +1,6 @@
 import type { PendingCxJudgement } from '@daifugo/server';
 
-export const CX01_PROMPT_VERSION = 'cx01-v13';
+export const CX01_PROMPT_VERSION = 'cx01-v14';
 
 const CONTRACT = `
 契約 v1/v2 のフック:
@@ -20,6 +20,8 @@ Effect 語彙:
 - 異なるルールが同じプレイで requestChoice を返す場合、エンジンはルール優先順位順に
   直列処理し、先行Effect適用後の手札から後続ルールの要求を再計算する。
 - forceRank の rank は 1〜4 の順位または 'lowest'（最下位）。反則あがり系は 'lowest' を使う
+- announce は通常は全員への公開通知。players に1〜4人のプレイヤーIDを指定すると、
+  公開履歴や公開発動数へ載せず、その対象者だけへ秘密の通知を送れる
 
 hook別のEffect許可:
 - afterPlay: 全Effect（requestChoice は contract v2 のみ）

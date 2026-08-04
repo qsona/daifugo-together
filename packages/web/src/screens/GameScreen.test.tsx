@@ -198,6 +198,66 @@ describe('10捨ての結果表示', () => {
   });
 });
 
+describe('対象者限定ルール通知', () => {
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+  });
+
+  it('自分に届いた最新通知だけを表示し、時間経過で引く', () => {
+    vi.useFakeTimers();
+    render(
+      <GameScreen
+        {...game([]).props}
+        privateRuleNotices={[
+          {
+            id: 1,
+            ruleId: 'r-secret',
+            name: '大富豪殺人事件',
+            message: '2とジョーカーを出さずに、場を3回流してください。',
+          },
+        ]}
+      />,
+    );
+
+    expect(
+      screen.getByText('2とジョーカーを出さずに、場を3回流してください。'),
+    ).toBeTruthy();
+    act(() => {
+      vi.advanceTimersByTime(6200);
+    });
+    expect(
+      screen.queryByText('2とジョーカーを出さずに、場を3回流してください。'),
+    ).toBeNull();
+  });
+
+  it('次のゲームでは通知IDが1に戻っても表示する', () => {
+    const firstNotice = {
+      id: 1,
+      ruleId: 'r-secret',
+      name: '秘密ルール',
+      message: '第1戦の通知',
+    };
+    const { rerender } = render(
+      <GameScreen
+        {...game([]).props}
+        gameLabel="第1戦"
+        privateRuleNotices={[firstNotice]}
+      />,
+    );
+
+    rerender(
+      <GameScreen
+        {...game([]).props}
+        gameLabel="第2戦"
+        privateRuleNotices={[{ ...firstNotice, message: '第2戦の通知' }]}
+      />,
+    );
+
+    expect(screen.getByText('第2戦の通知')).toBeTruthy();
+  });
+});
+
 describe('DS-04: 自分の手番が手札トレイで分かる', () => {
   afterEach(() => {
     cleanup();

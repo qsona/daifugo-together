@@ -80,6 +80,11 @@ KV はルール・スコープごとに分離し、最大 32 キー、1 値 1KB�
 
 適用された Effect は原則として `ruleFired` になり、クライアントで発動カットインとして表示されます。発動そのものではない初期化・解除・次ゲーム用の記録には、`setMemory` の `silent: true` を指定してください。`modifyLegality` と `modifyStrength` は判定の変換であり、それだけでは `ruleFired` になりません。
 
+`announce` は通常、全員の公開履歴へ `ruleFired` を出します。`players` に1〜4人の
+プレイヤーIDを指定した場合は、その対象者の個別スナップショットにだけ通知を載せ、
+公開履歴・公開発動数には載せません。秘密の条件や役割を知らせる用途では、手札や
+カードIDを文言へ含めず、成立事実と行動条件だけを `messageKey` で通知してください。
+
 `afterPlay`、`afterFieldClear`、`onGameStart`、`onGameEnd` の
 `context.game.strength` は、同じ状態に `modifyStrength` チェーンを適用した
 実効 StrengthOrder です。特に `afterPlay` では、そのプレイを出す直前の
@@ -125,16 +130,16 @@ player または `choiceId` を重複させてはいけません。先頭から�
 
 ## 競合キー
 
-| Effect             | 競合単位                                                    |
-| ------------------ | ----------------------------------------------------------- |
-| `clearField`       | `field`                                                     |
-| `requestChoice`    | `choice:{ruleId}`（同一・異なるルールとも要求順に直列処理） |
-| `skipTurns`        | `turn:{player}`                                             |
-| `reverseTurnOrder` | `turnOrder`                                                 |
-| `forceRank`        | `rank:{player}`                                             |
-| `moveCards`        | バッチ開始時に解決した CardId 集合の推移的な重なり          |
-| `setMemory`        | `memory:{ruleId}:{key}`                                     |
-| `announce`         | 競合なし。非 announce Effect が全棄却なら同時に抑制         |
+| Effect             | 競合単位                                                                                |
+| ------------------ | --------------------------------------------------------------------------------------- |
+| `clearField`       | `field`                                                                                 |
+| `requestChoice`    | `choice:{ruleId}`（同一・異なるルールとも要求順に直列処理）                             |
+| `skipTurns`        | `turn:{player}`                                                                         |
+| `reverseTurnOrder` | `turnOrder`                                                                             |
+| `forceRank`        | `rank:{player}`                                                                         |
+| `moveCards`        | バッチ開始時に解決した CardId 集合の推移的な重なり                                      |
+| `setMemory`        | `memory:{ruleId}:{key}`                                                                 |
+| `announce`         | 競合なし。非 announce Effect が全棄却なら同時に抑制。`players` 指定時は対象者だけへ通知 |
 
 競合はチェーンの最高優先ルールを採用します。同一ペイロードは `deduped`、同一ルール・同一キーの先行 Effect は `superseded` です。語彙を追加する変更では、この表と `conflictKeyOf` の exhaustive switch を同時に更新します。
 

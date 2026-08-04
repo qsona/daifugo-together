@@ -238,6 +238,7 @@ export function startGame(
       memory: {},
       rng: start.state,
       hookCalls: {},
+      ruleNotices: [],
     },
     players: Object.fromEntries(
       config.seats.map((seat) => [

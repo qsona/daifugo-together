@@ -434,7 +434,7 @@ Effect を返す 4 フックの `ctx.game.strength` は、同じ状態に
 | `forceRank` | §2.10 の退場・再割当処理 |
 | `moveCards` | 解決済みの具象カード集合をゾーン間で移動。解決不能(既に無い等)は no-op + 記録。`cardsMoved` イベントを積む — **可視性**: `field` / `discard` が絡む移動はカード面公開、`hand` → `hand` は全員には枚数のみ公開(札面は当事者のスナップショットにのみ現れる。§2.7.1・E02 §6-8 への回答は §5.3) |
 | `setMemory` | §2.8 のスコープ・クォータ検査のうえ書込み |
-| `announce` | 状態は変えず `ruleFired` イベントを積む(画面 3 の発動バナー・ログ、5b の発動ルール一覧の表示素材。抑制済み announce はイベントにならない) |
+| `announce` | `players` 省略時は `ruleFired` イベントを積む(画面 3 の発動バナー・ログ、5b の発動ルール一覧の表示素材)。`players` 指定時は対象者の個別スナップショットだけへ通知し、公開履歴・公開発動数には載せない。抑制済み announce はどちらの通知にもならない |
 
 #### 2.5.5 フェイルセーフ(ルール起因の進行不能への保護)
 
@@ -1088,7 +1088,7 @@ export type Effect =
   | { type: "forceRank"; player: PlayerId; rank: Standing | "lowest" }
   | { type: "moveCards"; from: Zone; to: Zone; cards: CardSelector }
   | { type: "setMemory"; scope: MemoryScope; key: string; value: JsonValue }
-  | { type: "announce"; messageKey: string; params?: Record<string, string> };
+  | { type: "announce"; messageKey: string; params?: Record<string, string>; players?: PlayerId[] };
 ```
 
 E12 骨子からの確定差分(いずれも E12 が「確定は E1」と委譲した範囲): `setMemory` に `scope` フィールド(§2.8)/ `forceRank` の `Rank` → `Standing` 改名 / `announce` に `params` 追加 / `modifyStrength` の引数名 `order` → `base`(modifyLegality と対称)/ `moveCards` の `Zone`・`CardSelector` の具体化(`excluded` 除外。具象化は `resolveCardSelector` §2.12)/ `RuleMeta.messages` の追加(announce 文言をコードでなくメタに置き、演出側の差し替えを容易にする)。

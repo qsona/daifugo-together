@@ -761,13 +761,19 @@ function effectPayloadValid(effect: unknown): effect is Effect {
         );
       case 'announce':
         return (
-          hasExactKeys(effect, ['type', 'messageKey'], ['params']) &&
+          hasExactKeys(effect, ['type', 'messageKey'], ['params', 'players']) &&
           typeof effect.messageKey === 'string' &&
           (effect.params === undefined ||
             (isRecord(effect.params) &&
               Object.values(effect.params).every(
                 (value) => typeof value === 'string',
-              )))
+              ))) &&
+          (effect.players === undefined ||
+            (Array.isArray(effect.players) &&
+              effect.players.length >= 1 &&
+              effect.players.length <= 4 &&
+              effect.players.every((player) => typeof player === 'string') &&
+              new Set(effect.players).size === effect.players.length))
         );
       default:
         return false;
@@ -781,6 +787,7 @@ const INVALID_EFFECT_EVENT_PAYLOAD: Effect = {
   type: 'announce',
   messageKey: 'engine.invalid-effect-payload',
 };
+const MAX_PRIVATE_RULE_NOTICES = 32;
 
 type InvalidEffectReason =
   | 'effect-limit'
@@ -1224,6 +1231,20 @@ export function executeEffectHook(
         break;
       }
       case 'announce':
+        if (
+          entry.effect.players?.some(
+            (player) => nextState.players[player] === undefined,
+          )
+        ) {
+          entry.resolution = {
+            status: 'rejected',
+            winnerRuleId: entry.ruleId,
+          };
+          details.set(index, {
+            applied: false,
+            reason: 'unknown-player',
+          });
+        }
         break;
     }
   }
@@ -1290,17 +1311,56 @@ export function executeEffectHook(
         ['adopted', 'deduped'].includes(entry.resolution.status) &&
         !(entry.effect.type === 'setMemory' && entry.effect.silent === true),
     );
+    const applied = nonAnnounce.some((entry) =>
+      ['adopted', 'deduped'].includes(entry.resolution.status),
+    );
     if (nonAnnounce.length > 0 && !realized) {
       for (const entry of ruleEntries) {
         if (
           entry.effect.type === 'announce' &&
-          entry.resolution.status === 'adopted'
+          entry.resolution.status === 'adopted' &&
+          !(entry.effect.players !== undefined && applied)
         ) {
           entry.resolution = { status: 'suppressed-announce' };
         }
       }
     }
   }
+
+  const privateNotices = [...(nextState.private.ruleNotices ?? [])];
+  let privateNoticesChanged = false;
+  for (const entry of batch.entries) {
+    if (
+      entry.effect.type !== 'announce' ||
+      entry.effect.players === undefined ||
+      entry.resolution.status !== 'adopted'
+    ) {
+      continue;
+    }
+    privateNotices.push({
+      id: (privateNotices.at(-1)?.id ?? 0) + 1,
+      ruleId: entry.ruleId,
+      messageKey: entry.effect.messageKey,
+      ...(entry.effect.params === undefined
+        ? {}
+        : { params: { ...entry.effect.params } }),
+      players: [...entry.effect.players],
+    });
+    privateNoticesChanged = true;
+    if (privateNotices.length > MAX_PRIVATE_RULE_NOTICES) {
+      privateNotices.splice(
+        0,
+        privateNotices.length - MAX_PRIVATE_RULE_NOTICES,
+      );
+    }
+  }
+  if (privateNoticesChanged) {
+    nextState = {
+      ...nextState,
+      private: { ...nextState.private, ruleNotices: privateNotices },
+    };
+  }
+
   for (const [ruleId, ruleEntries] of Map.groupBy(
     batch.entries,
     (entry) => entry.ruleId,
@@ -1308,6 +1368,7 @@ export function executeEffectHook(
     const announcement = ruleEntries.find(
       (entry) =>
         entry.effect.type === 'announce' &&
+        entry.effect.players === undefined &&
         entry.resolution.status === 'adopted',
     );
     const realized = ruleEntries.some(
@@ -1350,6 +1411,7 @@ export function executeEffectHook(
       ruleEntries.some(
         (entry) =>
           entry.effect.type === 'announce' &&
+          entry.effect.players === undefined &&
           entry.resolution.status === 'adopted',
       )
     ) {

@@ -1754,6 +1754,7 @@ function ConnectedApp({
           }
           finishes={seatFinishes(room)}
           discardNotices={cardDiscardNotices(room)}
+          privateRuleNotices={game.privateRuleNotices ?? []}
           leadSeatName={
             leadMember
               ? seatDisplayName(

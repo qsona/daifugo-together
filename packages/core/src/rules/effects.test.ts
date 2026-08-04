@@ -132,6 +132,61 @@ describe('GE-04 effect pipeline and lifecycle hooks', () => {
     expect(started.state.public.firedRules).not.toContain(silentEntry.ruleId);
   });
 
+  it('対象者限定announceをprivate stateだけへ記録し公開発動に数えない', () => {
+    const privateEntry = entry('r-private-notice');
+    const privateRule: RuleModule = {
+      meta: {
+        ruleId: privateEntry.ruleId,
+        name: '秘密の知らせ',
+        description: '対象者だけへ通知するfixture',
+        kind: 'original',
+        proposalId: 'fixture',
+        contractVersion: 1,
+        messages: { started: '秘密の条件が成立しました' },
+      },
+      hooks: {
+        onGameStart: () => [
+          {
+            type: 'setMemory',
+            scope: 'game',
+            key: 'active',
+            value: true,
+            silent: true,
+          },
+          {
+            type: 'announce',
+            messageKey: 'started',
+            players: ['p1', 'p3'],
+          },
+        ],
+      },
+    };
+    const config: GameConfig = {
+      gameIndex: 0,
+      seats,
+      gameSeed: 'private-notice',
+      ruleChain: [privateEntry],
+    };
+
+    const started = startGame(config, runtime(privateRule));
+
+    expect(started.state.private.ruleNotices).toEqual([
+      {
+        id: 1,
+        ruleId: privateEntry.ruleId,
+        messageKey: 'started',
+        players: ['p1', 'p3'],
+      },
+    ]);
+    expect(started.events.some((event) => event.type === 'ruleFired')).toBe(
+      false,
+    );
+    expect(started.state.public.history).not.toContainEqual(
+      expect.objectContaining({ type: 'ruleFired' }),
+    );
+    expect(started.state.public.firedRules).not.toContain(privateEntry.ruleId);
+  });
+
   it('onGameStartでもmodifyStrength適用済みの実効順序を渡す', () => {
     const reverseEntry = entry('r-always-reverse');
     const observerEntry = {

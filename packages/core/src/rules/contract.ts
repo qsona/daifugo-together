@@ -269,4 +269,10 @@ export type Effect =
       type: 'announce';
       messageKey: string;
       params?: Record<string, string>;
+      /**
+       * Omitted for the existing public ruleFired announcement. When present,
+       * only these players receive the notice and nothing is written to public
+       * history or the public fired-rule tally.
+       */
+      players?: PlayerId[];
     };

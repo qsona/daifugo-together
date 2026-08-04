@@ -31,6 +31,7 @@ const EFFECTS = new Set([
   'setMemory',
   'announce',
 ]);
+// announce は公開通知と、rule.ts が players を指定する対象者限定通知の両方を表す。
 const EFFECTS_BY_HOOK: Readonly<Record<string, ReadonlySet<string>>> = {
   modifyLegality: new Set(),
   modifyStrength: new Set(),

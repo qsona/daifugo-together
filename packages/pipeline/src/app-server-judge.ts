@@ -103,6 +103,7 @@ const CX01_OUTPUT_SCHEMA = {
                 ],
               },
             },
+            // `announce` covers both public notices and player-targeted private notices.
             effects: {
               type: 'array',
               maxItems: 8,

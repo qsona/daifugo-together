@@ -1211,6 +1211,50 @@ describe('per-player room view allow-list', () => {
     }
   });
 
+  it('対象者限定ルール通知を対象メンバーだけへ解決して配信する', () => {
+    const started = start(fourHumanRoom());
+    const game = started.engine?.currentGame;
+    if (!game) throw new Error('Expected a current game');
+    const withNotice: RoomState = {
+      ...started,
+      engine: {
+        ...started.engine!,
+        currentGame: {
+          ...game,
+          private: {
+            ...game.private,
+            ruleNotices: [
+              {
+                id: 1,
+                ruleId: 'r-secret',
+                messageKey: 'started',
+                players: ['member-1', 'member-3'],
+              },
+            ],
+          },
+        },
+      },
+    };
+    const options = {
+      resolveRuleMessage: (ruleId: string, messageKey: string) =>
+        `${ruleId}:${messageKey}:秘密`,
+    };
+
+    expect(
+      viewFor(withNotice, 'member-1', options).game?.privateRuleNotices,
+    ).toEqual([
+      {
+        id: 1,
+        ruleId: 'r-secret',
+        name: 'r-secret',
+        message: 'r-secret:started:秘密',
+      },
+    ]);
+    expect(
+      viewFor(withNotice, 'member-2', options).game?.privateRuleNotices,
+    ).toEqual([]);
+  });
+
   it('復帰用全量snapshotでは演出eventsを必ず空にする', () => {
     const started = start(room());
     expect(viewFor(started, 'member-1').events.length).toBeGreaterThan(0);

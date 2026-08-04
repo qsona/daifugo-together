@@ -33,6 +33,7 @@ export type SeatFinish = {
 /** あがり告知を出しておく時間。読み切れて、かつ次の手を邪魔しない長さ。 */
 const FINISH_NOTICE_MS = 2600;
 const DISCARD_NOTICE_MS = 3000;
+const PRIVATE_RULE_NOTICE_MS = 6000;
 
 const NO_FINISHES: readonly SeatFinish[] = [];
 const NO_STATUSES: readonly GameStatusMarker[] = [];
@@ -43,6 +44,13 @@ export type CardDiscardNotice = {
   ruleName: string;
   playerName: string;
   cards: readonly CardView[];
+};
+
+export type PrivateRuleNotice = {
+  id: number;
+  ruleId: string;
+  name: string;
+  message: string | null;
 };
 
 type GameScreenProps = {
@@ -62,6 +70,8 @@ type GameScreenProps = {
   finishes?: readonly SeatFinish[];
   /** 公開されたカード破棄。増えた分だけ札面つきで数秒告知する。 */
   discardNotices?: readonly CardDiscardNotice[];
+  /** このプレイヤーだけに届いたルール通知。公開カットインには載せない。 */
+  privateRuleNotices?: readonly PrivateRuleNotice[];
   /** 再生中のカットイン。空なら出さない。 */
   activations: readonly RuleActivation[];
   /**
@@ -112,6 +122,7 @@ export function GameScreen({
   holdFieldStatuses = false,
   finishes = NO_FINISHES,
   discardNotices = NO_DISCARD_NOTICES,
+  privateRuleNotices = [],
   activations,
   isCutInPlaying = false,
   onCutInDone,
@@ -139,6 +150,7 @@ export function GameScreen({
 }: GameScreenProps) {
   const finishNotice = useFinishNotice(finishes);
   const discardNotice = useDiscardNotice(discardNotices);
+  const privateRuleNotice = usePrivateRuleNotice(privateRuleNotices, gameLabel);
   const settledStatuses = useSettledStatuses(
     statuses,
     activations.length > 0 || isCutInPlaying,
@@ -218,11 +230,16 @@ export function GameScreen({
           }
         />
       </main>
-      {(finishNotice || guideCue) && (
+      {(finishNotice || privateRuleNotice || guideCue) && (
         <div className={styles.noticeLayer}>
           {finishNotice ? (
             <Toast variant="warn">
               {finishNotice.name}が{finishNotice.rank}位であがり!
+            </Toast>
+          ) : privateRuleNotice ? (
+            <Toast variant="warn">
+              {privateRuleNotice.message ??
+                `${privateRuleNotice.name}から秘密の知らせが届きました`}
             </Toast>
           ) : guideCue ? (
             <Toast variant="guide">
@@ -335,6 +352,38 @@ function useDiscardNotice(
     const timer = window.setTimeout(() => {
       setNotice(null);
     }, DISCARD_NOTICE_MS);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [notice]);
+
+  return notice;
+}
+
+function usePrivateRuleNotice(
+  notices: readonly PrivateRuleNotice[],
+  gameLabel: string,
+): PrivateRuleNotice | null {
+  const seenId = useRef(0);
+  const [notice, setNotice] = useState<PrivateRuleNotice | null>(null);
+
+  useEffect(() => {
+    seenId.current = 0;
+    setNotice(null);
+  }, [gameLabel]);
+
+  useEffect(() => {
+    const latest = notices.at(-1);
+    if (!latest || latest.id <= seenId.current) return;
+    seenId.current = latest.id;
+    setNotice(latest);
+  }, [notices]);
+
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => {
+      setNotice(null);
+    }, PRIVATE_RULE_NOTICE_MS);
     return () => {
       window.clearTimeout(timer);
     };

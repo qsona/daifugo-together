@@ -178,6 +178,13 @@ export interface MultiplayerGameView {
   previousResults: GameResultView[];
   yourHand: Card[];
   legalMoves: Play[] | null;
+  /** `announce.players` で自分だけに届いた、公開履歴へ出ない通知。 */
+  privateRuleNotices?: {
+    id: number;
+    ruleId: string;
+    name: string;
+    message: string | null;
+  }[];
   miniGame?: {
     id: string;
     kind: 'bomb_throw_15';

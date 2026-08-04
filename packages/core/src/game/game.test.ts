@@ -97,6 +97,41 @@ describe('GE-02 game start and snapshots', () => {
     expect(otherCardIds.every((id) => !serialized.includes(id))).toBe(true);
   });
 
+  it('対象者限定ルール通知を対象者のスナップショットだけへ含める', () => {
+    const game = started('private-rule-notice');
+    const state: GameState = {
+      ...game.state,
+      private: {
+        ...game.state.private,
+        ruleNotices: [
+          {
+            id: 1,
+            ruleId: 'r-secret',
+            messageKey: 'started',
+            params: { count: '3' },
+            players: ['p1', 'p3'],
+          },
+        ],
+      },
+    };
+
+    expect(
+      buildPlayerSnapshot(game.config, state, snapshotContext, 'p1')
+        .privateRuleNotices,
+    ).toEqual([
+      {
+        id: 1,
+        ruleId: 'r-secret',
+        messageKey: 'started',
+        params: { count: '3' },
+      },
+    ]);
+    expect(
+      buildPlayerSnapshot(game.config, state, snapshotContext, 'p2')
+        .privateRuleNotices,
+    ).toEqual([]);
+  });
+
   it('スナップショットのネストを書き換えても権威状態を変更しない', () => {
     const game = started('snapshot-detachment');
     const player = currentPlayer(game.state);
