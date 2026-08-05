@@ -198,6 +198,7 @@
 }
 
 .player {
+  position: relative;
   z-index: 3;
   width: 70%;
   border: var(--border-heavy) solid var(--color-cream-100);
@@ -210,6 +211,31 @@
   transition:
     grid-column 150ms linear,
     grid-row 150ms linear;
+}
+
+.playerSuit {
+  line-height: 1;
+}
+
+.you {
+  border-color: var(--color-gold-400);
+  outline: var(--border-heavy) solid var(--color-white);
+  outline-offset: 2px;
+  background: var(--color-gold-400);
+  box-shadow: var(--shadow-hard-m);
+}
+
+.youBadge {
+  position: absolute;
+  inset-inline: 4%;
+  inset-block-end: 4%;
+  padding: 1px 2px;
+  border-radius: var(--radius-s);
+  color: var(--color-white);
+  background: var(--color-navy-900);
+  font-size: clamp(0.42rem, 2vw, 0.65rem);
+  letter-spacing: 0.08em;
+  line-height: 1.05;
 }
 
 .player[data-seat='1'],
@@ -249,6 +275,14 @@
 .instructionTitle {
   color: var(--color-gold-400);
   font-size: clamp(1.15rem, 5vw, 1.8rem);
+}
+
+.youHint {
+  color: var(--color-navy-900);
+  padding: 4px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--color-gold-400);
+  font-weight: 1000;
 }
 
 .countdown {

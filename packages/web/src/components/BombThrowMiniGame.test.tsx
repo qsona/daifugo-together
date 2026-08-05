@@ -55,6 +55,11 @@ describe('BombThrowMiniGame', () => {
     expect(screen.getByText('10.0')).toBeTruthy();
     expect(screen.getByText(/あなた/)).toBeTruthy();
     expect(screen.getByText(/相手/)).toBeTruthy();
+    expect(screen.getByLabelText('あなた（自分）').dataset.you).toBe('true');
+    expect(screen.getByLabelText('あなた（自分）').textContent).toContain(
+      'YOU',
+    );
+    expect(screen.getByLabelText('相手').dataset.you).toBeUndefined();
   });
 
   it('最初の1秒はリアルボンバーのカットインだけを表示する', () => {
@@ -87,8 +92,23 @@ describe('BombThrowMiniGame', () => {
     );
 
     expect(screen.getByText('爆弾を投げて相手に当てろ！')).toBeTruthy();
+    expect(screen.getByText('「YOU」のカードがあなた！')).toBeTruthy();
     expect(screen.getByText('爆弾：Space・Enter・THROW')).toBeTruthy();
     expect(screen.getByLabelText(label)).toBeTruthy();
+  });
+
+  it('観戦者にはYOU表示を付けない', () => {
+    render(
+      <BombThrowMiniGame
+        game={game}
+        yourSeat={null}
+        names={{ 0: 'プレイヤー1', 1: 'プレイヤー2' }}
+        onCommand={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText('YOU')).toBeNull();
+    expect(document.querySelector('[data-you="true"]')).toBeNull();
   });
 
   it('説明とカウント中は操作コマンドを送らない', () => {

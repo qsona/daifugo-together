@@ -141,24 +141,32 @@ export function BombThrowMiniGame({
               {SUITS[blast.seat]}
             </span>
           ))}
-          {game.players.map((player) => (
-            <span
-              key={player.seat}
-              className={`${styles.player} ${player.invulnerable ? styles.invulnerable : ''}`}
-              data-seat={player.seat}
-              style={{ gridColumn: player.x + 1, gridRow: player.y + 1 }}
-              aria-label={
-                names[player.seat] ?? `プレイヤー${String(player.seat + 1)}`
-              }
-            >
-              {SUITS[player.seat]}
-            </span>
-          ))}
+          {game.players.map((player) => {
+            const isYou = participating && player.seat === yourSeat;
+            const name =
+              names[player.seat] ?? `プレイヤー${String(player.seat + 1)}`;
+            return (
+              <span
+                key={player.seat}
+                className={`${styles.player} ${player.invulnerable ? styles.invulnerable : ''} ${isYou ? styles.you : ''}`}
+                data-seat={player.seat}
+                data-you={isYou ? 'true' : undefined}
+                style={{ gridColumn: player.x + 1, gridRow: player.y + 1 }}
+                aria-label={isYou ? `${name}（自分）` : name}
+              >
+                <span className={styles.playerSuit}>{SUITS[player.seat]}</span>
+                {isYou && <span className={styles.youBadge}>YOU</span>}
+              </span>
+            );
+          })}
           {game.phase === 'countdown' && (
             <div className={`${styles.curtain} ${styles.instructions}`}>
               <p className={styles.instructionTitle}>
                 爆弾を投げて相手に当てろ！
               </p>
+              {participating && (
+                <p className={styles.youHint}>「YOU」のカードがあなた！</p>
+              )}
               <p>移動：矢印キー・WASD・方向ボタン</p>
               <p>爆弾：Space・Enter・THROW</p>
               <p>命中で1点。一番得点したプレイヤーの勝ち！</p>
