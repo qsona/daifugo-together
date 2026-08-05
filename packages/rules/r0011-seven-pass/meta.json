@@ -6,6 +6,7 @@
   "proposalId": "01KYW5CDR00MKHZQ9WRE0KSJDN",
   "contractVersion": 2,
   "messages": {
-    "seven_pass_choice": "7渡し: 次の人に渡すカードを選んでください。"
+    "seven_pass_choice": "7渡し: 次の人に渡すカードを選んでください。",
+    "seven_pass_received": "7渡しで {cards} を受け取りました。"
   }
 }

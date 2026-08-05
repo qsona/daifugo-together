@@ -1,6 +1,26 @@
-import type { CardId, PlayerId, RuleContext, RuleModule } from '@daifugo/core';
+import type {
+  Card,
+  CardId,
+  PlayerId,
+  RuleContext,
+  RuleModule,
+} from '@daifugo/core';
 
 const CHOICE_ID = 'seven_pass_choice';
+const RECEIVED_MESSAGE_KEY = 'seven_pass_received';
+
+const SUIT_MARKS = {
+  spade: '♠',
+  heart: '♥',
+  diamond: '♦',
+  club: '♣',
+} as const;
+
+function cardLabel(card: Card): string {
+  return card.kind === 'natural'
+    ? `${SUIT_MARKS[card.suit]}${card.rank}`
+    : `ジョーカー${String(card.index + 1)}`;
+}
 
 function naturalSevenCount(
   play: Parameters<NonNullable<RuleModule['hooks']['afterPlay']>>[1],
@@ -58,6 +78,7 @@ export const rule: RuleModule = {
     contractVersion: 2,
     messages: {
       seven_pass_choice: '7渡し: 次の人に渡すカードを選んでください。',
+      seven_pass_received: '7渡しで {cards} を受け取りました。',
     },
   },
   hooks: {
@@ -91,6 +112,17 @@ export const rule: RuleModule = {
             from: { kind: 'hand', player: actor },
             to: { kind: 'hand', player: target },
             cards: { kind: 'specific', cardIds: [...input.cardIds] },
+          },
+          {
+            type: 'announce',
+            messageKey: RECEIVED_MESSAGE_KEY,
+            params: {
+              cards: actorState.hand
+                .filter((card) => input.cardIds.includes(card.id))
+                .map(cardLabel)
+                .join('・'),
+            },
+            players: [target],
           },
         ];
       }

@@ -155,6 +155,13 @@ describe('ルール間の追加入力', () => {
 
       expect(transition.rejections).toEqual([]);
       expect(transition.state.players.p1?.hand).toHaveLength(afterSevenPass);
+      expect(transition.state.private.ruleNotices).toContainEqual({
+        id: 1,
+        ruleId: sevenPass.meta.ruleId,
+        messageKey: 'seven_pass_received',
+        params: { cards: '♥3' },
+        players: ['p2'],
+      });
       expect(transition.state.private.pendingChoice).toMatchObject({
         ruleId: bomberman.meta.ruleId,
         choiceId: 'bomberman_discard',

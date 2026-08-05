@@ -121,7 +121,37 @@ describe('7渡し', () => {
         to: { kind: 'hand', player: 'p2' },
         cards: { kind: 'specific', cardIds: ['S03'] },
       },
+      {
+        type: 'announce',
+        messageKey: 'seven_pass_received',
+        params: { cards: '♠3' },
+        players: ['p2'],
+      },
     ]);
+  });
+
+  it('受け手だけに渡した複数枚の札面を知らせる', () => {
+    const currentPlay = play([card('S07', '7'), card('H07', '7')]);
+    const ruleContext = context({
+      currentPlay,
+      hand: [
+        card('S03', '3'),
+        { kind: 'natural', id: 'H04', suit: 'heart', rank: '4' },
+      ],
+    });
+
+    const effects = afterPlay(ruleContext, currentPlay, {
+      kind: 'cards',
+      choiceId: 'seven_pass_choice',
+      cardIds: ['S03', 'H04'],
+    });
+
+    expect(effects.at(1)).toEqual({
+      type: 'announce',
+      messageKey: 'seven_pass_received',
+      params: { cards: '♠3・♥4' },
+      players: ['p2'],
+    });
   });
 
   it('自然な7を2枚出すと正確に2枚を選んで渡す', () => {
@@ -140,13 +170,12 @@ describe('7渡し', () => {
         choiceId: 'seven_pass_choice',
         cardIds: ['S03', 'S04'],
       }),
-    ).toMatchObject([
-      {
-        type: 'moveCards',
-        to: { kind: 'hand', player: 'p2' },
-        cards: { kind: 'specific', cardIds: ['S03', 'S04'] },
-      },
-    ]);
+    ).toContainEqual({
+      type: 'moveCards',
+      from: { kind: 'hand', player: 'p1' },
+      to: { kind: 'hand', player: 'p2' },
+      cards: { kind: 'specific', cardIds: ['S03', 'S04'] },
+    });
   });
 
   it('逆方向では逆隣のプレイヤーへ渡す', () => {
@@ -161,9 +190,14 @@ describe('7渡し', () => {
       },
     );
 
-    expect(effects).toMatchObject([
-      { type: 'moveCards', to: { kind: 'hand', player: 'p4' } },
-    ]);
+    expect(effects).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'moveCards',
+          to: { kind: 'hand', player: 'p4' },
+        }),
+      ]),
+    );
   });
 
   it('次の席が終了済みなら現在の進行方向で次のactiveプレイヤーへ渡す', () => {
@@ -178,9 +212,14 @@ describe('7渡し', () => {
       },
     );
 
-    expect(effects).toMatchObject([
-      { type: 'moveCards', to: { kind: 'hand', player: 'p3' } },
-    ]);
+    expect(effects).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'moveCards',
+          to: { kind: 'hand', player: 'p3' },
+        }),
+      ]),
+    );
   });
 
   it('7を含まない手では選択も移動も要求しない', () => {
