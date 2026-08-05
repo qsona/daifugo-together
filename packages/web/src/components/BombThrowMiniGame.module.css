@@ -10,6 +10,70 @@
   backdrop-filter: blur(8px);
 }
 
+.cutIn {
+  position: relative;
+  width: min(100%, 720px);
+  overflow: hidden;
+  padding: clamp(24px, 8vw, 56px) 20px;
+  border-block: var(--border-heavy) solid var(--color-gold-400);
+  color: var(--color-white);
+  background: linear-gradient(
+    105deg,
+    var(--color-navy-900),
+    var(--color-red-700) 48%,
+    var(--color-navy-900)
+  );
+  box-shadow: var(--shadow-hard-l);
+  transform: skewY(-2deg);
+}
+
+.cutIn::before,
+.cutIn::after {
+  position: absolute;
+  inset-block-start: 50%;
+  color: var(--color-gold-400);
+  opacity: 0.22;
+  font-size: clamp(7rem, 32vw, 14rem);
+  line-height: 1;
+  transform: translateY(-50%);
+}
+
+.cutIn::before {
+  inset-inline-start: -0.1em;
+  content: '♠';
+}
+
+.cutIn::after {
+  inset-inline-end: -0.1em;
+  content: '♥';
+}
+
+.cutInContent {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  justify-items: center;
+  transform: skewY(2deg);
+}
+
+.cutInContent p,
+.cutInContent span {
+  margin: 0;
+  color: var(--color-gold-400);
+  font-size: clamp(0.72rem, 2.5vw, 1rem);
+  font-weight: 900;
+  letter-spacing: 0.18em;
+}
+
+.cutInContent strong {
+  margin-block: 6px;
+  font-size: clamp(2.2rem, 10vw, 5rem);
+  font-weight: 1000;
+  letter-spacing: 0.04em;
+  line-height: 1.1;
+  text-shadow: var(--shadow-hard-m);
+}
+
 .panel {
   width: min(100%, 560px);
   padding: 14px;
@@ -170,6 +234,29 @@
   font-weight: 1000;
   text-shadow: var(--shadow-hard-m);
   background: var(--color-overlay);
+}
+
+.instructions {
+  align-content: center;
+  gap: 5px;
+  font-size: clamp(0.78rem, 3.3vw, 1.05rem);
+}
+
+.instructions p {
+  margin: 0;
+}
+
+.instructionTitle {
+  color: var(--color-gold-400);
+  font-size: clamp(1.15rem, 5vw, 1.8rem);
+}
+
+.countdown {
+  display: block;
+  margin-block-start: 8px;
+  color: var(--color-gold-400);
+  font-size: clamp(3rem, 18vw, 6rem);
+  line-height: 1;
 }
 
 .winnerSuit {

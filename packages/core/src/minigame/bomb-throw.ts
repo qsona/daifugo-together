@@ -53,7 +53,8 @@ export interface BombThrowResult {
   scores: Record<PlayerId, { score: number; hitsTaken: number }>;
 }
 
-export const BOMB_THROW_COUNTDOWN_MS = 2_000;
+export const BOMB_THROW_CUT_IN_MS = 1_000;
+export const BOMB_THROW_COUNTDOWN_MS = 4_000;
 export const BOMB_THROW_PLAY_MS = 12_000;
 export const BOMB_THROW_RESULT_MS = 1_000;
 export const BOMB_THROW_TICK_MS = 200;
@@ -169,7 +170,7 @@ export function applyBombThrowCommand(
   },
 ): BombThrowMiniGameState {
   const player = state.players[input.playerId];
-  if (!player || state.phase === 'result') {
+  if (!player || state.phase !== 'playing') {
     return state;
   }
   return {

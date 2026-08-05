@@ -4,6 +4,12 @@ import { createDeck, type Card } from '../cards/card.js';
 import { reduceGame } from '../engine/reducer.js';
 import { startGame } from '../game/start-game.js';
 import type { GameConfig, GameState } from '../game/types.js';
+import {
+  BOMB_THROW_COUNTDOWN_MS,
+  BOMB_THROW_PLAY_MS,
+  BOMB_THROW_RESULT_MS,
+  BOMB_THROW_TICK_MS,
+} from '../minigame/bomb-throw.js';
 import { seedRng } from '../rng/rng.js';
 import { buildPlayerSnapshot } from '../snapshot/snapshot.js';
 import type { RuleRuntime } from './chain.js';
@@ -867,7 +873,10 @@ describe('contract v2 rule choices', () => {
       code: 'INVALID_RULE_CHOICE',
     });
 
-    for (let index = 0; index < 75; index += 1) {
+    const ticksUntilComplete =
+      (BOMB_THROW_COUNTDOWN_MS + BOMB_THROW_PLAY_MS + BOMB_THROW_RESULT_MS) /
+      BOMB_THROW_TICK_MS;
+    for (let index = 0; index < ticksUntilComplete; index += 1) {
       const activeMiniGame =
         transition.state.private.pendingChoice?.miniGameState;
       expect(activeMiniGame).toBeDefined();

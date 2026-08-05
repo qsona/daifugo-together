@@ -1,4 +1,9 @@
-import type { MultiplayerGameView, SeatId } from '@daifugo/core';
+import {
+  BOMB_THROW_COUNTDOWN_MS,
+  BOMB_THROW_CUT_IN_MS,
+  type MultiplayerGameView,
+  type SeatId,
+} from '@daifugo/core';
 import { useEffect } from 'react';
 
 import styles from './BombThrowMiniGame.module.css';
@@ -18,11 +23,15 @@ export interface BombThrowMiniGameProps {
 function remainingSeconds(game: MiniGame): string {
   const remaining =
     game.phase === 'countdown'
-      ? 2_000 - game.elapsedMs
+      ? BOMB_THROW_COUNTDOWN_MS - game.elapsedMs
       : game.phase === 'playing'
-        ? 2_000 + game.durationMs - game.elapsedMs
+        ? BOMB_THROW_COUNTDOWN_MS + game.durationMs - game.elapsedMs
         : 0;
   return (Math.max(0, remaining) / 1_000).toFixed(1);
+}
+
+function countdownNumber(game: MiniGame): number {
+  return Math.max(1, 4 - Math.floor(game.elapsedMs / 1_000));
 }
 
 export function BombThrowMiniGame({
@@ -34,7 +43,7 @@ export function BombThrowMiniGame({
   const participating = game.players.some((player) => player.seat === yourSeat);
 
   useEffect(() => {
-    if (!participating || game.phase === 'result') return undefined;
+    if (!participating || game.phase !== 'playing') return undefined;
     const directionByKey: Partial<Record<string, Direction>> = {
       ArrowUp: 'up',
       w: 'up',
@@ -66,6 +75,20 @@ export function BombThrowMiniGame({
     };
   }, [game.phase, onCommand, participating]);
 
+  if (game.phase === 'countdown' && game.elapsedMs < BOMB_THROW_CUT_IN_MS) {
+    return (
+      <div className={styles.backdrop} role="dialog" aria-label="ボムスロー15">
+        <section className={styles.cutIn} aria-label="リアルボンバー発動">
+          <div className={styles.cutInContent}>
+            <p>RULE ACTIVATED · ♠ ♥ ♦ ♣</p>
+            <strong>リアルボンバー</strong>
+            <span>BOMB THROW BATTLE</span>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div className={styles.backdrop} role="dialog" aria-label="ボムスロー15">
       <section className={styles.panel}>
@@ -76,7 +99,7 @@ export function BombThrowMiniGame({
           </div>
           <strong className={styles.timer}>
             {game.phase === 'countdown'
-              ? 'READY'
+              ? countdownNumber(game)
               : game.phase === 'playing'
                 ? remainingSeconds(game)
                 : 'RESULT'}
@@ -132,7 +155,20 @@ export function BombThrowMiniGame({
             </span>
           ))}
           {game.phase === 'countdown' && (
-            <div className={styles.curtain}>爆弾を投げて命中させろ！</div>
+            <div className={`${styles.curtain} ${styles.instructions}`}>
+              <p className={styles.instructionTitle}>
+                爆弾を投げて相手に当てろ！
+              </p>
+              <p>移動：矢印キー・WASD・方向ボタン</p>
+              <p>爆弾：Space・Enter・THROW</p>
+              <p>命中で1点。一番得点したプレイヤーの勝ち！</p>
+              <strong
+                className={styles.countdown}
+                aria-label={`${String(countdownNumber(game))}秒後に開始`}
+              >
+                {countdownNumber(game)}
+              </strong>
+            </div>
           )}
           {game.phase === 'result' && game.winnerSeat !== null && (
             <div className={styles.curtain}>
@@ -158,7 +194,7 @@ export function BombThrowMiniGame({
             ))}
         </div>
 
-        {participating && game.phase !== 'result' ? (
+        {participating && game.phase === 'playing' ? (
           <div className={styles.controls}>
             <div className={styles.dpad}>
               <button
@@ -194,7 +230,13 @@ export function BombThrowMiniGame({
             </button>
           </div>
         ) : (
-          <p className={styles.spectating}>対戦を観戦中…</p>
+          <p className={styles.spectating}>
+            {game.phase === 'countdown'
+              ? '3カウント後にスタート'
+              : game.phase === 'result'
+                ? '結果を集計中…'
+                : '対戦を観戦中…'}
+          </p>
         )}
       </section>
     </div>
