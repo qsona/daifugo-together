@@ -147,4 +147,43 @@ describe('BombThrowMiniGame', () => {
     expect(onCommand).toHaveBeenNthCalledWith(2, { direction: 'stop' });
     expect(onCommand).toHaveBeenNthCalledWith(3, { throwBomb: true });
   });
+
+  it('スマホ用十字キーを長押しし、指を離すか外すと停止する', () => {
+    const onCommand = vi.fn();
+    render(
+      <BombThrowMiniGame
+        game={game}
+        yourSeat={0}
+        names={{ 0: 'あなた' }}
+        onCommand={onCommand}
+      />,
+    );
+
+    const up = screen.getByRole('button', { name: '上へ移動' });
+    fireEvent.pointerDown(up, { pointerId: 1 });
+    fireEvent.pointerUp(up, { pointerId: 1 });
+    fireEvent.pointerDown(up, { pointerId: 2 });
+    fireEvent.pointerLeave(up, { pointerId: 2 });
+
+    expect(onCommand).toHaveBeenNthCalledWith(1, { direction: 'up' });
+    expect(onCommand).toHaveBeenNthCalledWith(2, { direction: 'stop' });
+    expect(onCommand).toHaveBeenNthCalledWith(3, { direction: 'up' });
+    expect(onCommand).toHaveBeenNthCalledWith(4, { direction: 'stop' });
+  });
+
+  it('スマホ用の爆弾ボタンで投擲する', () => {
+    const onCommand = vi.fn();
+    render(
+      <BombThrowMiniGame
+        game={game}
+        yourSeat={0}
+        names={{ 0: 'あなた' }}
+        onCommand={onCommand}
+      />,
+    );
+
+    fireEvent.pointerDown(screen.getByRole('button', { name: '爆弾を投げる' }));
+
+    expect(onCommand).toHaveBeenCalledWith({ throwBomb: true });
+  });
 });

@@ -4,7 +4,7 @@ import {
   type MultiplayerGameView,
   type SeatId,
 } from '@daifugo/core';
-import { useEffect } from 'react';
+import { type PointerEvent as ReactPointerEvent, useEffect } from 'react';
 
 import styles from './BombThrowMiniGame.module.css';
 
@@ -41,6 +41,14 @@ export function BombThrowMiniGame({
   onCommand,
 }: BombThrowMiniGameProps) {
   const participating = game.players.some((player) => player.seat === yourSeat);
+  const startMoving = (
+    event: ReactPointerEvent<HTMLButtonElement>,
+    direction: Direction,
+  ) => {
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    onCommand({ direction });
+  };
+  const stopMoving = () => onCommand({ direction: 'stop' });
 
   useEffect(() => {
     if (!participating || game.phase !== 'playing') return undefined;
@@ -206,34 +214,52 @@ export function BombThrowMiniGame({
           <div className={styles.controls}>
             <div className={styles.dpad}>
               <button
-                onPointerDown={() => onCommand({ direction: 'up' })}
-                onPointerUp={() => onCommand({ direction: 'stop' })}
+                className={styles.dpadUp}
+                aria-label="上へ移動"
+                onPointerDown={(event) => startMoving(event, 'up')}
+                onPointerUp={stopMoving}
+                onPointerCancel={stopMoving}
+                onPointerLeave={stopMoving}
               >
                 ▲
               </button>
               <button
-                onPointerDown={() => onCommand({ direction: 'left' })}
-                onPointerUp={() => onCommand({ direction: 'stop' })}
+                className={styles.dpadLeft}
+                aria-label="左へ移動"
+                onPointerDown={(event) => startMoving(event, 'left')}
+                onPointerUp={stopMoving}
+                onPointerCancel={stopMoving}
+                onPointerLeave={stopMoving}
               >
                 ◀
               </button>
               <button
-                onPointerDown={() => onCommand({ direction: 'down' })}
-                onPointerUp={() => onCommand({ direction: 'stop' })}
+                className={styles.dpadDown}
+                aria-label="下へ移動"
+                onPointerDown={(event) => startMoving(event, 'down')}
+                onPointerUp={stopMoving}
+                onPointerCancel={stopMoving}
+                onPointerLeave={stopMoving}
               >
                 ▼
               </button>
               <button
-                onPointerDown={() => onCommand({ direction: 'right' })}
-                onPointerUp={() => onCommand({ direction: 'stop' })}
+                className={styles.dpadRight}
+                aria-label="右へ移動"
+                onPointerDown={(event) => startMoving(event, 'right')}
+                onPointerUp={stopMoving}
+                onPointerCancel={stopMoving}
+                onPointerLeave={stopMoving}
               >
                 ▶
               </button>
             </div>
             <button
               className={styles.throwButton}
+              aria-label="爆弾を投げる"
               onPointerDown={() => onCommand({ throwBomb: true })}
             >
+              <span>💣</span>
               THROW
             </button>
           </div>

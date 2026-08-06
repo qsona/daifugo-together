@@ -283,6 +283,7 @@
   border-radius: var(--radius-pill);
   background: var(--color-gold-400);
   font-weight: 1000;
+  text-shadow: none;
 }
 
 .countdown {
@@ -313,13 +314,40 @@
 
 .controls {
   margin-top: 12px;
+  justify-content: center;
+  gap: clamp(12px, 5vw, 28px);
+  touch-action: none;
+  user-select: none;
 }
 
 .dpad {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
   gap: 5px;
-  flex: 1;
+  flex: 0 0 auto;
+  width: min(44vw, 164px);
+  aspect-ratio: 1;
+}
+
+.dpadUp {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.dpadLeft {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.dpadDown {
+  grid-column: 2;
+  grid-row: 3;
+}
+
+.dpadRight {
+  grid-column: 3;
+  grid-row: 2;
 }
 
 .dpad button,
@@ -335,9 +363,25 @@
   box-shadow: var(--shadow-hard-s);
 }
 
+.dpad button {
+  min-height: 0;
+  aspect-ratio: 1;
+  font-size: clamp(1.1rem, 5vw, 1.5rem);
+}
+
 .throwButton {
-  min-width: 108px;
+  display: grid;
+  place-content: center;
+  width: min(30vw, 112px);
+  min-width: 0;
+  aspect-ratio: 1;
+  border-radius: 50%;
   background: var(--color-red-600);
+}
+
+.throwButton span {
+  font-size: clamp(1.5rem, 7vw, 2.2rem);
+  line-height: 1;
 }
 
 .spectating {
@@ -352,7 +396,15 @@
   }
 
   .arena {
-    max-height: 58vh;
+    max-height: 46vh;
     margin: 7px auto;
+  }
+
+  .dpad {
+    width: min(42vw, 148px);
+  }
+
+  .throwButton {
+    width: min(28vw, 96px);
   }
 }
