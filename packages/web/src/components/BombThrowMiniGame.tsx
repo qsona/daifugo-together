@@ -169,15 +169,9 @@ export function BombThrowMiniGame({
           })}
           {game.phase === 'countdown' && (
             <div className={`${styles.curtain} ${styles.instructions}`}>
-              <p className={styles.instructionTitle}>
-                爆弾を投げて相手に当てろ！
-              </p>
               {participating && (
                 <p className={styles.youHint}>「YOU」のカードがあなた！</p>
               )}
-              <p>移動：矢印キー・WASD・方向ボタン</p>
-              <p>爆弾：Space・Enter・THROW</p>
-              <p>命中で1点。一番得点したプレイヤーの勝ち！</p>
               <strong
                 className={styles.countdown}
                 aria-label={`${String(countdownNumber(game))}秒後に開始`}

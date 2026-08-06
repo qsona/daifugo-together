@@ -821,6 +821,7 @@ function ConnectedApp({
   const ruleEventRoomId = useRef<string | null>(null);
   const lastRuleEventSeq = useRef(0);
   const seenRuleIds = useRef(new Set<string>());
+  const customPresentationRuleIds = useRef(new Set<string>());
   const [activationVolleys, setActivationVolleys] = useState<
     readonly ActivationVolley[]
   >([]);
@@ -1178,7 +1179,10 @@ function ConnectedApp({
       ? (room.game.pendingChoice?.ruleId ?? null)
       : null;
     const fired = freshEvents.filter(
-      (event) => event.t === 'ruleFired' && event.ruleId !== miniGameRuleId,
+      (event) =>
+        event.t === 'ruleFired' &&
+        event.ruleId !== miniGameRuleId &&
+        !customPresentationRuleIds.current.has(event.ruleId),
     );
     const unique = new Map<string, RuleActivation>();
     for (const event of fired) {
@@ -1202,6 +1206,30 @@ function ConnectedApp({
       ]);
     }
   }, [room]);
+
+  const currentMiniGameRuleId = room?.game?.miniGame
+    ? (room.game.pendingChoice?.ruleId ?? null)
+    : null;
+  useEffect(() => {
+    if (!currentMiniGameRuleId) return;
+    // ruleFired がミニゲーム開始より先に届く場合もある。専用演出が始まったら、
+    // 同じルールの汎用カットインと、その終了後に残る発動チップを取り消す。
+    seenRuleIds.current.add(currentMiniGameRuleId);
+    customPresentationRuleIds.current.add(currentMiniGameRuleId);
+    setActivationVolleys((volleys) =>
+      volleys.flatMap((volley) => {
+        const remaining = volley.activations.filter(
+          (activation) => activation.ruleId !== currentMiniGameRuleId,
+        );
+        return remaining.length > 0
+          ? [{ ...volley, activations: remaining }]
+          : [];
+      }),
+    );
+    setLastActivation((activation) =>
+      activation?.ruleId === currentMiniGameRuleId ? null : activation,
+    );
+  }, [currentMiniGameRuleId]);
 
   useEffect(() => {
     if (current !== 'menu' || !proposalApi.mine) return;

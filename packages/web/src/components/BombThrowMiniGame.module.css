@@ -272,11 +272,6 @@
   margin: 0;
 }
 
-.instructionTitle {
-  color: var(--color-gold-400);
-  font-size: clamp(1.15rem, 5vw, 1.8rem);
-}
-
 .youHint {
   color: var(--color-navy-900);
   padding: 4px 8px;

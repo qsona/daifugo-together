@@ -91,9 +91,11 @@ describe('BombThrowMiniGame', () => {
       />,
     );
 
-    expect(screen.getByText('爆弾を投げて相手に当てろ！')).toBeTruthy();
+    expect(screen.queryByText('爆弾を投げて相手に当てろ！')).toBeNull();
     expect(screen.getByText('「YOU」のカードがあなた！')).toBeTruthy();
-    expect(screen.getByText('爆弾：Space・Enter・THROW')).toBeTruthy();
+    expect(screen.queryByText(/移動：/)).toBeNull();
+    expect(screen.queryByText(/爆弾：/)).toBeNull();
+    expect(screen.queryByText(/命中で1点/)).toBeNull();
     expect(screen.getByLabelText(label)).toBeTruthy();
   });
 

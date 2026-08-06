@@ -1226,6 +1226,24 @@ describe('CX-06: 実ルール発動イベントの演出', () => {
         ...initial,
         v: 5,
         activeRules: [{ ruleId: 'r0029-real-bomber', name: 'リアルボンバー' }],
+        events: [
+          {
+            seq: 10,
+            t: 'ruleFired',
+            ruleId: 'r0029-real-bomber',
+            name: 'リアルボンバー',
+            message: null,
+          },
+        ],
+      });
+    });
+    expect(screen.getByRole('button', { name: '演出をとばす' })).toBeTruthy();
+
+    act(() => {
+      observable.setRoom({
+        ...initial,
+        v: 6,
+        activeRules: [{ ruleId: 'r0029-real-bomber', name: 'リアルボンバー' }],
         game: {
           ...initial.game!,
           pendingChoice: {
@@ -1276,6 +1294,26 @@ describe('CX-06: 実ルール発動イベントの演出', () => {
 
     expect(screen.getByRole('dialog', { name: 'ボムスロー15' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: '演出をとばす' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'リアルボンバー' })).toBeNull();
+
+    act(() => {
+      observable.setRoom({
+        ...initial,
+        v: 7,
+        activeRules: [{ ruleId: 'r0029-real-bomber', name: 'リアルボンバー' }],
+        events: [
+          {
+            seq: 11,
+            t: 'ruleFired',
+            ruleId: 'r0029-real-bomber',
+            name: 'リアルボンバー',
+            message: null,
+          },
+        ],
+      });
+    });
+    expect(screen.queryByRole('button', { name: '演出をとばす' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'リアルボンバー' })).toBeNull();
   });
 
   it('新しいruleFiredを一度だけカットインし、完了後に発動の痕跡を残す', async () => {
