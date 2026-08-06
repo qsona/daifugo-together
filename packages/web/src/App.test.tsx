@@ -1216,6 +1216,68 @@ describe('ルール発動: カットインが引いてから場が流れる', ()
 describe('CX-06: 実ルール発動イベントの演出', () => {
   afterEach(cleanup);
 
+  it('専用演出があるミニゲームでは汎用カットインを重ねない', () => {
+    const initial = tutorialHintRoom('community', []);
+    const observable = observableTutorialClient(initial);
+    render(<App client={observable.client} />);
+
+    act(() => {
+      observable.setRoom({
+        ...initial,
+        v: 5,
+        activeRules: [{ ruleId: 'r0029-real-bomber', name: 'リアルボンバー' }],
+        game: {
+          ...initial.game!,
+          pendingChoice: {
+            kind: 'miniGame',
+            ruleId: 'r0029-real-bomber',
+            choiceId: 'real_bomber',
+            message: null,
+            seat: 0,
+            count: 0,
+            cards: null,
+          },
+          miniGame: {
+            id: 'real-bomber-1',
+            kind: 'bomb_throw_15',
+            phase: 'result',
+            elapsedMs: 16_500,
+            durationMs: 12_000,
+            width: 9,
+            height: 7,
+            obstacles: [],
+            players: [
+              {
+                seat: 0,
+                x: 1,
+                y: 1,
+                direction: 'stop',
+                score: 2,
+                hitsTaken: 0,
+                invulnerable: false,
+              },
+            ],
+            bombs: [],
+            blasts: [],
+            winnerSeat: 0,
+          },
+        },
+        events: [
+          {
+            seq: 10,
+            t: 'ruleFired',
+            ruleId: 'r0029-real-bomber',
+            name: 'リアルボンバー',
+            message: null,
+          },
+        ],
+      });
+    });
+
+    expect(screen.getByRole('dialog', { name: 'ボムスロー15' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: '演出をとばす' })).toBeNull();
+  });
+
   it('新しいruleFiredを一度だけカットインし、完了後に発動の痕跡を残す', async () => {
     const user = userEvent.setup();
     const initial = {

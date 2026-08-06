@@ -1172,7 +1172,14 @@ function ConnectedApp({
       lastRuleEventSeq.current,
       ...freshEvents.map((event) => event.seq),
     );
-    const fired = freshEvents.filter((event) => event.t === 'ruleFired');
+    // ミニゲームには専用の発動演出がある。結果フェーズの背後で汎用カットインを
+    // 再生すると、オーバーレイが消える直前の一瞬だけ末尾が見えてしまう。
+    const miniGameRuleId = room.game?.miniGame
+      ? (room.game.pendingChoice?.ruleId ?? null)
+      : null;
+    const fired = freshEvents.filter(
+      (event) => event.t === 'ruleFired' && event.ruleId !== miniGameRuleId,
+    );
     const unique = new Map<string, RuleActivation>();
     for (const event of fired) {
       if (event.t !== 'ruleFired') continue;
