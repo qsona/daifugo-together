@@ -1,4 +1,4 @@
-import type { MultiplayerGameView } from '@daifugo/core';
+import { BOMB_THROW_TICK_MS, type MultiplayerGameView } from '@daifugo/core';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -39,7 +39,10 @@ const game: NonNullable<MultiplayerGameView['miniGame']> = {
 };
 
 describe('BombThrowMiniGame', () => {
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+  });
 
   it('サーバー状態の盤面、残り時間、得点を表示する', () => {
     render(
@@ -152,6 +155,7 @@ describe('BombThrowMiniGame', () => {
   });
 
   it('スマホ用十字キーは指がボタン外へずれても、離すまで移動を続ける', () => {
+    vi.useFakeTimers();
     const onCommand = vi.fn();
     render(
       <BombThrowMiniGame
@@ -170,6 +174,8 @@ describe('BombThrowMiniGame', () => {
     expect(onCommand).toHaveBeenLastCalledWith({ direction: 'up' });
 
     fireEvent.pointerUp(up, { pointerId: 1 });
+    expect(onCommand).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(BOMB_THROW_TICK_MS + 40);
 
     expect(onCommand).toHaveBeenNthCalledWith(1, { direction: 'up' });
     expect(onCommand).toHaveBeenNthCalledWith(2, { direction: 'stop' });

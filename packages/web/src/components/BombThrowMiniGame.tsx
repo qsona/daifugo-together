@@ -1,15 +1,21 @@
 import {
   BOMB_THROW_COUNTDOWN_MS,
   BOMB_THROW_CUT_IN_MS,
+  BOMB_THROW_TICK_MS,
   type MultiplayerGameView,
   type SeatId,
 } from '@daifugo/core';
-import { type PointerEvent as ReactPointerEvent, useEffect } from 'react';
+import {
+  type PointerEvent as ReactPointerEvent,
+  useEffect,
+  useRef,
+} from 'react';
 
 import styles from './BombThrowMiniGame.module.css';
 
 type MiniGame = NonNullable<MultiplayerGameView['miniGame']>;
 type Direction = MiniGame['players'][number]['direction'];
+const MIN_POINTER_MOVE_MS = BOMB_THROW_TICK_MS + 40;
 
 const SUITS = ['♠', '♥', '♦', '♣'] as const;
 
@@ -41,14 +47,54 @@ export function BombThrowMiniGame({
   onCommand,
 }: BombThrowMiniGameProps) {
   const participating = game.players.some((player) => player.seat === yourSeat);
+  const movementStartedAt = useRef<number | null>(null);
+  const pendingStop = useRef<number | null>(null);
+  const clearPendingStop = () => {
+    if (pendingStop.current === null) return;
+    window.clearTimeout(pendingStop.current);
+    pendingStop.current = null;
+  };
   const startMoving = (
     event: ReactPointerEvent<HTMLButtonElement>,
     direction: Direction,
   ) => {
+    clearPendingStop();
+    movementStartedAt.current = Date.now();
     event.currentTarget.setPointerCapture?.(event.pointerId);
     onCommand({ direction });
   };
-  const stopMoving = () => onCommand({ direction: 'stop' });
+  const sendStop = () => {
+    pendingStop.current = null;
+    movementStartedAt.current = null;
+    onCommand({ direction: 'stop' });
+  };
+  const stopMoving = () => {
+    if (movementStartedAt.current === null) return;
+    const remaining = Math.max(
+      0,
+      MIN_POINTER_MOVE_MS - (Date.now() - movementStartedAt.current),
+    );
+    clearPendingStop();
+    if (remaining === 0) {
+      sendStop();
+      return;
+    }
+    pendingStop.current = window.setTimeout(sendStop, remaining);
+  };
+  const cancelMoving = () => {
+    if (movementStartedAt.current === null) return;
+    clearPendingStop();
+    sendStop();
+  };
+
+  useEffect(
+    () => () => {
+      if (pendingStop.current !== null) {
+        window.clearTimeout(pendingStop.current);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!participating || game.phase !== 'playing') return undefined;
@@ -212,7 +258,7 @@ export function BombThrowMiniGame({
                 aria-label="上へ移動"
                 onPointerDown={(event) => startMoving(event, 'up')}
                 onPointerUp={stopMoving}
-                onPointerCancel={stopMoving}
+                onPointerCancel={cancelMoving}
               >
                 ▲
               </button>
@@ -221,7 +267,7 @@ export function BombThrowMiniGame({
                 aria-label="左へ移動"
                 onPointerDown={(event) => startMoving(event, 'left')}
                 onPointerUp={stopMoving}
-                onPointerCancel={stopMoving}
+                onPointerCancel={cancelMoving}
               >
                 ◀
               </button>
@@ -230,7 +276,7 @@ export function BombThrowMiniGame({
                 aria-label="下へ移動"
                 onPointerDown={(event) => startMoving(event, 'down')}
                 onPointerUp={stopMoving}
-                onPointerCancel={stopMoving}
+                onPointerCancel={cancelMoving}
               >
                 ▼
               </button>
@@ -239,7 +285,7 @@ export function BombThrowMiniGame({
                 aria-label="右へ移動"
                 onPointerDown={(event) => startMoving(event, 'right')}
                 onPointerUp={stopMoving}
-                onPointerCancel={stopMoving}
+                onPointerCancel={cancelMoving}
               >
                 ▶
               </button>
