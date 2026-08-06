@@ -114,10 +114,10 @@ export function createBombThrowMiniGame(input: {
   const width = 7;
   const height = 7;
   const spawnPoints = [
-    { x: 0, y: 0, direction: 'right' as const },
-    { x: 6, y: 6, direction: 'left' as const },
-    { x: 6, y: 0, direction: 'down' as const },
-    { x: 0, y: 6, direction: 'up' as const },
+    { x: 2, y: 2, direction: 'stop' as const },
+    { x: 4, y: 4, direction: 'stop' as const },
+    { x: 4, y: 2, direction: 'stop' as const },
+    { x: 2, y: 4, direction: 'stop' as const },
   ];
   const participants = [...new Set(input.participants)].slice(0, 4);
   return {

@@ -96,6 +96,7 @@ describe('BombThrowMiniGame', () => {
     expect(screen.queryByText(/移動：/)).toBeNull();
     expect(screen.queryByText(/爆弾：/)).toBeNull();
     expect(screen.queryByText(/命中で1点/)).toBeNull();
+    expect(screen.queryByText('3カウント後にスタート')).toBeNull();
     expect(screen.getByLabelText(label)).toBeTruthy();
   });
 
@@ -150,7 +151,7 @@ describe('BombThrowMiniGame', () => {
     expect(onCommand).toHaveBeenNthCalledWith(3, { throwBomb: true });
   });
 
-  it('スマホ用十字キーを長押しし、指を離すか外すと停止する', () => {
+  it('スマホ用十字キーは指がボタン外へずれても、離すまで移動を続ける', () => {
     const onCommand = vi.fn();
     render(
       <BombThrowMiniGame
@@ -163,14 +164,15 @@ describe('BombThrowMiniGame', () => {
 
     const up = screen.getByRole('button', { name: '上へ移動' });
     fireEvent.pointerDown(up, { pointerId: 1 });
+    fireEvent.pointerLeave(up, { pointerId: 1 });
+
+    expect(onCommand).toHaveBeenCalledTimes(1);
+    expect(onCommand).toHaveBeenLastCalledWith({ direction: 'up' });
+
     fireEvent.pointerUp(up, { pointerId: 1 });
-    fireEvent.pointerDown(up, { pointerId: 2 });
-    fireEvent.pointerLeave(up, { pointerId: 2 });
 
     expect(onCommand).toHaveBeenNthCalledWith(1, { direction: 'up' });
     expect(onCommand).toHaveBeenNthCalledWith(2, { direction: 'stop' });
-    expect(onCommand).toHaveBeenNthCalledWith(3, { direction: 'up' });
-    expect(onCommand).toHaveBeenNthCalledWith(4, { direction: 'stop' });
   });
 
   it('スマホ用の爆弾ボタンで投擲する', () => {

@@ -213,7 +213,6 @@ export function BombThrowMiniGame({
                 onPointerDown={(event) => startMoving(event, 'up')}
                 onPointerUp={stopMoving}
                 onPointerCancel={stopMoving}
-                onPointerLeave={stopMoving}
               >
                 ▲
               </button>
@@ -223,7 +222,6 @@ export function BombThrowMiniGame({
                 onPointerDown={(event) => startMoving(event, 'left')}
                 onPointerUp={stopMoving}
                 onPointerCancel={stopMoving}
-                onPointerLeave={stopMoving}
               >
                 ◀
               </button>
@@ -233,7 +231,6 @@ export function BombThrowMiniGame({
                 onPointerDown={(event) => startMoving(event, 'down')}
                 onPointerUp={stopMoving}
                 onPointerCancel={stopMoving}
-                onPointerLeave={stopMoving}
               >
                 ▼
               </button>
@@ -243,7 +240,6 @@ export function BombThrowMiniGame({
                 onPointerDown={(event) => startMoving(event, 'right')}
                 onPointerUp={stopMoving}
                 onPointerCancel={stopMoving}
-                onPointerLeave={stopMoving}
               >
                 ▶
               </button>
@@ -257,13 +253,9 @@ export function BombThrowMiniGame({
               THROW
             </button>
           </div>
-        ) : (
+        ) : game.phase === 'countdown' ? null : (
           <p className={styles.spectating}>
-            {game.phase === 'countdown'
-              ? '3カウント後にスタート'
-              : game.phase === 'result'
-                ? '結果を集計中…'
-                : '対戦を観戦中…'}
+            {game.phase === 'result' ? '結果を集計中…' : '対戦を観戦中…'}
           </p>
         )}
       </section>

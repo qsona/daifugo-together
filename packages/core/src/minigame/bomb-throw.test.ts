@@ -10,6 +10,27 @@ import {
 } from './bomb-throw.js';
 
 describe('ボムスロー15', () => {
+  it('中央に隣接する斜め4マスから静止状態で始まる', () => {
+    const state = createBombThrowMiniGame({
+      id: 'center-spawns',
+      seed: 'seed',
+      participants: ['p1', 'p2', 'p3', 'p4'],
+    });
+
+    expect(
+      Object.values(state.players).map(({ x, y, direction }) => ({
+        x,
+        y,
+        direction,
+      })),
+    ).toEqual([
+      { x: 2, y: 2, direction: 'stop' },
+      { x: 4, y: 4, direction: 'stop' },
+      { x: 4, y: 2, direction: 'stop' },
+      { x: 2, y: 4, direction: 'stop' },
+    ]);
+  });
+
   it('1秒のカットインと3カウント、12秒の対戦、1秒の結果表示で完了する', () => {
     let state = createBombThrowMiniGame({
       id: 'test',
