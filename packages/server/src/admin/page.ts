@@ -135,9 +135,13 @@ export const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
     .send:disabled { cursor:wait; opacity:.6; }
     .announcement-status { min-height:20px; margin:0; color:#8ee8d2; font-size:12px; }
     .announcement-history { display:grid; gap:10px; }
+    .rule-actions { display:flex; align-items:center; gap:10px; margin-top:13px; }
+    .rule-actions small { color:#8490ad; font-size:11px; line-height:1.5; }
+    .publish { border:0; border-radius:11px; padding:10px 14px; color:#0a1320; background:var(--mint); cursor:pointer; font-weight:900; }
+    .publish:disabled { cursor:not-allowed; opacity:.5; }
     .empty { padding:34px; color:#8995b3; text-align:center; }
     @media (max-width:960px) { .periods,.overview-lower,.announcement-layout { grid-template-columns:1fr; } .user-grid { grid-template-columns:1fr; } }
-    @media (max-width:720px) { .shell { display:block; } aside { position:relative; height:auto; padding:14px; border-right:0; border-bottom:1px solid var(--line); } .brand { padding:3px 5px 12px; } nav { grid-template-columns:repeat(4,1fr); } .nav { justify-content:center; padding:9px 5px; font-size:12px; } .nav-icon { display:none; } .aside-foot { display:none; } main { padding:22px 14px 50px; } header { align-items:flex-end; } .header-actions .live { display:none; } .summary { grid-template-columns:repeat(2,1fr); } .status-grid { grid-template-columns:repeat(2,1fr); } }
+    @media (max-width:720px) { .shell { display:block; } aside { position:relative; height:auto; padding:14px; border-right:0; border-bottom:1px solid var(--line); } .brand { padding:3px 5px 12px; } nav { grid-template-columns:repeat(5,1fr); } .nav { justify-content:center; padding:9px 5px; font-size:12px; } .nav-icon { display:none; } .aside-foot { display:none; } main { padding:22px 14px 50px; } header { align-items:flex-end; } .header-actions .live { display:none; } .summary { grid-template-columns:repeat(2,1fr); } .status-grid { grid-template-columns:repeat(2,1fr); } }
     @media (max-width:430px) { .period { padding:14px; } .metric { min-height:78px; padding:10px; } .metric strong { font-size:22px; } .user-stats { grid-template-columns:repeat(2,1fr); } }
   </style>
 </head>
@@ -149,7 +153,8 @@ export const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
         <button class="nav active" data-view="overview"><span class="nav-icon">01</span>概要</button>
         <button class="nav" data-view="proposals"><span class="nav-icon">02</span>提案</button>
         <button class="nav" data-view="users"><span class="nav-icon">03</span>ユーザー</button>
-        <button class="nav" data-view="announcements"><span class="nav-icon">04</span>お知らせ</button>
+        <button class="nav" data-view="rules"><span class="nav-icon">04</span>ルール</button>
+        <button class="nav" data-view="announcements"><span class="nav-icon">05</span>お知らせ</button>
       </nav>
       <div class="aside-foot"><form method="post" action="/admin/logout"><button class="logout">ログアウト</button></form></div>
     </aside>
@@ -173,6 +178,10 @@ export const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       <section class="view" id="view-users">
         <div class="toolbar"><input id="user-query" type="search" placeholder="表示名・ユーザーIDで検索"><select id="user-registration"><option value="all">すべてのユーザー</option><option value="registered">Google登録済み</option><option value="guest">ゲスト</option></select></div>
         <p class="result-meta" id="user-meta"></p><div class="user-grid" id="user-list"></div><button class="more" id="user-more">さらに表示</button>
+      </section>
+      <section class="view" id="view-rules">
+        <div class="toolbar"><select id="rule-status"><option value="all">すべてのルール</option><option value="pending">公開待ち</option><option value="active">公開中</option><option value="disabled">停止中</option><option value="removed">削除済み</option></select></div>
+        <p class="result-meta" id="rule-meta"></p><div class="list" id="rule-list"></div>
       </section>
       <section class="view" id="view-announcements">
         <div class="announcement-layout">
@@ -199,7 +208,9 @@ export const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
     const nf = new Intl.NumberFormat("ja-JP");
     const dt = new Intl.DateTimeFormat("ja-JP", { timeZone:"Asia/Tokyo", month:"numeric", day:"numeric", hour:"2-digit", minute:"2-digit" });
     const labels = { screening:"審査中", implementing:"実装中", released:"公開済み", rejected:"却下", failed:"実装失敗" };
-    const views = { overview:["運用概要","本番の利用状況を確認します。"], proposals:["提案","提案内容と処理状況を確認します。"], users:["ユーザー","登録・プレイ状況を確認します。"], announcements:["お知らせ配信","全ユーザーのお知らせBoxと購読端末へ配信します。"] };
+    const ruleLabels = { active:"公開中", disabled:"停止中", removed:"削除済み" };
+    const ruleReasonLabels = { pending_enable:"公開待ち", manual:"手動停止", auto_incident:"自動停止", rollback:"巻き戻し" };
+    const views = { overview:["運用概要","本番の利用状況を確認します。"], proposals:["提案","提案内容と処理状況を確認します。"], users:["ユーザー","登録・プレイ状況を確認します。"], rules:["ルール","実装済みルールを確認し、公開します。"], announcements:["お知らせ配信","全ユーザーのお知らせBoxと購読端末へ配信します。"] };
     const state = { proposalOffset:0, userOffset:0, proposalTotal:0, userTotal:0, busy:false };
     const el = (id) => document.getElementById(id);
     const text = (tag, value, className) => { const node=document.createElement(tag); node.textContent=value; if(className) node.className=className; return node; };
@@ -253,6 +264,21 @@ export const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       const data=await api("/admin/api/users?"+q);state.userTotal=data.total;data.items.forEach(item=>el("user-list").append(userNode(item)));state.userOffset+=data.items.length;
       el("user-meta").textContent=nf.format(data.total)+"人";if(data.total===0)el("user-list").append(text("div","該当するユーザーはいません。","empty"));el("user-more").style.display=state.userOffset<data.total?"block":"none";
     }
+    function ruleNode(item) {
+      const root=text("article","","item");const top=text("div","","item-top");const heading=document.createElement("div");heading.append(text("h3",item.name),text("span",item.id,"item-id"));
+      const pending=item.status==="disabled"&&item.disabledReason==="pending_enable";const status=pending?"公開待ち":(ruleLabels[item.status]||item.status);top.append(heading,text("span",status,"badge "+(pending?"screening":item.status)));root.append(top,text("p",item.description,"body"));
+      const meta=text("div","","meta");[item.kind==="local"?"ご当地ルール":"オリジナル",item.prefecture||null,"登録 "+date(item.createdAt),item.priorityRank?"優先順位 #"+item.priorityRank:null].filter(Boolean).forEach(value=>meta.append(text("span",value)));root.append(meta);
+      if(item.status==="disabled"&&item.disabledReason){root.append(text("p",ruleReasonLabels[item.disabledReason]||item.disabledReason,"reason"));}
+      if(pending){const actions=text("div","","rule-actions");const publish=document.createElement("button");publish.className="publish";publish.type="button";publish.textContent="公開";publish.disabled=!item.releaseReady;publish.addEventListener("click",()=>void run(()=>publishRule(item)));actions.append(publish);if(!item.releaseReady)actions.append(text("small","公開に必要な準備が未完了です。"));root.append(actions);}
+      return root;
+    }
+    async function loadRules() {
+      const data=await api("/admin/api/rules");const filter=el("rule-status").value;const items=data.items.filter(item=>filter==="all"||(filter==="pending"&&item.status==="disabled"&&item.disabledReason==="pending_enable")||item.status===filter);el("rule-list").replaceChildren();items.forEach(item=>el("rule-list").append(ruleNode(item)));el("rule-meta").textContent=nf.format(items.length)+"件";if(items.length===0)el("rule-list").append(text("div","該当するルールはありません。","empty"));
+    }
+    async function publishRule(item) {
+      if(!confirm("「"+item.name+"」を公開します。よろしいですか？"))return;
+      const result=await api("/admin/api/rules/"+encodeURIComponent(item.id)+"/publish",{method:"POST"});await loadRules();el("rule-meta").textContent=result.status==="unchanged"?"このルールはすでに公開されています。":"公開しました。";
+    }
     function announcementNode(item) {
       const root=text("article","","item");const top=text("div","","item-top");const heading=document.createElement("div");heading.append(text("h3",item.title),text("span","#"+item.id,"item-id"));top.append(heading,text("span",nf.format(item.recipientCount)+"人","badge registered"));root.append(top,text("p",item.body,"body"));const meta=text("div","","meta");["配信 "+date(item.createdAt),"配信者 "+item.createdBy,"遷移先 "+item.url].forEach(value=>meta.append(text("span",value)));root.append(meta);return root;
     }
@@ -261,8 +287,8 @@ export const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
     }
     async function run(task){if(state.busy)return;state.busy=true;el("refresh").disabled=true;clearError();try{await task();el("live").textContent="本番取得済み";}catch(error){showError(error);el("live").textContent="取得失敗";}finally{state.busy=false;el("refresh").disabled=false;}}
     function currentView(){return document.querySelector(".nav.active").dataset.view;}
-    document.querySelectorAll(".nav").forEach(button=>button.addEventListener("click",()=>{document.querySelectorAll(".nav,.view").forEach(node=>node.classList.remove("active"));button.classList.add("active");el("view-"+button.dataset.view).classList.add("active");el("title").textContent=views[button.dataset.view][0];el("subtitle").textContent=views[button.dataset.view][1];if(button.dataset.view==="proposals"&&!el("proposal-list").children.length)void run(()=>loadProposals());if(button.dataset.view==="users"&&!el("user-list").children.length)void run(()=>loadUsers());if(button.dataset.view==="announcements"&&!el("announcement-list").children.length)void run(loadAnnouncements);}));
-    let proposalTimer,userTimer;el("proposal-query").addEventListener("input",()=>{clearTimeout(proposalTimer);proposalTimer=setTimeout(()=>void run(()=>loadProposals()),300);});el("proposal-status").addEventListener("change",()=>void run(()=>loadProposals()));el("user-query").addEventListener("input",()=>{clearTimeout(userTimer);userTimer=setTimeout(()=>void run(()=>loadUsers()),300);});el("user-registration").addEventListener("change",()=>void run(()=>loadUsers()));el("proposal-more").addEventListener("click",()=>void run(()=>loadProposals(false)));el("user-more").addEventListener("click",()=>void run(()=>loadUsers(false)));el("announcement-form").addEventListener("submit",async event=>{event.preventDefault();const title=el("announcement-title").value.trim();const body=el("announcement-body").value.trim();const url=el("announcement-url").value.trim()||"/notifications";if(!confirm("「"+title+"」を全ユーザーへ配信します。よろしいですか？"))return;const send=el("announcement-send");send.disabled=true;el("announcement-status").textContent="配信しています…";clearError();try{const data=await api("/admin/api/announcements",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({title,body,url})});el("announcement-status").textContent=nf.format(data.item.recipientCount)+"人のお知らせBoxへ配信しました。";el("announcement-form").reset();el("announcement-url").value="/notifications";await loadAnnouncements();}catch(error){el("announcement-status").textContent="";showError(error);}finally{send.disabled=false;}});el("refresh").addEventListener("click",()=>void run(()=>currentView()==="overview"?loadOverview():currentView()==="proposals"?loadProposals():currentView()==="users"?loadUsers():loadAnnouncements()));
+    document.querySelectorAll(".nav").forEach(button=>button.addEventListener("click",()=>{document.querySelectorAll(".nav,.view").forEach(node=>node.classList.remove("active"));button.classList.add("active");el("view-"+button.dataset.view).classList.add("active");el("title").textContent=views[button.dataset.view][0];el("subtitle").textContent=views[button.dataset.view][1];if(button.dataset.view==="proposals"&&!el("proposal-list").children.length)void run(()=>loadProposals());if(button.dataset.view==="users"&&!el("user-list").children.length)void run(()=>loadUsers());if(button.dataset.view==="rules"&&!el("rule-list").children.length)void run(loadRules);if(button.dataset.view==="announcements"&&!el("announcement-list").children.length)void run(loadAnnouncements);}));
+    let proposalTimer,userTimer;el("proposal-query").addEventListener("input",()=>{clearTimeout(proposalTimer);proposalTimer=setTimeout(()=>void run(()=>loadProposals()),300);});el("proposal-status").addEventListener("change",()=>void run(()=>loadProposals()));el("user-query").addEventListener("input",()=>{clearTimeout(userTimer);userTimer=setTimeout(()=>void run(()=>loadUsers()),300);});el("user-registration").addEventListener("change",()=>void run(()=>loadUsers()));el("rule-status").addEventListener("change",()=>void run(loadRules));el("proposal-more").addEventListener("click",()=>void run(()=>loadProposals(false)));el("user-more").addEventListener("click",()=>void run(()=>loadUsers(false)));el("announcement-form").addEventListener("submit",async event=>{event.preventDefault();const title=el("announcement-title").value.trim();const body=el("announcement-body").value.trim();const url=el("announcement-url").value.trim()||"/notifications";if(!confirm("「"+title+"」を全ユーザーへ配信します。よろしいですか？"))return;const send=el("announcement-send");send.disabled=true;el("announcement-status").textContent="配信しています…";clearError();try{const data=await api("/admin/api/announcements",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({title,body,url})});el("announcement-status").textContent=nf.format(data.item.recipientCount)+"人のお知らせBoxへ配信しました。";el("announcement-form").reset();el("announcement-url").value="/notifications";await loadAnnouncements();}catch(error){el("announcement-status").textContent="";showError(error);}finally{send.disabled=false;}});el("refresh").addEventListener("click",()=>void run(()=>currentView()==="overview"?loadOverview():currentView()==="proposals"?loadProposals():currentView()==="users"?loadUsers():currentView()==="rules"?loadRules():loadAnnouncements()));
     void run(loadOverview);setInterval(()=>{if(currentView()==="overview")void run(loadOverview);},60_000);
   </script>
 </body>

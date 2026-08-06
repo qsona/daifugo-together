@@ -6,6 +6,7 @@ import { ADMIN_DASHBOARD_HTML, adminLoginHtml } from './page.js';
 import type { AdminRepository } from './repository.js';
 import type { NotificationService } from '../notification/service.js';
 import type { TrafficWindow } from '../operations/dashboard-local.js';
+import type { RuleRegistryService } from '../rules/service.js';
 
 const FLOW_COOKIE = '__Host-daifugo-admin-flow';
 const SESSION_COOKIE = '__Host-daifugo-admin-session';
@@ -18,6 +19,11 @@ const SECURE_HEADERS = {
 type TrafficSnapshot = {
   windows: Record<'last30m' | 'last3h' | 'today', TrafficWindow>;
 };
+
+type AdminRuleService = Pick<
+  RuleRegistryService,
+  'priority' | 'get' | 'enable'
+>;
 
 function sameValue(left: string, right: string): boolean {
   const leftHash = createHash('sha256').update(left).digest();
@@ -119,6 +125,7 @@ export class AdminConsole {
   readonly #notifications:
     | Pick<NotificationService, 'publishAnnouncement' | 'listAnnouncements'>
     | undefined;
+  readonly #rules: AdminRuleService | undefined;
   readonly #now: () => number;
 
   constructor(options: {
@@ -131,6 +138,7 @@ export class AdminConsole {
       NotificationService,
       'publishAnnouncement' | 'listAnnouncements'
     >;
+    rules?: AdminRuleService;
     now?: () => number;
   }) {
     if (options.basicUsername.trim().length === 0) {
@@ -145,6 +153,7 @@ export class AdminConsole {
     this.#basicPassword = options.basicPassword;
     this.#traffic = options.traffic;
     this.#notifications = options.notifications;
+    this.#rules = options.rules;
     this.#now = options.now ?? Date.now;
   }
 
@@ -377,6 +386,53 @@ export class AdminConsole {
         return;
       }
       this.#methodNotAllowed(response, 'GET, POST');
+      return;
+    }
+    const publishRuleMatch = /^\/admin\/api\/rules\/([^/]+)\/publish$/u.exec(
+      url.pathname,
+    );
+    if (url.pathname === '/admin/api/rules' || publishRuleMatch) {
+      if (!this.#rules) {
+        this.#json(response, 503, { error: 'rule_service_unavailable' });
+        return;
+      }
+      if (url.pathname === '/admin/api/rules') {
+        if (request.method !== 'GET') {
+          this.#methodNotAllowed(response, 'GET');
+          return;
+        }
+        const items = this.#rules.priority().flatMap((item) => {
+          const result = this.#rules!.get(item.ruleId);
+          return result.status === 'found'
+            ? [{ ...result.rule, ...item, releaseReady: result.releaseReady }]
+            : [];
+        });
+        this.#json(response, 200, { items });
+        return;
+      }
+      if (request.method !== 'POST') {
+        this.#methodNotAllowed(response, 'POST');
+        return;
+      }
+      let ruleId: string;
+      try {
+        ruleId = decodeURIComponent(publishRuleMatch![1]!);
+      } catch {
+        this.#json(response, 400, { error: 'invalid_path_encoding' });
+        return;
+      }
+      const result = this.#rules.enable(ruleId);
+      this.#json(
+        response,
+        result.status === 'not_found'
+          ? 404
+          : result.status === 'conflict'
+            ? 409
+            : result.status === 'invalid'
+              ? 400
+              : 200,
+        result,
+      );
       return;
     }
     if (request.method !== 'GET') {

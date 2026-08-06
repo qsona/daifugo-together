@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { afterEach, describe, expect, test } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import { createAppServer, type AppServer } from '../app-server.js';
 import { SqlitePersistence } from '../persistence.js';
@@ -44,6 +44,40 @@ describe('AdminConsole', () => {
       emailVerified: true,
     });
     let sequence = 0;
+    const adminRule = {
+      id: 'r0001-admin-rule',
+      slug: 'admin-rule',
+      name: '管理画面テストルール',
+      description: '管理画面から公開できるルールです。',
+      kind: 'original' as const,
+      prefecture: null,
+      proposalId: 'proposal-admin-rule',
+      status: 'disabled' as const,
+      disabledReason: 'pending_enable' as const,
+      activatedAt: null,
+      ratingUp: 0,
+      ratingDown: 0,
+      popularityScore: 0.5,
+      popularityUpdatedAt: null,
+      createdAt: 123,
+      updatedAt: 123,
+    };
+    const getRule = vi.fn(() => ({
+      status: 'found' as const,
+      rule: adminRule,
+      versions: [],
+      incidents: [],
+      releaseReady: true,
+    }));
+    const enableRule = vi.fn(() => ({
+      status: 'updated' as const,
+      rule: {
+        ...adminRule,
+        status: 'active' as const,
+        disabledReason: null,
+        activatedAt: 456,
+      },
+    }));
     const adminConsole = new AdminConsole({
       repository: persistence.admin,
       auth: new AdminAuthService({
@@ -58,6 +92,21 @@ describe('AdminConsole', () => {
       notifications: new NotificationService(persistence.notifications, {
         now: () => 123,
       }),
+      rules: {
+        priority: () => [
+          {
+            ruleId: adminRule.id,
+            up: adminRule.ratingUp,
+            down: adminRule.ratingDown,
+            popularityScore: adminRule.popularityScore,
+            priorityRank: null,
+            activatedAt: adminRule.activatedAt,
+            popularityUpdatedAt: adminRule.popularityUpdatedAt,
+          },
+        ],
+        get: getRule,
+        enable: enableRule,
+      },
     });
     const app = createAppServer({ webDistDir: directory, adminConsole });
     apps.push(app);
@@ -189,6 +238,40 @@ describe('AdminConsole', () => {
     await expect(history.json()).resolves.toMatchObject({
       items: [{ title: '新しいお知らせ', recipientCount: 1 }],
     });
+
+    const rules = await fetch(`${baseUrl}/admin/api/rules`, {
+      headers: {
+        authorization: basic(),
+        cookie: sessionCookie ?? '',
+      },
+    });
+    expect(rules.status).toBe(200);
+    await expect(rules.json()).resolves.toMatchObject({
+      items: [
+        {
+          id: 'r0001-admin-rule',
+          status: 'disabled',
+          disabledReason: 'pending_enable',
+          releaseReady: true,
+        },
+      ],
+    });
+
+    const publishedRule = await fetch(
+      `${baseUrl}/admin/api/rules/r0001-admin-rule/publish`,
+      {
+        method: 'POST',
+        headers: {
+          authorization: basic(),
+          cookie: sessionCookie ?? '',
+        },
+      },
+    );
+    expect(publishedRule.status).toBe(200);
+    await expect(publishedRule.json()).resolves.toMatchObject({
+      status: 'updated',
+    });
+    expect(enableRule).toHaveBeenCalledWith('r0001-admin-rule');
   });
 
   test('Google sessionがない管理APIを拒否する', async () => {

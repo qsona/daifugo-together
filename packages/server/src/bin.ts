@@ -107,7 +107,11 @@ if (
   );
 }
 let createAdminConsole:
-  ((notifications: NotificationService) => AdminConsole) | undefined;
+  | ((
+      notifications: NotificationService,
+      rules: RuleRegistryService,
+    ) => AdminConsole)
+  | undefined;
 if (
   adminBasicUsername &&
   adminBasicPassword &&
@@ -156,7 +160,7 @@ if (
         return value;
       }
     : undefined;
-  createAdminConsole = (notifications) =>
+  createAdminConsole = (notifications, rules) =>
     new AdminConsole({
       repository: persistence.admin,
       auth: new AdminAuthService({
@@ -168,6 +172,7 @@ if (
       basicUsername: adminBasicUsername,
       basicPassword: adminBasicPassword,
       notifications,
+      rules,
       ...(traffic ? { traffic } : {}),
     });
 }
@@ -209,7 +214,6 @@ const notifications = new NotificationService(persistence.notifications, {
   onError: (error) =>
     writeLog('error', 'notification_delivery_failed', errorFields(error)),
 });
-const adminConsole = createAdminConsole?.(notifications);
 const rules = new RuleRegistryService(persistence.rules, codeRules, {
   proposals: persistence.proposals,
   pipeline: persistence.pipeline,
@@ -254,6 +258,7 @@ for (const rule of registrySync.reverted) {
 for (const failure of registrySync.failures) {
   writeLog('error', 'rule_registry_sync_failed', { ...failure });
 }
+const adminConsole = createAdminConsole?.(notifications, rules);
 const roomManager = new RoomManager({
   ...persistence.roomManagerOptions(),
   availableRules: (setId) => rules.availableRules(setId),
