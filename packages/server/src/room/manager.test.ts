@@ -333,7 +333,7 @@ describe('RoomManager indexes', () => {
         userId: 'user-2',
         displayName: '遅刻',
       }),
-    ).toEqual({ ok: false, code: 'ROOM_IN_GAME' });
+    ).toEqual({ ok: false, code: 'SEAT_CHOICE_REQUIRED' });
 
     const closed = rooms.apply(roomId, {
       type: 'leave',
@@ -351,6 +351,69 @@ describe('RoomManager indexes', () => {
         displayName: '失効後',
       }),
     ).toEqual({ ok: false, code: 'ROOM_NOT_FOUND' });
+  });
+
+  it('開始後のAI席を引き継ぎ、参加者indexへ登録する', () => {
+    const rooms = manager();
+    const created = rooms.create({ userId: 'owner', displayName: 'ホスト' });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const started = rooms.apply(created.value.room.roomId, {
+      type: 'start',
+      memberId: created.value.member.memberId,
+      now: 2_000,
+      setSeed: 'takeover-set',
+    });
+    expect(started?.accepted).toBe(true);
+    const ai = started?.state.members.find((member) => member.isAI);
+    expect(ai).toBeTruthy();
+    if (!ai) return;
+
+    const joined = rooms.joinTakeover(
+      created.value.room.inviteCode,
+      { userId: 'late-user', displayName: '遅刻参加者' },
+      ai.memberId,
+    );
+
+    expect(joined.ok).toBe(true);
+    expect(rooms.findByUser('late-user')?.member).toMatchObject({
+      memberId: ai.memberId,
+      displayName: '遅刻参加者',
+      isAI: false,
+    });
+    expect(
+      rooms.joinTakeover(
+        created.value.room.inviteCode,
+        { userId: 'another-user', displayName: '後着' },
+        ai.memberId,
+      ),
+    ).toEqual({ ok: false, code: 'SEAT_TAKEN' });
+  });
+
+  it('setResult中は次セット待ちとして通常参加を受け入れる', () => {
+    const rooms = modeManager(() => []);
+    const created = rooms.create({ userId: 'owner', displayName: 'ホスト' });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    rooms.apply(created.value.room.roomId, {
+      type: 'start',
+      memberId: created.value.member.memberId,
+      now: 2_000,
+      setSeed: 'set-result-join',
+    });
+    finishManagedSet(rooms, created.value.room.roomId);
+
+    const joined = rooms.join(created.value.room.inviteCode, {
+      userId: 'next-user',
+      displayName: '次セット参加者',
+    });
+
+    expect(joined.ok).toBe(true);
+    if (!joined.ok) return;
+    expect(joined.value.member).toMatchObject({
+      seatId: null,
+      wantsNextSet: true,
+    });
   });
 
   it('存在しない部屋のapplyは副作用なくundefinedを返す', () => {

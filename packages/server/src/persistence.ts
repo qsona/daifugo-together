@@ -524,6 +524,12 @@ export class SqlitePersistence implements RoomPersistencePort {
           })),
         });
       }
+      if (action.type === 'joinTakeover' && next.engine) {
+        this.evaluations.addSetParticipant(
+          next.engine.setId,
+          action.user.userId,
+        );
+      }
       if (
         previous.phase !== 'setResult' &&
         next.phase === 'setResult' &&

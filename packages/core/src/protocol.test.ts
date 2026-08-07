@@ -46,6 +46,23 @@ describe('shared client payload schemas', () => {
         .success,
     ).toBe(true);
     expect(
+      clientPayloadSchemas['room:join'].safeParse({
+        inviteCode: '01234',
+        takeoverMemberId: 'ai-seat-1',
+      }).success,
+    ).toBe(true);
+    expect(
+      clientPayloadSchemas['room:join'].safeParse({
+        inviteCode: '01234',
+        takeoverMemberId: '',
+      }).success,
+    ).toBe(false);
+    expect(
+      clientPayloadSchemas['room:seatOptions'].safeParse({
+        inviteCode: '01234',
+      }).success,
+    ).toBe(true);
+    expect(
       clientPayloadSchemas['room:join'].safeParse({ inviteCode: 123 }).success,
     ).toBe(false);
     expect(

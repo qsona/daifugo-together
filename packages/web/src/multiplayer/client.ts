@@ -4,6 +4,7 @@ import type {
   PlayerRoomView,
   RoomCloseReason,
   RoomMode,
+  SeatOption,
   ServerToClientEvents,
 } from '@daifugo/core';
 import { io, type Socket } from 'socket.io-client';
@@ -132,9 +133,23 @@ export class MultiplayerClient {
     );
   }
 
-  async joinRoom(inviteCode: string): Promise<void> {
+  async joinRoom(inviteCode: string, takeoverMemberId?: string): Promise<void> {
     await this.#request((ack) =>
-      this.#socket.emit('room:join', { inviteCode }, ack),
+      this.#socket.emit(
+        'room:join',
+        takeoverMemberId === undefined
+          ? { inviteCode }
+          : { inviteCode, takeoverMemberId },
+        ack,
+      ),
+    );
+  }
+
+  async seatOptions(
+    inviteCode: string,
+  ): Promise<{ roomId: string; seats: SeatOption[] }> {
+    return this.#request((ack) =>
+      this.#socket.emit('room:seatOptions', { inviteCode }, ack),
     );
   }
 

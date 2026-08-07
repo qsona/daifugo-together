@@ -1,4 +1,8 @@
-import type { NotificationView, PlayerRoomView } from '@daifugo/core';
+import type {
+  NotificationView,
+  PlayerRoomView,
+  SeatOption,
+} from '@daifugo/core';
 import type { ReactNode } from 'react';
 import {
   useCallback,
@@ -45,6 +49,7 @@ import { GameScreen } from './screens/GameScreen';
 import { MenuScreen } from './screens/MenuScreen';
 import { MyProposalsScreen } from './screens/MyProposalsScreen';
 import { NotificationsScreen } from './screens/NotificationsScreen';
+import { NextSetWaitingScreen } from './screens/NextSetWaitingScreen';
 import { PushSettingsScreen } from './screens/PushSettingsScreen';
 import { ActiveRulesScreen } from './screens/ActiveRulesScreen';
 import { RuleDexScreen } from './screens/RuleDexScreen';
@@ -674,12 +679,13 @@ function setRanks(room: PlayerRoomView): SetRankView[] {
       const member = room.members.find(
         (candidate) => candidate.memberId === standing.memberId,
       );
+      const name = seatDisplayName(
+        member?.displayName ?? 'プレイヤー',
+        standing.memberId === room.you.memberId,
+      );
       return {
         place: standing.totalRank,
-        name: seatDisplayName(
-          member?.displayName ?? 'プレイヤー',
-          standing.memberId === room.you.memberId,
-        ),
+        name: member?.joinedMidSet ? `${name}（AI分を含む）` : name,
         kind: member?.isAI ? ('ai' as const) : ('human' as const),
         title: standing.title,
         totalPoints: standing.points,
@@ -782,6 +788,13 @@ function ConnectedApp({
   const [isChoosingRoom, setIsChoosingRoom] = useState(
     sharedInviteCode !== null,
   );
+  const [joinSeatChoice, setJoinSeatChoice] = useState<{
+    inviteCode: string;
+    seats: SeatOption[];
+  } | null>(null);
+  const [takeoverPendingMemberId, setTakeoverPendingMemberId] = useState<
+    string | null
+  >(null);
   const [selectedCardIds, setSelectedCardIds] = useState<readonly string[]>([]);
   const [funRating, setFunRating] = useState<SetFunRating | null>(null);
   const [ruleVotes, setRuleVotes] = useState<Record<string, RuleVote>>({});
@@ -820,6 +833,8 @@ function ConnectedApp({
   const notificationApi = getBrowserNotificationClient();
   const ruleEventRoomId = useRef<string | null>(null);
   const lastRuleEventSeq = useRef(0);
+  const takeoverEventRoomId = useRef<string | null>(null);
+  const lastTakeoverEventSeq = useRef(0);
   const seenRuleIds = useRef(new Set<string>());
   const customPresentationRuleIds = useRef(new Set<string>());
   const [activationVolleys, setActivationVolleys] = useState<
@@ -1014,7 +1029,7 @@ function ConnectedApp({
     return () => window.removeEventListener('popstate', restoreOverlayFromUrl);
   }, [room]);
   const evaluationSetId =
-    room?.phase === 'setResult'
+    room?.phase === 'setResult' && room.you.seatId !== null
       ? (room.setResult?.setId ?? null)
       : !room && isGraduating && graduationFrom?.phase === 'setResult'
         ? (graduationFrom.setResult?.setId ?? null)
@@ -1207,6 +1222,27 @@ function ConnectedApp({
     }
   }, [room]);
 
+  useEffect(() => {
+    if (!room) return;
+    if (takeoverEventRoomId.current !== room.roomId) {
+      takeoverEventRoomId.current = room.roomId;
+      lastTakeoverEventSeq.current = 0;
+    }
+    const event = room.events
+      .filter(
+        (candidate) =>
+          candidate.t === 'seatTakeover' &&
+          candidate.seq > lastTakeoverEventSeq.current,
+      )
+      .toSorted((left, right) => left.seq - right.seq)
+      .at(-1);
+    if (!event || event.t !== 'seatTakeover') return;
+    lastTakeoverEventSeq.current = event.seq;
+    setRootToast(
+      `${event.displayName}さんが参加しました(${event.previousName}の席)`,
+    );
+  }, [room]);
+
   const currentMiniGameRuleId = room?.game?.miniGame
     ? (room.game.pendingChoice?.ruleId ?? null)
     : null;
@@ -1266,7 +1302,7 @@ function ConnectedApp({
 
   useEffect(() => {
     const completedOneGame =
-      room?.phase === 'setResult' ||
+      (room?.phase === 'setResult' && room.you.seatId !== null) ||
       (room?.game?.previousResults.length ?? 0) > 0;
     if (!playedBefore && completedOneGame) {
       markPlayedBefore(storage);
@@ -1275,7 +1311,10 @@ function ConnectedApp({
   }, [playedBefore, room, storage]);
 
   useEffect(() => {
-    const setId = room?.phase === 'setResult' ? room.setResult?.setId : null;
+    const setId =
+      room?.phase === 'setResult' && room.you.seatId !== null
+        ? room.setResult?.setId
+        : null;
     if (!setId) return;
     if (countedSetId.current === setId) return;
     const next = completedSetCount + 1;
@@ -1283,7 +1322,7 @@ function ConnectedApp({
     setCompletedSetCount(next);
     storageWrite(storage, AUTH_COMPLETED_SET_COUNT_KEY, String(next));
     storageWrite(storage, AUTH_LAST_COUNTED_SET_KEY, setId);
-  }, [completedSetCount, room?.phase, room?.setResult?.setId, storage]);
+  }, [completedSetCount, room, storage]);
 
   useEffect(() => {
     if (current !== 'menu' || state.registered) {
@@ -1939,7 +1978,9 @@ function ConnectedApp({
    * この端末の中でだけ最終戦リザルトを先に見せてからセットリザルトへ渡す。
    */
   const finalResultKey =
-    room?.phase === 'setResult' && room.setResult?.finalGame
+    room?.phase === 'setResult' &&
+    room.you.seatId !== null &&
+    room.setResult?.finalGame
       ? `${room.roomId}:${String(room.setResult.respondBy)}`
       : null;
   if (room?.setResult?.finalGame && finalResultKey !== null) {
@@ -1971,6 +2012,19 @@ function ConnectedApp({
 
   if (visibleSetResultRoom) {
     const resultRoom = visibleSetResultRoom;
+    if (resultRoom.you.seatId === null) {
+      return show(
+        <NextSetWaitingScreen
+          onLeave={() => {
+            invoke(
+              client.leaveRoom().then(() => {
+                go('menu');
+              }),
+            );
+          }}
+        />,
+      );
+    }
     const you = resultRoom.members.find(
       (member) => member.memberId === resultRoom.you.memberId,
     );
@@ -2156,6 +2210,7 @@ function ConnectedApp({
       <MenuScreen
         onPlay={() => {
           setPlaySheetError(null);
+          setJoinSeatChoice(null);
           setIsChoosingRoom(true);
         }}
         onPropose={() => go('proposal')}
@@ -2185,8 +2240,11 @@ function ConnectedApp({
             : {})}
           {...(sharedInviteCode ? { initialInviteCode: sharedInviteCode } : {})}
           initialMode={playSheetError === GRADUATION_ERROR ? 'community' : null}
+          seatOptions={joinSeatChoice?.seats ?? null}
+          takeoverPendingMemberId={takeoverPendingMemberId}
           onCreate={(mode) => {
             setPlaySheetError(null);
+            setJoinSeatChoice(null);
             invoke(
               client.createRoom(mode).then(() => {
                 setIsChoosingRoom(false);
@@ -2198,23 +2256,82 @@ function ConnectedApp({
             );
           }}
           onJoin={(inviteCode, displayName) => {
+            setPlaySheetError(null);
             const renameBeforeJoin =
               !state.registered &&
               displayName !== undefined &&
               displayName !== state.displayName
                 ? client.rename(displayName)
                 : Promise.resolve();
-            invoke(
-              renameBeforeJoin
-                .then(() => client.joinRoom(inviteCode))
-                .then(() => {
+            void renameBeforeJoin
+              .then(() => client.joinRoom(inviteCode))
+              .then(() => {
+                setIsChoosingRoom(false);
+              })
+              .catch((error: unknown) => {
+                if (
+                  !(error instanceof Error) ||
+                  error.message !== 'SEAT_CHOICE_REQUIRED'
+                ) {
+                  return;
+                }
+                void client
+                  .seatOptions(inviteCode)
+                  .then((result) => {
+                    setJoinSeatChoice({ inviteCode, seats: result.seats });
+                    setPlaySheetError(null);
+                  })
+                  .catch(() => undefined);
+              });
+          }}
+          onTakeover={(memberId) => {
+            if (!joinSeatChoice || takeoverPendingMemberId !== null) return;
+            const { inviteCode } = joinSeatChoice;
+            setTakeoverPendingMemberId(memberId);
+            setPlaySheetError(null);
+            void client
+              .joinRoom(inviteCode, memberId)
+              .then(() => {
+                setJoinSeatChoice(null);
+                setIsChoosingRoom(false);
+              })
+              .catch(async (error: unknown) => {
+                if (
+                  !(error instanceof Error) ||
+                  error.message !== 'SEAT_TAKEN'
+                ) {
+                  return;
+                }
+                try {
+                  await client.joinRoom(inviteCode);
+                  setJoinSeatChoice(null);
                   setIsChoosingRoom(false);
-                }),
-            );
+                } catch (retryError: unknown) {
+                  if (
+                    !(retryError instanceof Error) ||
+                    retryError.message !== 'SEAT_CHOICE_REQUIRED'
+                  ) {
+                    return;
+                  }
+                  const result = await client.seatOptions(inviteCode);
+                  setJoinSeatChoice({ inviteCode, seats: result.seats });
+                  setPlaySheetError('その席は埋まりました');
+                }
+              })
+              .finally(() => {
+                setTakeoverPendingMemberId(null);
+              })
+              .catch(() => undefined);
+          }}
+          onBackFromSeatChoice={() => {
+            setJoinSeatChoice(null);
+            setPlaySheetError(null);
           }}
           onClose={() => {
             setIsChoosingRoom(false);
             setPlaySheetError(null);
+            setJoinSeatChoice(null);
+            setTakeoverPendingMemberId(null);
             if (sharedInviteCode) {
               navigate('/menu', 'replace');
             }
@@ -2241,6 +2358,9 @@ function friendlyError(error: string | null): string | null {
       ROOM_NOT_FOUND: '部屋が見つかりません。コードをたしかめてください',
       ROOM_FULL: 'この部屋は満員です',
       ROOM_IN_GAME: 'この部屋は対戦中です',
+      SEAT_CHOICE_REQUIRED:
+        'この部屋は対戦中です。空いている席をえらんでください',
+      SEAT_TAKEN: 'その席は埋まりました',
       ROOM_SOLO_ONLY:
         'この部屋はひとりで練習する部屋です。友だちの部屋の招待コードをたしかめてください。',
       RATE_LIMITED: 'しばらく待ってから、もう一度ためしてください',

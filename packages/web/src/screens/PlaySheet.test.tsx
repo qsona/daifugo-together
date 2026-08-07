@@ -272,4 +272,56 @@ describe('TU-01: あそぶ導線の選択', () => {
       'もう一度ためしてください',
     );
   });
+
+  it('途中参加するAI席の状態を表示して選べる', async () => {
+    const user = userEvent.setup();
+    const onTakeover = vi.fn();
+    render(
+      <PlaySheet
+        onCreate={vi.fn()}
+        onJoin={vi.fn()}
+        onTakeover={onTakeover}
+        onClose={vi.fn()}
+        seatOptions={[
+          {
+            memberId: 'ai-1',
+            displayName: 'AIプレイヤーA',
+            previousRank: 2,
+            handCount: 5,
+          },
+          {
+            memberId: 'ai-2',
+            displayName: 'AIプレイヤーB',
+            previousRank: null,
+            handCount: 0,
+          },
+        ]}
+      />,
+    );
+
+    expect(
+      screen.getByRole('dialog', { name: '途中参加する席をえらぶ' }),
+    ).toBeTruthy();
+    expect(screen.getByText('前回 富豪')).toBeTruthy();
+    expect(screen.getByText('残り 5枚')).toBeTruthy();
+    expect(screen.getByText('このゲームは終了済みです')).toBeTruthy();
+    expect(screen.queryByText(/得点/u)).toBeNull();
+    await user.click(screen.getByRole('button', { name: /AIプレイヤーA/u }));
+    expect(onTakeover).toHaveBeenCalledWith('ai-1');
+  });
+
+  it('途中参加できるAI席がなければ満席と表示する', () => {
+    render(
+      <PlaySheet
+        onCreate={vi.fn()}
+        onJoin={vi.fn()}
+        onClose={vi.fn()}
+        seatOptions={[]}
+      />,
+    );
+
+    expect(screen.getByRole('status').textContent).toBe(
+      '満席のため参加できません',
+    );
+  });
 });

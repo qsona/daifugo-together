@@ -164,6 +164,32 @@ describe('MultiplayerClient', () => {
     });
   });
 
+  it('途中参加では選んだAI席をjoin payloadへ載せる', async () => {
+    const socket = new FakeSocket();
+    const client = new MultiplayerClient(
+      'http://example.test',
+      {
+        getItem: () => null,
+        setItem: () => undefined,
+        removeItem: () => undefined,
+      },
+      () => socket as never,
+    );
+
+    await client.joinRoom('01234', 'ai-seat-1');
+
+    expect(socket.emitted.at(-1)).toEqual({
+      event: 'room:join',
+      payload: { inviteCode: '01234', takeoverMemberId: 'ai-seat-1' },
+    });
+
+    await client.seatOptions('01234');
+    expect(socket.emitted.at(-1)).toEqual({
+      event: 'room:seatOptions',
+      payload: { inviteCode: '01234' },
+    });
+  });
+
   it('表示名を変更してクライアントの状態にも反映する', async () => {
     const socket = new FakeSocket();
     const client = new MultiplayerClient(

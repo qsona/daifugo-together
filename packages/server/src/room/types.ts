@@ -22,6 +22,7 @@ export type {
   RoomMode,
   RoomPhase,
   RuleRef,
+  SeatOption,
   SeatId,
   SetResultView,
 } from '@daifugo/core';
@@ -88,6 +89,12 @@ export type RoomAction =
         displayName: string;
         connected?: boolean;
       };
+      now: number;
+    }
+  | {
+      type: 'joinTakeover';
+      takeoverMemberId: string;
+      user: { userId: string; displayName: string };
       now: number;
     }
   | {

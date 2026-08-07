@@ -592,7 +592,7 @@ function join(
   if (state.phase === 'closed') {
     return rejected(state, 'ROOM_CLOSED');
   }
-  if (state.phase !== 'waiting') {
+  if (state.phase !== 'waiting' && state.phase !== 'setResult') {
     return rejected(state, 'NOT_WAITING');
   }
   if (
@@ -618,7 +618,7 @@ function join(
     controller: 'human',
     aiActing: false,
     departed: false,
-    wantsNextSet: false,
+    wantsNextSet: state.phase === 'setResult',
     joinedAt: action.now,
     disconnectedAt: action.member.connected === false ? action.now : null,
     waitingDisconnectExpiresAt:
@@ -629,6 +629,71 @@ function join(
   return committed(state, { members: [...state.members, member] }, [
     { t: 'memberJoined', memberId: member.memberId },
   ]);
+}
+
+function joinTakeover(
+  state: RoomState,
+  action: Extract<RoomAction, { type: 'joinTakeover' }>,
+  options: RoomReducerOptions,
+): RoomTransition {
+  if (state.phase === 'closed') {
+    return rejected(state, 'ROOM_CLOSED');
+  }
+  if (state.phase !== 'playing') {
+    return rejected(state, 'SEAT_TAKEN');
+  }
+  const target = state.members.find(
+    (member) => member.memberId === action.takeoverMemberId,
+  );
+  if (!target?.isAI) {
+    return rejected(state, 'SEAT_TAKEN');
+  }
+  if (state.members.some((member) => member.userId === action.user.userId)) {
+    return rejected(state, 'ALREADY_IN_ROOM');
+  }
+  const members = state.members.map((member) =>
+    member.memberId === target.memberId
+      ? {
+          ...member,
+          userId: action.user.userId,
+          displayName: action.user.displayName,
+          isAI: false,
+          isHost: false,
+          connected: true,
+          controller: 'human' as const,
+          aiActing: false,
+          departed: false,
+          wantsNextSet: false,
+          joinedAt: action.now,
+          disconnectedAt: null,
+          waitingDisconnectExpiresAt: null,
+        }
+      : member,
+  );
+  return committed(
+    state,
+    {
+      members,
+      turnDeadlineAt: state.engine
+        ? deadlineAtForTurn(
+            state.engine,
+            members,
+            state.mode,
+            action.now,
+            options,
+          )
+        : null,
+      abandonAt: null,
+    },
+    [
+      {
+        t: 'seatTakeover',
+        memberId: target.memberId,
+        displayName: action.user.displayName,
+        previousName: target.displayName,
+      },
+    ],
+  );
 }
 
 function start(
@@ -1424,6 +1489,8 @@ export function reduceRoom(
         : rejected(state, 'NOT_WAITING');
     case 'join':
       return join(state, action, options);
+    case 'joinTakeover':
+      return joinTakeover(state, action, options);
     case 'start':
       return start(state, action, options);
     case 'leave':

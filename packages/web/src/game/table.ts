@@ -222,7 +222,9 @@ export function tableSeats(
         ? '退出(AI代行)'
         : !member?.connected || member.aiActing
           ? '切断中(AI代行)'
-          : undefined;
+          : member.joinedMidSet
+            ? '途中参加(AI分を含む)'
+            : undefined;
     return {
       name: seatDisplayName(
         member?.displayName ?? `席${String(seat + 1)}`,

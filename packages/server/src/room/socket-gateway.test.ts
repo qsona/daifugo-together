@@ -506,6 +506,71 @@ describe('Socket.IO room gateway', () => {
     }
   });
 
+  it('進行中のAI席を一覧し、選んだ席へ途中参加させる', async () => {
+    const harness = await createHarness();
+    const owner = await connect(harness);
+    const late = await connect(harness);
+    const created = await emitAck<
+      'room:create',
+      { roomId: string; inviteCode: string }
+    >(owner.client, 'room:create', { mode: 'community' });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    await emitAck<'room:start', Record<string, never>>(
+      owner.client,
+      'room:start',
+      {},
+    );
+
+    expect(
+      await emitAck<'room:join', { roomId: string }>(late.client, 'room:join', {
+        inviteCode: created.value.inviteCode,
+      }),
+    ).toEqual({ ok: false, code: 'SEAT_CHOICE_REQUIRED' });
+    const options = await emitAck<
+      'room:seatOptions',
+      {
+        roomId: string;
+        seats: Array<{ memberId: string; displayName: string }>;
+      }
+    >(late.client, 'room:seatOptions', {
+      inviteCode: created.value.inviteCode,
+    });
+    expect(options.ok).toBe(true);
+    if (!options.ok) return;
+    expect(options.value.seats).toHaveLength(3);
+    const target = options.value.seats[0]!;
+    const ownerState = once<PlayerRoomView>((resolve) =>
+      owner.client.once('room:state', resolve),
+    );
+    const lateState = once<PlayerRoomView>((resolve) =>
+      late.client.once('room:state', resolve),
+    );
+
+    const joined = await emitAck<'room:join', { roomId: string }>(
+      late.client,
+      'room:join',
+      {
+        inviteCode: created.value.inviteCode,
+        takeoverMemberId: target.memberId,
+      },
+    );
+
+    expect(joined).toEqual({
+      ok: true,
+      value: { roomId: created.value.roomId },
+    });
+    const [ownerView, lateView] = await Promise.all([ownerState, lateState]);
+    expect(lateView.you.memberId).toBe(target.memberId);
+    expect(lateView.game?.yourHand.length).toBeGreaterThan(0);
+    expect(ownerView.events).toEqual([
+      expect.objectContaining({
+        t: 'seatTakeover',
+        memberId: target.memberId,
+      }),
+    ]);
+  });
+
   it('きほんの部屋へのjoinはROOM_SOLO_ONLYで拒否し、みんなのルールは受け入れる', async () => {
     const harness = await createHarness();
     const owner = await connect(harness);
@@ -773,11 +838,10 @@ describe('Socket.IO room gateway', () => {
       'room:join',
       { inviteCode: '11111' },
     );
-    const second = await emitAck<'room:join', { roomId: string }>(
-      client.client,
-      'room:join',
-      { inviteCode: '22222' },
-    );
+    const second = await emitAck<
+      'room:seatOptions',
+      { roomId: string; seats: [] }
+    >(client.client, 'room:seatOptions', { inviteCode: '22222' });
     const limited = await emitAck<'room:join', { roomId: string }>(
       client.client,
       'room:join',

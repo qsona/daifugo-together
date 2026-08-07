@@ -46,7 +46,7 @@ import {
 import type { RoomTimerOptions } from './timers.js';
 import { setSeedForRoomStart } from './tutorial.js';
 import type { RoomReducerOptions, RoomState, RoomTransition } from './types.js';
-import { viewFor } from './view.js';
+import { seatOptionsFor, viewFor } from './view.js';
 
 export type RoomSocketServer = Server<
   ClientToServerEvents,
@@ -498,6 +498,23 @@ export function attachRoomSocketGateway(
           safeAck(ack, failure('BAD_PAYLOAD'));
           return;
         }
+        if (parsed.data.takeoverMemberId) {
+          const joined = rooms.joinTakeover(
+            parsed.data.inviteCode,
+            session,
+            parsed.data.takeoverMemberId,
+          );
+          if (!joined.ok) {
+            safeAck(ack, failure(joined.code));
+            return;
+          }
+          publishTransition(joined.value.previous, joined.value.transition);
+          safeAck(ack, {
+            ok: true,
+            value: { roomId: joined.value.room.roomId },
+          });
+          return;
+        }
         const joined = rooms.join(parsed.data.inviteCode, session);
         if (!joined.ok) {
           safeAck(ack, failure(joined.code));
@@ -508,6 +525,36 @@ export function attachRoomSocketGateway(
         safeAck(ack, {
           ok: true,
           value: { roomId: joined.value.room.roomId },
+        });
+      } catch (error) {
+        handleUnexpected(error, ack);
+      }
+    });
+
+    socket.on('room:seatOptions', (payload, ack) => {
+      try {
+        if (draining) {
+          safeAck(ack, failure('INTERNAL', 'server is draining'));
+          return;
+        }
+        if (!joinRateLimiter.allow(clientIp(socket), now())) {
+          safeAck(ack, failure('RATE_LIMITED'));
+          return;
+        }
+        const parsed =
+          clientPayloadSchemas['room:seatOptions'].safeParse(payload);
+        if (!parsed.success) {
+          safeAck(ack, failure('BAD_PAYLOAD'));
+          return;
+        }
+        const room = rooms.findByInvite(parsed.data.inviteCode);
+        if (!room) {
+          safeAck(ack, failure('ROOM_NOT_FOUND'));
+          return;
+        }
+        safeAck(ack, {
+          ok: true,
+          value: { roomId: room.roomId, seats: seatOptionsFor(room) },
         });
       } catch (error) {
         handleUnexpected(error, ack);

@@ -21,12 +21,14 @@ export type RoomErrorCode =
   | 'STALE_TURN'
   | 'ILLEGAL_PLAY'
   | 'INVALID_SET_PHASE'
-  | 'INVALID_NAME';
+  | 'INVALID_NAME'
+  | 'SEAT_TAKEN';
 
 export type ErrorCode =
   | RoomErrorCode
   | 'ROOM_NOT_FOUND'
   | 'ROOM_IN_GAME'
+  | 'SEAT_CHOICE_REQUIRED'
   | 'ROOM_SOLO_ONLY'
   | 'INVITE_SPACE_EXHAUSTED'
   | 'BAD_PAYLOAD'
@@ -54,6 +56,17 @@ export interface MemberView {
   handCount: number | null;
   finishedRank: number | null;
   wantsNextSet: boolean | null;
+  /** 現セット中にAI席を引き継いだ人間。次セット開始時に false へ戻る。 */
+  joinedMidSet?: boolean;
+}
+
+export interface SeatOption {
+  memberId: string;
+  displayName: string;
+  /** 現セット内の直前のゲームの順位。セット1戦目は null。 */
+  previousRank: Standing | null;
+  /** 現在の手札枚数。ゲーム間インターミッション中は null。 */
+  handCount: number | null;
 }
 
 export interface RuleRef {
@@ -83,6 +96,12 @@ export type RoomGameEvent = { seq: number } & (
   | { t: 'playerFinished'; seat: SeatId; rank: number }
   | { t: 'gameEnded' }
   | { t: 'setEnded' }
+  | {
+      t: 'seatTakeover';
+      memberId: string;
+      displayName: string;
+      previousName: string;
+    }
   | {
       t: 'ruleFired';
       ruleId: string;
@@ -264,6 +283,12 @@ export const clientPayloadSchemas = {
     .object({ mode: z.enum(['basic', 'community']).optional() })
     .strict(),
   'room:join': z
+    .object({
+      inviteCode: z.string().regex(/^[0-9]{5}$/),
+      takeoverMemberId: z.string().min(1).max(200).optional(),
+    })
+    .strict(),
+  'room:seatOptions': z
     .object({ inviteCode: z.string().regex(/^[0-9]{5}$/) })
     .strict(),
   'room:leave': emptyPayloadSchema,
@@ -336,6 +361,10 @@ export interface ClientToServerEvents {
   'room:join': (
     payload: ClientPayload<'room:join'>,
     ack: (result: Ack<{ roomId: string }>) => void,
+  ) => void;
+  'room:seatOptions': (
+    payload: ClientPayload<'room:seatOptions'>,
+    ack: (result: Ack<{ roomId: string; seats: SeatOption[] }>) => void,
   ) => void;
   'room:leave': (
     payload: ClientPayload<'room:leave'>,

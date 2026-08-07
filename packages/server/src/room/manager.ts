@@ -43,6 +43,8 @@ export type RoomManagerErrorCode =
   | 'ROOM_FULL'
   | 'ROOM_NOT_FOUND'
   | 'ROOM_IN_GAME'
+  | 'SEAT_CHOICE_REQUIRED'
+  | 'SEAT_TAKEN'
   | 'ROOM_SOLO_ONLY'
   | 'INVITE_SPACE_EXHAUSTED';
 
@@ -105,6 +107,11 @@ export class RoomManager {
 
   get(roomId: string): RoomState | undefined {
     return this.#rooms.get(roomId);
+  }
+
+  findByInvite(inviteCode: string): RoomState | undefined {
+    const roomId = this.#byInvite.get(normalizeInviteCode(inviteCode));
+    return roomId ? this.#rooms.get(roomId) : undefined;
   }
 
   findByUser(userId: string): RoomMembership | undefined {
@@ -289,7 +296,10 @@ export class RoomManager {
     if (room.mode === 'basic') {
       return { ok: false, code: 'ROOM_SOLO_ONLY' };
     }
-    if (room.phase !== 'waiting') {
+    if (room.phase === 'playing') {
+      return { ok: false, code: 'SEAT_CHOICE_REQUIRED' };
+    }
+    if (room.phase !== 'waiting' && room.phase !== 'setResult') {
       return { ok: false, code: 'ROOM_IN_GAME' };
     }
     const memberId = this.#options.createMemberId();
@@ -319,6 +329,50 @@ export class RoomManager {
       (candidate) => candidate.memberId === memberId,
     )!;
     return { ok: true, value: { room: transition.state, member } };
+  }
+
+  joinTakeover(
+    inviteCode: string,
+    user: RoomUser,
+    takeoverMemberId: string,
+  ): RoomManagerResult<
+    RoomMembership & { previous: RoomState; transition: RoomTransition }
+  > {
+    if (this.findByUser(user.userId)) {
+      return { ok: false, code: 'ALREADY_IN_ROOM' };
+    }
+    const room = this.findByInvite(inviteCode);
+    if (!room) {
+      return { ok: false, code: 'ROOM_NOT_FOUND' };
+    }
+    if (room.mode === 'basic') {
+      return { ok: false, code: 'ROOM_SOLO_ONLY' };
+    }
+    const transition = this.apply(room.roomId, {
+      type: 'joinTakeover',
+      takeoverMemberId,
+      user,
+      now: this.#options.now(),
+    });
+    if (!transition?.accepted) {
+      return {
+        ok: false,
+        code:
+          transition?.error?.code === 'ALREADY_IN_ROOM'
+            ? 'ALREADY_IN_ROOM'
+            : transition?.error?.code === 'ROOM_FULL'
+              ? 'ROOM_FULL'
+              : 'SEAT_TAKEN',
+      };
+    }
+    this.#byUser.set(user.userId, room.roomId);
+    const member = transition.state.members.find(
+      (candidate) => candidate.memberId === takeoverMemberId,
+    )!;
+    return {
+      ok: true,
+      value: { room: transition.state, member, previous: room, transition },
+    };
   }
 
   apply(roomId: string, action: RoomAction): RoomTransition | undefined {

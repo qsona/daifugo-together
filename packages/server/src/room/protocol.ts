@@ -4,6 +4,7 @@ export type {
   ErrorCode,
   InterServerEvents,
   RoomCloseReason,
+  SeatOption,
   ServerToClientEvents,
   SocketData,
 } from '@daifugo/core';

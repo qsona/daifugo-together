@@ -237,6 +237,15 @@ export class EvaluationRepository {
     })();
   }
 
+  addSetParticipant(setId: string, userId: string): void {
+    this.#sqlite
+      .prepare(
+        `INSERT OR IGNORE INTO set_participants(set_id, user_id)
+         SELECT ?, user_id FROM users WHERE user_id = ?`,
+      )
+      .run(setId, userId);
+  }
+
   completeSet(input: CompleteSetInput): void {
     this.#sqlite.transaction(() => {
       const updated = this.#sqlite

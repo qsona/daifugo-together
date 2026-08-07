@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 
 import { createRoomState, reduceRoom } from './reducer.js';
 import type { RoomAction, RoomState } from './types.js';
-import { viewFor } from './view.js';
+import { seatOptionsFor, viewFor } from './view.js';
 
 function room(): RoomState {
   return createRoomState({
@@ -145,6 +145,123 @@ function finishSet(initial: RoomState): {
 }
 
 describe('pure room reducer', () => {
+  it('playing中のAI席を同じmemberIdの人間へ差し替える', () => {
+    const started = start(room());
+    const target = started.members.find((member) => member.isAI)!;
+    const game = started.engine!.currentGame!;
+    const withAiTurn: RoomState = {
+      ...started,
+      abandonAt: 9_999,
+      engine: {
+        ...started.engine!,
+        currentGame: {
+          ...game,
+          public: {
+            ...game.public,
+            phase: 'awaitingPlay',
+            turn: target.memberId,
+          },
+        },
+      },
+    };
+
+    const transition = reduceRoom(withAiTurn, {
+      type: 'joinTakeover',
+      takeoverMemberId: target.memberId,
+      user: { userId: 'late-user', displayName: '途中参加者' },
+      now: 3_000,
+    });
+
+    expect(transition.accepted).toBe(true);
+    expect(
+      transition.state.members.find(
+        (member) => member.memberId === target.memberId,
+      ),
+    ).toMatchObject({
+      memberId: target.memberId,
+      seatId: target.seatId,
+      userId: 'late-user',
+      displayName: '途中参加者',
+      isAI: false,
+      controller: 'human',
+      connected: true,
+      aiActing: false,
+      wantsNextSet: false,
+      isHost: false,
+    });
+    expect(transition.state.turnDeadlineAt).toBe(63_000);
+    expect(transition.state.abandonAt).toBeNull();
+    expect(transition.events).toEqual([
+      expect.objectContaining({
+        t: 'seatTakeover',
+        memberId: target.memberId,
+        displayName: '途中参加者',
+        previousName: target.displayName,
+      }),
+    ]);
+    expect(
+      viewFor(transition.state, target.memberId)
+        .game?.yourHand.map((card) => card.id)
+        .toSorted(),
+    ).toEqual(
+      game.players[target.memberId]!.hand.map((card) => card.id).toSorted(),
+    );
+    expect(
+      viewFor(transition.state, target.memberId).members.find(
+        (member) => member.memberId === target.memberId,
+      )?.joinedMidSet,
+    ).toBe(true);
+    expectNoOtherHands(transition.state);
+  });
+
+  it('席候補はplaying中のAI席だけを公開する', () => {
+    const started = start(room());
+    const options = seatOptionsFor(started);
+
+    expect(options).toHaveLength(3);
+    expect(options.every((option) => option.previousRank === null)).toBe(true);
+    expect(options.every((option) => option.handCount !== null)).toBe(true);
+    expect(seatOptionsFor(room())).toEqual([]);
+    expect(
+      seatOptionsFor(
+        createRoomState({
+          roomId: 'basic-room',
+          inviteCode: '99999',
+          mode: 'basic',
+          owner: {
+            memberId: 'basic-owner',
+            userId: 'basic-user',
+            displayName: '練習者',
+          },
+          now: 0,
+        }),
+      ),
+    ).toEqual([]);
+  });
+
+  it('setResult中の通常参加者は次セット待ちとして追加する', () => {
+    const finished = finishSet(start(room())).state;
+    expect(finished.phase).toBe('setResult');
+
+    const transition = reduceRoom(finished, {
+      type: 'join',
+      member: {
+        memberId: 'next-set-user',
+        userId: 'next-set-private-user',
+        displayName: '次セット参加者',
+      },
+      now: 90_000,
+    });
+
+    expect(transition.accepted).toBe(true);
+    expect(
+      transition.state.members.find(
+        (member) => member.memberId === 'next-set-user',
+      ),
+    ).toMatchObject({ seatId: null, wantsNextSet: true, isAI: false });
+    expect(seatOptionsFor(transition.state)).toEqual([]);
+  });
+
   it('autoActは通常手番ではなく追加入力のAI本人として受け付ける', () => {
     const basic = createRoomState({
       roomId: 'ai-rule-choice',

@@ -20,6 +20,7 @@ import type {
   PublicPlayView,
   RoomMember,
   RoomState,
+  SeatOption,
   SeatId,
   SetResultView,
 } from './types.js';
@@ -156,6 +157,11 @@ function historyView(
 
 function memberViews(state: RoomState): MemberView[] {
   const game = state.engine?.currentGame;
+  const engineAiMemberIds = new Set(
+    state.engine?.members.flatMap((member) =>
+      member.isAI ? [member.id] : [],
+    ) ?? [],
+  );
   const ordered =
     state.phase === 'waiting'
       ? [...state.members].sort((left, right) => left.joinedAt - right.joinedAt)
@@ -184,8 +190,35 @@ function memberViews(state: RoomState): MemberView[] {
             ? true
             : member.wantsNextSet
           : null,
+      joinedMidSet: !member.isAI && engineAiMemberIds.has(member.memberId),
     };
   });
+}
+
+export function seatOptionsFor(state: RoomState): SeatOption[] {
+  if (state.phase !== 'playing' || state.mode === 'basic' || !state.engine) {
+    return [];
+  }
+  const previousStandings = state.engine.results.at(-1)?.standings;
+  const intermission = state.engine.phase.name === 'interimResult';
+  return state.members.flatMap((member) =>
+    member.isAI
+      ? [
+          {
+            memberId: member.memberId,
+            displayName: member.displayName,
+            previousRank:
+              previousStandings?.find(
+                (standing) => standing.player === member.memberId,
+              )?.standing ?? null,
+            handCount: intermission
+              ? null
+              : (state.engine?.currentGame?.players[member.memberId]?.hand
+                  .length ?? null),
+          },
+        ]
+      : [],
+  );
 }
 
 function gameView(

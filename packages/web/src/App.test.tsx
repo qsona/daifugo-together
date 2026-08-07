@@ -872,6 +872,235 @@ function tutorialSetResultRoom(
   };
 }
 
+describe('途中参加', () => {
+  beforeEach(() => {
+    window.history.replaceState({}, '', '/?room=01234');
+    useScreenStore.setState({ current: 'menu' });
+  });
+  afterEach(cleanup);
+
+  it('進行中ならAI席を取得して選択したmemberIdで再参加する', async () => {
+    let state: MultiplayerState = {
+      connection: 'ready',
+      registered: true,
+      displayName: '途中参加者',
+      room: null,
+      roomClosedReason: null,
+      error: null,
+    };
+    const listeners = new Set<() => void>();
+    const notify = () => {
+      for (const listener of listeners) listener();
+    };
+    const joinRoom = vi.fn(
+      async (_inviteCode: string, takeoverMemberId?: string) => {
+        if (takeoverMemberId === undefined) {
+          state = { ...state, error: 'SEAT_CHOICE_REQUIRED' };
+          notify();
+          throw new Error('SEAT_CHOICE_REQUIRED');
+        }
+      },
+    );
+    const seatOptions = vi.fn(async () => {
+      state = { ...state, error: null };
+      notify();
+      return {
+        roomId: 'playing-room',
+        seats: [
+          {
+            memberId: 'ai-seat-1',
+            displayName: 'AIプレイヤーA',
+            previousRank: 1 as const,
+            handCount: 4,
+          },
+        ],
+      };
+    });
+    const client = {
+      subscribe: (listener: () => void) => {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+      snapshot: () => state,
+      joinRoom,
+      seatOptions,
+    } as unknown as MultiplayerClient;
+    render(<App client={client} />);
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: 'はいる' }));
+    await user.click(
+      await screen.findByRole('button', { name: /AIプレイヤーA/u }),
+    );
+
+    expect(seatOptions).toHaveBeenCalledWith('01234');
+    expect(joinRoom).toHaveBeenLastCalledWith('01234', 'ai-seat-1');
+  });
+
+  it('席選択中にセットが終わったら席なしjoinで次セット待ちへ入る', async () => {
+    let state: MultiplayerState = {
+      connection: 'ready',
+      registered: true,
+      displayName: '途中参加者',
+      room: null,
+      roomClosedReason: null,
+      error: null,
+    };
+    const listeners = new Set<() => void>();
+    const notify = () => {
+      for (const listener of listeners) listener();
+    };
+    let plainJoinCount = 0;
+    const joinRoom = vi.fn(
+      async (_inviteCode: string, takeoverMemberId?: string) => {
+        if (takeoverMemberId !== undefined) {
+          state = { ...state, error: 'SEAT_TAKEN' };
+          notify();
+          throw new Error('SEAT_TAKEN');
+        }
+        plainJoinCount += 1;
+        if (plainJoinCount === 1) {
+          state = { ...state, error: 'SEAT_CHOICE_REQUIRED' };
+          notify();
+          throw new Error('SEAT_CHOICE_REQUIRED');
+        }
+        state = { ...state, error: null };
+        notify();
+      },
+    );
+    const seatOptions = vi.fn(async () => ({
+      roomId: 'playing-room',
+      seats: [
+        {
+          memberId: 'stale-ai-seat',
+          displayName: 'AIプレイヤーA',
+          previousRank: null,
+          handCount: 1,
+        },
+      ],
+    }));
+    const client = {
+      subscribe: (listener: () => void) => {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+      snapshot: () => state,
+      joinRoom,
+      seatOptions,
+    } as unknown as MultiplayerClient;
+    render(<App client={client} />);
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: 'はいる' }));
+    await user.click(
+      await screen.findByRole('button', { name: /AIプレイヤーA/u }),
+    );
+
+    await waitFor(() => expect(joinRoom).toHaveBeenCalledTimes(3));
+    expect(joinRoom.mock.calls).toEqual([
+      ['01234'],
+      ['01234', 'stale-ai-seat'],
+      ['01234'],
+    ]);
+  });
+
+  it('席テイクオーバーを同じevent seqでは一度だけ通知する', async () => {
+    const takeoverRoom = {
+      ...tutorialHintRoom('community', null),
+      events: [
+        {
+          seq: 40,
+          t: 'seatTakeover' as const,
+          memberId: 'ai-seat-1',
+          displayName: '途中参加者',
+          previousName: 'AIプレイヤーA',
+        },
+      ],
+    };
+    const client = tutorialHintClient(takeoverRoom);
+    render(<App client={client} />);
+
+    expect(
+      await screen.findByText(
+        '途中参加者さんが参加しました(AIプレイヤーAの席)',
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getAllByText('途中参加者さんが参加しました(AIプレイヤーAの席)'),
+    ).toHaveLength(1);
+  });
+
+  it('setResultから入った席なし参加者には評価でなく次セット待機を表示する', () => {
+    const base = tutorialSetResultRoom('community');
+    const waiting = {
+      ...base,
+      setResult: {
+        ...base.setResult!,
+        finalGame: {
+          gameNo: 3,
+          standings: [
+            {
+              seat: 0 as const,
+              rank: 1 as const,
+              title: '大富豪' as const,
+              points: 5,
+            },
+          ],
+          firedRuleIds: [],
+        },
+      },
+      members: [
+        ...base.members,
+        {
+          memberId: 'next-set-user',
+          seatId: null,
+          displayName: '次セット参加者',
+          isAI: false,
+          isHost: false,
+          connected: true,
+          aiActing: false,
+          departed: false,
+          handCount: null,
+          finishedRank: null,
+          wantsNextSet: true,
+        },
+      ],
+      you: { memberId: 'next-set-user', seatId: null },
+    } satisfies PlayerRoomView;
+    const getEvaluation = vi.fn(async () => ({
+      setRating: null,
+      ruleVotes: [],
+    }));
+    const state: MultiplayerState = {
+      connection: 'ready',
+      registered: true,
+      displayName: '次セット参加者',
+      room: waiting,
+      roomClosedReason: null,
+      error: null,
+    };
+    const client = {
+      subscribe: () => () => undefined,
+      snapshot: () => state,
+    } as unknown as MultiplayerClient;
+    render(
+      <App
+        client={client}
+        evaluationApi={{
+          get: getEvaluation,
+          update: vi.fn(),
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByRole('heading', { name: '次のセットを待っています' }),
+    ).toBeTruthy();
+    expect(screen.queryByText('おもしろかった?')).toBeNull();
+    expect(getEvaluation).not.toHaveBeenCalled();
+  });
+});
+
 describe('TU-02: きほんの部屋のカードヒント統合', () => {
   afterEach(cleanup);
 

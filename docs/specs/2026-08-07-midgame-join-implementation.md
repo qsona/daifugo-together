@@ -2,7 +2,7 @@
 
 ## 0. 前提
 
-- **設計書(正)**: [`docs/specs/2026-08-07-midgame-join-design.md`](./2026-08-07-midgame-join-design.md)。レビュー承認済みで**変更しない**。設計書とコードの矛盾を見つけたら勝手に直さず報告する。
+- **設計書(正)**: [`docs/specs/2026-08-07-midgame-join-design.md`](./2026-08-07-midgame-join-design.md)。実装レビューで確定した補足も同設計書を正とする。
 - 実装前に必ず読む節: **§2**(エンジン無改修が成立する根拠)、**§3**(プロトコル契約の全文)、**§4**(フェーズ別の挙動表)、**§8**(エッジケースの確定挙動)。§5〜§7 は該当ステップの着手前でよい。
 - 本書の file:line は 2026-08-07 時点の実物。行がずれても、併記した関数名でアンカーを取り直せる。
 - 「room 層」= `packages/server/src/room/*`、「エンジン」= `packages/core`。本仕様は**エンジンのゲームロジックを変更しない**(`protocol.ts` の契約追加のみ)。
@@ -99,7 +99,7 @@ export interface SeatOption {
 ```
 userId ← action.user.userId, displayName ← action.user.displayName,
 isAI: false, controller: 'human', connected: true, aiActing: false,
-departed: false, isHost: false, wantsNextSet: true,
+departed: false, isHost: false, wantsNextSet: false,
 joinedAt: action.now, disconnectedAt: null, waitingDisconnectExpiresAt: null
 ```
 
@@ -188,14 +188,8 @@ joinTakeover(
 
 設計書 §6。`SqlitePersistence.commit`(`persistence.ts:476-576`)のトランザクション内、`beginSet` を呼ぶブロック(`:510-526`)の**直後**に足す:
 
-```
-transition.events のうち t === 'seatTakeover' のものについて、
-  userId = next.members.find((m) => m.memberId === event.memberId)?.userId
-  userId が非 null かつ next.engine が非 null なら
-    evaluations.addSetParticipant({ setId: next.engine.setId, userId })
-```
-
-`seatTakeover` イベントは memberId しか持たないので、userId は必ず `next.members` から引く。
+表示用の `seatTakeover` イベントには依存しない。`action.type === 'joinTakeover'` を判定し、
+`action.user.userId` と `next.engine.setId` を使う。
 
 `EvaluationRepository`(`packages/server/src/evaluation/repository.ts`)に 1 メソッド足す。`beginSet` 内の参加者 INSERT(`repository.ts:213-219`)をそのまま写す:
 
@@ -232,7 +226,9 @@ SELECT ?, user_id FROM users WHERE user_id = ?
 - **合計得点は表示しない**(設計書 §5 / §7-2。ユーザー明示指定)。
 - `seats` が空 → 「満席のため参加できません」。
 - タップ → `client.joinRoom(inviteCode, memberId)`。
-- `SEAT_TAKEN` → 「その席は埋まりました」を出し、`client.seatOptions(inviteCode)` を取り直して再描画。再取得が空なら満席メッセージへ切り替える。
+- `SEAT_TAKEN` → まず席指定なしの `joinRoom(inviteCode)` を再試行する。setResult なら
+  次セット待ちとして成功する。まだ playing で `SEAT_CHOICE_REQUIRED` なら
+  「その席は埋まりました」を出し、`client.seatOptions(inviteCode)` を取り直す。
 - 成功 → `setIsChoosingRoom(false)`。以降は既存のゲーム画面遷移に乗る。
 - 複数箇所で使う文言は `packages/web/src/messages.ts` へ寄せる(同ファイル冒頭に集約方針あり)。
 
@@ -263,7 +259,7 @@ pnpm verify   # format:check → lint → lint:design → typecheck → test →
 
 | # | ケース | 期待 | 設計書 |
 | --- | --- | --- | --- |
-| R1 | playing 中の AI 席をテイクオーバー | 成立。memberId / seatId 不変、userId・displayName が参加者に、`isAI:false` / `controller:'human'` / `connected:true` / `aiActing:false` / `wantsNextSet:true` / `isHost:false` | §2, §3.5 |
+| R1 | playing 中の AI 席をテイクオーバー | 成立。memberId / seatId 不変、userId・displayName が参加者に、`isAI:false` / `controller:'human'` / `connected:true` / `aiActing:false` / `wantsNextSet:false` / `isHost:false` | §2, §3.5 |
 | R2 | `seatTakeover` イベント | `memberId` / `displayName` / `previousName`(旧 AI 名)が載る | §3.4 |
 | R3 | `waiting` / `setResult` でテイクオーバー | `SEAT_TAKEN` | §4 |
 | R4 | 人間席を `takeoverMemberId` に指定 | `SEAT_TAKEN` | §3.5 |
@@ -371,11 +367,11 @@ pnpm verify   # format:check → lint → lint:design → typecheck → test →
 - [ ] 参加者からの `game:miniGameInput` が即座に通る(`reducer.ts:1168-1176` の `isAI === false && aiActing === false && connected`)
 - [ ] AI 宛に届いていた `privateRuleNotices` が、テイクオーバー後の最初のフルスナップショットで参加者に表示される(`packages/core/src/snapshot/snapshot.ts:121-122` → `view.ts:285-294`)
 - [ ] 過去ゲームのログ・セットリザルトが参加者名義で表示される。ログは `SeatId` で記録され名前はクライアントが `members` から解決するので、**参加前の戦の行も参加者名になる**。これを正とする(設計書 §5)
-- [ ] ルールが生成する文言の中では「AIプレイヤーB」「isAI: true」のまま残りうる(`snapshot.ts:93-94`)。v1 では許容
+- [ ] AI入力用の `PlayerSnapshot` では「AIプレイヤーB」「isAI: true」のまま残りうる(`snapshot.ts:93-94`)。現行AIは意思決定に使わないためv1では許容
 - [ ] その席の手番中だったときの `turnDeadlineAt` 再計算とタイマー sync。走行中の AI 決定が `#fireTurn` の再検証(`timers.ts:332`)で破棄される
 - [ ] 全人間が切断中の部屋への参加で `abandonAt` が `null` に戻る(戻さないと期限超過後の再スケジュールが遅延 0ms になり空回りする)
 - [ ] 同時に 2 人が同じ席を選んだとき、後着が `SEAT_TAKEN`
-- [ ] 一覧取得と選択の間に `playing` → `setResult` へ移ったら `SEAT_TAKEN`。クライアントは再取得フローに入り、席なし join からやり直せば setResult 入室として成功する
+- [ ] 一覧取得と選択の間に `playing` → `setResult` へ移ったら `SEAT_TAKEN`。クライアントは席なし join を自動再試行し、setResult の次セット待ちとして成功する
 - [ ] `playing` → `closed` の場合は `ROOM_NOT_FOUND`
 - [ ] セット境界をまたいだ古い `takeoverMemberId` は `SEAT_TAKEN`(`startSet` が AI を毎セット作り直す。memberId に setNo が入る: `reducer.ts:449-454`)
 - [ ] テイクオーバー直後の切断・再接続が既存の `aiTakeover` / `humanReturned` 経路に乗る

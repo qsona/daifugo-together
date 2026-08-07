@@ -1,4 +1,4 @@
-import type { RoomMode } from '@daifugo/core';
+import type { RoomMode, SeatOption } from '@daifugo/core';
 import { useId, useState } from 'react';
 
 import { Button } from '../components/Button';
@@ -12,6 +12,8 @@ import styles from './PlaySheet.module.css';
 type PlaySheetProps = {
   onCreate: (mode: RoomMode) => void;
   onJoin: (code: string, displayName?: string) => void;
+  onTakeover?: (memberId: string) => void;
+  onBackFromSeatChoice?: () => void;
   onClose: () => void;
   /** 匿名ユーザーの現在の表示名。指定時だけ入室前の名前入力を出す。 */
   anonymousDisplayName?: string | null;
@@ -19,6 +21,8 @@ type PlaySheetProps = {
   initialInviteCode?: string;
   initialMode?: RoomMode | null;
   error?: string | null;
+  seatOptions?: readonly SeatOption[] | null;
+  takeoverPendingMemberId?: string | null;
 };
 
 type Step = 'root' | 'community' | 'join';
@@ -34,11 +38,15 @@ type Step = 'root' | 'community' | 'join';
 export function PlaySheet({
   onCreate,
   onJoin,
+  onTakeover = () => undefined,
+  onBackFromSeatChoice = () => undefined,
   onClose,
   anonymousDisplayName,
   initialInviteCode,
   initialMode = null,
   error,
+  seatOptions = null,
+  takeoverPendingMemberId = null,
 }: PlaySheetProps) {
   /**
    * 練習ボタンのラベルとキャプションを結ぶ id。
@@ -70,6 +78,7 @@ export function PlaySheet({
   const visibleError =
     errorAt.error === error && errorAt.step === step ? error : null;
   const isJoining = step === 'join';
+  const isChoosingSeat = seatOptions !== null;
   const asksDisplayName = anonymousDisplayName !== undefined;
   const parsedDisplayName = asksDisplayName
     ? validateDisplayName(displayName)
@@ -80,15 +89,59 @@ export function PlaySheet({
   return (
     <ChoiceSheet
       label={
-        isJoining
-          ? JOIN_FRIEND_ROOM_LABEL
-          : step === 'community'
-            ? 'みんなのルールであそぶ'
-            : 'あそびかたをえらぶ'
+        isChoosingSeat
+          ? '途中参加する席をえらぶ'
+          : isJoining
+            ? JOIN_FRIEND_ROOM_LABEL
+            : step === 'community'
+              ? 'みんなのルールであそぶ'
+              : 'あそびかたをえらぶ'
       }
       onClose={onClose}
     >
-      {isJoining ? (
+      {isChoosingSeat ? (
+        <>
+          <p className={styles.seatHelp}>
+            この席の手札と、このセットの成績を引き継ぎます。
+          </p>
+          {seatOptions.length === 0 ? (
+            <p role="status">満席のため参加できません</p>
+          ) : (
+            <div className={styles.seatList}>
+              {seatOptions.map((seat) => (
+                <Button
+                  key={seat.memberId}
+                  block
+                  disabled={takeoverPendingMemberId !== null}
+                  onClick={() => onTakeover(seat.memberId)}
+                >
+                  <span className={styles.seatCard}>
+                    <strong>{seat.displayName}</strong>
+                    {seat.previousRank !== null && (
+                      <span>{rankLabel(seat.previousRank)}</span>
+                    )}
+                    {seat.handCount !== null && (
+                      <span>残り {String(seat.handCount)}枚</span>
+                    )}
+                    {seat.handCount === 0 && (
+                      <span className={styles.modeCaption}>
+                        このゲームは終了済みです
+                      </span>
+                    )}
+                    <span>この席に入る</span>
+                  </span>
+                </Button>
+              ))}
+            </div>
+          )}
+          {visibleError && <p role="alert">{visibleError}</p>}
+          <div className={styles.back}>
+            <Button size="small" onClick={onBackFromSeatChoice}>
+              もどる
+            </Button>
+          </div>
+        </>
+      ) : isJoining ? (
         <>
           <InputField
             label="招待コード"
@@ -219,4 +272,15 @@ export function PlaySheet({
       )}
     </ChoiceSheet>
   );
+}
+
+function rankLabel(rank: SeatOption['previousRank']): string {
+  return (
+    {
+      1: '前回 大富豪',
+      2: '前回 富豪',
+      3: '前回 貧民',
+      4: '前回 大貧民',
+    } as const
+  )[rank ?? 4];
 }

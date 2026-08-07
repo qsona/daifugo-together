@@ -26,7 +26,7 @@ friend 部屋(`mode: 'community'`)は 4 席固定で開始し、開始後の入�
 
   - `userId` ← 参加者の userId、`displayName` ← 参加者の表示名
   - `isAI: false`、`controller: 'human'`、`connected: true`、`aiActing: false`、
-    `departed: false`、`isHost: false`、`wantsNextSet: true`
+    `departed: false`、`isHost: false`、`wantsNextSet: false`
   - `joinedAt: now`、`disconnectedAt: null`、`waitingDisconnectExpiresAt: null`
   - `memberId` はエンジンとの結び目なので変更しない。`seatId` は席が持つ値なので変更しない。
 
@@ -219,6 +219,8 @@ export interface SeatOption {
 - `seatId: null`、`wantsNextSet: true` で入室する。通常 join が `wantsNextSet: false` を
   入れる(`reducer.ts:621`)のに対し、ここだけ `true` にする。次セットを待っている人の
   合意を新参者が引き延ばさないため。
+- この参加者は終了済みセットの参加者ではない。クライアントはセット結果・評価UIではなく
+  「次のセットを待っています」を表示し、`set_participants` にも追加しない。
 - 次セット開始(`continueSet` → `startSet`、または `expireSetResult` → `startSet`)で
   通常の席割り当てにより着席する。
 - `continueSet` の「接続中の全人間が同意」判定(`reducer.ts:685-690`)では
@@ -257,13 +259,18 @@ UX 上のメンタルモデルは「AIプレイヤーB の席を引き継いで�
 したがって参加前の戦の行も参加者名義で表示される。相続のメンタルモデルと一致しており、
 これを正とする。
 
+テイクオーバーの事実はセット終了まで表示する。`MemberView.joinedMidSet` は、room メンバーが
+人間である一方、同じ memberId の `engine.members` が AI のままであることから導出する。
+卓では「途中参加(AI分を含む)」、セットリザルトでは「AI分を含む」と表示する。次セットでは
+エンジンメンバーが人間として作り直されるため、この表示は自然に消える。
+
 ### 相続しないもの(既知の割り切り)
 
-ルールモジュールに渡る `PlayerSnapshot` の `displayName` / `isAI` はセット開始時の
-エンジン側メンバーから作られる(`packages/core/src/snapshot/snapshot.ts:93-94`)。したがって
-テイクオーバー後もルールが生成する文言の中では「AIプレイヤーB」「isAI: true」のままになりうる。
-クライアントに出る名前はすべて room 層で解決される(`view.ts:172`、選択肢の名前は `:361-363`)
-ので影響は限定的であり、v1 では許容する。
+AI 入力に使う `PlayerSnapshot` の `displayName` / `isAI` はセット開始時のエンジン側メンバーから
+作られる(`packages/core/src/snapshot/snapshot.ts:93-94`)。したがって他の AI からはテイクオーバー後も
+「AIプレイヤーB」「isAI: true」のまま見える。現行 AI はこの違いを意思決定に使わないため、v1 では
+許容する。ルールモジュールが受け取るのは `PlayerSnapshot` ではなく `RuleContext` であり、そこに
+`displayName` / `isAI` は含まれない。
 
 ## 6. 永続化・評価への影響
 
@@ -272,7 +279,8 @@ UX 上のメンタルモデルは「AIプレイヤーB の席を引き継いで�
   現在はセット開始時に一括登録される(`beginSet`、`repository.ts:204-219`、呼び出しは
   `packages/server/src/persistence.ts:510-526`)ため、途中参加者は評価に参加できない。
 - テイクオーバー成立時に `INSERT OR IGNORE` で当該 userId を `set_participants` に足す。
-  フックは persistence の遷移オブザーバで、`seatTakeover` イベントを見て登録する。
+  `persistence.commit` は表示イベントではなく `action.type === 'joinTakeover'` を根拠にし、
+  `action.user.userId` を登録する。
 - **契約**: そのためにテイクオーバーの適用は `persistence.commit` の遷移オブザーバを通る経路、
   すなわち `manager.apply` と同じパイプライン(`manager.ts:341`)で dispatch する。
   `manager.join` は `reduceRoom` を直接呼び commit を経由しない(`manager.ts:296-321`)ので、
@@ -298,8 +306,10 @@ UX 上のメンタルモデルは「AIプレイヤーB の席を引き継いで�
    - **合計得点は表示しない。**
 3. `seats` が空 → 「満席のため参加できません」。
 4. カードをタップ → `room:join { inviteCode, takeoverMemberId }`。
-5. `SEAT_TAKEN` → 「その席は埋まりました」を出し、`room:seatOptions` を取り直して一覧を再描画する。
-   再取得結果が空なら 3 の文言に切り替える。
+5. `SEAT_TAKEN` → まず `takeoverMemberId` なしの `room:join` を再試行する。セット終了後の
+   `setResult` ならこれが成功し、次セット待ちとして入室できる。まだ playing 中なら
+   `SEAT_CHOICE_REQUIRED` になるため、「その席は埋まりました」を出して `room:seatOptions` を
+   取り直す。再取得結果が空なら 3 の文言に切り替える。
 6. 成功 → そのままゲーム画面へ。全員に `seatTakeover` トースト
    「◯◯さんが参加しました(AIプレイヤーBの席)」。
 
@@ -340,8 +350,8 @@ UX 上のメンタルモデルは「AIプレイヤーB の席を引き継いで�
 - **同時に 2 人が同じ席を選んだ。** 先着が成立し、後着は reducer の `isAI !== true` 検証で
   `SEAT_TAKEN`。
 - **一覧取得と選択の間にフェーズが変わった。** `playing` → `setResult` に移った後に
-  `takeoverMemberId` 付き join が届いたら `SEAT_TAKEN` を返す。クライアントは 7-5 の再取得
-  フローに入り、席なし `room:join` からやり直せば setResult 入室として成功する。
+  `takeoverMemberId` 付き join が届いたら `SEAT_TAKEN` を返す。クライアントは 7-5 の
+  席なし `room:join` 再試行により、setResult の次セット待ちとして入室する。
   `playing` → `closed` の場合は `ROOM_NOT_FOUND`。
 - **セット境界をまたいだ席の消滅。** `startSet` は AI メンバーを毎セット作り直す
   (`reducer.ts:449-454`、memberId に setNo を含む)ので、古い `takeoverMemberId` は

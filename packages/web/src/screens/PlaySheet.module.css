@@ -51,3 +51,21 @@
   display: flex;
   justify-content: center;
 }
+
+.seatHelp {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+.seatList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.seatCard {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: center;
+}

@@ -444,4 +444,55 @@ describe('SQLite persistence', () => {
     });
     persistence.close();
   });
+
+  it('途中参加者をセット評価の参加者へ追加し、リプレイ操作は増やさない', () => {
+    const path = databasePath();
+    const persistence = new SqlitePersistence(path);
+    const owner = persistence.sessions.resolve(undefined);
+    const late = persistence.sessions.resolve(undefined);
+    const rooms = new RoomManager({
+      ...persistence.roomManagerOptions(),
+      createRoomId: () => 'takeover-persistence-room',
+      createMemberId: () => 'takeover-owner',
+      randomIndex: () => 0,
+      reducer: { random: () => 0.999_999 },
+    });
+    const created = rooms.create(owner);
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const started = rooms.apply(created.value.room.roomId, {
+      type: 'start',
+      memberId: created.value.member.memberId,
+      now: 1_000,
+      setSeed: 'takeover-persistence-set',
+    });
+    expect(started?.accepted).toBe(true);
+    const ai = started?.state.members.find((member) => member.isAI);
+    expect(ai).toBeTruthy();
+    if (!ai || !started?.state.engine) return;
+    const replayBefore = persistence.replay(started.state.engine.setId);
+
+    const joined = rooms.joinTakeover(
+      created.value.room.inviteCode,
+      late,
+      ai.memberId,
+    );
+
+    expect(joined.ok).toBe(true);
+    expect(persistence.replay(started.state.engine.setId)).toEqual(
+      replayBefore,
+    );
+    const verified = new Database(path, { readonly: true });
+    expect(
+      verified
+        .prepare(
+          'SELECT user_id FROM set_participants WHERE set_id = ? ORDER BY user_id',
+        )
+        .all(started.state.engine.setId),
+    ).toEqual(
+      [owner.userId, late.userId].sort().map((userId) => ({ user_id: userId })),
+    );
+    verified.close();
+    persistence.close();
+  });
 });
