@@ -389,8 +389,19 @@ function settleMembersAtSetResult(
     .filter((member) => !member.isAI && (member.departed || !member.connected))
     .map((member) => member.memberId);
   return {
-    members: members.filter(
-      (member) => member.isAI || (!member.departed && member.connected),
+    // セット結果と最終戦は、途中離脱した席を含む4席の結果を参照する。
+    // 次セットの対象からは departed で除外しつつ、結果表示が終わるまでは
+    // memberId → seatId / displayName の対応を保持する。
+    members: members.map((member) =>
+      !member.isAI && !member.connected && !member.departed
+        ? {
+            ...member,
+            controller: 'ai' as const,
+            aiActing: true,
+            departed: true,
+            wantsNextSet: false,
+          }
+        : member,
     ),
     removedMemberIds,
   };
@@ -604,7 +615,10 @@ function join(
   ) {
     return rejected(state, 'ALREADY_IN_ROOM');
   }
-  if (state.members.filter((member) => !member.isAI).length >= 4) {
+  if (
+    state.members.filter((member) => !member.isAI && !member.departed).length >=
+    4
+  ) {
     return rejected(state, 'ROOM_FULL');
   }
   const member: RoomMember = {

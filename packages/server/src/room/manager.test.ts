@@ -506,6 +506,17 @@ describe('RoomManager indexes', () => {
     }
 
     expect(rooms.get(roomId)?.phase).toBe('setResult');
+    expect(
+      rooms
+        .get(roomId)
+        ?.members.find(
+          (member) => member.memberId === joined.value.member.memberId,
+        ),
+    ).toMatchObject({
+      seatId: expect.any(Number),
+      connected: false,
+      departed: true,
+    });
     expect(rooms.findByUser('user-2')).toBeUndefined();
     expect(rooms.findByUser('user-1')?.room.roomId).toBe(roomId);
     expect(rooms.create({ userId: 'user-2', displayName: '別部屋へ' }).ok).toBe(

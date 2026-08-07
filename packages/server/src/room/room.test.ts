@@ -1204,8 +1204,8 @@ describe('pure room reducer', () => {
     expect(viewFor(drained, 'member-1').setResult?.finalGame).toBeNull();
   });
 
-  it('setResult到達時に切断中・明示離脱済みの人間を除去し、接続中の人間は残す', () => {
-    const started = start(join(join(room(), 2), 3));
+  it('setResult表示中は離脱席を保持し、次セットは接続中の人間だけで始める', () => {
+    const started = start(fourHumanRoom());
     const withDeparture = reduceRoom(started, {
       type: 'leave',
       memberId: 'member-1',
@@ -1217,15 +1217,36 @@ describe('pure room reducer', () => {
       memberId: 'member-2',
       now: 2_001,
     }).state;
-    const finished = finishSet(disconnected).state;
+    const withSecondDeparture = reduceRoom(disconnected, {
+      type: 'leave',
+      memberId: 'member-3',
+      now: 2_002,
+      setSeed: 'unused',
+    }).state;
+    const finished = finishSet(withSecondDeparture).state;
 
     expect(finished.phase).toBe('setResult');
     expect(
-      finished.members.some(
-        (member) =>
-          member.memberId === 'member-1' || member.memberId === 'member-2',
+      finished.members.filter((member) =>
+        ['member-1', 'member-2', 'member-3'].includes(member.memberId),
       ),
-    ).toBe(false);
+    ).toEqual([
+      expect.objectContaining({
+        memberId: 'member-1',
+        connected: false,
+        departed: true,
+      }),
+      expect.objectContaining({
+        memberId: 'member-2',
+        connected: false,
+        departed: true,
+      }),
+      expect.objectContaining({
+        memberId: 'member-3',
+        connected: false,
+        departed: true,
+      }),
+    ]);
     expect(
       finished.lastEvents.flatMap((event) =>
         event.t === 'memberLeft' ? [event.memberId] : [],
@@ -1233,11 +1254,77 @@ describe('pure room reducer', () => {
     ).toContain('member-2');
     expect(finished.members).toContainEqual(
       expect.objectContaining({
-        memberId: 'member-3',
+        memberId: 'member-4',
         connected: true,
         departed: false,
       }),
     );
+
+    const resultView = viewFor(finished, 'member-4');
+    expect(resultView.setResult?.standings).toHaveLength(4);
+    expect(resultView.setResult?.finalGame?.standings).toHaveLength(4);
+    expect(
+      new Set(
+        resultView.setResult?.finalGame?.standings.map(
+          (standing) => standing.seat,
+        ),
+      ).size,
+    ).toBe(4);
+
+    const withLateJoin = reduceRoom(finished, {
+      type: 'join',
+      member: {
+        memberId: 'member-5',
+        userId: 'private-user-5',
+        displayName: '次セット参加者',
+      },
+      now: 49_999,
+    });
+    expect(withLateJoin.accepted).toBe(true);
+    expect(withLateJoin.state.members).toContainEqual(
+      expect.objectContaining({
+        memberId: 'member-5',
+        seatId: null,
+        departed: false,
+        wantsNextSet: true,
+      }),
+    );
+
+    const continued = reduceRoom(
+      withLateJoin.state,
+      {
+        type: 'continue',
+        memberId: 'member-4',
+        now: 50_000,
+        setSeed: 'next-set',
+      },
+      { random: () => 0.999_999 },
+    );
+    expect(continued.accepted).toBe(true);
+    expect(continued.state.phase).toBe('playing');
+    expect(continued.state.setNo).toBe(2);
+    expect(
+      continued.state.members.some((member) =>
+        ['member-1', 'member-2', 'member-3'].includes(member.memberId),
+      ),
+    ).toBe(false);
+    expect(continued.state.members).toContainEqual(
+      expect.objectContaining({
+        memberId: 'member-4',
+        connected: true,
+        departed: false,
+      }),
+    );
+    expect(continued.state.members).toContainEqual(
+      expect.objectContaining({
+        memberId: 'member-5',
+        connected: true,
+        departed: false,
+      }),
+    );
+    expect(
+      continued.state.members.filter((member) => member.isAI),
+    ).toHaveLength(2);
   });
 
   it('残留人間全員のcontinueを待ち、AIを取り直して新しいセットを開始する', () => {

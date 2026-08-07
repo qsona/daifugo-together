@@ -227,13 +227,11 @@ export interface SeatOption {
   `wantsNextSet: true` により即座に同意済みとして数えられる。`expireSetResult` の
   「続けたい人間」抽出(`reducer.ts:812-818`)にも入るので、既存メンバーが誰も
   続けなくても参加者ひとりで次セットが始まる。
-- 定員判定は既存 join のもの(`!isAI` の人間が 4 人以上なら `ROOM_FULL`、`reducer.ts:607`)を
-  そのまま使う。setResult では `settleMembersAtSetResult`(`reducer.ts:381-397`)が
-  セット境界で離脱者・切断者を除去済みで、setResult 中の `leave` はレコードごと消す
-  (`reducer.ts:745-747`)ため、`!isAI` のメンバー = 次セットで着席しうる人間と一致する。
-  切断中(`connected: false`)だが離脱していない人間は再接続して着席しうるので、定員に
-  数えるのが正しい。この判定により `startSet`(`reducer.ts:449-460`、席は 4 つしかない)に
-  5 人以上が渡ることはない。
+- 定員判定は `!isAI && !departed` の人間が 4 人以上なら `ROOM_FULL` とする。setResult では
+  `settleMembersAtSetResult`(`reducer.ts:381-407`)が離脱者・切断者を結果表示用に保持するため、
+  `departed` を除外しないと空きがある次セットへ参加できなくなる。切断中の人間も
+  setResult 到達時に `departed: true` へ確定する。これにより、表示用の過去メンバーを
+  残しても `startSet`(`reducer.ts:459-470`、席は 4 つしかない)に 5 人以上が渡らない。
 - reducer 側 join の `phase !== 'waiting'` ガード(`reducer.ts:595-597`)と manager 側の
   `phase !== 'waiting'` → `ROOM_IN_GAME`(`manager.ts:292-294`)を、このケースについて緩める。
 
@@ -367,6 +365,10 @@ AI 入力に使う `PlayerSnapshot` の `displayName` / `isAI` はセット開�
   残る(`reducer.ts:708-719`)。join の重複判定は userId を `departed` で絞らずに見る
   (`reducer.ts:598-606`)ため、同じユーザーはセット境界でレコードが消えるまで
   `ALREADY_IN_ROOM` で弾かれる。v1 の意図した挙動とする(離脱人間席の引き継ぎはスコープ外)。
+- **途中離脱後のセット結果。** AI 代行でセットを完走した場合、エンジンの結果には離脱席も
+  4 席の一員として残る。`setResult` の表示中は `departed: true` のメンバーを席・表示名の
+  解決用に保持し、再アタッチと次セット参加からは除外する。次セット開始または部屋終了で
+  除去する。
 - **ホスト。** 参加者は `isHost: false`。ホスト移譲は起きない。
 
 ## 9. スコープ外 / 将来
