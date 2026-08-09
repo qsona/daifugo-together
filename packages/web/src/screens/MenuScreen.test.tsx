@@ -64,4 +64,25 @@ describe('MenuScreen', () => {
     expect(onOpenAccount).toHaveBeenCalledOnce();
     expect(screen.queryByText('引き継ぎ・ログイン')).toBeNull();
   });
+
+  it('未ログインならセットを遊ぶ前でもログインを出す', async () => {
+    const user = userEvent.setup();
+    const onConnect = vi.fn();
+    const props = {
+      onPlay: vi.fn(),
+      onPropose: vi.fn(),
+      onEncyclopedia: vi.fn(),
+      onMyProposals: vi.fn(),
+      displayName: 'ゲスト000001',
+      accountState: 'anonymous' as const,
+      onOpenAccount: vi.fn(),
+      onConnect,
+    };
+    // showConnectPrompt は 1 セット遊び終えるまで false。
+    // 誘いの Callout が無くてもログインへ行けることを確かめる。
+    render(<MenuScreen {...props} />);
+    expect(screen.queryByText(/今日の記録は/u)).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'ログイン' }));
+    expect(onConnect).toHaveBeenCalledOnce();
+  });
 });

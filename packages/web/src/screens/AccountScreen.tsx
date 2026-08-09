@@ -3,7 +3,11 @@ import { useEffect, useState } from 'react';
 import { AppBar } from '../components/AppBar';
 import { Button } from '../components/Button';
 import { Tag } from '../components/Tag';
-import { GOOGLE_CONNECT_LABEL, SIGN_OUT_LABEL } from '../messages';
+import {
+  GOOGLE_LOGIN_LABEL,
+  LOGIN_RESTORE_HINT,
+  SIGN_OUT_LABEL,
+} from '../messages';
 import type { ProposalApi } from '../proposal/client';
 
 import styles from './AccountScreen.module.css';
@@ -105,19 +109,26 @@ export function AccountScreen({
 
         <div className={styles.state}>
           <Tag variant={registered ? 'accountActive' : 'account'}>
-            {registered ? 'Googleでつないである' : '記録はこの端末だけ'}
+            {registered ? 'ログイン済み' : '未ログイン'}
           </Tag>
         </div>
 
         {!registered ? (
-          <Button
-            variant="primary"
-            block
-            disabled={!connected}
-            onClick={onConnect}
-          >
-            {GOOGLE_CONNECT_LABEL}
-          </Button>
+          <>
+            {/* 未ログインの人は「まだ何も無い人」とは限らない。
+                前にあそんだ記録があることを、ログインの前に言う。 */}
+            <p className={styles.loginHint}>
+              今の記録は、この端末だけに残っています。{LOGIN_RESTORE_HINT}
+            </p>
+            <Button
+              variant="primary"
+              block
+              disabled={!connected}
+              onClick={onConnect}
+            >
+              {GOOGLE_LOGIN_LABEL}
+            </Button>
+          </>
         ) : (
           <div className={styles.accountActions}>
             <Button block disabled={!connected} onClick={onSwitch}>

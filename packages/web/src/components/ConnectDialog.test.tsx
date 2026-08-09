@@ -7,6 +7,30 @@ import { ConnectDialog } from './ConnectDialog';
 afterEach(cleanup);
 
 describe('ConnectDialog', () => {
+  it('はじめての人と前にあそんだ人の両方に効く説明を出す', () => {
+    render(
+      <ConnectDialog
+        displayName="ゲスト000001"
+        connectionReady
+        pending={false}
+        rename={vi.fn()}
+        onProceed={vi.fn()}
+        onBack={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByRole('dialog', { name: 'Googleでログインしますか?' }),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        /前にあそんだことがある人は、同じGoogleでログインすると/u,
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText(/はじめての人は、ほかの端末でも/u)).toBeTruthy();
+    // ここで入れたなまえが効くのは、はじめての人だけ
+    expect(screen.getByLabelText('はじめての人のなまえ')).toBeTruthy();
+  });
+
   it('なまえ編集中は外側の操作を止め、ack後に表示名を更新する', async () => {
     let resolveRename: (() => void) | undefined;
     const rename = vi.fn(

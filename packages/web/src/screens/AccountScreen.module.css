@@ -36,6 +36,13 @@
   justify-content: center;
 }
 
+.loginHint {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-caption);
+}
+
 .accountActions {
   margin-top: auto;
   display: flex;

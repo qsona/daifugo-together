@@ -29,7 +29,7 @@ import type { ProposalApi } from '../proposal/client';
 import { ProposalApiError } from '../proposal/client';
 import { STATUS_LABELS } from '../proposal/status-labels';
 import { clampCodePoints } from '../lib/text';
-import { GOOGLE_CONNECT_LABEL } from '../messages';
+import { GOOGLE_LOGIN_LABEL } from '../messages';
 
 import styles from './ProposalFormScreen.module.css';
 import screen from './screen.module.css';
@@ -46,7 +46,7 @@ const RULE_KIND_LABEL = 'ルールの種類';
 const RULE_NAME_LABEL = 'ルール名';
 const RULE_BODY_LABEL = 'ルールの内容';
 const REGISTERED_SLOT_HINT =
-  '提案は1つずつです。結果が出たら次の提案ができ、Googleでつなぐといくつでも提案できます。';
+  '提案は1つずつです。結果が出たら次の提案ができ、Googleでログインするといくつでも提案できます。';
 
 export function ProposalFormScreen({
   api,
@@ -285,7 +285,7 @@ export function ProposalFormScreen({
             action={
               onLogin ? (
                 <Button size="small" onClick={onLogin}>
-                  {GOOGLE_CONNECT_LABEL}
+                  {GOOGLE_LOGIN_LABEL}
                 </Button>
               ) : undefined
             }
@@ -426,11 +426,11 @@ export function ProposalFormScreen({
                   <Callout
                     action={
                       <Button size="small" onClick={pushRegistration.begin}>
-                        {GOOGLE_CONNECT_LABEL}
+                        {GOOGLE_LOGIN_LABEL}
                       </Button>
                     }
                   >
-                    提案の結果が出たら、この端末へお知らせできます。Googleでつなぐと、通知を受け取れます。
+                    提案の結果が出たら、この端末へお知らせできます。Googleでログインすると、通知を受け取れます。
                   </Callout>
                 )}
             </>

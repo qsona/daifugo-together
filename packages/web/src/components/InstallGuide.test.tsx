@@ -25,7 +25,9 @@ describe('InstallGuide', () => {
     expect(screen.getByText(/画面のいちばん下にある共有ボタン/u)).toBeTruthy();
     expect(screen.getByText('「ホーム画面に追加」')).toBeTruthy();
     expect(
-      screen.getByText(/ホーム画面のアプリでもう一度Googleでつないでください/u),
+      screen.getByText(
+        /ホーム画面のアプリでもう一度Googleでログインしてください/u,
+      ),
     ).toBeTruthy();
   });
 

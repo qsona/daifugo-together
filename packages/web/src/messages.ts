@@ -8,8 +8,17 @@
 export const RETRY_GENERIC_ERROR =
   'うまくいきませんでした。もう一度ためしてください。';
 export const RETRY_REQUEST = 'もう一度ためしてください。';
-export const GOOGLE_CONNECT_LABEL = 'Googleでつなぐ';
+export const GOOGLE_LOGIN_LABEL = 'Googleでログイン';
 export const SIGN_OUT_LABEL = 'サインアウト';
+
+/**
+ * ログインの誘いは「はじめての人」と「前にあそんだ人」の両方に同時に効く必要がある。
+ * 端末が変わる・ストレージが消える・ホーム画面アプリになる、が未ログインの原因なので、
+ * クライアントには戻ってきた人を見分ける手がかりが無く、出し分けができない。
+ * (docs/design/ui-writing-style-guide.md §6「Googleでログイン」)
+ */
+export const LOGIN_RESTORE_HINT =
+  '前にあそんだことがある人は、同じGoogleでログインすると、そのときの記録がもどってきます。';
 
 export const RATING_SUBMIT_ERROR =
   '評価を送れませんでした。もう一度ためしてください。';

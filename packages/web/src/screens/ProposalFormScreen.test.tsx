@@ -51,7 +51,7 @@ describe('ProposalFormScreen', () => {
     expect(screen.getByText('あそんでいた記録として残ります')).toBeTruthy();
   });
 
-  it('匿名提案の送信後にGoogle引き継ぎから通知へ続く導線を出す', async () => {
+  it('匿名提案の送信後にGoogleログインから通知へ続く導線を出す', async () => {
     const begin = vi.fn();
     const submit = vi.fn<ProposalApi['submit']>().mockResolvedValue({
       outcome: 'accepted',
@@ -80,7 +80,7 @@ describe('ProposalFormScreen', () => {
     expect(
       await screen.findByText(/提案の結果が出たら、この端末へお知らせできます/),
     ).toBeTruthy();
-    await user.click(screen.getByRole('button', { name: 'Googleでつなぐ' }));
+    await user.click(screen.getByRole('button', { name: 'Googleでログイン' }));
     expect(begin).toHaveBeenCalledOnce();
   });
 
@@ -134,7 +134,7 @@ describe('ProposalFormScreen', () => {
     expect(screen.getByText('確認中')).toBeTruthy();
     expect(screen.getByText(/結果が出たら次の提案ができ/)).toBeTruthy();
     expect(screen.queryByLabelText('ルール名')).toBeNull();
-    await user.click(screen.getByRole('button', { name: 'Googleでつなぐ' }));
+    await user.click(screen.getByRole('button', { name: 'Googleでログイン' }));
     expect(onLogin).toHaveBeenCalledOnce();
   });
 

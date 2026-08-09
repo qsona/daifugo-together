@@ -403,6 +403,7 @@ function DemoApp() {
             displayName={demoDisplayName}
             accountState="anonymous"
             onOpenAccount={() => go('account')}
+            onConnect={() => go('account')}
           />
           {isChoosingRoom && (
             <PlaySheet
@@ -1356,9 +1357,9 @@ function ConnectedApp({
       (result: AuthCompleteResponse) => {
         client.switchSession(result.userToken);
         if (result.outcome === 'linked') {
-          setRootToast('Googleでつなぎました');
+          setRootToast('Googleでログインしました');
         } else if (result.outcome === 'already') {
-          setRootToast('すでにつないであります');
+          setRootToast('すでにログインしています');
         } else {
           setAuthResultDialog({
             kind: 'switched',
@@ -1514,7 +1515,7 @@ function ConnectedApp({
       {accountDialog === 'switch' && (
         <ConfirmDialog
           title="別のアカウントにしますか?"
-          description={`この端末は、えらんだGoogleアカウントの記録に切り替わります。今の「${state.displayName ?? '—'}」の記録は消えず、また同じGoogleでつなげばもどってきます。`}
+          description={`この端末は、えらんだGoogleアカウントの記録に切り替わります。今の「${state.displayName ?? '—'}」の記録は消えず、また同じGoogleでログインすればもどってきます。`}
           confirmLabel="Googleへ進む"
           cancelLabel={CONFIRM_BACK_LABEL}
           onConfirm={() => {
@@ -1538,7 +1539,7 @@ function ConnectedApp({
           }
         >
           <DialogBody>
-            この端末から記録が離れて、新しいゲストになります。記録は消えず、またGoogleでつなげばもどってきます。
+            この端末から記録が離れて、新しいゲストになります。記録は消えず、またGoogleでログインすればもどってきます。
           </DialogBody>
           {signOutHasSubscription && (
             <DialogBody>この端末のおしらせも届かなくなります。</DialogBody>
@@ -1558,11 +1559,11 @@ function ConnectedApp({
             </Button>
           }
         >
-          {authResultDialog.registeredBefore ? (
-            <DialogBody>
-              {`今は「${authResultDialog.displayName}」の記録であそんでいます。`}
-            </DialogBody>
-          ) : null}
+          <DialogBody>
+            {authResultDialog.registeredBefore
+              ? `今は「${authResultDialog.displayName}」の記録であそんでいます。`
+              : `前にあそんだ「${authResultDialog.displayName}」の記録にもどりました。`}
+          </DialogBody>
         </Dialog>
       )}
       {authResultDialog?.kind === 'expired' && (
@@ -1588,7 +1589,7 @@ function ConnectedApp({
       )}
       {authResultDialog?.kind === 'unavailable' && (
         <Dialog
-          title="今はつなげません"
+          title="今はログインできません"
           actions={
             <Button variant="primary" onClick={() => setAuthResultDialog(null)}>
               閉じる

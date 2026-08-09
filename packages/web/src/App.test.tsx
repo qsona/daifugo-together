@@ -2218,9 +2218,9 @@ describe('TU-04: みんなのルールへの卒業導線', () => {
     await waitFor(() =>
       expect(values.get('daifugo.authMenuPromptLastCount')).toBe('1'),
     );
-    await user.click(screen.getByRole('button', { name: 'Googleでつなぐ' }));
+    await user.click(screen.getByRole('button', { name: 'Googleでログイン' }));
     expect(
-      screen.getByRole('dialog', { name: 'Googleでつなぎますか?' }),
+      screen.getByRole('dialog', { name: 'Googleでログインしますか?' }),
     ).toBeTruthy();
   });
 
@@ -2964,7 +2964,7 @@ describe('AU-01: 認証完了のアプリ統合', () => {
     await waitFor(() => expect(auth.complete).toHaveBeenCalledWith('one-time'));
     expect(client.switchSession).toHaveBeenCalledWith('registered-token');
     expect((await screen.findByRole('status')).textContent).toBe(
-      'Googleでつなぎました',
+      'Googleでログインしました',
     );
     expect(window.location.hash).toBe('');
   });
@@ -2999,7 +2999,7 @@ describe('AU-01: 認証完了のアプリ統合', () => {
     ).toBeTruthy();
     await user.click(screen.getByRole('button', { name: 'もう一度ためす' }));
     expect(
-      screen.getByRole('dialog', { name: 'Googleでつなぎますか?' }),
+      screen.getByRole('dialog', { name: 'Googleでログインしますか?' }),
     ).toBeTruthy();
   });
 
@@ -3024,9 +3024,9 @@ describe('AU-01: 認証完了のアプリ統合', () => {
     render(<App client={authClient(state)} auth={auth} push={authPush()} />);
 
     await user.click(screen.getByRole('button', { name: /記録を開く/ }));
-    await user.click(screen.getByRole('button', { name: 'Googleでつなぐ' }));
+    await user.click(screen.getByRole('button', { name: 'Googleでログイン' }));
     expect(
-      screen.getByRole('dialog', { name: 'Googleでつなぎますか?' }),
+      screen.getByRole('dialog', { name: 'Googleでログインしますか?' }),
     ).toBeTruthy();
     await user.click(screen.getByRole('button', { name: 'Googleへ進む' }));
     await waitFor(() =>
@@ -3059,10 +3059,10 @@ describe('AU-01: 認証完了のアプリ統合', () => {
     );
 
     await user.click(screen.getByRole('button', { name: /記録を開く/ }));
-    await user.click(screen.getByRole('button', { name: 'Googleでつなぐ' }));
+    await user.click(screen.getByRole('button', { name: 'Googleでログイン' }));
     await user.click(screen.getByRole('button', { name: 'Googleへ進む' }));
     expect(
-      await screen.findByRole('dialog', { name: '今はつなげません' }),
+      await screen.findByRole('dialog', { name: '今はログインできません' }),
     ).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'もう一度ためす' })).toBeNull();
   });
@@ -3100,6 +3100,10 @@ describe('AU-01: 認証完了のアプリ統合', () => {
     });
     // 匿名からの切替では、前の記録に関する損失通知を出さない
     expect(within(dialog).queryByText(/もう見られません/u)).toBeNull();
+    // 戻ってきた人には、何が起きたのかを本文でも言う
+    expect(
+      within(dialog).getByText('前にあそんだ「たろう」の記録にもどりました。'),
+    ).toBeTruthy();
   });
 
   it('サインアウトは確認後に購読解除してから匿名セッションへ切り替える', async () => {

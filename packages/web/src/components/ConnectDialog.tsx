@@ -4,7 +4,11 @@ import { Button } from './Button';
 import { Dialog, DialogBody } from './Dialog';
 import { isDefaultDisplayName } from './AccountRow';
 import { NameField, validateDisplayName } from './NameField';
-import { CONFIRM_BACK_LABEL, RETRY_REQUEST } from '../messages';
+import {
+  CONFIRM_BACK_LABEL,
+  LOGIN_RESTORE_HINT,
+  RETRY_REQUEST,
+} from '../messages';
 
 import styles from './ConnectDialog.module.css';
 
@@ -55,7 +59,7 @@ export function ConnectDialog({
 
   return (
     <Dialog
-      title="Googleでつなぎますか?"
+      title="Googleでログインしますか?"
       actions={
         <>
           <Button
@@ -74,14 +78,19 @@ export function ConnectDialog({
         </>
       }
     >
+      {/* この画面に来る人は、はじめての人と前にあそんだ人が混ざっている。
+          クライアントには見分けがつかないので、両方に同時に効く文にする。 */}
       <DialogBody>
-        ほかの端末でも、同じなまえ・同じ提案であそべるようになります。
+        {LOGIN_RESTORE_HINT}
+        はじめての人は、ほかの端末でも同じなまえ・同じ提案であそべるようになります。
       </DialogBody>
       <DialogBody>
         Googleの画面に移りますが、受け取るのはIDだけで、終わったらここにもどります。
       </DialogBody>
-      <section className={styles.nameBox} aria-label="つなぐときのなまえ">
-        <span className={styles.nameLabel}>つなぐときのなまえ</span>
+      {/* 前にあそんだ人がログインすると、なまえはそのアカウントのものになる。
+          ここで入れたなまえが効くのは、はじめての人だけ。 */}
+      <section className={styles.nameBox} aria-label="はじめての人のなまえ">
+        <span className={styles.nameLabel}>はじめての人のなまえ</span>
         {editing ? (
           <>
             <NameField

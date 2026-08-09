@@ -10,7 +10,7 @@ describe('AccountRow', () => {
   it.each([
     ['anonymous', 'ゲスト', false],
     ['registered', null, false],
-    ['pending', 'つなぎ中', true],
+    ['pending', 'ログイン中', true],
     ['connecting', '接続中', true],
   ] as const)('%s の状態と操作可否を表示する', (state, label, disabled) => {
     render(
@@ -44,6 +44,40 @@ describe('AccountRow', () => {
     );
     await userEvent.click(screen.getByRole('button'));
     expect(onOpen).toHaveBeenCalledOnce();
+  });
+
+  it('未ログインではゲストバッジの代わりにログインを常設する', async () => {
+    const onLogin = vi.fn();
+    const onOpen = vi.fn();
+    render(
+      <AccountRow
+        displayName="ゲスト000001"
+        state="anonymous"
+        isDefaultName
+        onOpen={onOpen}
+        onLogin={onLogin}
+      />,
+    );
+    expect(screen.queryByText('ゲスト')).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'ログイン' }));
+    expect(onLogin).toHaveBeenCalledOnce();
+    expect(onOpen).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('button', { name: /記録を開く/u }));
+    expect(onOpen).toHaveBeenCalledOnce();
+  });
+
+  it('ログイン済みにはログインを出さない', () => {
+    render(
+      <AccountRow
+        displayName="たろう"
+        state="registered"
+        isDefaultName={false}
+        onOpen={vi.fn()}
+        onLogin={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: 'ログイン' })).toBeNull();
   });
 
   it('サーバーの既定名形式だけを判定する', () => {

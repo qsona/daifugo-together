@@ -39,8 +39,15 @@ describe('AccountScreen', () => {
     await waitFor(() => expect(screen.getByText('提案 0件')).toBeTruthy());
     // イエローカードは 1 枚以上のときだけ表示する
     expect(screen.queryByText(/イエローカード/u)).toBeNull();
+    expect(screen.getByText('未ログイン')).toBeTruthy();
+    // 未ログインの人は「まだ何も無い人」とは限らない
+    expect(
+      screen.getByText(
+        /前にあそんだことがある人は、同じGoogleでログインすると/u,
+      ),
+    ).toBeTruthy();
     await userEvent.click(
-      screen.getByRole('button', { name: 'Googleでつなぐ' }),
+      screen.getByRole('button', { name: 'Googleでログイン' }),
     );
     expect(onConnect).toHaveBeenCalledOnce();
     expect(screen.queryByText('サインアウト')).toBeNull();

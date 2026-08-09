@@ -5,7 +5,7 @@ import { Button } from '../components/Button';
 import { Callout } from '../components/Callout';
 import { InstallGuide } from '../components/InstallGuide';
 import { RETRY_GENERIC_ERROR } from '../messages';
-import { GOOGLE_CONNECT_LABEL } from '../messages';
+import { GOOGLE_LOGIN_LABEL } from '../messages';
 import { detectInstallEnvironment } from '../push/install';
 import type { PushClient, PushOfferResult } from '../push/client';
 
@@ -74,11 +74,11 @@ export function PushSettingsScreen({
                   if (onLogin() === false) setMessage(RETRY_GENERIC_ERROR);
                 }}
               >
-                {GOOGLE_CONNECT_LABEL}
+                {GOOGLE_LOGIN_LABEL}
               </Button>
             }
           >
-            Push通知を受け取るには、Googleでつないでください。
+            Push通知を受け取るには、Googleでログインしてください。
           </Callout>
         )}
         {registered && !environment.standalone && (

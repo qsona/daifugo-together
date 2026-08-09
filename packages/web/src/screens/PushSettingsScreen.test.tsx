@@ -90,7 +90,7 @@ describe('PushSettingsScreen', () => {
     ).toBeTruthy();
   });
 
-  it('未登録なら購読APIを呼ばずGoogle引き継ぎ導線だけを出す', async () => {
+  it('未登録なら購読APIを呼ばずGoogleログイン導線だけを出す', async () => {
     const available = api(true);
     const onLogin = vi.fn();
     render(
@@ -109,7 +109,7 @@ describe('PushSettingsScreen', () => {
       screen.queryByRole('button', { name: 'この端末への通知を止める' }),
     ).toBeNull();
     await userEvent.click(
-      screen.getByRole('button', { name: 'Googleでつなぐ' }),
+      screen.getByRole('button', { name: 'Googleでログイン' }),
     );
     expect(onLogin).toHaveBeenCalledOnce();
     expect(available.config).not.toHaveBeenCalled();

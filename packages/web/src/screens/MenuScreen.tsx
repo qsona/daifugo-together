@@ -8,7 +8,7 @@ import {
 import { Callout } from '../components/Callout';
 import { useEffect, type ReactNode } from 'react';
 
-import { GOOGLE_CONNECT_LABEL, PROPOSE_RULE_LABEL } from '../messages';
+import { GOOGLE_LOGIN_LABEL, PROPOSE_RULE_LABEL } from '../messages';
 import { SUPPORT_URL, X_ACCOUNT_URL } from '../links';
 
 import styles from './MenuScreen.module.css';
@@ -59,6 +59,7 @@ export function MenuScreen({
             state={accountState}
             isDefaultName={isDefaultDisplayName(displayName)}
             onOpen={onOpenAccount}
+            {...(onConnect ? { onLogin: onConnect } : {})}
           />
           {notification}
         </div>
@@ -116,11 +117,11 @@ function ConnectPrompt({
     <Callout
       action={
         <Button size="small" onClick={onConnect}>
-          {GOOGLE_CONNECT_LABEL}
+          {GOOGLE_LOGIN_LABEL}
         </Button>
       }
     >
-      今日の記録は、この端末だけに残っています。Googleでつなぐと、ほかの端末でも続きをあそべます。
+      今日の記録は、この端末だけに残っています。Googleでログインすると、ほかの端末でも続きをあそべます。
     </Callout>
   );
 }
