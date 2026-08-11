@@ -8,6 +8,7 @@ const runtimeScripts = [
   'judge:eval',
   'judge:review',
   'review',
+  'design:handoff',
   'implement',
   'implement:prepare',
   'implement:resume',

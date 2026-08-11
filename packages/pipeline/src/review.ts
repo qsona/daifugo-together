@@ -116,6 +116,14 @@ export function formatReviewItem(
   if (judgement.scaffoldMeta !== null) {
     details.push(`  slug: ${judgement.scaffoldMeta.slug}`);
   }
+  if (judgement.extensionNeeded !== null) {
+    details.push(
+      '',
+      '拡張要求:',
+      `  機構タグ: ${list(judgement.extensionNeeded.capabilities)}`,
+      `  スケッチ: ${judgement.extensionNeeded.sketch}`,
+    );
+  }
   return details.join('\n');
 }
 
@@ -230,13 +238,45 @@ export function validateConfirmationForItem(
   ) {
     return 'CX-01確定ではaction種別とjudgementIdを変更できません';
   }
-  if (
-    item.judgement.verdict === 'needs_review' &&
-    (command.action !== 'confirm_rejection' ||
-      command.rejectCategory === undefined ||
-      command.reasonForUser === undefined)
-  ) {
-    return 'needs_reviewの却下にはrejectCategoryとreasonForUserが必要です';
+  if (item.judgement.verdict === 'needs_review') {
+    const isValidRejection =
+      command.action === 'confirm_rejection' &&
+      command.rejectCategory !== undefined &&
+      command.reasonForUser !== undefined;
+    const isValidApproval = command.action === 'approve_spec';
+    if (!isValidRejection && !isValidApproval) {
+      return 'needs_reviewの確定には、rejectCategoryとreasonForUserを指定したconfirm_rejection、またはapprove_specが必要です';
+    }
   }
   return null;
+}
+
+export function extensionPendingSummary(
+  items: readonly PendingVerdictConfirmation[],
+): string | null {
+  const groups = new Map<string, { id: string; name: string }[]>();
+  for (const item of items) {
+    if (item.source !== 'cx01') continue;
+    const { judgement, proposal } = item;
+    if (
+      judgement.verdict !== 'needs_review' ||
+      judgement.extensionNeeded === null
+    ) {
+      continue;
+    }
+    for (const capability of judgement.extensionNeeded.capabilities) {
+      const entries = groups.get(capability) ?? [];
+      entries.push({ id: proposal.id, name: proposal.name });
+      groups.set(capability, entries);
+    }
+  }
+  if (groups.size === 0) return null;
+  return [...groups.entries()]
+    .map(
+      ([capability, entries]) =>
+        `  ${capability} — ${entries
+          .map(({ id, name }) => `${id} 「${name}」`)
+          .join(', ')}`,
+    )
+    .join('\n');
 }

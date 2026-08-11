@@ -1,8 +1,12 @@
-import type { PendingVerdictConfirmation } from '@daifugo/server';
+import type {
+  ExtensionNeeded,
+  PendingVerdictConfirmation,
+} from '@daifugo/server';
 import { describe, expect, it } from 'vitest';
 
 import {
   editableConfirmation,
+  extensionPendingSummary,
   formatReviewItem,
   manualRejectionConfirmation,
   MANUAL_REJECTION_REASONS,
@@ -12,17 +16,24 @@ import {
 
 function cxItem(
   verdict: 'approve' | 'reject' | 'needs_review',
+  overrides: {
+    id?: string;
+    name?: string;
+    extensionNeeded?: ExtensionNeeded | null;
+  } = {},
 ): Extract<PendingVerdictConfirmation, { source: 'cx01' }> {
+  const id = overrides.id ?? 'proposal-1';
+  const name = overrides.name ?? '革命返し';
   return {
     source: 'cx01',
     proposal: {
-      id: 'proposal-1',
-      name: '革命返し',
+      id,
+      name,
       body: '革命中の革命で通常状態へ戻す。',
     },
     judgement: {
       id: 12,
-      proposalId: 'proposal-1',
+      proposalId: id,
       verdict,
       rejectCategory: verdict === 'reject' ? 'contract' : null,
       rejectSubtype: verdict === 'reject' ? 'A2' : null,
@@ -51,6 +62,7 @@ function cxItem(
         verdict === 'approve'
           ? { slug: 'counter-revolution', messages: {} }
           : null,
+      extensionNeeded: overrides.extensionNeeded ?? null,
       confidence: 0.94,
       decidedBy: 'ai',
       model: 'gpt-5.6-sol',
@@ -207,5 +219,111 @@ describe('interactive confirmation review', () => {
         reasonForUser: '理由',
       }),
     ).toBe('proposalIdは変更できません');
+  });
+
+  it('needs_reviewはapprove_specでも確定できる(judgementId一致は既存チェックで担保)', () => {
+    const item = cxItem('needs_review');
+    expect(
+      validateConfirmationForItem(item, {
+        action: 'approve_spec',
+        proposalId: 'proposal-1',
+        judgementId: 12,
+        actor: 'developer',
+        spec: { name: '革命返し' },
+        scaffoldMeta: { slug: 'counter-revolution', messages: {} },
+      }),
+    ).toBeNull();
+  });
+
+  it('needs_reviewのapprove_specでもjudgementIdが一致しなければ拒否する', () => {
+    const item = cxItem('needs_review');
+    expect(
+      validateConfirmationForItem(item, {
+        action: 'approve_spec',
+        proposalId: 'proposal-1',
+        judgementId: 999,
+        actor: 'developer',
+        spec: { name: '革命返し' },
+        scaffoldMeta: { slug: 'counter-revolution', messages: {} },
+      }),
+    ).toBe('CX-01確定ではaction種別とjudgementIdを変更できません');
+  });
+
+  it('approve verdictの挙動は変わらない(承認コマンドをそのまま許可する)', () => {
+    const item = cxItem('approve');
+    expect(
+      validateConfirmationForItem(item, {
+        action: 'approve_spec',
+        proposalId: 'proposal-1',
+        judgementId: 12,
+        actor: 'developer',
+        spec: { name: '革命返し' },
+        scaffoldMeta: { slug: 'counter-revolution', messages: {} },
+      }),
+    ).toBeNull();
+  });
+
+  it('extensionNeededがあるとformatReviewItemが機構タグとスケッチを表示する', () => {
+    const item = cxItem('needs_review', {
+      extensionNeeded: {
+        capabilities: ['minigame:ab_vote', 'state:points'],
+        sketch: '2択の投票結果でポイントを付与する機構が必要。',
+      },
+    });
+    const output = formatReviewItem(item, 1, 1);
+    expect(output).toContain('拡張要求:');
+    expect(output).toContain('機構タグ: minigame:ab_vote, state:points');
+    expect(output).toContain(
+      'スケッチ: 2択の投票結果でポイントを付与する機構が必要。',
+    );
+  });
+
+  it('extensionNeededがnullならformatReviewItemに拡張要求を表示しない', () => {
+    const output = formatReviewItem(cxItem('needs_review'), 1, 1);
+    expect(output).not.toContain('拡張要求:');
+  });
+
+  it('extensionPendingSummaryはcx01のneeds_review+extensionNeeded非null項目だけを機構タグごとにグループ化する', () => {
+    const voteItem = cxItem('needs_review', {
+      id: 'proposal-vote',
+      name: '2択投票',
+      extensionNeeded: {
+        capabilities: ['minigame:ab_vote'],
+        sketch: '投票機構が必要。',
+      },
+    });
+    const pointsAndVoteItem = cxItem('needs_review', {
+      id: 'proposal-points',
+      name: 'ポイント制',
+      extensionNeeded: {
+        capabilities: ['state:points', 'minigame:ab_vote'],
+        sketch: 'ポイント状態と投票結果の連携が必要。',
+      },
+    });
+    const approvedItem = cxItem('approve', { id: 'proposal-approved' });
+    const rejectedWithExtensionLikeShape = cxItem('reject', {
+      id: 'proposal-rejected',
+    });
+
+    const summary = extensionPendingSummary([
+      voteItem,
+      pointsAndVoteItem,
+      approvedItem,
+      rejectedWithExtensionLikeShape,
+    ]);
+
+    expect(summary).not.toBeNull();
+    expect(summary).toContain(
+      'minigame:ab_vote — proposal-vote 「2択投票」, proposal-points 「ポイント制」',
+    );
+    expect(summary).toContain('state:points — proposal-points 「ポイント制」');
+    expect(summary).not.toContain('proposal-approved');
+    expect(summary).not.toContain('proposal-rejected');
+  });
+
+  it('extensionPendingSummaryは該当項目がなければnullを返す', () => {
+    expect(
+      extensionPendingSummary([cxItem('approve'), cxItem('reject')]),
+    ).toBeNull();
   });
 });

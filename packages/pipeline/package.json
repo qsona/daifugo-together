@@ -18,6 +18,7 @@
     "judge:eval": "node scripts/run-cli.mjs dist/judge-eval.js",
     "judge:review": "node scripts/run-cli.mjs dist/judge.js --review",
     "review": "node scripts/run-cli.mjs dist/review-cli.js",
+    "design:handoff": "node scripts/run-cli.mjs dist/design-handoff-cli.js",
     "implement": "node scripts/run-cli.mjs dist/implement-cli.js prepare",
     "implement:prepare": "node scripts/run-cli.mjs dist/implement-cli.js prepare",
     "implement:resume": "node scripts/run-cli.mjs dist/implement-cli.js prepare-resume",

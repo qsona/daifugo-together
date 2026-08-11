@@ -55,6 +55,7 @@ function judgement(): AiJudgementResult {
     reasonInternal: '要確認',
     spec: null,
     scaffoldMeta: null,
+    extensionNeeded: null,
     confidence: 0.5,
     model: 'gpt-5.6-sol',
     promptVersion: 'cx01-v1',

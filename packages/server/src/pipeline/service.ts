@@ -6,12 +6,15 @@ import {
   JUDGEMENT_VERDICTS,
   PipelineRepository,
   REJECT_CATEGORIES,
+  type ExtensionNeeded,
   type JudgementVerdict,
   type RejectCategory,
   type RuleScaffoldMeta,
   type RuleSpecification,
   type StoredJudgement,
 } from './repository.js';
+
+export type { ExtensionNeeded } from './repository.js';
 
 const HOOKS = new Set([
   'modifyLegality',
@@ -57,6 +60,7 @@ const EFFECTS_BY_HOOK: Readonly<Record<string, ReadonlySet<string>>> = {
 };
 // core の EngineFeature と同じ語彙。core 側の実装とは独立に検証する。
 const ENGINE_FEATURES = new Set(['sequence', 'jokers']);
+const CAPABILITY_PATTERN = /^[a-z][a-z0-9_-]*(:[a-z0-9_.-]+)?$/u;
 const REJECT_SUBTYPES = new Set([
   'A1',
   'A2',
@@ -90,6 +94,7 @@ export interface AiJudgementResult {
   reasonInternal: string;
   spec: Omit<RuleSpecification, 'source'> | null;
   scaffoldMeta: RuleScaffoldMeta | null;
+  extensionNeeded: ExtensionNeeded | null;
   confidence: number;
   model: string;
   promptVersion: string;
@@ -247,6 +252,29 @@ function parseScaffoldMeta(value: unknown): RuleScaffoldMeta | null {
     : null;
 }
 
+// undefined/null は既存クライアント互換のため null 相当として受理する。
+// object だが capabilities/sketch が不正なときだけ false (invalid) を返す。
+function parseExtensionNeeded(value: unknown): ExtensionNeeded | null | false {
+  if (value === undefined || value === null) return null;
+  const input = object(value);
+  if (!input) return false;
+  const rawCapabilities = input.capabilities;
+  const capabilities =
+    Array.isArray(rawCapabilities) &&
+    rawCapabilities.length >= 1 &&
+    rawCapabilities.length <= 4 &&
+    rawCapabilities.every(
+      (item) =>
+        typeof item === 'string' &&
+        item.length <= 64 &&
+        CAPABILITY_PATTERN.test(item),
+    )
+      ? [...(rawCapabilities as string[])]
+      : null;
+  const sketch = nonempty(input.sketch, 1_000);
+  return capabilities && sketch ? { capabilities, sketch } : false;
+}
+
 export function parseAiJudgement(value: unknown): AiJudgementResult | null {
   const input = object(value);
   if (!input || !JUDGEMENT_VERDICTS.includes(input.verdict as never)) {
@@ -271,6 +299,10 @@ export function parseAiJudgement(value: unknown): AiJudgementResult | null {
   const spec = input.spec === null ? null : parseSpec(input.spec);
   const scaffoldMeta =
     input.scaffoldMeta === null ? null : parseScaffoldMeta(input.scaffoldMeta);
+  const extensionNeeded = parseExtensionNeeded(input.extensionNeeded);
+  // 拡張ヒントは needs_review 専用。approve/reject での非null は invalid とする。
+  const extensionNeededCrossFieldValid =
+    extensionNeeded === null || verdict === 'needs_review';
   const model = nonempty(input.model, 100);
   const promptVersion = nonempty(input.promptVersion, 100);
   const validMetadata =
@@ -319,6 +351,8 @@ export function parseAiJudgement(value: unknown): AiJudgementResult | null {
     rejectCategory === false ||
     rejectSubtype === false ||
     reasonForUser === false ||
+    extensionNeeded === false ||
+    !extensionNeededCrossFieldValid ||
     !reasonInternal ||
     !model ||
     !promptVersion ||
@@ -336,6 +370,7 @@ export function parseAiJudgement(value: unknown): AiJudgementResult | null {
     reasonInternal,
     spec,
     scaffoldMeta,
+    extensionNeeded,
     confidence: input.confidence as number,
     model,
     promptVersion,
@@ -497,6 +532,7 @@ export class PipelineJudgementService {
         reasonInternal: `Developer confirmed E6 ${check.finalVerdict}.`,
         spec: null,
         scaffoldMeta: null,
+        extensionNeeded: null,
         confidence: null,
         decidedBy: 'developer',
         model: null,
@@ -599,6 +635,7 @@ export class PipelineJudgementService {
           : source.reasonInternal,
         spec: null,
         scaffoldMeta: null,
+        extensionNeeded: null,
         confidence: source.confidence,
         decidedBy: 'developer',
         model: null,
@@ -681,6 +718,7 @@ export class PipelineJudgementService {
           'Developer reviewed and approved the implementation SPEC.',
         spec,
         scaffoldMeta: approvedScaffoldMeta,
+        extensionNeeded: null,
         confidence: null,
         decidedBy: 'developer',
         model: null,
@@ -791,6 +829,7 @@ export class PipelineJudgementService {
           'Developer amended the approved SPEC before rule review.',
         spec,
         scaffoldMeta: approvedScaffoldMeta,
+        extensionNeeded: null,
         confidence: null,
         decidedBy: 'developer',
         model: null,

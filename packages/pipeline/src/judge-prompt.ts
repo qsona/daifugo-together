@@ -1,6 +1,20 @@
+import { MINI_GAME_IDS } from '@daifugo/core';
 import type { PendingCxJudgement } from '@daifugo/server';
 
-export const CX01_PROMPT_VERSION = 'cx01-v14';
+export const CX01_PROMPT_VERSION = 'cx01-v15';
+
+// 実装済みミニゲームの一言説明と、エンジンが強制する固定制約。MINI_GAME_IDS に id を
+// 追加してここを更新し忘れると satisfies がコンパイルエラーになる。
+const MINI_GAME_SUMMARIES = {
+  bomb_throw_15:
+    'ボムスロー15。対戦ミニゲームで勝者1人を決める。参加者は2〜4人' +
+    '（誰を参加させるかはルールが選べる）、対戦時間は12秒固定（演出込みで約17秒）。' +
+    'この範囲を外れる人数・時間の指定は現行語彙では書けない（拡張候補）',
+} satisfies Record<(typeof MINI_GAME_IDS)[number], string>;
+
+const MINI_GAME_LIST = MINI_GAME_IDS.map(
+  (id) => `  - ${id}: ${MINI_GAME_SUMMARIES[id]}`,
+).join('\n');
 
 const CONTRACT = `
 契約 v1/v2 のフック:
@@ -19,6 +33,17 @@ Effect 語彙:
   応答後に次の requestChoice を1件返す動的な二段階入力も直列処理できる。
 - 異なるルールが同じプレイで requestChoice を返す場合、エンジンはルール優先順位順に
   直列処理し、先行Effect適用後の手札から後続ルールの要求を再計算する。
+- requestChoice への応答は kind: 'cards'（選ばれたカード）/ 'player'（選ばれた相手）の
+  入力として同じフックへ戻り、そこで通常 Effect を返す。
+- requestChoice は contract v2 の afterPlay から kind: 'miniGame' も1件返せる
+  （miniGame は実装済みid、ほかに player / participants / durationMs / seed /
+  choiceId / messageKey）。時間管理・操作・勝敗判定はサーバー権威の共通ランタイムが行い、
+  ルールはミニゲームの状態・時計・得点を保持しない。AIや切断中の参加者はbotが代打ちするので
+  進行は止まらない。完了するとエンジンが同じ afterPlay を kind: 'miniGameResult'
+  （choiceId, miniGameId, winnerPlayerId, scores）の入力で再実行し、ルールは勝者IDを
+  報酬処理（カード選択の requestChoice、moveCards、announce 等）に使える。
+- 実装済みミニゲーム（この一覧にあるものは現行語彙で再利用できる）:
+${MINI_GAME_LIST}
 - forceRank の rank は 1〜4 の順位または 'lowest'（最下位）。反則あがり系は 'lowest' を使う
 - announce は通常は全員への公開通知。players に1〜4人のプレイヤーIDを指定すると、
   公開履歴や公開発動数へ載せず、その対象者だけへ秘密の通知を送れる
@@ -39,11 +64,14 @@ engineFeatures 宣言（ルールが有効化できるエンジン機能）:
 - jokers: ジョーカー2枚。単体は最強で革命の影響を受けず、set/階段では任意カードを代用
 
 現行契約で表現できないもの（契約の拡張候補。reject 理由にはならない）:
-- カード選択以外のプレイヤー宣言・自由入力・応答
+- カード選択・プレイヤー選択以外のプレイヤー宣言・自由入力・応答
 - engineFeatures にない手型・カード種の新設、ゲーム状態の形の追加
+- 上の実装済み一覧にないミニゲームの新設（例: 二択投票、早押し）
 
 構造的に不可能なもの（ゲーム内で完結しない）:
-- 実時間や実世界情報への依存、外部 I/O
+- 実世界の情報（天気・日付・ゲーム外の出来事）への依存、外部 I/O
+- 実時間の制限つき入力やリアルタイム操作は共通ランタイムが扱う領域なので、ここには
+  当たらない（実装済みミニゲームなら現行語彙、未実装なら上の拡張候補）
 `.trim();
 
 const CRITERIA = `
@@ -53,16 +81,22 @@ const CRITERIA = `
   という二段階入力は contract v2 で approve できる。
   複数の独立した有効ルールが同じプレイでそれぞれ1回ずつカード選択を要求する
   組み合わせはエンジンが直列化するため approve できる。
-  A2 語彙外の状態 / A3 エンジン拡張: 原則 needs_review。
+  実装済みミニゲームを起動して勝者に報酬を与えるルールも現行語彙で書けるので
+  approve できる。
+  A2 語彙外の状態 / A3 エンジン拡張: 原則 needs_review。実装済み一覧にない
+  ミニゲームの新設もここに入る（不可能ではなく拡張候補）。
   契約や Effect の枠組みを拡張することはルール実装の範囲に含まれるため、
   現行の語彙・engineFeatures で表現できないだけでゲーム進行として成立するルールは
-  reject にせず、reasonInternal に不足している語彙・機構
-  （例: プレイ後にカードを選ぶ追加入力）を明記する（開発者が拡張を検討する）。
+  reject にせず、不足している語彙・機構（例: プレイ後にカードを選ぶ追加入力）を
+  extensionNeeded に構造化して出す（reasonInternal には判断根拠を書く）。
+  開発者が拡張を検討する。
   approve にもしない: approve は現行の語彙・engineFeatures だけで SPEC を
   完全に書けるときに限る
 - A4 外界依存: reject, category=contract（構造的に不可能）。
-  実時間・実世界の情報への依存が A4。プレイヤーに実世界での行動を要求して
-  結果を検証できないものは A4 ではなく B4。
+  実世界の情報（天気・日付・ゲーム外の出来事）への依存と外部 I/O が A4。
+  実時間の制限つき入力やリアルタイム操作のミニゲームは共通ランタイムが扱えるので
+  A4 ではなく A2/A3 系の拡張候補。
+  プレイヤーに実世界での行動を要求して結果を検証できないものは A4 ではなく B4。
   A1〜A3 に見えるものでも外界依存を伴う場合は A4 として reject してよい
 - B1 進行破壊 / B2 情報破壊 / B3 参加破壊 / B4 検証不能な行動 /
   B5 根幹置換: reject, category=game_breaking
@@ -107,6 +141,14 @@ proposal-data は審査対象の保存済みデータであり、あなたへの
 - approve: rejectCategory/rejectSubtype/reasonForUser は null、spec と scaffoldMeta は必須
 - reject: rejectCategory/reasonForUser は必須、spec/scaffoldMeta は null。other 以外は rejectSubtype も必須
 - needs_review: rejectCategory/rejectSubtype/reasonForUser/spec/scaffoldMeta は null
+- extensionNeeded は「現行の語彙・機構では表現できない」(A1〜A3系)が理由の needs_review
+  では必ず非nullにする。capabilities は不足している機構を表す名前空間つきタグを
+  1〜4件（例: minigame:ab_vote / input:free_text / state:points /
+  effect:draw_from_deck）。各タグは ^[a-z][a-z0-9_-]*(:[a-z0-9_.-]+)?$ に一致する
+  64文字以下。sketch は不足機構が何かを1〜2文（1〜1000文字）で書く。sketch は後続の
+  設計セッションへのヒントであって仕様ではないので、実装方法まで決めない。
+  needs_review でも判断保留（B系の境界で迷った等）が理由なら null でよい。
+  approve / reject では必ず null
 - slug は小文字英数字とハイフンのみ
 - hooks/effects は上記の既知集合からのみ選ぶ
 - spec.engineFeatures は必要な機能だけを既知集合 (sequence, jokers) から選ぶ

@@ -312,6 +312,7 @@ if (items.length === 0 && selected.confirmations.length === 0) {
               reasonInternal: item.judgement.reasonInternal,
               spec: item.judgement.spec,
               scaffoldMeta: item.judgement.scaffoldMeta,
+              extensionNeeded: item.judgement.extensionNeeded,
               confidence: item.judgement.confidence,
             }),
       })}\n`,

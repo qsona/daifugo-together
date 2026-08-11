@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Design Engine Extension'
+  short_description: 'Design and land the extension a pending proposal needs'
+  default_prompt: 'Use $design-extension to design the engine extension for the proposal awaiting it.'

@@ -13,7 +13,7 @@ ADMIN_PIPELINE_URL=https://daifugo-together.fly.dev
 RULE_REPOSITORY_URL=git@github.com:qsona/daifugo-together.git
 ```
 
-`DAIFUGO_ADMIN_URL` は `judge` / `confirm`、`ADMIN_PIPELINE_URL` と `RULE_REPOSITORY_URL` は `implement*` が使う。`packages/pipeline` の各運用コマンドは、このファイルがあれば自動で読み込む。シェルで同名の環境変数を明示した場合は、その値を優先する。`.env.local` は必ず Git 管理外のまま、ファイルモード `0600` で保持する。
+`DAIFUGO_ADMIN_URL` は `judge` / `review` / `confirm` / `design:handoff`、`ADMIN_PIPELINE_URL` と `RULE_REPOSITORY_URL` は `implement*` が使う。`packages/pipeline` の各運用コマンドは、このファイルがあれば自動で読み込む。シェルで同名の環境変数を明示した場合は、その値を優先する。`.env.local` は必ず Git 管理外のまま、ファイルモード `0600` で保持する。
 
 各運用コマンドは build 済みの pipeline CLI を再利用する。core / ai /
 rules / server / pipeline の source または依存設定が前回 build より新しい場合だけ、
@@ -62,8 +62,9 @@ pnpm --filter @daifugo/pipeline review
 
 確定待ちの提案を1件ずつ表示し、`a`（SPEC承認）または `r`（却下確定）、
 `e`（エディタで内容を編集して確定）、`s`（保留）、`q`（終了）で処理する。
-キー入力には Enter が必要。`needs_review` は理由の編集を必須とし、そのまま
-確定する選択肢を出さない。中断・保留した提案は次回の `review` に再表示される。
+キー入力には Enter が必要。`needs_review` はそのまま確定する選択肢を出さず、
+理由を記入した却下か、`e` で `approve_spec` へ書き換えた SPEC 承認のどちらかを
+開発者が選ぶ。中断・保留した提案は次回の `review` に再表示される。
 actor は Git の `user.email` を既定で使う。Git email がなければ
 `local:<ローカルユーザー名>` を使う。明示する場合だけ `.env.local` の
 `PIPELINE_ACTOR` または `--actor` で上書きする。
@@ -90,6 +91,42 @@ CX-01 の却下は `action=confirm_rejection` と `judgementId` を使う。
 `spec`（不変な `SPEC.json` の元）と `scaffoldMeta`（slug / messages）を分ける。
 サーバーは対象ID・提案状態・E6 passを再確認し、監査行・カード／却下または
 queuedジョブを同じtransactionで確定する。確定ファイルには管理tokenを書かない。
+
+## 拡張前提の提案を設計セッションへ渡す
+
+CX-01 は「エンジン/契約を拡張すれば実装できる」提案を `needs_review` +
+`extensionNeeded`(機構タグ + スケッチ)で返す。`review` はこの種の提案を対話
+ループの前に機構タグ別へ集約して表示するので、どのタグに何件たまっているかは
+一覧の冒頭で分かる。個別表示では、その提案 ID を埋めた引き継ぎコマンドが出る。
+
+```bash
+pnpm --filter @daifugo/pipeline design:handoff -- <提案ID>
+```
+
+`ADMIN_PIPELINE_TOKEN` と `DAIFUGO_ADMIN_URL` は `judge` / `review` と同じものを
+使う。書き出し先は既定で `<一時ディレクトリ>/daifugo-design-handoff/proposal-<提案ID>.json`
+(モード `0600`)で、パスは標準出力に表示される。`--out` で変更できる。確定待ちの
+CX-01 判定がない提案 ID を渡すとエラーになる。
+
+このファイルを Codex App の新しいタスクへ渡し、設計 skill を起動する。
+
+```text
+$design-extension
+このハンドオフの提案について拡張を設計して
+```
+
+skill は契約の一次情報を読んで `docs/specs/` に拡張設計 doc を書き、**開発者の
+承認を得てから**拡張を実装する。実装はルール PR ではなく通常のエンジン開発なので、
+`pnpm verify` の後 `main` へ push し、デプロイまで行う。
+
+拡張のデプロイ後に `judge` を再実行するのが主経路になる。プロンプト版を繰り上げると
+未確定の AI 判定が再判定対象へ戻るため、対象提案は新しい語彙で判定し直され、通常は
+`approve` + SPEC が出る。あとは `review` で SPEC を承認し、`$implement-rule` へ進む。
+再判定しても `needs_review` のままだった場合だけ、設計セッションが SPEC と
+scaffoldMeta を手書きし、`action=approve_spec` の確定ファイルを `confirm` で送る
+(`judgementId` は再判定で作られた最新の AI 判定を使う)。
+
+フロー全体の設計判断は [specs/2026-08-11-judge-extension-flow-design.md](../specs/2026-08-11-judge-extension-flow-design.md) にある。
 
 ## 承認済みルールを実装する
 

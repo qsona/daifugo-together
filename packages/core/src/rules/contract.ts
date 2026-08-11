@@ -23,7 +23,17 @@ export const SUPPORTED_CONTRACT_VERSIONS: readonly RuleContractVersion[] = [
 /** エンジンのネイティブ機能のうち、ルールが宣言で有効化できるもの。 */
 export type EngineFeature = 'sequence' | 'jokers';
 
-export const ENGINE_FEATURES: readonly EngineFeature[] = ['sequence', 'jokers'];
+export const ENGINE_FEATURES = [
+  'sequence',
+  'jokers',
+] as const satisfies readonly EngineFeature[];
+
+// EngineFeature に値を追加したのに ENGINE_FEATURES を更新し忘れると、直前の satisfies 行
+// ではなくこの行がコンパイルエラーになる。
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type _EngineFeaturesExhaustive = AssertExhaustive<
+  Exclude<EngineFeature, (typeof ENGINE_FEATURES)[number]>
+>;
 
 /**
  * ルールチェーン全体で有効なエンジン機能の和集合を返す。
@@ -36,6 +46,13 @@ export function engineFeaturesOf(
     ruleChain.some((entry) => entry.engineFeatures?.includes(feature)),
   );
 }
+
+/**
+ * 型レベルの網羅性ガード。渡した型引数が `never` でない場合はコンパイルエラーになる。
+ * 実行時配列が対応する union を過不足なくカバーしていることを保証するために使う。
+ * 例: `type _Check = AssertExhaustive<Exclude<SomeUnion, (typeof SOME_ARRAY)[number]>>;`
+ */
+type AssertExhaustive<T extends never> = T;
 
 export interface PriorityKey {
   score: number;
@@ -119,6 +136,22 @@ export interface RuleHooks {
   onGameEnd(context: RuleContext, standings: DeepReadonly<Standings>): Effect[];
 }
 
+/** RuleHooks の全フック名。順序は宣言順(呼び出し順とは無関係)。 */
+export const RULE_HOOK_NAMES = [
+  'modifyLegality',
+  'modifyStrength',
+  'afterPlay',
+  'afterFieldClear',
+  'onGameStart',
+  'onGameEnd',
+] as const satisfies readonly (keyof RuleHooks)[];
+
+// RuleHooks にフックを追加/削除したのにここを更新し忘れると、この行がコンパイルエラーになる。
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- 型チェックのためだけに存在する
+type _RuleHookNamesExhaustive = AssertExhaustive<
+  Exclude<keyof RuleHooks, (typeof RULE_HOOK_NAMES)[number]>
+>;
+
 export interface RuleContext {
   readonly contractVersion: RuleContractVersion;
   readonly game: GameView;
@@ -180,6 +213,19 @@ export type RuleInput =
       scores: Record<PlayerId, { score: number; hitsTaken: number }>;
     };
 
+/** RuleInput の全 kind 文字列。 */
+export const RULE_INPUT_KINDS = [
+  'cards',
+  'player',
+  'miniGameResult',
+] as const satisfies readonly RuleInput['kind'][];
+
+// RuleInput に kind を追加/削除したのにここを更新し忘れると、この行がコンパイルエラーになる。
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- 型チェックのためだけに存在する
+type _RuleInputKindsExhaustive = AssertExhaustive<
+  Exclude<RuleInput['kind'], (typeof RULE_INPUT_KINDS)[number]>
+>;
+
 export interface CardChoiceRequest {
   player: PlayerId;
   choiceId: string;
@@ -206,6 +252,17 @@ export interface MiniGameChoiceRequest {
   seed: string;
   messageKey: string;
 }
+
+/** 実装済みミニゲーム id。 */
+export const MINI_GAME_IDS = [
+  'bomb_throw_15',
+] as const satisfies readonly MiniGameChoiceRequest['miniGame'][];
+
+// MiniGameChoiceRequest.miniGame に id を追加/削除したのにここを更新し忘れると、この行がコンパイルエラーになる。
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- 型チェックのためだけに存在する
+type _MiniGameIdsExhaustive = AssertExhaustive<
+  Exclude<MiniGameChoiceRequest['miniGame'], (typeof MINI_GAME_IDS)[number]>
+>;
 
 export type ChoiceRequestPayload =
   CardChoiceRequest | PlayerChoiceRequest | MiniGameChoiceRequest;
@@ -281,3 +338,22 @@ export type Effect =
        */
       players?: PlayerId[];
     };
+
+/** Effect の全 type 文字列。順序は宣言順。 */
+export const EFFECT_TYPES = [
+  'clearField',
+  'requestChoice',
+  'skipTurns',
+  'reverseTurnOrder',
+  'forceRank',
+  'moveCards',
+  'setMemory',
+  'announce',
+] as const satisfies readonly Effect['type'][];
+
+// Effect に variant を追加/削除したのにここを更新し忘れると、この行がコンパイルエラーになる
+// (上記 doc コメントが定める「網羅 switch でコンパイルを壊す」方針の実行時版)。
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- 型チェックのためだけに存在する
+type _EffectTypesExhaustive = AssertExhaustive<
+  Exclude<Effect['type'], (typeof EFFECT_TYPES)[number]>
+>;

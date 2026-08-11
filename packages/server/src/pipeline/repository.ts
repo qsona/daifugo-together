@@ -52,6 +52,11 @@ export interface RuleScaffoldMeta {
   messages: Record<string, string>;
 }
 
+export interface ExtensionNeeded {
+  capabilities: string[];
+  sketch: string;
+}
+
 export interface JudgementInput {
   verdict: JudgementVerdict;
   rejectCategory: RejectCategory | null;
@@ -60,6 +65,7 @@ export interface JudgementInput {
   reasonInternal: string;
   spec: RuleSpecification | null;
   scaffoldMeta: RuleScaffoldMeta | null;
+  extensionNeeded: ExtensionNeeded | null;
   confidence: number | null;
   decidedBy: 'ai' | 'developer';
   model: string | null;
@@ -160,6 +166,7 @@ type JudgementRow = {
   reason_internal: string;
   spec_json: string | null;
   scaffold_meta_json: string | null;
+  extension_needed_json: string | null;
   confidence: number | null;
   decided_by: 'ai' | 'developer';
   model: string | null;
@@ -210,6 +217,10 @@ function storedJudgement(row: JudgementRow): StoredJudgement {
       row.scaffold_meta_json === null
         ? null
         : (JSON.parse(row.scaffold_meta_json) as RuleScaffoldMeta),
+    extensionNeeded:
+      row.extension_needed_json === null
+        ? null
+        : (JSON.parse(row.extension_needed_json) as ExtensionNeeded),
     confidence: row.confidence,
     decidedBy: row.decided_by,
     model: row.model,
@@ -277,6 +288,7 @@ export class PipelineRepository {
         reason_internal TEXT NOT NULL,
         spec_json TEXT,
         scaffold_meta_json TEXT,
+        extension_needed_json TEXT,
         confidence REAL,
         decided_by TEXT NOT NULL CHECK (decided_by IN ('ai', 'developer')),
         model TEXT,
@@ -335,6 +347,13 @@ export class PipelineRepository {
     }
     if (!judgementColumns.some(({ name }) => name === 'run_id')) {
       this.#sqlite.exec('ALTER TABLE judgements ADD COLUMN run_id TEXT');
+    }
+    if (
+      !judgementColumns.some(({ name }) => name === 'extension_needed_json')
+    ) {
+      this.#sqlite.exec(
+        'ALTER TABLE judgements ADD COLUMN extension_needed_json TEXT',
+      );
     }
     const pipelineJobColumns = this.#sqlite
       .prepare("PRAGMA table_info('pipeline_jobs')")
@@ -477,9 +496,10 @@ export class PipelineRepository {
         `INSERT INTO judgements (
            proposal_id, verdict, reject_category, reject_subtype,
            reason_for_user, reason_internal, spec_json, confidence, decided_by,
-           scaffold_meta_json, model, prompt_version, latency_ms,
-           source_check_id, source_judgement_id, run_id, actor, created_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           scaffold_meta_json, extension_needed_json, model, prompt_version,
+           latency_ms, source_check_id, source_judgement_id, run_id, actor,
+           created_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         proposalId,
@@ -492,6 +512,9 @@ export class PipelineRepository {
         input.confidence,
         input.decidedBy,
         input.scaffoldMeta === null ? null : JSON.stringify(input.scaffoldMeta),
+        input.extensionNeeded === null
+          ? null
+          : JSON.stringify(input.extensionNeeded),
         input.model,
         input.promptVersion,
         input.latencyMs,

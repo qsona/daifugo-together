@@ -11,7 +11,7 @@ import { InjectionSignalRecorder } from '../injection/screening.js';
 import { SqlitePersistence } from '../persistence.js';
 import { ProposalSubmissionService } from '../proposal/submission.js';
 import { NotificationService } from '../notification/service.js';
-import { PipelineJudgementService } from './service.js';
+import { PipelineJudgementService, parseAiJudgement } from './service.js';
 
 const instances: SqlitePersistence[] = [];
 const directories: string[] = [];
@@ -60,6 +60,24 @@ function aiApprove() {
     promptVersion: 'cx01-v1',
     latencyMs: 12,
     runId: 'run-approve',
+  };
+}
+
+function aiNeedsReview(overrides: Record<string, unknown> = {}) {
+  return {
+    verdict: 'needs_review',
+    rejectCategory: null,
+    rejectSubtype: null,
+    reasonForUser: null,
+    reasonInternal: '契約外の状態が必要か解釈に確信がない。',
+    spec: null,
+    scaffoldMeta: null,
+    confidence: 0.5,
+    model: 'gpt-5.6-sol',
+    promptVersion: 'cx01-v1',
+    latencyMs: 10,
+    runId: 'run-needs-review',
+    ...overrides,
   };
 }
 
@@ -972,6 +990,7 @@ describe('CX-01 judgement and VERDICT_CONFIRMATION', () => {
       reasonInternal: 'Legacy judgement without prompt version.',
       spec: null,
       scaffoldMeta: null,
+      extensionNeeded: null,
       confidence: 0.8,
       decidedBy: 'ai',
       model: 'gpt-5.6-sol',
@@ -1113,5 +1132,290 @@ describe('CX-01 judgement and VERDICT_CONFIRMATION', () => {
         check: { finalVerdict: 'pass' },
       },
     ]);
+  });
+});
+
+describe('parseAiJudgement: extensionNeeded', () => {
+  it('needs_review + 有効なextensionNeededを保持したまま受理する', () => {
+    const result = parseAiJudgement(
+      aiNeedsReview({
+        extensionNeeded: {
+          capabilities: ['minigame:ab_vote', 'state:points'],
+          sketch: '得票をpointsに変換するミニゲームの拡張案。',
+        },
+      }),
+    );
+    expect(result).toMatchObject({
+      verdict: 'needs_review',
+      extensionNeeded: {
+        capabilities: ['minigame:ab_vote', 'state:points'],
+        sketch: '得票をpointsに変換するミニゲームの拡張案。',
+      },
+    });
+  });
+
+  it('フィールド未指定はnullとして受理する(既存互換)', () => {
+    expect(parseAiJudgement(aiNeedsReview())).toMatchObject({
+      extensionNeeded: null,
+    });
+    expect(parseAiJudgement(aiApprove())).toMatchObject({
+      extensionNeeded: null,
+    });
+  });
+
+  it('needs_reviewでのnull明示も引き続き有効', () => {
+    expect(
+      parseAiJudgement(aiNeedsReview({ extensionNeeded: null })),
+    ).toMatchObject({ extensionNeeded: null });
+  });
+
+  it('approveでの非nullはjudgement全体をinvalidにする', () => {
+    expect(
+      parseAiJudgement({
+        ...aiApprove(),
+        extensionNeeded: {
+          capabilities: ['state:points'],
+          sketch: '拡張が必要かもしれない。',
+        },
+      }),
+    ).toBeNull();
+  });
+
+  it('rejectでの非nullはjudgement全体をinvalidにする', () => {
+    expect(
+      parseAiJudgement({
+        verdict: 'reject',
+        rejectCategory: 'contract',
+        rejectSubtype: 'A1',
+        reasonForUser: 'プレイ途中の追加選択が必要なため実装できません。',
+        reasonInternal: 'Contract v1 has no choice mechanism.',
+        spec: null,
+        scaffoldMeta: null,
+        confidence: 0.98,
+        model: 'gpt-5.6-sol',
+        promptVersion: 'cx01-v1',
+        latencyMs: 10,
+        extensionNeeded: {
+          capabilities: ['state:points'],
+          sketch: '拡張が必要かもしれない。',
+        },
+      }),
+    ).toBeNull();
+  });
+
+  it.each([
+    ['0件', []],
+    ['5件', ['a:b', 'c:d', 'e:f', 'g:h', 'i:j']],
+    ['パターン違反(大文字始まり)', ['Minigame:ab_vote']],
+    ['65文字', ['a'.repeat(65)]],
+  ])('capabilitiesが%sならinvalid', (_label, capabilities) => {
+    expect(
+      parseAiJudgement(
+        aiNeedsReview({
+          extensionNeeded: {
+            capabilities,
+            sketch: '設計セッション向けの語彙レベルのヒント。',
+          },
+        }),
+      ),
+    ).toBeNull();
+  });
+
+  it.each([
+    ['空文字', ''],
+    ['1001文字', 'a'.repeat(1001)],
+  ])('sketchが%sならinvalid', (_label, sketch) => {
+    expect(
+      parseAiJudgement(
+        aiNeedsReview({
+          extensionNeeded: { capabilities: ['state:points'], sketch },
+        }),
+      ),
+    ).toBeNull();
+  });
+
+  it('capabilitiesが4件・64文字境界は受理する', () => {
+    const capabilities = [
+      'a'.repeat(64),
+      'minigame:ab_vote',
+      'input:free_text',
+      'state:points',
+    ];
+    expect(
+      parseAiJudgement(
+        aiNeedsReview({
+          extensionNeeded: {
+            capabilities,
+            sketch: '境界値の確認用ヒント。',
+          },
+        }),
+      ),
+    ).toMatchObject({ extensionNeeded: { capabilities } });
+  });
+
+  it('sketchが1000文字ちょうどなら受理する', () => {
+    const sketch = 'a'.repeat(1_000);
+    expect(
+      parseAiJudgement(
+        aiNeedsReview({
+          extensionNeeded: { capabilities: ['state:points'], sketch },
+        }),
+      ),
+    ).toMatchObject({ extensionNeeded: { sketch } });
+  });
+
+  it.each([
+    ['文字列', 'state:points'],
+    ['数値', 42],
+    ['配列', ['state:points']],
+  ])('extensionNeededが非オブジェクト(%s)ならinvalid', (_label, value) => {
+    expect(
+      parseAiJudgement(aiNeedsReview({ extensionNeeded: value })),
+    ).toBeNull();
+  });
+
+  it.each([
+    ['文字列', 'state:points'],
+    ['オブジェクト', { a: 'state:points' }],
+    ['null', null],
+  ])('capabilitiesが非配列(%s)ならinvalid', (_label, capabilities) => {
+    expect(
+      parseAiJudgement(
+        aiNeedsReview({
+          extensionNeeded: {
+            capabilities,
+            sketch: '設計セッション向けの語彙レベルのヒント。',
+          },
+        }),
+      ),
+    ).toBeNull();
+  });
+
+  it.each([
+    ['数値混在', [42, 'state:points']],
+    ['null混在', [null, 'state:points']],
+    ['オブジェクト混在', [{}, 'state:points']],
+  ])('capabilities要素が非文字列(%s)ならinvalid', (_label, capabilities) => {
+    expect(
+      parseAiJudgement(
+        aiNeedsReview({
+          extensionNeeded: {
+            capabilities,
+            sketch: '設計セッション向けの語彙レベルのヒント。',
+          },
+        }),
+      ),
+    ).toBeNull();
+  });
+
+  it('capabilitiesキー欠落ならinvalid', () => {
+    expect(
+      parseAiJudgement(
+        aiNeedsReview({
+          extensionNeeded: {
+            sketch: '設計セッション向けの語彙レベルのヒント。',
+          },
+        }),
+      ),
+    ).toBeNull();
+  });
+
+  it('sketchキー欠落ならinvalid', () => {
+    expect(
+      parseAiJudgement(
+        aiNeedsReview({
+          extensionNeeded: { capabilities: ['state:points'] },
+        }),
+      ),
+    ).toBeNull();
+  });
+});
+
+describe('judgements: extensionNeeded の永続化', () => {
+  it('DB round-trip: 挿入した値がそのまま復元される', async () => {
+    const { persistence, proposal, local, pipeline } = await setup();
+    local.record(proposal.id, {
+      verdict: 'clean',
+      reason: '通常の提案',
+      evidence: null,
+      model: 'gpt-5.6-sol',
+      latencyMs: 5,
+    });
+    const extensionNeeded = {
+      capabilities: ['minigame:ab_vote', 'state:points'],
+      sketch: '得票をpointsに変換するミニゲームの拡張案。',
+    };
+    const recorded = pipeline.recordAi(
+      proposal.id,
+      aiNeedsReview({ extensionNeeded, runId: 'run-extension-needed' }),
+    );
+    expect(recorded).toMatchObject({
+      status: 'recorded',
+      judgement: { extensionNeeded },
+    });
+    if (recorded.status !== 'recorded') return;
+    expect(persistence.pipeline.judgement(recorded.judgement.id)).toMatchObject(
+      { extensionNeeded },
+    );
+  });
+
+  it('既存DB(extension_needed_json列なし)を開いても壊れず、以後の挿入も復元できる', async () => {
+    const directory = mkdtempSync(
+      join(tmpdir(), 'pipeline-extension-needed-migration-'),
+    );
+    directories.push(directory);
+    const databasePath = join(directory, 'pipeline.sqlite');
+    const { persistence, proposal, local, pipeline } =
+      await setup(databasePath);
+    local.record(proposal.id, {
+      verdict: 'clean',
+      reason: '通常の提案',
+      evidence: null,
+      model: 'gpt-5.6-sol',
+      latencyMs: 5,
+    });
+    pipeline.recordAi(proposal.id, aiApprove());
+    instances.splice(instances.indexOf(persistence), 1);
+    persistence.close();
+
+    const oldDatabase = new Database(databasePath);
+    oldDatabase.exec(
+      'ALTER TABLE judgements DROP COLUMN extension_needed_json',
+    );
+    oldDatabase.close();
+
+    const restarted = new SqlitePersistence(databasePath);
+    instances.push(restarted);
+    expect(restarted.pipeline.latestAiJudgement(proposal.id)).toMatchObject({
+      extensionNeeded: null,
+    });
+
+    const inserted = restarted.pipeline.insertJudgement(proposal.id, {
+      verdict: 'needs_review',
+      rejectCategory: null,
+      rejectSubtype: null,
+      reasonForUser: null,
+      reasonInternal: 'マイグレーション後の再判定。',
+      spec: null,
+      scaffoldMeta: null,
+      extensionNeeded: {
+        capabilities: ['state:points'],
+        sketch: 'マイグレーション後の拡張ヒント。',
+      },
+      confidence: 0.6,
+      decidedBy: 'ai',
+      model: 'gpt-5.6-sol',
+      promptVersion: 'cx01-v1',
+      latencyMs: 9,
+      sourceCheckId: null,
+      sourceJudgementId: null,
+      runId: 'run-after-migration',
+      actor: null,
+      createdAt: 20,
+    });
+    expect(inserted.extensionNeeded).toEqual({
+      capabilities: ['state:points'],
+      sketch: 'マイグレーション後の拡張ヒント。',
+    });
   });
 });

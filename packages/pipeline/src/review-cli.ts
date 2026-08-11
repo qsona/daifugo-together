@@ -13,12 +13,16 @@ import {
 } from './confirmation.js';
 import {
   editableConfirmation,
+  extensionPendingSummary,
   formatReviewItem,
   manualRejectionConfirmation,
   MANUAL_REJECTION_REASONS,
   suggestedConfirmation,
   validateConfirmationForItem,
 } from './review.js';
+
+const DESIGN_HANDOFF_HINT =
+  'pnpm --filter @daifugo/pipeline design:handoff -- ';
 
 function option(name: string): string | null {
   const index = process.argv.indexOf(name);
@@ -192,6 +196,13 @@ const listed = await requestJson(
 );
 const items = confirmations(listed).slice(0, limit);
 
+const pendingSummary = extensionPendingSummary(items);
+if (pendingSummary !== null) {
+  process.stdout.write(
+    `拡張待ちの提案(エンジン/契約の拡張があれば実装可能):\n${pendingSummary}\n設計セッションへの引き継ぎ: ${DESIGN_HANDOFF_HINT}<提案ID>\n\n`,
+  );
+}
+
 if (items.length === 0) {
   process.stdout.write('確定待ちの提案はありません。\n');
 } else {
@@ -214,6 +225,15 @@ if (items.length === 0) {
           : suggested === null
             ? null
             : 'r';
+      if (
+        item.source === 'cx01' &&
+        item.judgement.verdict === 'needs_review' &&
+        item.judgement.extensionNeeded !== null
+      ) {
+        process.stdout.write(
+          `設計セッションへの引き継ぎ: ${DESIGN_HANDOFF_HINT}${item.proposal.id}\n`,
+        );
+      }
       const choices = [
         ...(acceptKey === 'a' ? ['[a] 承認して次へ'] : []),
         ...(item.source === 'cx01' ? ['[r] 理由を選んで却下'] : []),

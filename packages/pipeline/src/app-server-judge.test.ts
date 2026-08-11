@@ -235,6 +235,28 @@ describe('CodexCxJudge', () => {
     expect(result.spec?.engineFeatures).toEqual(['sequence', 'jokers']);
   });
 
+  it('needs_reviewのextensionNeededをtransport正規化で落とさない', async () => {
+    const extensionNeeded = {
+      capabilities: ['minigame:ab_vote', 'state:points'],
+      sketch: '二択投票のミニゲームと、ゲームをまたがない得点状態が要る。',
+    };
+    const rpc = new FakeRpc({
+      verdict: 'needs_review',
+      rejectCategory: null,
+      rejectSubtype: null,
+      reasonForUser: null,
+      reasonInternal: '現行語彙では表現できない。',
+      spec: null,
+      scaffoldMeta: null,
+      extensionNeeded,
+      confidence: 0.6,
+    });
+    const result = await new CodexCxJudge({ rpc, model: 'gpt-5.6-sol' }).judge(
+      pending(),
+    );
+    expect(result.extensionNeeded).toEqual(extensionNeeded);
+  });
+
   it('Structured Outputs対応キーワードだけでスキーマを構成する', async () => {
     const rpc = new FakeRpc(rejectOutput());
     await new CodexCxJudge({ rpc, model: 'gpt-5.6-sol' }).judge(pending());

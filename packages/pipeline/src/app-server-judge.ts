@@ -9,7 +9,7 @@ import {
 } from '@daifugo/server';
 import { buildCxJudgePrompt, CX01_PROMPT_VERSION } from './judge-prompt.js';
 
-const CX01_OUTPUT_SCHEMA = {
+export const CX01_OUTPUT_SCHEMA = {
   type: 'object',
   additionalProperties: false,
   required: [
@@ -20,6 +20,7 @@ const CX01_OUTPUT_SCHEMA = {
     'reasonInternal',
     'spec',
     'scaffoldMeta',
+    'extensionNeeded',
     'confidence',
   ],
   properties: {
@@ -172,6 +173,30 @@ const CX01_OUTPUT_SCHEMA = {
                 },
               },
             },
+          },
+        },
+        { type: 'null' },
+      ],
+    },
+    // Structured Outputs は minLength/maxLength を受け付けないため、capabilities の
+    // 64文字上限と sketch の 1〜1000 文字はプロンプト文言と parseAiJudgement 側で担保する。
+    extensionNeeded: {
+      anyOf: [
+        {
+          type: 'object',
+          additionalProperties: false,
+          required: ['capabilities', 'sketch'],
+          properties: {
+            capabilities: {
+              type: 'array',
+              minItems: 1,
+              maxItems: 4,
+              items: {
+                type: 'string',
+                pattern: '^[a-z][a-z0-9_-]*(:[a-z0-9_.-]+)?$',
+              },
+            },
+            sketch: { type: 'string' },
           },
         },
         { type: 'null' },

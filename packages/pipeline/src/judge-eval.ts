@@ -103,11 +103,15 @@ try {
       verdict: result.verdict,
       rejectCategory: result.rejectCategory,
       rejectSubtype: result.rejectSubtype,
+      extensionNeeded: result.extensionNeeded !== null,
     };
     const matched =
       actual.verdict === sample.expected.verdict &&
       actual.rejectCategory === sample.expected.rejectCategory &&
-      actual.rejectSubtype === sample.expected.rejectSubtype;
+      actual.rejectSubtype === sample.expected.rejectSubtype &&
+      // extensionNeeded を明示したケースだけ、非nullかどうかを一致条件に加える。
+      (sample.expected.extensionNeeded === undefined ||
+        actual.extensionNeeded === sample.expected.extensionNeeded);
     if (matched) matches += 1;
     latencyMs += result.latencyMs;
     process.stdout.write(

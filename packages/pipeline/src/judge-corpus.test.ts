@@ -22,13 +22,18 @@ describe('CX-01 evaluation corpus', () => {
         subtype,
       ).toBe(true);
     }
-    // A1〜A3（追加入力・語彙外・エンジン拡張）は契約拡張候補なので needs_review
-    for (const id of ['A1', 'A2', 'A3']) {
+    // A2〜A3（語彙外の状態・エンジン拡張）は契約拡張候補なので needs_review
+    for (const id of ['A2', 'A3']) {
       expect(
         CX_JUDGE_CORPUS.find((c) => c.id === id)?.expected.verdict,
         id,
       ).toBe('needs_review');
     }
+    // A1（カード選択＋相手選択の二段階入力）は contract v2 で表現できるので approve
+    expect(
+      CX_JUDGE_CORPUS.find((c) => c.id === 'A1')?.expected.verdict,
+      'A1',
+    ).toBe('approve');
     expect(
       CX_JUDGE_CORPUS.filter(({ expected }) => expected.verdict === 'approve')
         .length,
