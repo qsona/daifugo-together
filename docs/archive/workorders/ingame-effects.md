@@ -6,7 +6,7 @@
 
 **ゴール:** 対局中の「何が起きたか」を読み取れるようにする。カットインが引いてから場が流れる / ルール名タップで盤面を離れずモーダルが開く / 自分の手番が手札トレイで分かる。
 
-**設計書:** [docs/design/ingame-effects-design.md](../design/ingame-effects-design.md) が正。本書は設計書を実装手順に落としたもので、仕様の判断が要る場面は設計書へ戻ること。
+**設計書:** [docs/design/ingame-effects-design.md](../../design/ingame-effects-design.md) が正。本書は設計書を実装手順に落としたもので、仕様の判断が要る場面は設計書へ戻ること。
 
 **アーキテクチャ:** サーバーは by-id の図鑑エンドポイントを 1 本足すだけ(`GET /api/rules/{ruleId}`)。`@daifugo/core` の**部屋の契約(`PlayerRoomView` / `RuleRef`)は変更しない**。Web 側は、卓の描画ロジックを `App.tsx` から `src/game/table.ts` へ切り出して単体テスト可能にし、そこに「場が流れるのを保持する」モードを足す。モーダルは既存 `Dialog` を拡張して 2 種類(有効ルール一覧・ルール詳細)を組む。
 

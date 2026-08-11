@@ -11,6 +11,7 @@ packages/rules/generated/
 # ローカル管理用の秘密値
 .env.local
 
-# Claude Code のローカル作業データ(launch.json だけ共有する)
+# Claude Code のローカル作業データ(launch.json と skills だけ共有する)
 .claude/*
 !.claude/launch.json
+!.claude/skills/

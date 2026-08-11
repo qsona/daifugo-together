@@ -100,4 +100,4 @@ fly secrets list --app daifugo-together
 
 ## 7. 完了記録
 
-`docs/impl-progress.md`のE15「残る開発者確認」へ、実施日、Google Cloud project、OAuth client名、本番確認結果を追記する。Client ID全文・Client secret・認可コード・`user_token`は記録しない。
+実施記録は本 runbook 末尾の「実施記録」節へ追記し(節がなければ作る)、`docs/status.md` の該当行(E15 の実 Google 通し受入)を更新する(完了なら行を削除する)。追記する内容は、実施日、Google Cloud project、OAuth client名、本番確認結果。Client ID全文・Client secret・認可コード・`user_token`は記録しない。

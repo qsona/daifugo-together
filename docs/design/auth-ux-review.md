@@ -4,7 +4,7 @@
 
 **2026-07-30 追補**: 開発者の依頼により、**プレイヤー名(表示名)の設定・表示**を対象に加えた(§2.8・§5.6)。表示名は「引き継がれるもの」の筆頭(E15 §2.5)であり、Google からは取得せずアプリ内で付ける(AU-D5)ため、認証 UX と不可分である。
 
-参照: [E15: 引き継ぎ登録・ログイン](../epics/E15-auth-account.md) / [UI文言・情報量ガイド.md](./UI文言・情報量ガイド.md) / [UIライティングガイド](./ui-writing-style-guide.md) / [デザインシステム.md](./デザインシステム.md) / [匿名おためし提案枠 実装計画](../plans/2026-07-30-anonymous-trial-proposal.md)
+参照: [E15: 引き継ぎ登録・ログイン](../epics/E15-auth-account.md) / [UI文言・情報量ガイド.md](./UI文言・情報量ガイド.md) / [UIライティングガイド](./ui-writing-style-guide.md) / [デザインシステム.md](./デザインシステム.md) / [匿名おためし提案枠 実装計画](../archive/plans/2026-07-30-anonymous-trial-proposal.md)
 
 ---
 

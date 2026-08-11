@@ -2,7 +2,7 @@
 
 - 作成日: 2026-07-27
 - 状態: 確定(2026-07-27 開発者承認。フェーズ 1 として着手可)
-- 一次情報源: `docs/epics/E12-tech-stack.md`(§4.5, §4.6, §6) / `docs/product-backlog.md`(DP-01〜03) / `docs/decision-log.md`(A-2) / `docs/impl-progress.md`(E3 の実装済み範囲)
+- 一次情報源: `docs/epics/E12-tech-stack.md`(§4.5, §4.6, §6) / `docs/product-backlog.md`(DP-01〜03) / `docs/decision-log.md`(A-2) / `docs/archive/impl-progress.md`(E3 の実装済み範囲)
 
 ---
 
@@ -37,7 +37,7 @@ DP-02 と DP-03 は DP-01 のあと**並行して進めてよい**(互いに依�
 | **E1(ゲームエンジン)/ E3(マルチプレイ)** | draining の**エンジン・サーバー側の実装は GE-05 / MP-01 の持ち物**であり、E3 で実装済み(`app.beginDrain()` → Core `requestDrain`)。E13 は `fly.toml` の `kill_timeout` と SIGTERM の到達経路を配線するだけで、drain の意味論には手を入れない |
 | **E7(codex パイプライン)** | DP-02 の CD が、E7 の「ルール PR が main にマージされたら反映される」の**最後の一歩を提供する**。E7 は反映機構を自前で持たない |
 | **E10(運用・観測)** | E10 は §1.4 で計測とレート制御に範囲を限定しており、インフラは範囲外。DP-03 のログは `fly logs` で読める構造化ログまでで、`ops_events` などの計測テーブルは E10 の持ち物 |
-| **E4(デザイン)** | `og:image` の絶対 URL(DS-01 の残件。`docs/impl-progress.md` 仮定 17)が DP-01 の公開 URL 確定で解消する |
+| **E4(デザイン)** | `og:image` の絶対 URL(DS-01 の残件。`docs/archive/impl-progress.md` 仮定 17)が DP-01 の公開 URL 確定で解消する |
 | **E6(インジェクション対策)** | リポジトリ public(decision-log A-2)の前提として、**デプロイ用シークレットが fork PR から到達できない**ことを DP-02 が担保する |
 
 ### 1.4 スコープ境界(やること / やらないこと)
@@ -157,7 +157,7 @@ E12 §2 の判断基準 2(運用物を増やさない)に従い、Sentry など�
 2. `Dockerfile` を書く(§2.3)。
 3. `fly.toml` を書く。`internal_port = 8080`、`kill_timeout = 300`、`auto_stop_machines = false`、`min_machines_running = 1`、`[[mounts]]` でボリューム、環境変数(§2.2)。単一マシン制約の理由をコメントで残す(§2.1)。
 4. 初回デプロイし、公開 URL を確定する。
-5. 確定した URL で `packages/web/index.html` の `og:image` を絶対 URL に差し替える(`docs/impl-progress.md` 仮定 17 の解消)。同ファイルの「デプロイ先未定」コメントも消す。
+5. 確定した URL で `packages/web/index.html` の `og:image` を絶対 URL に差し替える(`docs/archive/impl-progress.md` 仮定 17 の解消)。同ファイルの「デプロイ先未定」コメントも消す。
 
 #### (c) 受け入れ条件
 
@@ -241,7 +241,7 @@ decision-log A-2 で**リポジトリは public** と決まっている。デプ
 | CI が落ちたコミットがデプロイされない | 手動(DP-02)。わざと落ちる PR を main にマージして確認するのは危険なので、ワークフローの条件式と 1 回の失敗実行ログで確認する |
 | ロールバックが成立する | 手動(DP-03)。1 回実行する |
 
-手動確認の結果は `docs/impl-progress.md` に記録する(このリポジトリの慣行どおり)。
+手動確認の結果は `docs/status.md` の該当項目を更新する。
 
 ---
 

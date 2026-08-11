@@ -122,7 +122,7 @@ DATABASE_PATH=/data/daifugo.sqlite node packages/server/dist/ops.js rule reinsta
 
 ## 初回ドライラン
 
-2026-07-29、空の一時 SQLite に対して build 済みCLIで `metrics`、`settings set elimination_theta 0.70`、`popularity recompute` を実行する。期待結果は、評価帯・日次が空配列、各件数が0、設定変更と再計算が成功JSONを返し、再起動を要求しないこと。実施結果は `docs/impl-progress.md` の Phase 3 プロセス2へ記録する。
+2026-07-29、空の一時 SQLite に対して build 済みCLIで `metrics`、`settings set elimination_theta 0.70`、`popularity recompute` を実行する。期待結果は、評価帯・日次が空配列、各件数が0、設定変更と再計算が成功JSONを返し、再起動を要求しないこと。実施記録は本 runbook 末尾の「実施記録」節へ追記し(節がなければ作る)、`docs/status.md` の該当行を更新する(完了なら行を削除する)。
 
 ## アクションログ
 

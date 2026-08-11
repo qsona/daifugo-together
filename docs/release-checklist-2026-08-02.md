@@ -247,7 +247,7 @@ fly volumes snapshots create <VOLUME_ID>               # 直前の時点を明�
 **なぜ**: Testing のままだと、明示的にテストユーザーとして登録したアカウント以外はログインできない(かつ 100 ユーザー上限)。X 告知で来た人が「引き継ぎ登録」を押して失敗すると、提案(このサービスの中核機能)に到達できない。
 
 **根拠**:
-- `docs/impl-progress.md:1633` — 「実 Google 通し、実セット完走後の登録導線、最終文言は本番デプロイ後の受け入れ確認で完了させる」。
+- `docs/archive/impl-progress.md:1633` — 「実 Google 通し、実セット完走後の登録導線、最終文言は本番デプロイ後の受け入れ確認で完了させる」。
 - `docs/runbooks/E15-google-oauth.md:9-12` — Audience の `External` / `Internal` 選択までは書かれている。
 - `grep -n "公開|production|Testing|テストユーザー|Publishing" docs/runbooks/E15-google-oauth.md` — **Publishing status / Testing / テストユーザーへの言及は 1 件も無い**(ヒットは Internal の説明文中の「検証」2 件のみ)。runbook の穴。
 - `packages/server/src/bin.ts:59-72` — Client ID/secret が無い/失敗すると `google_auth_provider_unavailable` をログして起動は続行。`packages/server/src/app-server.ts:270-273` — provider が無いと `/api/auth/*` は 503 `auth_unavailable`。つまり**サーバーは落ちずに静かにログイン不能になる**。
@@ -262,9 +262,9 @@ fly volumes snapshots create <VOLUME_ID>               # 直前の時点を明�
 4. 起動ログに `google_auth_provider_unavailable` が出ていないか: `fly logs --app daifugo-together --no-tail | grep google_auth_provider_unavailable`。
 5. **自分のアカウント以外**(家族・別 Google アカウント)で、シークレットウィンドウから実際にログインを通す。これが Testing 状態の唯一の確実な検出方法。
 6. `docs/runbooks/E15-google-oauth.md` §4〜§6 の受け入れ手順(AU-01/AU-02/AU-03、375×812)を通す。時間が足りない場合、**最低でも §4 の 1〜5(実ログイン → 提案送信)だけは通す**。
-7. 実施結果を `docs/impl-progress.md` の E15 節へ追記(`docs/runbooks/E15-google-oauth.md:74-75`)。Client ID 全文・secret・認可コード・`user_token` は書かない。
+7. 実施記録は `docs/runbooks/E15-google-oauth.md` 末尾の「実施記録」節へ追記し(節がなければ作る)、`docs/status.md` の該当行を更新する(完了なら行を削除する)。同 runbook §7 のとおり、Client ID 全文・secret・認可コード・`user_token` は書かない。
 
-**フォールバック**: 万一 OAuth が本番で動かないまま告知時刻になった場合、匿名のままでも遊べる(匿名おためし提案枠が同時 1 件ある。`docs/impl-progress.md:6`、`packages/server/src/proposal/submission.ts:108-113,137-140`)。壊滅ではないが、告知文で「ログインは調整中」と書くか、ログイン導線を隠す判断が要る。
+**フォールバック**: 万一 OAuth が本番で動かないまま告知時刻になった場合、匿名のままでも遊べる(匿名おためし提案枠が同時 1 件ある。`docs/archive/impl-progress.md:6`、`packages/server/src/proposal/submission.ts:108-113,137-140`)。壊滅ではないが、告知文で「ログインは調整中」と書くか、ログイン導線を隠す判断が要る。
 
 ---
 
@@ -360,7 +360,7 @@ fly ssh console --app daifugo-together -C "node --input-type=module" < funnel.mj
 2. デプロイ後、`docs/runbooks/E13-production.md:141-150` の drain 確認手順(`node scripts/verify-production-set.mjs https://daifugo-together.fly.dev` を別端末で走らせながらデプロイ)で、対局が完走することを確認する。
 3. 確認が済んだら(遅くとも 10:40)**告知まで main に push しない**。ルール PR のマージも止める(ルール PR のマージ = デプロイ = ダウンタイム)。10:40 までに drain 確認が終わらない場合は、**デプロイを取り消してロールバックし(手順 5)、フリーズへ入る**。中途半端な状態で告知時刻を迎えない。
 4. 保険として GitHub の `production` Environment に Required reviewers を設定しておくと、うっかり push でも本番へ出ない。
-5. 告知当日に緊急修正が必要になった場合のロールバック手順は `docs/runbooks/E13-production.md:151-167` にある(**実際に一度実行して戻せることを検証済み**: `docs/impl-progress.md:1537`)。この節を明日開いておく。
+5. 告知当日に緊急修正が必要になった場合のロールバック手順は `docs/runbooks/E13-production.md:151-167` にある(**実際に一度実行して戻せることを検証済み**: `docs/archive/impl-progress.md:1537`)。この節を明日開いておく。
 
 ---
 
@@ -475,9 +475,9 @@ db.close();
 **なぜ**: 実画面での確認が**開発環境の制約で残ったまま**になっている項目が複数ある。これらは「本番 URL ができた今なら実行できるが、まだ実行されていない」性質のもので、告知前に潰す価値が高い。X の告知経由の来訪者はほぼスマホなので、ここが崩れていると全部無駄になる。
 
 **根拠**:
-- `docs/impl-progress.md:6` — 匿名おためし提案枠について「**375×812 実画面だけブラウザの localhost 遮断で未確認**」。
-- `docs/impl-progress.md:99` — 「375×812 で未登録フォームと枠埋まりパネルを実画面確認 | Browser / Chrome とも localhost をクライアント側で遮断したため**未確認**。自動 UI テストは成功」。**localhost 遮断が原因なので、本番 URL では実行できる**。
-- `docs/impl-progress.md:1100` — 「**実機のノッチ/ホームインジケータでの見え**は未確認。ブラウザでは `env(safe-area-inset-*)` が 0 になるため、セーフエリアの効きそのものは検証できていない」。これは**実機でしか確認できない**。
+- `docs/archive/impl-progress.md:6` — 匿名おためし提案枠について「**375×812 実画面だけブラウザの localhost 遮断で未確認**」。
+- `docs/archive/impl-progress.md:99` — 「375×812 で未登録フォームと枠埋まりパネルを実画面確認 | Browser / Chrome とも localhost をクライアント側で遮断したため**未確認**。自動 UI テストは成功」。**localhost 遮断が原因なので、本番 URL では実行できる**。
+- `docs/archive/impl-progress.md:1100` — 「**実機のノッチ/ホームインジケータでの見え**は未確認。ブラウザでは `env(safe-area-inset-*)` が 0 になるため、セーフエリアの効きそのものは検証できていない」。これは**実機でしか確認できない**。
 - `packages/web/index.html:5-9` — `viewport-fit=cover` を指定しており、セーフエリアに依存した実装になっている。
 - `docs/runbooks/E15-google-oauth.md:72-78`(§5)に 375×812 での AU-03 受け入れ手順があり、必須-4 と重複するので**まとめて 1 回で済ませられる**。
 
@@ -534,7 +534,7 @@ exit
 ### 4-1. ロールバック手順(観点9)— 問題なし
 
 - `docs/runbooks/E13-production.md:151-167` に、`fly releases --image` で直前のイメージを特定して `fly deploy --image` で戻す手順が実コマンド付きで記載されている。戻らないもの(SQLite データ、スキーマ、secret、`fly.toml` 由来の設定)も明記されている。
-- **机上ではなく実際に実行済み**: `docs/impl-progress.md:1537` —「Fly CLI v0.4.69 で `fly releases --image` から直前の `e13-initial` を特定し、`fly deploy --image` で実際に切り替えた。`/health` passing と `replay_records=333` / `set_results=2` の保持を確認後、同じ手順で `e13-final` へ復帰」。
+- **机上ではなく実際に実行済み**: `docs/archive/impl-progress.md:1537` —「Fly CLI v0.4.69 で `fly releases --image` から直前の `e13-initial` を特定し、`fly deploy --image` で実際に切り替えた。`/health` passing と `replay_records=333` / `set_results=2` の保持を確認後、同じ手順で `e13-final` へ復帰」。
 - 唯一の注意点として「古いイメージはレジストリから永久には保持されない」(`E13-production.md:167`)。明日戻す先が消えている可能性は低いが、**明日朝のデプロイ前に `fly releases --app daifugo-together --image` を実行して、戻り先のタグを控えておく**と確実。
 
 ### 4-2. graceful restart / drain(観点9)— 問題なし

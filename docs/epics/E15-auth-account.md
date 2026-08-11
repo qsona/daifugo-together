@@ -172,7 +172,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_sub ON users(google_sub) WHER
 - サーバーは `AuthProvider` インターフェイス(authUrl 生成・code→sub 解決)に切り、実装を `GoogleAuthProvider`(openid-client)と `FakeAuthProvider` の 2 つにする(FakeCodexRunner と同じ流儀)。
 - 単体テスト: §2.4 の分岐 1〜5 全部、ott 単回性・期限、begin 未認証、503(未設定)、提案 API の 403(§2.6)、ログアウト後の新規匿名発行。
 - クライアント: 完了ハンドラ(localStorage 差し替え・再接続・トースト)、提案画面の未登録分岐、切替確認ダイアログ。
-- 実 Google での通し確認は開発者タスク(§2.9)完了後に手動 1 回(手順を impl-progress に記録)。
+- 実 Google での通し確認は開発者タスク(§2.9)完了後に手動 1 回(結果は `docs/status.md` の該当項目を更新)。
 
 ---
 

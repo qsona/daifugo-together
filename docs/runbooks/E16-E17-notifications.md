@@ -120,4 +120,4 @@ WHERE revoked_at IS NULL;
 
 ## 7. 完了記録
 
-`docs/impl-progress.md` の E16/E17 節へ実施日、ブラウザ/OS、375×812 の結果、Push 受信・夜間抑止・ログアウト解除の結果を追記する。VAPID 鍵、endpoint、`user_token`、Google 識別子は記録しない。
+実施記録は本 runbook 末尾の「実施記録」節へ追記し(節がなければ作る)、`docs/status.md` の該当行(E16/E17 の実 Push 受入)を更新する(完了なら行を削除する)。追記する内容は、実施日、ブラウザ/OS、375×812 の結果、Push 受信・夜間抑止・ログアウト解除の結果。VAPID 鍵、endpoint、`user_token`、Google 識別子は記録しない。
