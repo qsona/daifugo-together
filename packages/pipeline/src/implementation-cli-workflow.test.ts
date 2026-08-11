@@ -13,6 +13,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PipelineJobPort } from './implementation-driver.js';
 import type { RuleReleasePort } from './implementation-api.js';
 import {
+  awaitMergedImplementation,
+  deployMergedImplementation,
   prepareImplementationRetry,
   prepareImplementationWorkspace,
   recordMergedImplementation,
@@ -112,6 +114,32 @@ function processPort(
       return run(input);
     },
   };
+}
+
+function mergedPr(headRefOid = 'b'.repeat(40)): string {
+  return JSON.stringify({
+    state: 'MERGED',
+    mergedAt: '2026-07-27T00:00:00Z',
+    headRefOid,
+    mergeCommit: { oid: 'c'.repeat(40) },
+    reviewDecision: 'APPROVED',
+  });
+}
+
+function deployProcess(
+  refs: Record<string, string>,
+  override: (
+    input: Parameters<ProcessPort['run']>[0],
+  ) => ProcessResult | null = () => null,
+): ProcessPort & { inputs: Parameters<ProcessPort['run']>[0][] } {
+  return processPort(async (input) => {
+    const overridden = override(input);
+    if (overridden) return overridden;
+    if (input.args[0] === 'rev-parse') {
+      return result(0, { stdout: `${refs[input.args[1] ?? ''] ?? ''}\n` });
+    }
+    return result(0);
+  });
 }
 
 function retryJobs(
@@ -371,6 +399,567 @@ describe('implementation CLI workflow', () => {
     expect(update).not.toHaveBeenCalled();
   });
 
+  it('初回pollでMERGEDだったPRをそのままmergedとして記録する', async () => {
+    const current = item('pr_open', {
+      prNumber: 42,
+      headSha: 'b'.repeat(40),
+    });
+    const updates: unknown[] = [];
+    const jobs: Pick<PipelineJobPort, 'resume' | 'update'> = {
+      resume: () => current,
+      update: (_jobId, input) => {
+        updates.push(input);
+        return {
+          status: 'updated',
+          job: { ...current.job, phase: 'merged', mergeSha: 'c'.repeat(40) },
+        };
+      },
+    };
+    const process = processPort(async () => result(0, { stdout: mergedPr() }));
+
+    await expect(
+      awaitMergedImplementation({
+        jobs,
+        process,
+        cwd: '/repo',
+        jobId: 1,
+        maxWaitMs: 1_000,
+        pollIntervalMs: 100,
+        now: () => 0,
+        wait: async () => {},
+      }),
+    ).resolves.toMatchObject({
+      status: 'merged',
+      record: 'recorded',
+      job: { phase: 'merged', mergeSha: 'c'.repeat(40) },
+    });
+    expect(updates).toEqual([
+      { from: 'pr_open', to: 'merged', mergeSha: 'c'.repeat(40) },
+    ]);
+    expect(process.inputs[0]).toMatchObject({
+      command: 'gh',
+      args: [
+        'pr',
+        'view',
+        '42',
+        '--json',
+        'state,mergedAt,mergeCommit,headRefOid,reviewDecision',
+      ],
+    });
+  });
+
+  it('OPENのPRをpoll間隔で待ち、MERGED検出後にmergeを記録する', async () => {
+    const current = item('pr_open', {
+      prNumber: 42,
+      headSha: 'b'.repeat(40),
+    });
+    const update = vi.fn(() => ({
+      status: 'updated' as const,
+      job: {
+        ...current.job,
+        phase: 'merged' as const,
+        mergeSha: 'c'.repeat(40),
+      },
+    }));
+    const waits: number[] = [];
+    let now = 0;
+    let polls = 0;
+    const process = processPort(async () => {
+      polls += 1;
+      return result(0, {
+        stdout:
+          polls < 3
+            ? JSON.stringify({
+                state: 'OPEN',
+                headRefOid: 'b'.repeat(40),
+                reviewDecision: 'REVIEW_REQUIRED',
+              })
+            : mergedPr(),
+      });
+    });
+
+    await expect(
+      awaitMergedImplementation({
+        jobs: { resume: () => current, update },
+        process,
+        cwd: '/repo',
+        jobId: 1,
+        maxWaitMs: 1_000,
+        pollIntervalMs: 100,
+        now: () => now,
+        wait: async (delay) => {
+          waits.push(delay);
+          now += delay;
+        },
+      }),
+    ).resolves.toMatchObject({ status: 'merged', record: 'recorded' });
+    expect(waits).toEqual([100, 100]);
+    expect(polls).toBe(4);
+  });
+
+  it('mergeされずCLOSEDになったPRをclosedとして返す', async () => {
+    const current = item('pr_open', {
+      prNumber: 42,
+      headSha: 'b'.repeat(40),
+    });
+    const update = vi.fn();
+    let now = 0;
+    let polls = 0;
+    const process = processPort(async () => {
+      polls += 1;
+      return result(0, {
+        stdout: JSON.stringify({
+          state: polls < 2 ? 'OPEN' : 'CLOSED',
+          headRefOid: 'b'.repeat(40),
+          reviewDecision: 'REVIEW_REQUIRED',
+        }),
+      });
+    });
+
+    await expect(
+      awaitMergedImplementation({
+        jobs: { resume: () => current, update },
+        process,
+        cwd: '/repo',
+        jobId: 1,
+        maxWaitMs: 1_000,
+        pollIntervalMs: 100,
+        now: () => now,
+        wait: async (delay) => {
+          now += delay;
+        },
+      }),
+    ).resolves.toEqual({ status: 'closed', jobId: 1, prNumber: 42 });
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('起動中にCHANGES_REQUESTEDへ遷移したreviewを早期に返す', async () => {
+    const current = item('pr_open', {
+      prNumber: 42,
+      headSha: 'b'.repeat(40),
+    });
+    let now = 0;
+    let polls = 0;
+    const process = processPort(async () => {
+      polls += 1;
+      return result(0, {
+        stdout: JSON.stringify({
+          state: 'OPEN',
+          headRefOid: polls < 2 ? 'b'.repeat(40) : 'e'.repeat(40),
+          reviewDecision: polls < 2 ? 'REVIEW_REQUIRED' : 'CHANGES_REQUESTED',
+        }),
+      });
+    });
+
+    await expect(
+      awaitMergedImplementation({
+        jobs: { resume: () => current, update: vi.fn() },
+        process,
+        cwd: '/repo',
+        jobId: 1,
+        maxWaitMs: 1_000,
+        pollIntervalMs: 100,
+        now: () => now,
+        wait: async (delay) => {
+          now += delay;
+        },
+      }),
+    ).resolves.toEqual({
+      status: 'changes_requested',
+      jobId: 1,
+      prNumber: 42,
+      headRefOid: 'e'.repeat(40),
+    });
+    expect(polls).toBe(2);
+  });
+
+  it('起動時点で既にCHANGES_REQUESTEDならspinせずpendingまで待つ', async () => {
+    const current = item('pr_open', {
+      prNumber: 42,
+      headSha: 'b'.repeat(40),
+    });
+    let now = 0;
+    let polls = 0;
+    const process = processPort(async () => {
+      polls += 1;
+      return result(0, {
+        stdout: JSON.stringify({
+          state: 'OPEN',
+          headRefOid: 'b'.repeat(40),
+          reviewDecision: 'CHANGES_REQUESTED',
+        }),
+      });
+    });
+
+    await expect(
+      awaitMergedImplementation({
+        jobs: { resume: () => current, update: vi.fn() },
+        process,
+        cwd: '/repo',
+        jobId: 1,
+        maxWaitMs: 300,
+        pollIntervalMs: 100,
+        now: () => now,
+        wait: async (delay) => {
+          now += delay;
+        },
+      }),
+    ).resolves.toEqual({
+      status: 'pending',
+      jobId: 1,
+      prNumber: 42,
+      reviewDecision: 'CHANGES_REQUESTED',
+      reason: 'awaiting_merge',
+    });
+    expect(polls).toBe(4);
+  });
+
+  it('gh参照の継続失敗ではthrowせずinspect_unavailableで待ち続ける', async () => {
+    const current = item('pr_open', {
+      prNumber: 42,
+      headSha: 'b'.repeat(40),
+    });
+    let now = 0;
+    const process = processPort(async () =>
+      result(1, { stderr: 'gh api unavailable' }),
+    );
+
+    await expect(
+      awaitMergedImplementation({
+        jobs: { resume: () => current, update: vi.fn() },
+        process,
+        cwd: '/repo',
+        jobId: 1,
+        maxWaitMs: 2_000,
+        pollIntervalMs: 100,
+        now: () => now,
+        wait: async (delay) => {
+          now += delay;
+        },
+      }),
+    ).resolves.toEqual({
+      status: 'pending',
+      jobId: 1,
+      prNumber: 42,
+      reviewDecision: null,
+      reason: 'inspect_unavailable',
+    });
+    expect(process.inputs.length).toBeGreaterThan(3);
+  });
+
+  it('gh復旧後の初観測がCHANGES_REQUESTEDでもbaseline扱いで待ち続ける', async () => {
+    const current = item('pr_open', {
+      prNumber: 42,
+      headSha: 'b'.repeat(40),
+    });
+    let now = 0;
+    let calls = 0;
+    const process = processPort(async () => {
+      calls += 1;
+      return calls <= 3
+        ? result(1, { stderr: 'gh api unavailable' })
+        : result(0, {
+            stdout: JSON.stringify({
+              state: 'OPEN',
+              headRefOid: 'b'.repeat(40),
+              reviewDecision: 'CHANGES_REQUESTED',
+            }),
+          });
+    });
+
+    await expect(
+      awaitMergedImplementation({
+        jobs: { resume: () => current, update: vi.fn() },
+        process,
+        cwd: '/repo',
+        jobId: 1,
+        maxWaitMs: 500,
+        pollIntervalMs: 100,
+        now: () => now,
+        wait: async (delay) => {
+          now += delay;
+        },
+      }),
+    ).resolves.toEqual({
+      status: 'pending',
+      jobId: 1,
+      prNumber: 42,
+      reviewDecision: 'CHANGES_REQUESTED',
+      reason: 'awaiting_merge',
+    });
+    expect(calls).toBe(5);
+  });
+
+  it('CHANGES_REQUESTED以外へのreview遷移では早期returnせず待ち続ける', async () => {
+    const current = item('pr_open', {
+      prNumber: 42,
+      headSha: 'b'.repeat(40),
+    });
+    let now = 0;
+    let polls = 0;
+    const process = processPort(async () => {
+      polls += 1;
+      return result(0, {
+        stdout: JSON.stringify({
+          state: 'OPEN',
+          headRefOid: 'b'.repeat(40),
+          reviewDecision: polls < 2 ? '' : 'APPROVED',
+        }),
+      });
+    });
+
+    await expect(
+      awaitMergedImplementation({
+        jobs: { resume: () => current, update: vi.fn() },
+        process,
+        cwd: '/repo',
+        jobId: 1,
+        maxWaitMs: 300,
+        pollIntervalMs: 100,
+        now: () => now,
+        wait: async (delay) => {
+          now += delay;
+        },
+      }),
+    ).resolves.toEqual({
+      status: 'pending',
+      jobId: 1,
+      prNumber: 42,
+      reviewDecision: 'APPROVED',
+      reason: 'awaiting_merge',
+    });
+    expect(polls).toBe(4);
+  });
+
+  it('merged phaseから再開したjobはpollせず記録済みmergeを再確認する', async () => {
+    const current = item('merged', {
+      prNumber: 42,
+      headSha: 'b'.repeat(40),
+      mergeSha: 'c'.repeat(40),
+    });
+    const update = vi.fn();
+    const process = processPort(async () => result(0, { stdout: mergedPr() }));
+
+    await expect(
+      awaitMergedImplementation({
+        jobs: { resume: () => current, update },
+        process,
+        cwd: '/repo',
+        jobId: 1,
+      }),
+    ).resolves.toMatchObject({
+      status: 'merged',
+      record: 'already_recorded',
+    });
+    expect(update).not.toHaveBeenCalled();
+    expect(process.inputs).toHaveLength(1);
+  });
+
+  it('MERGEDでもreview済みheadと一致しないPRは記録せず失敗する', async () => {
+    const current = item('pr_open', {
+      prNumber: 42,
+      headSha: 'b'.repeat(40),
+    });
+    const update = vi.fn();
+    const process = processPort(async () =>
+      result(0, { stdout: mergedPr('d'.repeat(40)) }),
+    );
+
+    await expect(
+      awaitMergedImplementation({
+        jobs: { resume: () => current, update },
+        process,
+        cwd: '/repo',
+        jobId: 1,
+        maxWaitMs: 0,
+        wait: async () => {},
+      }),
+    ).rejects.toThrow('reviewed job head');
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('merged commitを検証してorigin/mainをreleaseへfast-forward pushする', async () => {
+    const current = item('merged', {
+      prNumber: 42,
+      headSha: 'b'.repeat(40),
+      mergeSha: 'c'.repeat(40),
+    });
+    const process = deployProcess({
+      'refs/remotes/origin/main': 'f'.repeat(40),
+      'refs/remotes/origin/release': 'a'.repeat(40),
+    });
+
+    await expect(
+      deployMergedImplementation({
+        jobs: { resume: () => current },
+        process,
+        cwd: '/repo',
+        jobId: 1,
+        wait: async () => {},
+      }),
+    ).resolves.toEqual({
+      status: 'deployed',
+      jobId: 1,
+      releaseSha: 'f'.repeat(40),
+      previousReleaseSha: 'a'.repeat(40),
+    });
+    expect(process.inputs.every((input) => input.command === 'git')).toBe(true);
+    expect(process.inputs.map((input) => input.args)).toEqual([
+      ['fetch', 'origin', 'main', 'release'],
+      ['rev-parse', 'refs/remotes/origin/main'],
+      ['rev-parse', 'refs/remotes/origin/release'],
+      [
+        'merge-base',
+        '--is-ancestor',
+        'c'.repeat(40),
+        'refs/remotes/origin/main',
+      ],
+      [
+        'merge-base',
+        '--is-ancestor',
+        'refs/remotes/origin/release',
+        'refs/remotes/origin/main',
+      ],
+      ['push', 'origin', `${'f'.repeat(40)}:refs/heads/release`],
+    ]);
+  });
+
+  it('releaseが既にmainと同一なら再pushせずalready_deployedを返す', async () => {
+    const current = item('done', {
+      prNumber: 42,
+      headSha: 'b'.repeat(40),
+      mergeSha: 'c'.repeat(40),
+    });
+    const process = deployProcess({
+      'refs/remotes/origin/main': 'f'.repeat(40),
+      'refs/remotes/origin/release': 'f'.repeat(40),
+    });
+
+    await expect(
+      deployMergedImplementation({
+        jobs: { resume: () => current },
+        process,
+        cwd: '/repo',
+        jobId: 1,
+        wait: async () => {},
+      }),
+    ).resolves.toEqual({
+      status: 'already_deployed',
+      jobId: 1,
+      releaseSha: 'f'.repeat(40),
+    });
+    expect(
+      process.inputs.filter((input) => input.args[0] === 'push'),
+    ).toHaveLength(0);
+  });
+
+  it('merged commitがorigin/mainに無い場合はdeployせず失敗する', async () => {
+    const current = item('merged', {
+      prNumber: 42,
+      headSha: 'b'.repeat(40),
+      mergeSha: 'c'.repeat(40),
+    });
+    const process = deployProcess(
+      {
+        'refs/remotes/origin/main': 'f'.repeat(40),
+        'refs/remotes/origin/release': 'a'.repeat(40),
+      },
+      (input) =>
+        input.args[0] === 'merge-base' && input.args[2] === 'c'.repeat(40)
+          ? result(1)
+          : null,
+    );
+
+    await expect(
+      deployMergedImplementation({
+        jobs: { resume: () => current },
+        process,
+        cwd: '/repo',
+        jobId: 1,
+        wait: async () => {},
+      }),
+    ).rejects.toThrow('merged commit is not on origin/main');
+    expect(
+      process.inputs.filter((input) => input.args[0] === 'push'),
+    ).toHaveLength(0);
+  });
+
+  it('releaseがfast-forwardできない場合はdeployせず失敗する', async () => {
+    const current = item('merged', {
+      prNumber: 42,
+      headSha: 'b'.repeat(40),
+      mergeSha: 'c'.repeat(40),
+    });
+    const process = deployProcess(
+      {
+        'refs/remotes/origin/main': 'f'.repeat(40),
+        'refs/remotes/origin/release': 'a'.repeat(40),
+      },
+      (input) =>
+        input.args[0] === 'merge-base' &&
+        input.args[2] === 'refs/remotes/origin/release'
+          ? result(1)
+          : null,
+    );
+
+    await expect(
+      deployMergedImplementation({
+        jobs: { resume: () => current },
+        process,
+        cwd: '/repo',
+        jobId: 1,
+        wait: async () => {},
+      }),
+    ).rejects.toThrow('fast-forward');
+    expect(
+      process.inputs.filter((input) => input.args[0] === 'push'),
+    ).toHaveLength(0);
+  });
+
+  it('merge未記録のjobはdeploy対象にしない', async () => {
+    const process = deployProcess({});
+
+    await expect(
+      deployMergedImplementation({
+        jobs: { resume: () => item('pr_open', { prNumber: 42 }) },
+        process,
+        cwd: '/repo',
+        jobId: 1,
+        wait: async () => {},
+      }),
+    ).rejects.toThrow('not ready for a release deploy');
+    expect(process.inputs).toHaveLength(0);
+  });
+
+  it('fetchが恒久失敗した場合はrefを比較せず失敗する', async () => {
+    const current = item('merged', {
+      prNumber: 42,
+      headSha: 'b'.repeat(40),
+      mergeSha: 'c'.repeat(40),
+    });
+    const process = deployProcess(
+      {
+        'refs/remotes/origin/main': 'f'.repeat(40),
+        'refs/remotes/origin/release': 'a'.repeat(40),
+      },
+      (input) =>
+        input.args[0] === 'fetch'
+          ? result(1, { stderr: 'could not read from remote' })
+          : null,
+    );
+
+    await expect(
+      deployMergedImplementation({
+        jobs: { resume: () => current },
+        process,
+        cwd: '/repo',
+        jobId: 1,
+        wait: async () => {},
+      }),
+    ).rejects.toThrow('could not read from remote');
+    expect(process.inputs).toHaveLength(3);
+  });
+
   it('deployと一時API障害を待ち、provenance一致後にruleを有効化する', async () => {
     const current = item('merged', {
       prNumber: 42,
@@ -415,12 +1004,10 @@ describe('implementation CLI workflow', () => {
     expect(enable).toHaveBeenCalledOnce();
   });
 
-  it('provenance不一致を有効化せずpendingとして返し、48時間超を通知する', async () => {
-    const now = 48 * 60 * 60 * 1_000 + 2;
+  it('provenance不一致のruleは有効化せずpendingとして返す', async () => {
     const current = item('merged', {
       prNumber: 42,
       mergeSha: 'c'.repeat(40),
-      updatedAt: 1,
     });
     const enable = vi.fn<RuleReleasePort['enable']>();
 
@@ -438,14 +1025,12 @@ describe('implementation CLI workflow', () => {
         },
         jobId: 1,
         maxWaitMs: 0,
-        now: () => now,
       }),
     ).resolves.toEqual({
       status: 'pending',
       jobId: 1,
       ruleId: 'r0001-yagiri',
       reason: 'provenance_mismatch',
-      reminder: true,
     });
     expect(enable).not.toHaveBeenCalled();
   });

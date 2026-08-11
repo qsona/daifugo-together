@@ -25,7 +25,9 @@
     "implement:submit": "node scripts/run-cli.mjs dist/implement-cli.js submit",
     "implement:fail": "node scripts/run-cli.mjs dist/implement-cli.js fail",
     "implement:checks": "node scripts/run-cli.mjs dist/ci-cli.js",
+    "implement:await-merge": "node scripts/run-cli.mjs dist/implement-cli.js await-merge",
     "implement:merged": "node scripts/run-cli.mjs dist/implement-cli.js merged",
+    "implement:deploy": "node scripts/run-cli.mjs dist/implement-cli.js deploy",
     "implement:release-status": "node scripts/run-cli.mjs dist/implement-cli.js release-status",
     "implement:release": "node scripts/run-cli.mjs dist/implement-cli.js release",
     "typecheck": "tsc --noEmit -p tsconfig.json"

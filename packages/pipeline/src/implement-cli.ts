@@ -14,6 +14,8 @@ import {
 } from './implementation-driver.js';
 import { LocalImplementationVerifier } from './implementation-verifier.js';
 import {
+  awaitMergedImplementation,
+  deployMergedImplementation,
   prepareImplementationRetry,
   prepareImplementationWorkspace,
   recordMergedImplementation,
@@ -131,9 +133,43 @@ async function main(): Promise<void> {
     cwd: process.cwd(),
   });
 
+  if (command === 'await-merge') {
+    const jobId = positiveJobId(
+      process.argv[3],
+      'implement-cli await-merge JOB_ID',
+    );
+    const maxWaitMs = optionalDuration('IMPLEMENT_MERGE_WAIT_MS');
+    const pollIntervalMs = optionalDuration('IMPLEMENT_MERGE_POLL_MS');
+    if (pollIntervalMs === 0) {
+      throw new Error('IMPLEMENT_MERGE_POLL_MS must be greater than zero');
+    }
+    const result = await awaitMergedImplementation({
+      jobs,
+      process: commands,
+      cwd: process.cwd(),
+      jobId,
+      ...(maxWaitMs === undefined ? {} : { maxWaitMs }),
+      ...(pollIntervalMs === undefined ? {} : { pollIntervalMs }),
+    });
+    process.stdout.write(`${JSON.stringify({ result })}\n`);
+    return;
+  }
+
   if (command === 'merged') {
     const jobId = positiveJobId(process.argv[3], 'implement-cli merged JOB_ID');
     const result = await recordMergedImplementation({
+      jobs,
+      process: commands,
+      cwd: process.cwd(),
+      jobId,
+    });
+    process.stdout.write(`${JSON.stringify({ result })}\n`);
+    return;
+  }
+
+  if (command === 'deploy') {
+    const jobId = positiveJobId(process.argv[3], 'implement-cli deploy JOB_ID');
+    const result = await deployMergedImplementation({
       jobs,
       process: commands,
       cwd: process.cwd(),

@@ -15,7 +15,9 @@ const runtimeScripts = [
   'implement:submit',
   'implement:fail',
   'implement:checks',
+  'implement:await-merge',
   'implement:merged',
+  'implement:deploy',
   'implement:release-status',
   'implement:release',
 ] as const;

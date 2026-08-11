@@ -10,8 +10,6 @@ import {
 } from './implementation-api.js';
 import type { ProcessPort, ProcessResult } from './process.js';
 
-const RELEASE_REMINDER_MS = 48 * 60 * 60 * 1_000;
-
 export function validatePreparedWorkspace(
   workspaceValue: string,
   workRootValue: string,
@@ -198,6 +196,258 @@ export async function recordMergedImplementation(options: {
   return { status: 'recorded', job: updated.job };
 }
 
+export type AwaitMergedImplementationResult =
+  | {
+      status: 'merged';
+      record: 'recorded' | 'already_recorded';
+      job: QueuedImplementation['job'];
+    }
+  | { status: 'closed'; jobId: number; prNumber: number }
+  | {
+      status: 'changes_requested';
+      jobId: number;
+      prNumber: number;
+      headRefOid: string;
+    }
+  | {
+      status: 'pending';
+      jobId: number;
+      prNumber: number;
+      reviewDecision: string | null;
+      reason: 'awaiting_merge' | 'inspect_unavailable';
+    };
+
+export async function awaitMergedImplementation(options: {
+  jobs: Pick<PipelineJobPort, 'resume' | 'update'>;
+  process: ProcessPort;
+  cwd: string;
+  jobId: number;
+  maxWaitMs?: number;
+  pollIntervalMs?: number;
+  now?: () => number;
+  wait?: (delayMs: number) => Promise<void>;
+}): Promise<AwaitMergedImplementationResult> {
+  const item = await options.jobs.resume(options.jobId);
+  if (!item) throw new Error('merge job was not found');
+  const job = item.job;
+  if (
+    (job.phase !== 'pr_open' &&
+      job.phase !== 'merged' &&
+      job.phase !== 'done') ||
+    job.prNumber === null ||
+    job.headSha === null
+  ) {
+    throw new Error('job is not awaiting or recording a PR merge');
+  }
+  const prNumber = job.prNumber;
+  const headSha = job.headSha;
+  const record = async (): Promise<AwaitMergedImplementationResult> => {
+    const recorded = await recordMergedImplementation({
+      jobs: options.jobs,
+      process: options.process,
+      cwd: options.cwd,
+      jobId: options.jobId,
+      ...(options.wait ? { wait: options.wait } : {}),
+    });
+    return { status: 'merged', record: recorded.status, job: recorded.job };
+  };
+  if (job.phase === 'merged' || job.phase === 'done') return record();
+  const now = options.now ?? Date.now;
+  const wait =
+    options.wait ??
+    ((delayMs: number) =>
+      new Promise<void>((resolve) => {
+        setTimeout(resolve, delayMs);
+      }));
+  const maxWaitMs = options.maxWaitMs ?? 15 * 60 * 1_000;
+  const pollIntervalMs = options.pollIntervalMs ?? 30_000;
+  const startedAt = now();
+  let reason: Extract<
+    AwaitMergedImplementationResult,
+    { status: 'pending' }
+  >['reason'];
+  let reviewDecision: string | null = null;
+  // GitHub keeps reviewDecision at CHANGES_REQUESTED after a fix push, so only a
+  // transition observed during this run is reported; a review that was already
+  // requesting changes when polling started waits the budget out as pending.
+  let baseline: string | null | undefined;
+  while (true) {
+    const viewed = await runTransient(
+      options.process,
+      {
+        command: 'gh',
+        args: [
+          'pr',
+          'view',
+          String(prNumber),
+          '--json',
+          'state,mergedAt,mergeCommit,headRefOid,reviewDecision',
+        ],
+        cwd: options.cwd,
+        timeoutMs: 60_000,
+      },
+      {
+        ...(options.wait ? { wait: options.wait } : {}),
+      },
+    );
+    if (failed(viewed)) {
+      reason = 'inspect_unavailable';
+    } else {
+      const pr = JSON.parse(viewed.stdout) as {
+        state?: string;
+        headRefOid?: string;
+        reviewDecision?: string | null;
+      };
+      if (pr.state === 'MERGED') return record();
+      if (pr.state === 'CLOSED') {
+        return { status: 'closed', jobId: job.id, prNumber };
+      }
+      reason = 'awaiting_merge';
+      reviewDecision =
+        typeof pr.reviewDecision === 'string' ? pr.reviewDecision : null;
+      if (baseline === undefined) {
+        baseline = reviewDecision;
+      } else if (
+        baseline !== 'CHANGES_REQUESTED' &&
+        reviewDecision === 'CHANGES_REQUESTED'
+      ) {
+        return {
+          status: 'changes_requested',
+          jobId: job.id,
+          prNumber,
+          headRefOid:
+            typeof pr.headRefOid === 'string' ? pr.headRefOid : headSha,
+        };
+      }
+    }
+    if (now() - startedAt >= maxWaitMs) {
+      return {
+        status: 'pending',
+        jobId: job.id,
+        prNumber,
+        reviewDecision,
+        reason,
+      };
+    }
+    await wait(Math.min(pollIntervalMs, maxWaitMs - (now() - startedAt)));
+  }
+}
+
+export type DeployMergedImplementationResult =
+  | {
+      status: 'deployed';
+      jobId: number;
+      releaseSha: string;
+      previousReleaseSha: string;
+    }
+  | { status: 'already_deployed'; jobId: number; releaseSha: string };
+
+export async function deployMergedImplementation(options: {
+  jobs: Pick<PipelineJobPort, 'resume'>;
+  process: ProcessPort;
+  cwd: string;
+  jobId: number;
+  wait?: (delayMs: number) => Promise<void>;
+}): Promise<DeployMergedImplementationResult> {
+  const item = await options.jobs.resume(options.jobId);
+  if (!item) throw new Error('deploy job was not found');
+  const job = item.job;
+  if (
+    (job.phase !== 'merged' && job.phase !== 'done') ||
+    job.mergeSha === null
+  ) {
+    throw new Error('job is not ready for a release deploy');
+  }
+  const transient = (
+    input: Parameters<ProcessPort['run']>[0],
+    allowExitCodes = [0],
+  ) =>
+    runTransient(options.process, input, {
+      allowExitCodes,
+      ...(options.wait ? { wait: options.wait } : {}),
+    });
+  const fetched = await transient({
+    command: 'git',
+    args: ['fetch', 'origin', 'main', 'release'],
+    cwd: options.cwd,
+    timeoutMs: 60_000,
+  });
+  if (failed(fetched)) {
+    throw new Error(fetched.stderr.trim() || 'could not fetch release refs');
+  }
+  const resolveRef = async (ref: string): Promise<string> => {
+    const parsed = await transient({
+      command: 'git',
+      args: ['rev-parse', ref],
+      cwd: options.cwd,
+      timeoutMs: 60_000,
+    });
+    if (failed(parsed)) {
+      throw new Error(parsed.stderr.trim() || `could not resolve ${ref}`);
+    }
+    return parsed.stdout.trim();
+  };
+  const mainSha = await resolveRef('refs/remotes/origin/main');
+  const previousReleaseSha = await resolveRef('refs/remotes/origin/release');
+  const requireAncestor = async (
+    ancestor: string,
+    descendant: string,
+    message: string,
+  ): Promise<void> => {
+    const checked = await transient(
+      {
+        command: 'git',
+        args: ['merge-base', '--is-ancestor', ancestor, descendant],
+        cwd: options.cwd,
+        timeoutMs: 60_000,
+      },
+      [0, 1],
+    );
+    if (
+      checked.timedOut ||
+      (checked.exitCode !== 0 && checked.exitCode !== 1)
+    ) {
+      throw new Error(
+        checked.stderr.trim() ||
+          `could not compare ${ancestor} with ${descendant}`,
+      );
+    }
+    if (checked.exitCode === 1) throw new Error(message);
+  };
+  await requireAncestor(
+    job.mergeSha,
+    'refs/remotes/origin/main',
+    'merged commit is not on origin/main',
+  );
+  if (previousReleaseSha === mainSha) {
+    return {
+      status: 'already_deployed',
+      jobId: job.id,
+      releaseSha: mainSha,
+    };
+  }
+  await requireAncestor(
+    'refs/remotes/origin/release',
+    'refs/remotes/origin/main',
+    'origin/release cannot be fast-forwarded to origin/main',
+  );
+  const pushed = await transient({
+    command: 'git',
+    args: ['push', 'origin', `${mainSha}:refs/heads/release`],
+    cwd: options.cwd,
+    timeoutMs: 60_000,
+  });
+  if (failed(pushed)) {
+    throw new Error(pushed.stderr.trim() || 'could not push release');
+  }
+  return {
+    status: 'deployed',
+    jobId: job.id,
+    releaseSha: mainSha,
+    previousReleaseSha,
+  };
+}
+
 export type ReleaseDeployedRuleResult =
   | {
       status: 'ready' | 'released' | 'already_released';
@@ -209,7 +459,6 @@ export type ReleaseDeployedRuleResult =
       jobId: number;
       ruleId: string;
       reason: 'not_deployed' | 'provenance_mismatch' | 'api_unavailable';
-      reminder: boolean;
     };
 
 export async function releaseDeployedRule(options: {
@@ -330,7 +579,6 @@ export async function releaseDeployedRule(options: {
         jobId: job.id,
         ruleId: job.ruleId,
         reason,
-        reminder: now() - job.updatedAt >= RELEASE_REMINDER_MS,
       };
     }
     await wait(Math.min(pollIntervalMs, maxWaitMs - (now() - startedAt)));
