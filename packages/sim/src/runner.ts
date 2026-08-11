@@ -243,7 +243,7 @@ const CI_AI_WARMUP_BUDGET: ThinkBudget = {
   ...CI_AI_BUDGET,
   hardMs: 2_000,
 };
-const CI_MAX_MOVE_WALL_MS = 625;
+export const CI_MAX_MOVE_WALL_MS = 625;
 
 export async function runAiRuleSimulations(options: {
   bundles: readonly LoadedRuleBundle[];

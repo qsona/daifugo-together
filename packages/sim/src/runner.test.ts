@@ -8,6 +8,7 @@ import { rule as jokersRule } from './test-fixtures/jokers-rule.js';
 import { rule as sequenceRule } from './test-fixtures/sequence-rule.js';
 import { rule as simRule } from './test-fixtures/sim-rule.js';
 import {
+  CI_MAX_MOVE_WALL_MS,
   ruleChainEntries,
   runAiRuleSimulations,
   runRuleSimulations,
@@ -63,7 +64,10 @@ describe('CX-03 simulation runner', () => {
     expect(runs.every((run) => (run.aiStats?.moves ?? 0) > 0)).toBe(true);
     expect(runs.every((run) => run.aiStats?.fallbackRate === 0)).toBe(true);
     expect(
-      runs.every((run) => (run.aiStats?.maxMoveWallMs ?? Infinity) <= 200),
+      runs.every(
+        (run) =>
+          (run.aiStats?.maxMoveWallMs ?? Infinity) <= CI_MAX_MOVE_WALL_MS,
+      ),
     ).toBe(true);
   }, 20_000);
 
