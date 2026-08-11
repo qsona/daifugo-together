@@ -11,7 +11,6 @@ import {
   type RuleChainEntry,
   type RuleExecutionIssue,
   type RuleModule,
-  type RuleRuntime,
   type SetAction,
   type SetState,
   simulate,
@@ -100,12 +99,77 @@ export function runRuleSimulations(options: {
   return runs;
 }
 
+function compactValue(value: unknown): string {
+  const serialized = JSON.stringify(value);
+  return (serialized ?? String(value)).slice(0, 160);
+}
+
+function firstStructuralDifference(
+  left: unknown,
+  right: unknown,
+  path = '$',
+): string {
+  if (Object.is(left, right)) return '';
+  if (
+    typeof left !== 'object' ||
+    left === null ||
+    typeof right !== 'object' ||
+    right === null
+  ) {
+    return `${path}: ${compactValue(left)} !== ${compactValue(right)}`;
+  }
+  if (Array.isArray(left) !== Array.isArray(right)) {
+    return `${path}: array/object shape differs`;
+  }
+  if (Array.isArray(left) && Array.isArray(right)) {
+    for (
+      let index = 0;
+      index < Math.min(left.length, right.length);
+      index += 1
+    ) {
+      const difference = firstStructuralDifference(
+        left[index],
+        right[index],
+        `${path}[${String(index)}]`,
+      );
+      if (difference) return difference;
+    }
+    if (left.length === right.length) return '';
+    return `${path}.length: ${String(left.length)} !== ${String(
+      right.length,
+    )}; extra ${compactValue(
+      left.length > right.length
+        ? left.slice(right.length)
+        : right.slice(left.length),
+    )}`;
+  }
+  const leftRecord = left as Record<string, unknown>;
+  const rightRecord = right as Record<string, unknown>;
+  const leftKeys = Object.keys(leftRecord).sort();
+  const rightKeys = Object.keys(rightRecord).sort();
+  if (
+    leftKeys.length !== rightKeys.length ||
+    leftKeys.some((key, index) => key !== rightKeys[index])
+  ) {
+    return `${path}: ${compactValue(left)} !== ${compactValue(right)}`;
+  }
+  for (const key of leftKeys) {
+    const difference = firstStructuralDifference(
+      leftRecord[key],
+      rightRecord[key],
+      Array.isArray(left) ? `${path}[${key}]` : `${path}.${key}`,
+    );
+    if (difference) return difference;
+  }
+  return '';
+}
+
 function differentialSimulationProblem(input: {
   config: GameConfig;
   game: GameState;
   state: SetState;
   player: string;
-  safeRuntime: RuleRuntime;
+  modules: readonly RuleModule[];
   trustedPlan: TrustedSimulationRulePlan;
   move: number;
 }): string | undefined {
@@ -115,16 +179,22 @@ function differentialSimulationProblem(input: {
     members: input.state.members,
     setResults: input.state.results,
   };
+  const safePort = createInProcessRuleChainPort(input.modules);
+  const fastPort = createTrustedSimulationRuleChainPort(input.trustedPlan);
   const safe = createSimulationApi({
     config: input.config,
     snapshotContext,
-    runtime: input.safeRuntime,
+    runtime: {
+      port: safePort,
+      setHistory: input.state.results,
+      setMemory: input.state.setMemory,
+    },
   });
   const fast = createSimulationApi({
     config: input.config,
     snapshotContext,
     runtime: {
-      port: createTrustedSimulationRuleChainPort(input.trustedPlan),
+      port: fastPort,
       setHistory: input.state.results,
       setMemory: input.state.setMemory,
     },
@@ -139,8 +209,9 @@ function differentialSimulationProblem(input: {
     fastPosition,
     input.player,
   );
-  if (JSON.stringify(fastLegal) !== JSON.stringify(safeLegal)) {
-    return 'legal plays or strength differ';
+  const legalDifference = firstStructuralDifference(fastLegal, safeLegal);
+  if (legalDifference) {
+    return `legal plays or strength differ at ${legalDifference}`;
   }
   const selected = safeLegal.plays[input.move % safeLegal.plays.length];
   const action = selected
@@ -153,9 +224,10 @@ function differentialSimulationProblem(input: {
   try {
     const safeResult = safe.applyPlay(safePosition, action);
     const fastResult = fast.applyPlay(fastPosition, action);
-    return JSON.stringify(fastResult) === JSON.stringify(safeResult)
-      ? undefined
-      : 'applied transition differs';
+    const resultDifference = firstStructuralDifference(fastResult, safeResult);
+    return resultDifference
+      ? `applied transition differs at ${resultDifference}`
+      : undefined;
   } catch (error) {
     return `differential apply failed: ${error instanceof Error ? error.message : String(error)}`;
   }
@@ -163,7 +235,7 @@ function differentialSimulationProblem(input: {
 
 const CI_AI_BUDGET: ThinkBudget = {
   softMs: 50,
-  hardMs: 200,
+  hardMs: 600,
   maxPlayouts: 64,
   sliceMs: 10,
 };
@@ -171,7 +243,7 @@ const CI_AI_WARMUP_BUDGET: ThinkBudget = {
   ...CI_AI_BUDGET,
   hardMs: 2_000,
 };
-const CI_MAX_MOVE_WALL_MS = 200;
+const CI_MAX_MOVE_WALL_MS = 625;
 
 export async function runAiRuleSimulations(options: {
   bundles: readonly LoadedRuleBundle[];
@@ -213,13 +285,10 @@ export async function runAiRuleSimulations(options: {
         ruleChain,
         port,
       });
-      const trustedPlan = compileTrustedSimulationRulePlan(
-        ruleChain,
-        configuration.bundles.map((bundle) => bundle.module),
-      );
+      const trustedPlans = new Map<string, TrustedSimulationRulePlan>();
       const ai = createAiPlayer({
         // CIも本番と同じ先読み長で、ルール実行の性能退行を検出する。
-        search: { cutoffSteps: 24 },
+        search: { cutoffSteps: 65 },
       });
       let moves = 0;
       let fallbacks = 0;
@@ -235,13 +304,40 @@ export async function runAiRuleSimulations(options: {
           if (!game) {
             throw new Error('AI simulation has no active game');
           }
+          const disabledRuleIds = new Set(
+            decision.runtime.port.disabledRuleIds?.() ?? [],
+          );
+          const activeRuleChain = ruleChain.filter(
+            (entry) => !disabledRuleIds.has(entry.ruleId),
+          );
+          const activeRuleIds = new Set(
+            activeRuleChain.map((entry) => entry.ruleId),
+          );
+          const activeBundles = configuration.bundles.filter((bundle) =>
+            activeRuleIds.has(bundle.module.meta.ruleId),
+          );
+          const activeConfig = {
+            ...decision.config,
+            ruleChain: activeRuleChain,
+          };
+          const trustedPlanKey = activeRuleChain
+            .map((entry) => entry.ruleId)
+            .join('\0');
+          let trustedPlan = trustedPlans.get(trustedPlanKey);
+          if (!trustedPlan) {
+            trustedPlan = compileTrustedSimulationRulePlan(
+              activeRuleChain,
+              activeBundles.map((bundle) => bundle.module),
+            );
+            trustedPlans.set(trustedPlanKey, trustedPlan);
+          }
           let action: SetAction;
           const differentialProblem = differentialSimulationProblem({
-            config: decision.config,
+            config: activeConfig,
             game,
             state: decision.state,
             player: decision.player,
-            safeRuntime: decision.runtime,
+            modules: activeBundles.map((bundle) => bundle.module),
             trustedPlan,
             move: moves,
           });
@@ -257,7 +353,7 @@ export async function runAiRuleSimulations(options: {
           } else {
             const input = {
               view: buildPlayerSnapshot(
-                decision.config,
+                activeConfig,
                 game,
                 {
                   setId: decision.state.setId,
@@ -274,8 +370,8 @@ export async function runAiRuleSimulations(options: {
               )}:${decision.player}`,
               difficulty: NORMAL_DIFFICULTY,
               ruleContext: {
-                ruleChain,
-                bundles: configuration.bundles.map((bundle) => ({
+                ruleChain: activeRuleChain,
+                bundles: activeBundles.map((bundle) => ({
                   ruleId: bundle.module.meta.ruleId,
                   moduleUrl: bundle.moduleUrl,
                   bundleHash: bundle.bundleHash,

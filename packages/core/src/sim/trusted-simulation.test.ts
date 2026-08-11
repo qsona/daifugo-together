@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
+import { executeEffectHook } from '../engine/effects.js';
 import type { GameAction, GameConfig, SnapshotContext } from '../game/types.js';
 import { startGame } from '../game/start-game.js';
+import type { Play } from '../play/play.js';
 import type { RuleChainEntry, RuleModule } from '../rules/contract.js';
 import { createInProcessRuleChainPort } from '../rules/in-process.js';
 import {
@@ -115,6 +117,95 @@ const snapshotContext: SnapshotContext = {
 };
 
 describe('trusted simulation rule path', () => {
+  it('盤面依存で不正になるchoice要求は高速経路でも棄却する', () => {
+    const choiceModule: RuleModule = {
+      meta: {
+        ruleId: 'r9004-fast-choice-validation',
+        name: 'fast-choice-validation',
+        description: 'trusted simulation choice fixture',
+        kind: 'original',
+        proposalId: 'fixture-fast-choice-validation',
+        contractVersion: 2,
+        messages: { choose: 'choose' },
+      },
+      hooks: {
+        afterPlay(context) {
+          const player = context.game.turn ?? context.game.seats[0]!;
+          return [
+            {
+              type: 'requestChoice',
+              player,
+              choiceId: 'dynamic_choice',
+              from: { kind: 'hand', player },
+              cards: { kind: 'all' },
+              count: 1,
+              messageKey: 'choose',
+              additionalChoices: [],
+              simultaneous: true,
+            },
+          ];
+        },
+      },
+    };
+    const choiceEntry: RuleChainEntry = {
+      ruleId: choiceModule.meta.ruleId,
+      name: choiceModule.meta.name,
+      position: 0,
+      priority: {
+        score: 0,
+        activatedAt: 0,
+        ruleId: choiceModule.meta.ruleId,
+      },
+      bundleHash: 'fixture-fast-choice-validation',
+      contractVersion: 2,
+    };
+    const config: GameConfig = {
+      gameIndex: 0,
+      seats,
+      gameSeed: 'fast-choice-validation',
+      ruleChain: [choiceEntry],
+    };
+    const safePort = createInProcessRuleChainPort([choiceModule]);
+    const fastPort = createTrustedSimulationRuleChainPort(
+      compileTrustedSimulationRulePlan([choiceEntry], [choiceModule]),
+    );
+    const started = startGame(config, {
+      port: safePort,
+      setHistory: [],
+      setMemory: {},
+    });
+    const actor = started.state.public.turn!;
+    const card = started.state.players[actor]!.hand[0]!;
+    const played: Play = {
+      kind: 'single',
+      cards: [card],
+      count: 1,
+      repRank: card.kind === 'natural' ? card.rank : 'joker',
+    };
+    const safe = executeEffectHook(
+      config,
+      started.state,
+      { port: safePort, setHistory: [], setMemory: {} },
+      'afterPlay',
+      played,
+      undefined,
+      { previewChoice: true },
+    );
+    const fast = executeEffectHook(
+      config,
+      started.state,
+      { port: fastPort, setHistory: [], setMemory: {} },
+      'afterPlay',
+      played,
+      undefined,
+      { previewChoice: true },
+    );
+
+    expect(fast).toEqual(safe);
+    expect(fast.choiceRequests).toBeUndefined();
+    expect(fastPort.disabledRuleIds?.()).toEqual([choiceModule.meta.ruleId]);
+  });
+
   it.each(['diff-a', 'diff-b', 'diff-c'])(
     'safe経路と高速経路が複数の到達盤面で一致する: %s',
     (seed) => {

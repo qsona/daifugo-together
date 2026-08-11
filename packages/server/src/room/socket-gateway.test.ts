@@ -423,7 +423,7 @@ describe('Socket.IO room gateway', () => {
     const log = await logged;
     expect(observedInput?.budget).toEqual({
       softMs: 50,
-      hardMs: 400,
+      hardMs: 600,
       maxPlayouts: 64,
       sliceMs: 10,
     });

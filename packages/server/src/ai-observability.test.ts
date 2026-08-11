@@ -43,7 +43,7 @@ describe('AI turn log aggregation', () => {
   it('ルームAIを全候補の公平な比較が可能な既定予算に固定する', () => {
     expect(ROOM_AI_THINK_BUDGET).toEqual({
       softMs: 50,
-      hardMs: 400,
+      hardMs: 600,
       maxPlayouts: 64,
       sliceMs: 10,
     });

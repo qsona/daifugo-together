@@ -61,6 +61,8 @@ export function createInProcessRuleChainPort(
   };
 
   return {
+    disabledRuleIds: () => [...disabled],
+
     disableRule(ruleId) {
       disabled.add(ruleId);
     },

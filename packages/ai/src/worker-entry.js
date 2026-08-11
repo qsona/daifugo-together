@@ -275,12 +275,13 @@ function rollout(api, initialState, rootPlay, payload) {
     api.createPosition(initialState),
     actionFor(payload.view.forPlayer, rootPlay),
   ).position;
-  let steps = 0;
+  // cutoffSteps counts the root play so the configured value is the maximum
+  // length of the simulated action sequence, not only the replies after it.
+  let steps = 1;
   let dangerousPlayFilters = 0;
-  for (
-    let step = 0;
-    step < payload.config.cutoffSteps && !api.isTerminal(position);
-    step += 1
+  while (
+    steps < Math.max(1, payload.config.cutoffSteps) &&
+    !api.isTerminal(position)
   ) {
     const { state } = position;
     const player = state.public.turn;

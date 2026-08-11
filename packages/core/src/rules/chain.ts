@@ -19,6 +19,8 @@ export interface RuleChainPort {
    * 権威ゲーム向け safe-port の clone / freeze / 戻り値検証を省略する。
    */
   readonly trustedSimulation?: true;
+  /** Rules disabled for the lifetime of this runtime after a rejected hook/effect. */
+  disabledRuleIds?(): readonly RuleId[];
   /**
    * Excludes a rule from the current runtime immediately.
    *
@@ -53,6 +55,7 @@ export interface RuleRuntime {
 }
 
 export const NO_RULE_CHAIN_PORT: RuleChainPort = {
+  disabledRuleIds: () => [],
   disableRule: () => undefined,
   modifyLegality: (_entries, _context, _plays, base) => ({
     results: base,

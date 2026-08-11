@@ -949,7 +949,16 @@ export function executeEffectHook(
       collectedEffects.forEach((candidate) => {
         const effectIndex = effectCountByRule.get(ruleId) ?? 0;
         effectCountByRule.set(ruleId, effectIndex + 1);
-        const valid = trustedSimulation || effectPayloadValid(candidate);
+        // Choice payloads depend on live player/card counts and can become
+        // invalid even when the published bundle itself is trusted. Keep this
+        // narrow validation while skipping schemas for ordinary hot-path effects.
+        const validateTrustedChoice =
+          trustedSimulation &&
+          isRecord(candidate) &&
+          candidate.type === 'requestChoice';
+        const valid =
+          (trustedSimulation && !validateTrustedChoice) ||
+          effectPayloadValid(candidate);
         const effect = (
           valid ? candidate : INVALID_EFFECT_EVENT_PAYLOAD
         ) as Effect;
@@ -1041,14 +1050,18 @@ export function executeEffectHook(
               }
             : {}),
         };
-        const reason: InvalidEffectReason | null = trustedSimulation
-          ? null
-          : effectIndex >= 8
+        const contractVersion =
+          effect.type === 'requestChoice'
+            ? (contractVersionByRule?.get(ruleId) ??
+              config.ruleChain.find((entry) => entry.ruleId === ruleId)
+                ?.contractVersion)
+            : undefined;
+        const reason: InvalidEffectReason | null =
+          effectIndex >= 8
             ? 'effect-limit'
             : !valid
               ? 'invalid-payload'
-              : effect.type === 'requestChoice' &&
-                  contractVersionByRule?.get(ruleId) !== 2
+              : effect.type === 'requestChoice' && contractVersion !== 2
                 ? 'contract-version'
                 : effect.type === 'requestChoice' &&
                     collectedEffects.length !== 1

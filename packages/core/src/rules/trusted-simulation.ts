@@ -114,6 +114,7 @@ export function createTrustedSimulationRuleChainPort(
 
   return {
     trustedSimulation: true,
+    disabledRuleIds: () => [...disabled],
 
     disableRule(ruleId) {
       disabled.add(ruleId);

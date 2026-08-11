@@ -21,7 +21,11 @@ import { describe, expect, it } from 'vitest';
 import { createAiPlayer } from './ai-player.js';
 import { sameCandidate } from './heuristic.js';
 import { rule as ai02RuleFixture } from './test-fixtures/ai02-rule.js';
-import { DEFAULT_THINK_BUDGET, NORMAL_DIFFICULTY } from './types.js';
+import {
+  DEFAULT_MCTS_CONFIG,
+  DEFAULT_THINK_BUDGET,
+  NORMAL_DIFFICULTY,
+} from './types.js';
 import { AiWorkerPool } from './worker-pool.js';
 
 const seats = ['human', 'bot-1', 'bot-2', 'bot-3'];
@@ -48,6 +52,10 @@ function snapshotContext(state: SetState): SnapshotContext {
 }
 
 describe('AI-01', () => {
+  it('ルート候補手を含めて最大65手までプレイアウトする', () => {
+    expect(DEFAULT_MCTS_CONFIG.cutoffSteps).toBe(65);
+  });
+
   it('同じ観測・seedからworker threadで同じ合法手を選ぶ', async () => {
     const config: GameConfig = {
       gameIndex: 0,
@@ -284,7 +292,7 @@ describe('AI-01', () => {
         legalPlays,
         budget: {
           softMs: 10_000,
-          hardMs: 100,
+          hardMs: 500,
           maxPlayouts: 1_000_000,
           sliceMs: 1,
         },
@@ -931,8 +939,14 @@ describe('AI-02 rule following', () => {
 
       expect(returnedToHand.usedFallback).toBe('none');
       expect(returnedToHand.stats?.effectiveStrengthInverted).toBe(true);
+      expect(returnedToHand.stats?.simulatedSteps).toBe(
+        returnedToHand.stats?.candidateEvaluations,
+      );
       expect(returnedToDiscard.usedFallback).toBe('none');
       expect(returnedToDiscard.stats?.effectiveStrengthInverted).toBe(false);
+      expect(returnedToDiscard.stats?.simulatedSteps).toBe(
+        returnedToDiscard.stats?.candidateEvaluations,
+      );
     } finally {
       await ai.close();
     }

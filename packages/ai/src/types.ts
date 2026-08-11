@@ -23,6 +23,7 @@ export interface DifficultyProfile {
 export interface MctsConfig {
   ucbC: number;
   maxTreeDepth: number;
+  /** Maximum simulated actions per playout, including the root play. */
   cutoffSteps: number;
   rootCandidateCap: number;
   playoutBatchSize: number;
@@ -109,7 +110,7 @@ export const DEFAULT_THINK_BUDGET: ThinkBudget = {
 export const DEFAULT_MCTS_CONFIG: MctsConfig = {
   ucbC: 0.7,
   maxTreeDepth: 1,
-  cutoffSteps: 24,
+  cutoffSteps: 65,
   rootCandidateCap: 8,
   playoutBatchSize: 4,
 };

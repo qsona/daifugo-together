@@ -110,9 +110,9 @@ export interface RoomAiTurnLog extends AiTurnLog {
 
 export const ROOM_AI_THINK_BUDGET = {
   ...DEFAULT_THINK_BUDGET,
-  // 全ルール・24手先の1world実測は最大約120ms。単一workerのキュー待ちも
-  // 含めて2〜3手番を吸収しつつ、server watchdog (1秒) より十分短く保つ。
-  hardMs: 400,
+  // 全ルール・初手を含む最大65手の探索を許容する。単一workerのキュー待ちも
+  // 含めつつ、server watchdog (1秒) には400msの余裕を残す。
+  hardMs: 600,
 } as const;
 
 export interface RoomSocketGateway {
