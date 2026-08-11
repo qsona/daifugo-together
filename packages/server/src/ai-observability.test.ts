@@ -18,6 +18,16 @@ function log(
     watchdog: false,
     wallMs,
     playouts,
+    worlds: 0,
+    rootCandidates: 0,
+    candidateEvaluations: 0,
+    simulatedSteps: 0,
+    dangerousPlayFilters: 0,
+    queueMs: 0,
+    setupMs: 0,
+    searchMs: 0,
+    workerReused: false,
+    ruleIds: [],
     animationDelayMs: 0,
     roomId: 'room-1',
     setId: 'set-1',
@@ -30,11 +40,11 @@ function log(
 }
 
 describe('AI turn log aggregation', () => {
-  it('ルームAIを実機で余裕を確認した150ms・3 playoutに固定する', () => {
+  it('ルームAIを全候補の公平な比較が可能な既定予算に固定する', () => {
     expect(ROOM_AI_THINK_BUDGET).toEqual({
       softMs: 50,
-      hardMs: 150,
-      maxPlayouts: 3,
+      hardMs: 400,
+      maxPlayouts: 64,
       sliceMs: 10,
     });
   });
@@ -62,7 +72,16 @@ describe('AI turn log aggregation', () => {
       },
       watchdogs: 1,
       modes: { basic: 2, community: 1 },
+      workerReuses: 0,
       wallMs: { average: 100, p95: 150, maximum: 150 },
+      queueMs: { average: 0, p95: 0, maximum: 0 },
+      setupMs: { average: 0, p95: 0, maximum: 0 },
+      searchMs: { average: 0, p95: 0, maximum: 0 },
+      worlds: { average: 0, p95: 0, maximum: 0 },
+      rootCandidates: { average: 0, p95: 0, maximum: 0 },
+      candidateEvaluations: { average: 0, p95: 0, maximum: 0 },
+      simulatedSteps: { average: 0, p95: 0, maximum: 0 },
+      dangerousPlayFilters: { average: 0, p95: 0, maximum: 0 },
       playouts: { average: 1.67, p95: 3, maximum: 3 },
     });
   });

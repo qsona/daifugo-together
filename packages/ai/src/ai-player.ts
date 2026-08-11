@@ -1,4 +1,4 @@
-import { weakestPlay } from './heuristic.js';
+import { chooseHeuristicPlayForView } from './heuristic.js';
 import {
   DEFAULT_MCTS_CONFIG,
   type AiDecision,
@@ -11,6 +11,11 @@ import { AiWorkerPool } from './worker-pool.js';
 export interface CreateAiPlayerOptions {
   pool?: AiWorkerPool;
   search?: Partial<MctsConfig>;
+}
+
+function fallbackReason(error: unknown): string {
+  const reason = error instanceof Error ? error.message : String(error);
+  return reason.split('\n', 1)[0]!.slice(0, 240) || 'unknown-worker-error';
 }
 
 export function createAiPlayer(options: CreateAiPlayerOptions = {}): AiPlayer {
@@ -52,12 +57,14 @@ export function createAiPlayer(options: CreateAiPlayerOptions = {}): AiPlayer {
         return {
           play: result.play,
           usedFallback: result.completed ? 'none' : 'partial-search',
+          ...(result.completed ? {} : { fallbackReason: 'soft-deadline' }),
           stats: result.stats,
         };
-      } catch {
+      } catch (error) {
         return {
-          play: weakestPlay(input.legalPlays, input.view.strengthNote.inverted),
+          play: chooseHeuristicPlayForView(input.legalPlays, input.view),
           usedFallback: 'heuristic',
+          fallbackReason: fallbackReason(error),
           stats: {
             playouts: 0,
             candidates: [],

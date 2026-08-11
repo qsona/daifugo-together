@@ -93,7 +93,18 @@ describe('AI-01', () => {
         input.legalPlays.some((play) => sameCandidate(play, first.play)),
       ).toBe(true);
       expect(second.play).toEqual(first.play);
-      expect(second.stats).toEqual(first.stats);
+      expect(second.stats?.candidates).toEqual(first.stats?.candidates);
+      expect(first.stats?.rootCandidates).toBe(input.legalPlays.length);
+      expect(
+        first.stats?.candidates.every(
+          (candidate) => candidate.visits === first.stats?.worlds,
+        ),
+      ).toBe(true);
+      expect(first.stats?.candidateEvaluations).toBe(
+        (first.stats?.rootCandidates ?? 0) * (first.stats?.worlds ?? 0),
+      );
+      expect(first.stats?.workerReused).toBe(false);
+      expect(second.stats?.workerReused).toBe(true);
     } finally {
       await ai.close();
     }
@@ -222,9 +233,11 @@ describe('AI-01', () => {
       const second = await ai.decideMove(input);
 
       expect(first.usedFallback).toBe('none');
-      expect(first.stats?.playouts).toBe(16);
+      expect(first.stats?.playouts).toBeGreaterThanOrEqual(
+        input.legalPlays.length,
+      );
       expect(first.stats?.workerThread).toBe(true);
-      expect(first.stats?.candidates.length).toBeLessThanOrEqual(8);
+      expect(first.stats?.candidates).toHaveLength(input.legalPlays.length);
       expect(
         Math.max(
           ...(first.stats?.candidates.map((candidate) => candidate.visits) ?? [
@@ -233,7 +246,68 @@ describe('AI-01', () => {
         ),
       ).toBeGreaterThan(1);
       expect(second.play).toEqual(first.play);
-      expect(second.stats).toEqual(first.stats);
+      expect(second.stats?.candidates).toEqual(first.stats?.candidates);
+    } finally {
+      await ai.close();
+    }
+  });
+
+  it('協調的なhard期限で公平な途中結果を返し、workerを再利用する', async () => {
+    const config: GameConfig = {
+      gameIndex: 0,
+      seats,
+      gameSeed: 'ai-cooperative-deadline',
+      ruleChain: [],
+    };
+    const state = startGame(config).state;
+    const player = state.public.turn!;
+    const view = buildPlayerSnapshot(
+      config,
+      state,
+      {
+        setId: 'ai-cooperative-deadline',
+        setPhase: { name: 'gameInProgress', gameIndex: 0 },
+        members: seats.map((id) => ({
+          id,
+          displayName: id,
+          isAI: true,
+        })),
+        setResults: [],
+      },
+      player,
+    );
+    const legalPlays = enumerateLegalPlays(config, state, player);
+    const ai = createAiPlayer();
+    try {
+      const partial = await ai.decideMove({
+        view,
+        legalPlays,
+        budget: {
+          softMs: 10_000,
+          hardMs: 100,
+          maxPlayouts: 1_000_000,
+          sliceMs: 1,
+        },
+        seed: 'cooperative-partial',
+        difficulty: NORMAL_DIFFICULTY,
+      });
+      const recovered = await ai.decideMove({
+        view,
+        legalPlays,
+        budget: { softMs: 1, hardMs: 1_000, maxPlayouts: 1, sliceMs: 1 },
+        seed: 'cooperative-recovered',
+        difficulty: NORMAL_DIFFICULTY,
+      });
+
+      expect(partial.usedFallback).toBe('partial-search');
+      expect(partial.stats?.worlds).toBeGreaterThan(0);
+      expect(
+        partial.stats?.candidates.every(
+          (candidate) => candidate.visits === partial.stats?.worlds,
+        ),
+      ).toBe(true);
+      expect(recovered.usedFallback).toBe('none');
+      expect(recovered.stats?.workerReused).toBe(true);
     } finally {
       await ai.close();
     }

@@ -28,6 +28,10 @@ interface RuleContextFactory {
 }
 
 const factories = new WeakMap<RuleContext, RuleContextFactory>();
+const trustedContractVersions = new WeakMap<
+  GameConfig,
+  ReadonlyMap<RuleId, 1 | 2>
+>();
 
 export function deepFreeze<T>(value: T): DeepReadonly<T> {
   if (value !== null && typeof value === 'object') {
@@ -47,8 +51,9 @@ function buildGameView(
   config: GameConfig,
   state: GameState,
   strength: StrengthOrder,
+  trustedSimulation: boolean,
 ): GameView {
-  return detachedFrozen({
+  const view = {
     gameIndex: config.gameIndex,
     seats: config.seats,
     direction: state.public.direction,
@@ -69,14 +74,17 @@ function buildGameView(
     discard: state.public.discard,
     history: state.public.history,
     strength,
-  });
+  };
+  return trustedSimulation ? view : detachedFrozen(view);
 }
 
 function memoryFor(
   memory: RuleMemory,
   ruleId: RuleId,
+  trustedSimulation: boolean,
 ): Readonly<Record<string, DeepReadonly<RuleMemory[RuleId][string]>>> {
-  return detachedFrozen(memory[ruleId] ?? {});
+  const value = memory[ruleId] ?? {};
+  return trustedSimulation ? value : detachedFrozen(value);
 }
 
 export function prepareRuleInvocation(
@@ -89,16 +97,21 @@ export function prepareRuleInvocation(
   invocationIndices: Record<RuleId, number>;
 } {
   const invocationIndices: Record<RuleId, number> = {};
+  if (!authoritative) {
+    for (const entry of entries) {
+      invocationIndices[entry.ruleId] =
+        state.private.hookCalls[`${entry.ruleId}:${hook}`] ?? 0;
+    }
+    return { state, invocationIndices };
+  }
   const hookCalls = { ...state.private.hookCalls };
   for (const entry of entries) {
     const key = `${entry.ruleId}:${hook}`;
     const current = hookCalls[key] ?? 0;
     invocationIndices[entry.ruleId] = current;
-    if (authoritative) {
-      hookCalls[key] = current + 1;
-    }
+    hookCalls[key] = current + 1;
   }
-  if (!authoritative || entries.length === 0) {
+  if (entries.length === 0) {
     return { state, invocationIndices };
   }
   return {
@@ -120,15 +133,26 @@ export function buildRuleContext(
   runtime: RuleRuntime,
   options: ContextBuildOptions,
 ): RuleContext {
-  const game = buildGameView(config, state, strength);
-  const setHistory = detachedFrozen(runtime.setHistory);
+  const trustedSimulation = runtime.port.trustedSimulation === true;
+  const game = buildGameView(config, state, strength, trustedSimulation);
+  const setHistory = trustedSimulation
+    ? runtime.setHistory
+    : detachedFrozen(runtime.setHistory);
   const contexts = new Map<RuleId, RuleContext>();
-  const contractVersionByRule = new Map(
-    config.ruleChain.map((entry) => [
-      entry.ruleId,
-      entry.contractVersion === 2 ? (2 as const) : (1 as const),
-    ]),
-  );
+  let contractVersionByRule = trustedSimulation
+    ? trustedContractVersions.get(config)
+    : undefined;
+  if (!contractVersionByRule) {
+    contractVersionByRule = new Map(
+      config.ruleChain.map((entry) => [
+        entry.ruleId,
+        entry.contractVersion === 2 ? (2 as const) : (1 as const),
+      ]),
+    );
+    if (trustedSimulation) {
+      trustedContractVersions.set(config, contractVersionByRule);
+    }
+  }
 
   const factory: RuleContextFactory = {
     forRule(ruleId) {
@@ -141,16 +165,16 @@ export function buildRuleContext(
           options.invocationIndices[ruleId] ?? 0
         }`,
       );
-      const context: RuleContext = Object.freeze({
+      const contextValue: RuleContext = {
         contractVersion:
           contractVersionByRule.get(ruleId) ?? ENGINE_CONTRACT_VERSION,
         game,
         setHistory,
-        memory: Object.freeze({
-          game: memoryFor(state.private.memory, ruleId),
-          set: memoryFor(runtime.setMemory, ruleId),
-        }),
-        rng: Object.freeze({
+        memory: {
+          game: memoryFor(state.private.memory, ruleId, trustedSimulation),
+          set: memoryFor(runtime.setMemory, ruleId, trustedSimulation),
+        },
+        rng: {
           next() {
             const result = nextRandom(rng);
             rng = result.state;
@@ -161,8 +185,15 @@ export function buildRuleContext(
             rng = result.state;
             return result.value;
           },
-        }),
-      });
+        },
+      };
+      const context = trustedSimulation
+        ? contextValue
+        : Object.freeze({
+            ...contextValue,
+            memory: Object.freeze(contextValue.memory),
+            rng: Object.freeze(contextValue.rng),
+          });
       contexts.set(ruleId, context);
       return context;
     },

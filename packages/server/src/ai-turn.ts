@@ -25,9 +25,20 @@ export interface AiTurnMetric {
 export interface AiTurnLog {
   event: 'ai_move';
   fallback: AiFallback;
+  fallbackReason?: string;
   watchdog: boolean;
   wallMs: number;
   playouts: number;
+  worlds: number;
+  rootCandidates: number;
+  candidateEvaluations: number;
+  simulatedSteps: number;
+  dangerousPlayFilters: number;
+  queueMs: number;
+  setupMs: number;
+  searchMs: number;
+  workerReused: boolean;
+  ruleIds: string[];
   animationDelayMs: number;
 }
 
@@ -78,7 +89,7 @@ export function withResolvedRuleBundles(
 
 type SettledDecision =
   | { kind: 'decision'; decision: AiDecision }
-  | { kind: 'failed' }
+  | { kind: 'failed'; reason: string }
   | { kind: 'watchdog' };
 
 function delayMs(
@@ -162,7 +173,13 @@ export async function runAiTurn(
     Promise.resolve()
       .then(() => options.ai.decideMove(options.input))
       .then((decision) => ({ kind: 'decision', decision }) as const)
-      .catch(() => ({ kind: 'failed' }) as const),
+      .catch(
+        (error: unknown) =>
+          ({
+            kind: 'failed',
+            reason: error instanceof Error ? error.message : String(error),
+          }) as const,
+      ),
     new Promise<SettledDecision>((resolve) => {
       timer = setTimeout(() => resolve({ kind: 'watchdog' }), watchdogMs);
     }),
@@ -172,13 +189,24 @@ export async function runAiTurn(
   }
 
   const watchdogTriggered = settled.kind === 'watchdog';
-  const decision =
+  const engineFallbackReason =
+    settled.kind === 'watchdog'
+      ? 'server-watchdog'
+      : settled.kind === 'failed'
+        ? `ai-error:${settled.reason}`
+        : legalDecision(settled.decision, options.input.legalPlays)
+          ? undefined
+          : 'ai-returned-illegal-play';
+  const decision: AiDecision =
     settled.kind === 'decision' &&
     legalDecision(settled.decision, options.input.legalPlays)
       ? settled.decision
       : {
           play: guaranteedFallback(options),
           usedFallback: 'engine-fallback' as const,
+          ...(engineFallbackReason === undefined
+            ? {}
+            : { fallbackReason: engineFallbackReason }),
           stats: {
             playouts: 0,
             candidates: [],
@@ -215,9 +243,22 @@ export async function runAiTurn(
     options.onLog?.({
       event: 'ai_move',
       fallback: decision.usedFallback,
+      ...(decision.fallbackReason === undefined
+        ? {}
+        : { fallbackReason: decision.fallbackReason }),
       watchdog: watchdogTriggered,
       wallMs,
       playouts: decision.stats?.playouts ?? 0,
+      worlds: decision.stats?.worlds ?? 0,
+      rootCandidates: decision.stats?.rootCandidates ?? 0,
+      candidateEvaluations: decision.stats?.candidateEvaluations ?? 0,
+      simulatedSteps: decision.stats?.simulatedSteps ?? 0,
+      dangerousPlayFilters: decision.stats?.dangerousPlayFilters ?? 0,
+      queueMs: decision.stats?.queueMs ?? 0,
+      setupMs: decision.stats?.setupMs ?? 0,
+      searchMs: decision.stats?.searchMs ?? 0,
+      workerReused: decision.stats?.workerReused ?? false,
+      ruleIds: decision.stats?.ruleIds ?? [],
       animationDelayMs,
     });
   } catch {

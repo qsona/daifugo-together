@@ -15,6 +15,11 @@ export type EffectHook =
 
 export interface RuleChainPort {
   /**
+   * AI worker の使い捨て可能なシミュレーション内だけで有効にする。
+   * 権威ゲーム向け safe-port の clone / freeze / 戻り値検証を省略する。
+   */
+  readonly trustedSimulation?: true;
+  /**
    * Excludes a rule from the current runtime immediately.
    *
    * The engine calls this after detecting an invalid or unapplicable Effect so

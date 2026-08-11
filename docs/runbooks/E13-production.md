@@ -126,7 +126,7 @@ fly logs --app daifugo-together --no-tail
 - `server_drain_failed`: drain失敗
 - `socket_internal_error`: Socket処理、タイマー、永続化の予期しない例外
 - `ai_fallback`: partial-search・heuristic・watchdogなど、通常完了以外のAI手番。room/set/game/turnの識別子も含む
-- `ai_turn_summary`: AI手番があった1分間の件数、fallback内訳、mode内訳、wall time・playout数の平均/P95/最大
+- `ai_turn_summary`: AI手番があった1分間の件数、fallback内訳、mode内訳、world数・候補評価数・模擬手数、queue/setup/search/wall time・playout数、worker再利用数の平均/P95/最大
 - `uncaught_exception`: 未捕捉例外。直後にMachineが再起動したかも確認する
 
 外部通知は初回スコープ外なので、障害は自動通知されない。

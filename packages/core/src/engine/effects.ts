@@ -802,6 +802,10 @@ const INVALID_EFFECT_EVENT_PAYLOAD: Effect = {
   messageKey: 'engine.invalid-effect-payload',
 };
 const MAX_PRIVATE_RULE_NOTICES = 32;
+const trustedRulePositions = new WeakMap<
+  GameConfig,
+  ReadonlyMap<string, number>
+>();
 
 type InvalidEffectReason =
   | 'effect-limit'
@@ -884,12 +888,21 @@ export function executeEffectHook(
       invocationIndices: invocation.invocationIndices,
     },
   );
-  const positionByRule = new Map(
-    config.ruleChain.map((entry) => [entry.ruleId, entry.position]),
-  );
-  const contractVersionByRule = new Map(
-    config.ruleChain.map((entry) => [entry.ruleId, entry.contractVersion]),
-  );
+  const trustedSimulation = runtime.port.trustedSimulation === true;
+  let positionByRule = trustedSimulation
+    ? trustedRulePositions.get(config)
+    : undefined;
+  if (!positionByRule) {
+    positionByRule = new Map(
+      config.ruleChain.map((entry) => [entry.ruleId, entry.position]),
+    );
+    if (trustedSimulation) trustedRulePositions.set(config, positionByRule);
+  }
+  const contractVersionByRule = trustedSimulation
+    ? undefined
+    : new Map(
+        config.ruleChain.map((entry) => [entry.ruleId, entry.contractVersion]),
+      );
   const invalid: InvalidEffectEmission[] = [];
   const emissions: EffectEmission[] = [];
   const effectCountByRule = new Map<string, number>();
@@ -904,17 +917,21 @@ export function executeEffectHook(
   if (Array.isArray(collected)) {
     for (const collectedEntry of collected) {
       if (
-        !isRecord(collectedEntry) ||
-        typeof collectedEntry.ruleId !== 'string'
+        !trustedSimulation &&
+        (!isRecord(collectedEntry) || typeof collectedEntry.ruleId !== 'string')
       ) {
         continue;
       }
-      const ruleId = collectedEntry.ruleId;
+      const trustedEntry = collectedEntry as {
+        ruleId: string;
+        effects: unknown[];
+      };
+      const ruleId = trustedEntry.ruleId;
       const position = positionByRule.get(ruleId);
       if (position === undefined) {
         continue;
       }
-      if (!Array.isArray(collectedEntry.effects)) {
+      if (!trustedSimulation && !Array.isArray(trustedEntry.effects)) {
         const effectIndex = effectCountByRule.get(ruleId) ?? 0;
         effectCountByRule.set(ruleId, effectIndex + 1);
         invalid.push({
@@ -928,12 +945,14 @@ export function executeEffectHook(
         });
         continue;
       }
-      const collectedEffects = collectedEntry.effects;
+      const collectedEffects = trustedEntry.effects;
       collectedEffects.forEach((candidate) => {
         const effectIndex = effectCountByRule.get(ruleId) ?? 0;
         effectCountByRule.set(ruleId, effectIndex + 1);
-        const valid = effectPayloadValid(candidate);
-        const effect = valid ? candidate : INVALID_EFFECT_EVENT_PAYLOAD;
+        const valid = trustedSimulation || effectPayloadValid(candidate);
+        const effect = (
+          valid ? candidate : INVALID_EFFECT_EVENT_PAYLOAD
+        ) as Effect;
         const emission: EffectEmission = {
           ruleId,
           position,
@@ -1022,13 +1041,14 @@ export function executeEffectHook(
               }
             : {}),
         };
-        const reason: InvalidEffectReason | null =
-          effectIndex >= 8
+        const reason: InvalidEffectReason | null = trustedSimulation
+          ? null
+          : effectIndex >= 8
             ? 'effect-limit'
             : !valid
               ? 'invalid-payload'
               : effect.type === 'requestChoice' &&
-                  contractVersionByRule.get(ruleId) !== 2
+                  contractVersionByRule?.get(ruleId) !== 2
                 ? 'contract-version'
                 : effect.type === 'requestChoice' &&
                     collectedEffects.length !== 1

@@ -142,6 +142,9 @@ export function safeModifyStrength(
   context: RuleContext,
   base: StrengthOrder,
 ): { result: StrengthOrder; influenced: string[] } {
+  if (port.trustedSimulation) {
+    return port.modifyStrength(entries, context, base);
+  }
   try {
     const returned: unknown = port.modifyStrength(
       detachedFrozen(entries) as RuleChainEntry[],
@@ -184,6 +187,9 @@ export function safeModifyLegality(
   plays: Play[],
   base: Legality[],
 ): { results: Legality[]; influenced: string[] } {
+  if (port.trustedSimulation) {
+    return port.modifyLegality(entries, context, plays, base);
+  }
   try {
     const returned: unknown = port.modifyLegality(
       detachedFrozen(entries) as RuleChainEntry[],
@@ -217,6 +223,9 @@ export function safeCollectEffects(
   argument?: Play | Standings,
   input?: { ruleId: string; value: RuleInput },
 ): unknown {
+  if (port.trustedSimulation) {
+    return port.collectEffects(hook, entries, context, argument, input);
+  }
   try {
     const returned: unknown = port.collectEffects(
       hook,

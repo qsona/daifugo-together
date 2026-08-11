@@ -9,6 +9,12 @@ const FALLBACKS: readonly AiFallback[] = [
   'engine-fallback',
 ];
 
+interface Distribution {
+  average: number;
+  p95: number;
+  maximum: number;
+}
+
 export interface AiTurnSummary {
   windowStartedAt: number;
   windowEndedAt: number;
@@ -16,16 +22,17 @@ export interface AiTurnSummary {
   fallbacks: Record<AiFallback, number>;
   watchdogs: number;
   modes: Record<RoomAiTurnLog['mode'], number>;
-  wallMs: {
-    average: number;
-    p95: number;
-    maximum: number;
-  };
-  playouts: {
-    average: number;
-    p95: number;
-    maximum: number;
-  };
+  workerReuses: number;
+  wallMs: Distribution;
+  queueMs: Distribution;
+  setupMs: Distribution;
+  searchMs: Distribution;
+  worlds: Distribution;
+  rootCandidates: Distribution;
+  candidateEvaluations: Distribution;
+  simulatedSteps: Distribution;
+  dangerousPlayFilters: Distribution;
+  playouts: Distribution;
 }
 
 function emptyFallbacks(): Record<AiFallback, number> {
@@ -45,6 +52,14 @@ function roundedAverage(values: readonly number[]): number {
   return Math.round(average * 100) / 100;
 }
 
+function distribution(values: readonly number[]): Distribution {
+  return {
+    average: roundedAverage(values),
+    p95: percentile95(values),
+    maximum: Math.max(...values),
+  };
+}
+
 export class AiTurnLogAggregator {
   #windowStartedAt: number;
   #fallbacks = emptyFallbacks();
@@ -54,7 +69,16 @@ export class AiTurnLogAggregator {
     community: 0,
   };
   #wallMs: number[] = [];
+  #queueMs: number[] = [];
+  #setupMs: number[] = [];
+  #searchMs: number[] = [];
+  #worlds: number[] = [];
+  #rootCandidates: number[] = [];
+  #candidateEvaluations: number[] = [];
+  #simulatedSteps: number[] = [];
+  #dangerousPlayFilters: number[] = [];
   #playouts: number[] = [];
+  #workerReuses = 0;
 
   constructor(startedAt = Date.now()) {
     this.#windowStartedAt = startedAt;
@@ -65,7 +89,16 @@ export class AiTurnLogAggregator {
     if (log.watchdog) this.#watchdogs += 1;
     this.#modes[log.mode] += 1;
     this.#wallMs.push(log.wallMs);
+    this.#queueMs.push(log.queueMs);
+    this.#setupMs.push(log.setupMs);
+    this.#searchMs.push(log.searchMs);
+    this.#worlds.push(log.worlds);
+    this.#rootCandidates.push(log.rootCandidates);
+    this.#candidateEvaluations.push(log.candidateEvaluations);
+    this.#simulatedSteps.push(log.simulatedSteps);
+    this.#dangerousPlayFilters.push(log.dangerousPlayFilters);
     this.#playouts.push(log.playouts);
+    if (log.workerReused) this.#workerReuses += 1;
   }
 
   flush(endedAt = Date.now()): AiTurnSummary | undefined {
@@ -80,16 +113,17 @@ export class AiTurnLogAggregator {
             fallbacks: { ...this.#fallbacks },
             watchdogs: this.#watchdogs,
             modes: { ...this.#modes },
-            wallMs: {
-              average: roundedAverage(this.#wallMs),
-              p95: percentile95(this.#wallMs),
-              maximum: Math.max(...this.#wallMs),
-            },
-            playouts: {
-              average: roundedAverage(this.#playouts),
-              p95: percentile95(this.#playouts),
-              maximum: Math.max(...this.#playouts),
-            },
+            workerReuses: this.#workerReuses,
+            wallMs: distribution(this.#wallMs),
+            queueMs: distribution(this.#queueMs),
+            setupMs: distribution(this.#setupMs),
+            searchMs: distribution(this.#searchMs),
+            worlds: distribution(this.#worlds),
+            rootCandidates: distribution(this.#rootCandidates),
+            candidateEvaluations: distribution(this.#candidateEvaluations),
+            simulatedSteps: distribution(this.#simulatedSteps),
+            dangerousPlayFilters: distribution(this.#dangerousPlayFilters),
+            playouts: distribution(this.#playouts),
           } satisfies AiTurnSummary);
 
     this.#windowStartedAt = endedAt;
@@ -97,7 +131,16 @@ export class AiTurnLogAggregator {
     this.#watchdogs = 0;
     this.#modes = { basic: 0, community: 0 };
     this.#wallMs = [];
+    this.#queueMs = [];
+    this.#setupMs = [];
+    this.#searchMs = [];
+    this.#worlds = [];
+    this.#rootCandidates = [];
+    this.#candidateEvaluations = [];
+    this.#simulatedSteps = [];
+    this.#dangerousPlayFilters = [];
     this.#playouts = [];
+    this.#workerReuses = 0;
     return summary;
   }
 }

@@ -43,4 +43,4 @@ Discord にも障害開始を送る場合は、Better Stack の `Integrations` �
 
 ## 3. 告知直後
 
-告知後 1〜2 時間は Discord 通知に加えて `fly logs --app daifugo-together` を開き、`uncaught_exception`、`socket_internal_error`、`rule_auto_disabled`、`rule_load_failure`、`ai_fallback`、`ai_turn_summary` を確認する。`ai_turn_summary` では1分ごとのAI手番数、fallback内訳、wall time・playout数のP95と最大値を見る。
+告知後 1〜2 時間は Discord 通知に加えて `fly logs --app daifugo-together` を開き、`uncaught_exception`、`socket_internal_error`、`rule_auto_disabled`、`rule_load_failure`、`ai_fallback`、`ai_turn_summary` を確認する。`ai_turn_summary` では1分ごとのAI手番数、fallback内訳、world数・候補評価数・模擬手数、queue/setup/search/wall time、worker再利用数のP95と最大値を見る。

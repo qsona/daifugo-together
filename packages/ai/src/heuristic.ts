@@ -1,5 +1,13 @@
 import { CARD_RANKS } from '@daifugo/core';
-import type { Play, PlayRank, StrengthOrder } from '@daifugo/core';
+import type {
+  Card,
+  Play,
+  PlayerSnapshot,
+  PlayRank,
+  StrengthOrder,
+} from '@daifugo/core';
+
+const DANGEROUS_LAST_RANKS = new Set(['2', '8', '3']);
 
 function cardIds(play: Play): string[] {
   return play.cards.map((card) => card.id).sort();
@@ -37,6 +45,49 @@ export function sortPlaysWeakFirst(
       right.count - left.count ||
       cardIds(left).join(',').localeCompare(cardIds(right).join(',')),
   );
+}
+
+export function leavesOnlyDangerousCards(
+  hand: readonly Card[],
+  play: Play,
+): boolean {
+  const played = new Set(play.cards.map((card) => card.id));
+  const remaining = hand.filter((card) => !played.has(card.id));
+  return (
+    remaining.length > 0 &&
+    remaining.every(
+      (card) => card.kind === 'joker' || DANGEROUS_LAST_RANKS.has(card.rank),
+    )
+  );
+}
+
+export function chooseHeuristicPlay(
+  plays: readonly Play[],
+  hand: readonly Card[],
+  strength: StrengthOrder,
+): Play {
+  const safe = plays.filter((play) => !leavesOnlyDangerousCards(hand, play));
+  const selected = sortPlaysWeakFirst(
+    safe.length > 0 ? safe : plays,
+    strength,
+  )[0];
+  if (!selected) {
+    throw new Error('AI cannot choose from an empty legal-play list');
+  }
+  return selected;
+}
+
+export function chooseHeuristicPlayForView(
+  plays: readonly Play[],
+  view: Pick<PlayerSnapshot, 'hand' | 'strengthNote'>,
+): Play {
+  const ranking = view.strengthNote.inverted
+    ? [...CARD_RANKS].reverse()
+    : [...CARD_RANKS];
+  return chooseHeuristicPlay(plays, view.hand, {
+    ranking,
+    revolution: view.strengthNote.inverted,
+  });
 }
 
 export function weakestPlay(plays: readonly Play[], inverted = false): Play {

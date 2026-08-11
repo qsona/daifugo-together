@@ -14,13 +14,7 @@ const REWARD = new Map([
   [4, 0],
 ]);
 
-// TS-03 (Node 26.5.0): cutoff 24 averaged about 0.9 playout/ms.
-// Keep roughly 3x headroom for shared CPU and active rule overhead.
-const CALIBRATED_MS_PER_PLAYOUT = 3;
-
-function nextRandom(rng) {
-  return core.nextRandom(rng);
-}
+const DANGEROUS_LAST_RANKS = new Set(['2', '8', '3']);
 
 function randomIndex(rng, length) {
   const selected = core.randomInt(rng, length);
@@ -58,6 +52,33 @@ function sortWeakFirst(plays, strength) {
   );
 }
 
+function dangerousLastCard(card) {
+  return card.kind === 'joker' || DANGEROUS_LAST_RANKS.has(card.rank);
+}
+
+function leavesOnlyDangerousCards(hand, play) {
+  const played = new Set(play.cards.map((card) => card.id));
+  const remaining = hand.filter((card) => !played.has(card.id));
+  return remaining.length > 0 && remaining.every(dangerousLastCard);
+}
+
+function policyPlays(plays, hand, strength) {
+  const safe = plays.filter((play) => !leavesOnlyDangerousCards(hand, play));
+  return sortWeakFirst(safe.length > 0 ? safe : plays, strength);
+}
+
+function rootPolicyPlays(plays, hand, strength) {
+  const safe = [];
+  const dangerous = [];
+  for (const play of plays) {
+    (leavesOnlyDangerousCards(hand, play) ? dangerous : safe).push(play);
+  }
+  return [
+    ...sortWeakFirst(safe, strength),
+    ...sortWeakFirst(dangerous, strength),
+  ];
+}
+
 function knownCardZones(view, engineFeatures) {
   // ジョーカー等の機能宣言つき部屋ではデッキが 52 枚ではない。ruleChain 由来の
   // 機能集合で同じデッキを再構成しないと、保存則チェックが常に破れて
@@ -85,7 +106,7 @@ function knownCardZones(view, engineFeatures) {
           if (!deck.has(cardId)) {
             throw new Error(`AI observed an unknown card: ${cardId}`);
           }
-          zones.set(cardId, structuredClone(event.to));
+          zones.set(cardId, event.to);
         }
       } else if (event.from.kind === 'hand' && event.to.kind === 'hand') {
         // Hand-to-hand moves intentionally omit identities. A card that was
@@ -125,7 +146,7 @@ function determinize(view, seed, iteration, engineFeatures) {
   for (const player of view.players) {
     let hand;
     if (player.id === view.forPlayer) {
-      hand = structuredClone(view.hand);
+      hand = [...view.hand];
     } else {
       const known = [...zones]
         .filter(([, zone]) => zone.kind === 'hand' && zone.player === player.id)
@@ -134,10 +155,7 @@ function determinize(view, seed, iteration, engineFeatures) {
       if (unknownCount < 0) {
         throw new Error(`AI observed too many cards in ${player.id}'s hand`);
       }
-      hand = [
-        ...known.map((card) => structuredClone(card)),
-        ...shuffled.cards.slice(offset, offset + unknownCount),
-      ];
+      hand = [...known, ...shuffled.cards.slice(offset, offset + unknownCount)];
       offset += unknownCount;
     }
     players[player.id] = {
@@ -169,14 +187,14 @@ function determinize(view, seed, iteration, engineFeatures) {
       direction: view.direction,
       turn: view.turn,
       field: {
-        ...(view.field ? { current: structuredClone(view.field) } : {}),
+        ...(view.field ? { current: view.field } : {}),
         passedSinceLastPlay: [...view.passedSinceLastPlay],
       },
       discard: publicCards,
       standingsTaken: view.players.flatMap((player) =>
         player.standing === null ? [] : [player.standing],
       ),
-      history: structuredClone(view.history),
+      history: view.history,
       firedRules: [],
       turnCount: view.history.filter(
         (event) => event.type === 'played' || event.type === 'passed',
@@ -252,12 +270,13 @@ function scoreState(api, position, player) {
   return REWARD.get(standing) ?? 0;
 }
 
-function rollout(api, initialState, rootPlay, payload, iteration) {
+function rollout(api, initialState, rootPlay, payload) {
   let position = api.applyPlay(
     api.createPosition(initialState),
     actionFor(payload.view.forPlayer, rootPlay),
   ).position;
-  let rng = core.seedRng(`${payload.seed}:rollout:${iteration}`);
+  let steps = 0;
+  let dangerousPlayFilters = 0;
   for (
     let step = 0;
     step < payload.config.cutoffSteps && !api.isTerminal(position);
@@ -268,48 +287,33 @@ function rollout(api, initialState, rootPlay, payload, iteration) {
     if (!player) {
       break;
     }
-    const legal = api.enumerateLegalPlays(position, player);
+    const { plays: legal, strength } = api.enumerateLegalPlaysWithStrength(
+      position,
+      player,
+    );
     if (legal.length === 0) {
       if (!state.public.field.current) {
         break;
       }
       position = api.applyPlay(position, { type: 'pass', player }).position;
+      steps += 1;
       continue;
     }
-    const strength = api.getEffectiveStrengthOrder(position);
-    const random = nextRandom(rng);
-    rng = random.state;
-    let selected;
-    if (random.value < payload.difficulty.rolloutEpsilon) {
-      const index = randomIndex(rng, legal.length);
-      rng = index.rng;
-      selected = legal[index.index];
-    } else {
-      selected = sortWeakFirst(legal, strength)[0];
-    }
+    const preferred = policyPlays(
+      legal,
+      state.players[player]?.hand ?? [],
+      strength,
+    );
+    if (preferred.length < legal.length) dangerousPlayFilters += 1;
+    const selected = preferred[0];
     position = api.applyPlay(position, actionFor(player, selected)).position;
+    steps += 1;
   }
-  return scoreState(api, position, payload.view.forPlayer);
-}
-
-function selectUcb(stats, total, c) {
-  const unvisited = stats.findIndex((entry) => entry.visits === 0);
-  if (unvisited >= 0) {
-    return unvisited;
-  }
-  let best = 0;
-  let bestValue = Number.NEGATIVE_INFINITY;
-  for (let index = 0; index < stats.length; index += 1) {
-    const entry = stats[index];
-    const value =
-      entry.reward / entry.visits +
-      c * Math.sqrt(Math.log(total) / entry.visits);
-    if (value > bestValue) {
-      best = index;
-      bestValue = value;
-    }
-  }
-  return best;
+  return {
+    reward: scoreState(api, position, payload.view.forPlayer),
+    steps,
+    dangerousPlayFilters,
+  };
 }
 
 function strongestCandidate(stats) {
@@ -317,53 +321,38 @@ function strongestCandidate(stats) {
     .map((entry, index) => ({ ...entry, index }))
     .sort(
       (left, right) =>
-        right.visits - left.visits ||
         right.reward / Math.max(1, right.visits) -
           left.reward / Math.max(1, left.visits) ||
+        right.visits - left.visits ||
         left.index - right.index,
     )[0];
 }
 
-function finalCandidate(stats, temperature, seed) {
-  if (temperature <= 0.01) {
-    return strongestCandidate(stats);
-  }
-  const weighted = stats.map((entry) =>
-    Math.pow(entry.visits, 1 / temperature),
-  );
-  const total = weighted.reduce((sum, weight) => sum + weight, 0);
-  if (total <= 0) {
-    return strongestCandidate(stats);
-  }
-  const random = core.nextRandom(core.seedRng(`${seed}:final`)).value * total;
-  let cursor = 0;
-  for (let index = 0; index < stats.length; index += 1) {
-    cursor += weighted[index];
-    if (random < cursor) {
-      return { ...stats[index], index };
-    }
-  }
-  return strongestCandidate(stats);
-}
-
 function response(
   stats,
-  payload,
-  completed,
+  worlds,
+  candidateEvaluations,
+  simulatedSteps,
+  dangerousPlayFilters,
   done,
   ruleIds,
   effectiveStrengthInverted,
+  setupMs,
+  searchStartedAt,
 ) {
-  const selected = finalCandidate(
-    stats,
-    payload.difficulty.temperature,
-    payload.seed,
-  );
+  const selected = strongestCandidate(stats);
   return {
     play: selected.play,
     completed: done,
     stats: {
-      playouts: completed,
+      playouts: candidateEvaluations,
+      worlds,
+      rootCandidates: stats.length,
+      candidateEvaluations,
+      simulatedSteps,
+      dangerousPlayFilters,
+      setupMs,
+      searchMs: performance.now() - searchStartedAt,
       candidates: stats.map((entry) => ({
         cardIds: cardIds(entry.play),
         visits: entry.visits,
@@ -378,6 +367,8 @@ function response(
 
 const moduleCache = new Map();
 const verifiedSourceCache = new Set();
+const verifiedModuleContractCache = new Set();
+const rulePlanCache = new Map();
 
 function ruleModule(value) {
   return (
@@ -447,37 +438,41 @@ async function loadRuleModules(ruleContext) {
       }
       moduleCache.set(cacheKey, module);
     }
-    if (
-      module.meta.ruleId !== entry.ruleId ||
-      module.meta.contractVersion !== entry.contractVersion ||
-      !isDeepStrictEqual(module.meta, bundle.meta)
-    ) {
-      throw new Error(`AI rule module contract mismatch: ${entry.ruleId}`);
+    if (!verifiedModuleContractCache.has(cacheKey)) {
+      if (
+        module.meta.ruleId !== entry.ruleId ||
+        module.meta.contractVersion !== entry.contractVersion ||
+        !isDeepStrictEqual(module.meta, bundle.meta)
+      ) {
+        throw new Error(`AI rule module contract mismatch: ${entry.ruleId}`);
+      }
+      verifiedModuleContractCache.add(cacheKey);
     }
     modules.push(module);
   }
   return modules;
 }
 
-async function search(payload, onProgress) {
+function rulePlanKey(ruleContext) {
+  return (ruleContext?.ruleChain ?? [])
+    .map((entry) => `${entry.ruleId}:${entry.bundleHash}:${entry.position}`)
+    .join('|');
+}
+
+async function search(payload, deadlineAt, onProgress) {
+  const searchStartedAt = performance.now();
   if (payload.config.maxTreeDepth !== 1) {
     throw new Error('AI-01 supports maxTreeDepth=1 only');
   }
   const modules = await loadRuleModules(payload.ruleContext);
-  const ruleChain = structuredClone(payload.ruleContext?.ruleChain ?? []);
-  let ruleIssue;
-  const port = core.createInProcessRuleChainPort(modules, {
-    onIssue(issue) {
-      ruleIssue ??= issue;
-    },
-  });
-  const throwIfRuleFailed = () => {
-    if (ruleIssue) {
-      throw new Error(
-        `AI rule execution failed: ${ruleIssue.ruleId}/${ruleIssue.hook}/${ruleIssue.reason}`,
-      );
-    }
-  };
+  const ruleChain = payload.ruleContext?.ruleChain ?? [];
+  const planKey = rulePlanKey(payload.ruleContext);
+  let rulePlan = rulePlanCache.get(planKey);
+  if (!rulePlan) {
+    rulePlan = core.compileTrustedSimulationRulePlan(ruleChain, modules);
+    rulePlanCache.set(planKey, rulePlan);
+  }
+  const port = core.createTrustedSimulationRuleChainPort(rulePlan);
   const config = gameConfig(
     payload.view,
     payload.ruleContext?.gameSeed ?? payload.seed,
@@ -488,102 +483,105 @@ async function search(payload, onProgress) {
     snapshotContext: snapshotContext(payload.view),
     runtime: {
       port,
-      setHistory: structuredClone(payload.view.setResults),
-      setMemory: structuredClone(payload.ruleContext?.setMemory ?? {}),
+      setHistory: payload.view.setResults,
+      setMemory: payload.ruleContext?.setMemory ?? {},
     },
   });
   const engineFeatures = core.engineFeaturesOf(ruleChain);
   const sample = determinize(payload.view, payload.seed, -1, engineFeatures);
-  sample.private.memory = structuredClone(
-    payload.ruleContext?.gameMemory ?? {},
-  );
-  sample.private.hookCalls = structuredClone(
-    payload.ruleContext?.hookCalls ?? {},
-  );
+  sample.private.memory = payload.ruleContext?.gameMemory ?? {};
+  sample.private.hookCalls = payload.ruleContext?.hookCalls ?? {};
   const strength = api.getEffectiveStrengthOrder(api.createPosition(sample));
-  throwIfRuleFailed();
   const effectiveStrengthInverted =
     strength.ranking.join(',') ===
     [...core.BASE_STRENGTH_ORDER.ranking].reverse().join(',');
   const scaled = Math.floor(
     payload.budget.maxPlayouts * payload.difficulty.budgetScale,
   );
-  const softLimit = Math.max(
-    1,
-    Math.floor(payload.budget.softMs / CALIBRATED_MS_PER_PLAYOUT),
+  const candidates = rootPolicyPlays(
+    payload.legalPlays,
+    payload.view.hand,
+    strength,
   );
-  const target = Math.max(1, Math.min(scaled, softLimit));
-  const revisitCap = Math.max(1, Math.floor(target / 2));
-  const candidates = sortWeakFirst(payload.legalPlays, strength).slice(
-    0,
-    Math.min(payload.config.rootCandidateCap, revisitCap),
+  const evaluationLimit = Math.max(candidates.length, scaled);
+  const configuredWorlds = Math.max(
+    1,
+    Math.floor(evaluationLimit / candidates.length),
+  );
+  const softBudgetWorlds = Math.max(
+    1,
+    Math.floor(payload.budget.softMs / Math.max(1, payload.budget.sliceMs)),
+  );
+  const ruleCostDivisor = Math.max(1, Math.ceil(ruleChain.length / 4));
+  const targetWorlds = Math.max(
+    1,
+    Math.floor(Math.min(configuredWorlds, softBudgetWorlds) / ruleCostDivisor),
   );
   const stats = candidates.map((play) => ({
     play,
     visits: 0,
     reward: 0,
   }));
-  const progressBatch = Math.max(
-    1,
-    Math.min(payload.config.playoutBatchSize, target),
-  );
-  let completed = 0;
-  let lastProgressAt = performance.now();
-  for (; completed < target; completed += 1) {
-    const candidateIndex = selectUcb(
-      stats,
-      Math.max(1, completed),
-      payload.config.ucbC,
-    );
+  const setupMs = performance.now() - searchStartedAt;
+  const cooperativeDeadlineAt =
+    deadlineAt - Math.max(25, payload.budget.sliceMs * 2);
+  let worlds = 0;
+  let candidateEvaluations = 0;
+  let simulatedSteps = 0;
+  let dangerousPlayFilters = 0;
+  for (let worldIndex = 0; worldIndex < targetWorlds; worldIndex += 1) {
+    if (worldIndex > 0 && Date.now() >= cooperativeDeadlineAt) break;
     const world = determinize(
       payload.view,
       payload.seed,
-      completed,
+      worldIndex,
       engineFeatures,
     );
-    world.private.memory = structuredClone(
-      payload.ruleContext?.gameMemory ?? {},
-    );
-    world.private.hookCalls = structuredClone(
-      payload.ruleContext?.hookCalls ?? {},
-    );
-    const reward = rollout(
-      api,
-      world,
-      stats[candidateIndex].play,
-      payload,
-      completed,
-    );
-    throwIfRuleFailed();
-    stats[candidateIndex].visits += 1;
-    stats[candidateIndex].reward += reward;
-    const count = completed + 1;
-    const now = performance.now();
-    if (
-      count === 1 ||
-      count % progressBatch === 0 ||
-      now - lastProgressAt >= payload.budget.sliceMs
-    ) {
-      onProgress(
-        response(
-          stats,
-          payload,
-          count,
-          false,
-          ruleChain.map((entry) => entry.ruleId),
-          effectiveStrengthInverted,
-        ),
-      );
-      lastProgressAt = now;
+    world.private.memory = payload.ruleContext?.gameMemory ?? {};
+    world.private.hookCalls = payload.ruleContext?.hookCalls ?? {};
+    const round = [];
+    for (const entry of stats) {
+      if (worldIndex > 0 && Date.now() >= cooperativeDeadlineAt) break;
+      round.push(rollout(api, world, entry.play, payload));
     }
+    if (round.length !== stats.length) break;
+    for (const [index, result] of round.entries()) {
+      stats[index].visits += 1;
+      stats[index].reward += result.reward;
+      simulatedSteps += result.steps;
+      dangerousPlayFilters += result.dangerousPlayFilters;
+    }
+    worlds += 1;
+    candidateEvaluations += stats.length;
+    onProgress(
+      response(
+        stats,
+        worlds,
+        candidateEvaluations,
+        simulatedSteps,
+        dangerousPlayFilters,
+        false,
+        ruleChain.map((entry) => entry.ruleId),
+        effectiveStrengthInverted,
+        setupMs,
+        searchStartedAt,
+      ),
+    );
+  }
+  if (worlds === 0) {
+    throw new Error('AI search could not complete one candidate round');
   }
   return response(
     stats,
-    payload,
-    completed,
-    completed === target,
+    worlds,
+    candidateEvaluations,
+    simulatedSteps,
+    dangerousPlayFilters,
+    worlds === targetWorlds,
     ruleChain.map((entry) => entry.ruleId),
     effectiveStrengthInverted,
+    setupMs,
+    searchStartedAt,
   );
 }
 
@@ -598,7 +596,7 @@ parentPort.on('message', async (message) => {
     parentPort.postMessage({
       kind: 'result',
       id: message.id,
-      value: await search(message.payload, (value) => {
+      value: await search(message.payload, message.deadlineAt, (value) => {
         parentPort.postMessage({
           kind: 'progress',
           id: message.id,

@@ -38,6 +38,15 @@ export interface SearchStats {
   playouts: number;
   candidates: CandidateStats[];
   workerThread: boolean;
+  worlds?: number;
+  rootCandidates?: number;
+  candidateEvaluations?: number;
+  simulatedSteps?: number;
+  dangerousPlayFilters?: number;
+  queueMs?: number;
+  setupMs?: number;
+  searchMs?: number;
+  workerReused?: boolean;
   ruleIds?: string[];
   effectiveStrengthInverted?: boolean;
 }
@@ -74,6 +83,7 @@ export interface DecideMoveInput {
 export interface AiDecision {
   play: Play;
   usedFallback: AiFallback;
+  fallbackReason?: string;
   stats?: SearchStats;
 }
 
@@ -92,7 +102,7 @@ export const NORMAL_DIFFICULTY: DifficultyProfile = {
 export const DEFAULT_THINK_BUDGET: ThinkBudget = {
   softMs: 50,
   hardMs: 200,
-  maxPlayouts: 2_000,
+  maxPlayouts: 64,
   sliceMs: 10,
 };
 

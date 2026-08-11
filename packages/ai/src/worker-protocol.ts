@@ -27,6 +27,7 @@ export interface SearchResponse {
 export interface WorkerRequest {
   id: number;
   payload: SearchRequest;
+  deadlineAt: number;
 }
 
 export interface WorkerReady {

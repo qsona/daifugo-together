@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import {
+  chooseHeuristicPlayForView,
   createAiPlayer,
   DEFAULT_THINK_BUDGET,
   NORMAL_DIFFICULTY,
@@ -109,8 +110,9 @@ export interface RoomAiTurnLog extends AiTurnLog {
 
 export const ROOM_AI_THINK_BUDGET = {
   ...DEFAULT_THINK_BUDGET,
-  hardMs: 150,
-  maxPlayouts: 3,
+  // 全ルール・24手先の1world実測は最大約120ms。単一workerのキュー待ちも
+  // 含めて2〜3手番を吸収しつつ、server watchdog (1秒) より十分短く保つ。
+  hardMs: 400,
 } as const;
 
 export interface RoomSocketGateway {
@@ -353,7 +355,7 @@ export function attachRoomSocketGateway(
             difficulty: NORMAL_DIFFICULTY,
             ruleContext,
           },
-          fallbackPlay: () => legalPlays[0]!,
+          fallbackPlay: () => chooseHeuristicPlayForView(legalPlays, view),
           animationDelay: { minMs: 0, maxMs: 0 },
           ...(options.onAiLog
             ? {

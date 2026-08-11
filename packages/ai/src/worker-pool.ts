@@ -10,6 +10,7 @@ import type {
 interface QueuedJob {
   id: number;
   payload: SearchRequest;
+  queuedAt: number;
   deadlineAt: number;
   timer: NodeJS.Timeout;
   resolve(value: SearchResponse): void;
@@ -19,6 +20,7 @@ interface QueuedJob {
 interface ActiveJob extends QueuedJob {
   worker: Worker;
   latest: SearchResponse | null;
+  workerReused: boolean;
 }
 
 export class AiWorkerPool {
@@ -29,6 +31,7 @@ export class AiWorkerPool {
   private nextId = 1;
   private active: ActiveJob | null = null;
   private readonly queue: QueuedJob[] = [];
+  private workerJobs = 0;
 
   constructor(
     private readonly workerUrl = new URL('./worker-entry.js', import.meta.url),
@@ -47,6 +50,7 @@ export class AiWorkerPool {
       const job: QueuedJob = {
         id,
         payload,
+        queuedAt: Date.now(),
         deadlineAt: Date.now() + timeoutMs,
         timer: undefined as unknown as NodeJS.Timeout,
         resolve,
@@ -89,6 +93,7 @@ export class AiWorkerPool {
     });
     this.worker = worker;
     this.ready = false;
+    this.workerJobs = 0;
     worker.on('message', (message: WorkerResponse) => {
       if (this.worker !== worker) {
         return;
@@ -109,7 +114,19 @@ export class AiWorkerPool {
       clearTimeout(active.timer);
       this.active = null;
       if (message.kind === 'result') {
-        active.resolve(message.value);
+        active.resolve({
+          ...message.value,
+          stats: {
+            ...message.value.stats,
+            queueMs: Math.max(
+              0,
+              Date.now() -
+                active.queuedAt -
+                (message.value.stats.searchMs ?? 0),
+            ),
+            workerReused: active.workerReused,
+          },
+        });
       } else {
         active.reject(new Error(message.error));
       }
@@ -157,11 +174,14 @@ export class AiWorkerPool {
       ...job,
       worker,
       latest: null,
+      workerReused: this.workerJobs > 0,
     };
     this.active = active;
+    this.workerJobs += 1;
     worker.postMessage({
       id: job.id,
       payload: job.payload,
+      deadlineAt: job.deadlineAt,
     } satisfies WorkerRequest);
   }
 
@@ -179,7 +199,20 @@ export class AiWorkerPool {
       const active = this.active;
       this.active = null;
       if (active.latest) {
-        active.resolve({ ...active.latest, completed: false });
+        active.resolve({
+          ...active.latest,
+          completed: false,
+          stats: {
+            ...active.latest.stats,
+            queueMs: Math.max(
+              0,
+              Date.now() -
+                active.queuedAt -
+                (active.latest.stats.searchMs ?? 0),
+            ),
+            workerReused: active.workerReused,
+          },
+        });
       } else {
         active.reject(new Error(`AI worker exceeded ${thinkMs}ms`));
       }

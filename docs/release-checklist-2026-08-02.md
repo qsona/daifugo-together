@@ -490,9 +490,9 @@ db.close();
 ### 初週-1. AI worker の飽和を観測する
 
 - **現状**: worker は **1 本固定**。`packages/ai/src/worker-pool.ts:25` — `readonly size = 1`。`packages/ai/src/ai-player.test.ts:185-188` —「B-7 の仮値として worker pool を 1 本に固定する」。`docs/decision-log.md:31` — B-7(プール本数と予算の実測調整)は**未決**。
-- **過負荷時の挙動は degrade であってハングではない**: `packages/server/src/ai-turn.ts` のwatchdogで応答不能時も最初の合法手へ進み、通常完了以外は`ai_fallback`へ記録する。ルームAIの探索予算は`hardMs: 150`、`maxPlayouts: 3`。時間内に途中結果があれば`partial-search`、探索開始前にキュー期限へ達した場合などは`heuristic`へ段階的に退避する。
+- **過負荷時の挙動は degrade であってハングではない**: `packages/server/src/ai-turn.ts` のwatchdogで応答不能時も危険札を残しにくい合法手へ進み、通常完了以外は`ai_fallback`へ記録する。ルームAIの探索予算は`softMs: 50`、`hardMs: 400`、候補評価上限`64`。同じ想定worldで全合法手を評価し終えた周だけを採用し、通常の予算完了ではworkerを再利用する。hard期限までに予定worldを完了できなければ、公平に完了した周だけを`partial-search`として返し、応答自体がなければ`heuristic`へ退避する。
 - **つまり**: 同時卓が増えると AI が弱くなるだけで、対局は止まらない。設計として妥当。
-- **観測**: `ai_fallback`の個別記録に加え、`ai_turn_summary`の1分ごとの手番数、fallback内訳、wall time・playout数のP95/最大を見る。fallbackが常時増えるようになったら予算かマシンサイズを調整する。CPU が1コアなので**プールを増やしても効果は薄い**。
+- **観測**: `ai_fallback`の個別記録に加え、`ai_turn_summary`の1分ごとの手番数、fallback内訳、world数・候補評価数・模擬手数、queue/setup/search/wall time、worker再利用数のP95/最大を見る。fallbackが常時増えるようになったら予算かマシンサイズを調整する。CPU が1コアなので**プールを増やしても効果は薄い**。
 
 ### 初週-2. Volume 使用量を毎日見る
 

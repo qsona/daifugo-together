@@ -1,14 +1,22 @@
 import {
   buildPlayerSnapshot,
+  compileTrustedSimulationRulePlan,
+  createSimulationApi,
   createSimulationRun,
   createInProcessRuleChainPort,
+  createTrustedSimulationRuleChainPort,
   samePlay,
+  type GameConfig,
+  type GameState,
   type RuleChainEntry,
   type RuleExecutionIssue,
   type RuleModule,
+  type RuleRuntime,
   type SetAction,
+  type SetState,
   simulate,
   type SimReport,
+  type TrustedSimulationRulePlan,
 } from '@daifugo/core';
 import {
   createAiPlayer,
@@ -92,11 +100,72 @@ export function runRuleSimulations(options: {
   return runs;
 }
 
+function differentialSimulationProblem(input: {
+  config: GameConfig;
+  game: GameState;
+  state: SetState;
+  player: string;
+  safeRuntime: RuleRuntime;
+  trustedPlan: TrustedSimulationRulePlan;
+  move: number;
+}): string | undefined {
+  const snapshotContext = {
+    setId: input.state.setId,
+    setPhase: input.state.phase,
+    members: input.state.members,
+    setResults: input.state.results,
+  };
+  const safe = createSimulationApi({
+    config: input.config,
+    snapshotContext,
+    runtime: input.safeRuntime,
+  });
+  const fast = createSimulationApi({
+    config: input.config,
+    snapshotContext,
+    runtime: {
+      port: createTrustedSimulationRuleChainPort(input.trustedPlan),
+      setHistory: input.state.results,
+      setMemory: input.state.setMemory,
+    },
+  });
+  const safePosition = safe.createPosition(input.game, input.state.setMemory);
+  const fastPosition = fast.createPosition(input.game, input.state.setMemory);
+  const safeLegal = safe.enumerateLegalPlaysWithStrength(
+    safePosition,
+    input.player,
+  );
+  const fastLegal = fast.enumerateLegalPlaysWithStrength(
+    fastPosition,
+    input.player,
+  );
+  if (JSON.stringify(fastLegal) !== JSON.stringify(safeLegal)) {
+    return 'legal plays or strength differ';
+  }
+  const selected = safeLegal.plays[input.move % safeLegal.plays.length];
+  const action = selected
+    ? {
+        type: 'play' as const,
+        player: input.player,
+        cards: selected.cards.map((card) => card.id),
+      }
+    : { type: 'pass' as const, player: input.player };
+  try {
+    const safeResult = safe.applyPlay(safePosition, action);
+    const fastResult = fast.applyPlay(fastPosition, action);
+    return JSON.stringify(fastResult) === JSON.stringify(safeResult)
+      ? undefined
+      : 'applied transition differs';
+  } catch (error) {
+    return `differential apply failed: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
 const CI_AI_BUDGET: ThinkBudget = {
-  softMs: 3,
-  hardMs: 150,
-  maxPlayouts: 1,
-  sliceMs: 1,
+  softMs: 50,
+  hardMs: 200,
+  maxPlayouts: 64,
+  sliceMs: 10,
 };
 const CI_AI_WARMUP_BUDGET: ThinkBudget = {
   ...CI_AI_BUDGET,
@@ -144,8 +213,13 @@ export async function runAiRuleSimulations(options: {
         ruleChain,
         port,
       });
+      const trustedPlan = compileTrustedSimulationRulePlan(
+        ruleChain,
+        configuration.bundles.map((bundle) => bundle.module),
+      );
       const ai = createAiPlayer({
-        search: { cutoffSteps: 4, rootCandidateCap: 4 },
+        // CIも本番と同じ先読み長で、ルール実行の性能退行を検出する。
+        search: { cutoffSteps: 24 },
       });
       let moves = 0;
       let fallbacks = 0;
@@ -162,6 +236,22 @@ export async function runAiRuleSimulations(options: {
             throw new Error('AI simulation has no active game');
           }
           let action: SetAction;
+          const differentialProblem = differentialSimulationProblem({
+            config: decision.config,
+            game,
+            state: decision.state,
+            player: decision.player,
+            safeRuntime: decision.runtime,
+            trustedPlan,
+            move: moves,
+          });
+          if (differentialProblem) {
+            policyViolations.push({
+              game: decision.setIndex,
+              invariant: 'ai-safe-fast-differential',
+              detail: differentialProblem,
+            });
+          }
           if (decision.legalPlays.length === 0) {
             action = { type: 'pass', player: decision.player };
           } else {
@@ -221,6 +311,29 @@ export async function runAiRuleSimulations(options: {
             moves += 1;
             playouts += result.stats?.playouts ?? 0;
             if (result.usedFallback !== 'none') fallbacks += 1;
+            if (
+              result.stats?.workerThread &&
+              result.stats.rootCandidates !== decision.legalPlays.length
+            ) {
+              policyViolations.push({
+                game: decision.setIndex,
+                invariant: 'ai-root-candidates',
+                detail: `${String(result.stats.rootCandidates)} evaluated for ${String(decision.legalPlays.length)} legal plays`,
+              });
+            }
+            if (
+              result.stats?.workerThread &&
+              result.stats.candidates.some(
+                (candidate) => candidate.visits !== result.stats?.worlds,
+              )
+            ) {
+              policyViolations.push({
+                game: decision.setIndex,
+                invariant: 'ai-incomplete-world',
+                detail:
+                  'root candidates were evaluated a different number of times',
+              });
+            }
             const authoritative = decision.legalPlays.find((play) =>
               samePlay(play, result.play),
             );

@@ -10,13 +10,17 @@ import type {
 } from '../game/types.js';
 import { TITLE_BY_STANDING } from '../game/types.js';
 import { reduceGame } from '../engine/reducer.js';
-import { enumerateLegalPlays } from '../play/candidates.js';
+import {
+  enumerateLegalPlays,
+  evaluateCandidates,
+  generateCandidates,
+} from '../play/candidates.js';
 import type { Play } from '../play/play.js';
 import { BASE_STRENGTH_ORDER, type StrengthOrder } from '../play/strength.js';
 import { noRuleRuntime, type RuleRuntime } from '../rules/chain.js';
 import { buildRuleContext, prepareRuleInvocation } from '../rules/context.js';
 import { safeModifyStrength } from '../rules/safe-port.js';
-import type { Standings } from '../rules/contract.js';
+import { engineFeaturesOf, type Standings } from '../rules/contract.js';
 import { buildPlayerSnapshot } from '../snapshot/snapshot.js';
 import { outstandingChoiceRequests } from '../game/pending-choice.js';
 
@@ -34,6 +38,10 @@ export interface SimulationPosition {
 export interface SimulationApi {
   createPosition(state: GameState, setMemory?: RuleMemory): SimulationPosition;
   enumerateLegalPlays(position: SimulationPosition, player: PlayerId): Play[];
+  enumerateLegalPlaysWithStrength(
+    position: SimulationPosition,
+    player: PlayerId,
+  ): { plays: Play[]; strength: StrengthOrder };
   applyPlay(
     position: SimulationPosition,
     action: GameAction,
@@ -81,10 +89,18 @@ function terminalStandings(
 export function createSimulationApi(
   input: CreateSimulationApiInput,
 ): SimulationApi {
-  const config = structuredClone(input.config);
-  const snapshotContext = structuredClone(input.snapshotContext);
   const runtime = input.runtime ?? noRuleRuntime();
-  const initialSetMemory = structuredClone(runtime.setMemory);
+  const trustedSimulation = runtime.port.trustedSimulation === true;
+  const config = trustedSimulation
+    ? input.config
+    : structuredClone(input.config);
+  const snapshotContext = trustedSimulation
+    ? input.snapshotContext
+    : structuredClone(input.snapshotContext);
+  const initialSetMemory = trustedSimulation
+    ? runtime.setMemory
+    : structuredClone(runtime.setMemory);
+  const engineFeatures = engineFeaturesOf(config.ruleChain);
 
   const runtimeFor = (position: SimulationPosition): RuleRuntime => ({
     ...runtime,
@@ -120,8 +136,8 @@ export function createSimulationApi(
   return {
     createPosition(state, setMemory = initialSetMemory) {
       return {
-        state: structuredClone(state),
-        setMemory: structuredClone(setMemory),
+        state: trustedSimulation ? state : structuredClone(state),
+        setMemory: trustedSimulation ? setMemory : structuredClone(setMemory),
       };
     },
 
@@ -132,6 +148,20 @@ export function createSimulationApi(
         player,
         runtimeFor(position),
       );
+    },
+
+    enumerateLegalPlaysWithStrength(position, player) {
+      const playerState = position.state.players[player];
+      if (!playerState || playerState.status !== 'active') {
+        return { plays: [], strength: effectiveStrength(position) };
+      }
+      const evaluated = evaluateCandidates(
+        config,
+        position.state,
+        generateCandidates(playerState.hand, engineFeatures),
+        runtimeFor(position),
+      );
+      return { plays: evaluated.plays, strength: evaluated.strength };
     },
 
     applyPlay(position, action) {
