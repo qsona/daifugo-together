@@ -20,8 +20,10 @@ export interface AdminOverview {
   windows: {
     last30m: OperationsActivity;
     last3h: OperationsActivity;
+    last24h: OperationsActivity;
     today: OperationsActivity;
   };
+  dailyGames: Array<{ date: string; games: number }>;
   proposals: {
     today: number;
     total: number;
@@ -114,6 +116,7 @@ export class AdminRepository {
     const jstOffset = 9 * 60 * 60 * 1_000;
     const day = 24 * 60 * 60 * 1_000;
     const today = Math.floor((now + jstOffset) / day) * day - jstOffset;
+    const dailyGamesSince = today - 13 * day;
     const status = this.#operations.status(now, { limit: 1 });
     const counts = this.#sqlite
       .prepare(
@@ -134,13 +137,33 @@ export class AdminRepository {
       users_today: number;
       active_rules: number;
     };
+    const dailyGameRows = this.#sqlite
+      .prepare(
+        `SELECT date(ended_at / 1000, 'unixepoch', '+9 hours') AS date,
+                COALESCE(SUM(games_played), 0) AS games
+         FROM game_sets
+         WHERE ended_at >= ? AND ended_at < ?
+         GROUP BY date
+         ORDER BY date`,
+      )
+      .all(dailyGamesSince, now) as Array<{ date: string; games: number }>;
+    const dailyGamesByDate = new Map(
+      dailyGameRows.map((row) => [row.date, row.games]),
+    );
+    const dailyGames = Array.from({ length: 14 }, (_, index) => {
+      const timestamp = dailyGamesSince + index * day;
+      const date = new Date(timestamp + jstOffset).toISOString().slice(0, 10);
+      return { date, games: dailyGamesByDate.get(date) ?? 0 };
+    });
     return {
       generatedAt: now,
       windows: {
         last30m: this.#operations.activity(now - 30 * 60 * 1_000, now),
         last3h: this.#operations.activity(now - 3 * 60 * 60 * 1_000, now),
+        last24h: this.#operations.activity(now - day, now),
         today: this.#operations.activity(today, now),
       },
+      dailyGames,
       proposals: {
         today: counts.proposals_today,
         total: status.proposals.total,

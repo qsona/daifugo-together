@@ -215,3 +215,19 @@ export async function loadTrafficDashboardWithToken(
   ]);
   return { windows: { last30m, last3h, today: todayWindow } };
 }
+
+export async function loadAdminTrafficDashboardWithToken(
+  app: string,
+  organization: string,
+  token: string,
+): Promise<{
+  windows: Record<'last30m' | 'last3h' | 'last24h', TrafficWindow>;
+}> {
+  if (!token.trim()) throw new Error('Fly.ioの認証トークンが空です');
+  const [last30m, last3h, last24h] = await Promise.all([
+    prometheusWindow(app, organization, token, WINDOW_RANGES.last30m),
+    prometheusWindow(app, organization, token, WINDOW_RANGES.last3h),
+    prometheusWindow(app, organization, token, 24 * 60 * 60),
+  ]);
+  return { windows: { last30m, last3h, last24h } };
+}

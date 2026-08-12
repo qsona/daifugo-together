@@ -93,6 +93,18 @@ export const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
     .detail { margin:13px 0 0; padding-top:12px; border-top:1px solid #26304b; color:#98a4c2; font-size:11px; line-height:1.8; }
     .overview-lower { display:grid; grid-template-columns:1.15fr .85fr; gap:14px; margin-top:14px; }
     .panel { padding:18px; }
+    .trend-panel { margin-top:14px; }
+    .panel-heading { display:flex; align-items:baseline; justify-content:space-between; gap:16px; margin-bottom:16px; }
+    .panel-heading h2 { margin:0; }
+    .trend-summary { color:#aab5d0; font-size:12px; text-align:right; }
+    .trend-chart { display:grid; grid-template-columns:repeat(14,minmax(0,1fr)); gap:clamp(3px,.8vw,9px); min-height:190px; padding:6px 2px 0; }
+    .trend-column { display:grid; grid-template-rows:24px 140px 20px; min-width:0; text-align:center; }
+    .trend-value { align-self:end; overflow:hidden; color:#cbd3e8; font:700 10px/1 ui-monospace,SFMono-Regular,Menlo,monospace; text-overflow:ellipsis; }
+    .trend-track { display:flex; align-items:flex-end; min-width:0; margin:6px 1px 0; border-bottom:1px solid #34405f; }
+    .trend-bar { width:100%; min-height:0; border-radius:5px 5px 1px 1px; background:linear-gradient(180deg,#968bff,#6656dd); box-shadow:0 0 16px rgba(123,108,255,.18); }
+    .trend-column:last-child .trend-bar { background:linear-gradient(180deg,#8cebd5,#43bfa3); box-shadow:0 0 16px rgba(67,211,176,.2); }
+    .trend-date { align-self:end; overflow:hidden; color:#7f8baa; font:9px/1 ui-monospace,SFMono-Regular,Menlo,monospace; white-space:nowrap; }
+    .trend-note { margin:9px 0 0; color:#7f8baa; font-size:10px; }
     .summary { display:grid; grid-template-columns:repeat(4,1fr); gap:9px; margin:0; }
     .summary div { padding:13px; border-radius:12px; background:var(--panel2); }
     .summary dt { color:#8d99b8; font-size:11px; }
@@ -142,7 +154,7 @@ export const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
     .empty { padding:34px; color:#8995b3; text-align:center; }
     @media (max-width:960px) { .periods,.overview-lower,.announcement-layout { grid-template-columns:1fr; } .user-grid { grid-template-columns:1fr; } }
     @media (max-width:720px) { .shell { display:block; } aside { position:relative; height:auto; padding:14px; border-right:0; border-bottom:1px solid var(--line); } .brand { padding:3px 5px 12px; } nav { grid-template-columns:repeat(5,1fr); } .nav { justify-content:center; padding:9px 5px; font-size:12px; } .nav-icon { display:none; } .aside-foot { display:none; } main { padding:22px 14px 50px; } header { align-items:flex-end; } .header-actions .live { display:none; } .summary { grid-template-columns:repeat(2,1fr); } .status-grid { grid-template-columns:repeat(2,1fr); } }
-    @media (max-width:430px) { .period { padding:14px; } .metric { min-height:78px; padding:10px; } .metric strong { font-size:22px; } .user-stats { grid-template-columns:repeat(2,1fr); } }
+    @media (max-width:430px) { .period { padding:14px; } .metric { min-height:78px; padding:10px; } .metric strong { font-size:22px; } .user-stats { grid-template-columns:repeat(2,1fr); } .panel-heading { display:block; } .trend-summary { margin-top:7px; text-align:left; } .trend-chart { gap:3px; } .trend-date { visibility:hidden; } .trend-column:nth-child(1) .trend-date,.trend-column:nth-child(5) .trend-date,.trend-column:nth-child(9) .trend-date,.trend-column:last-child .trend-date { visibility:visible; } }
   </style>
 </head>
 <body>
@@ -166,6 +178,11 @@ export const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       <div class="error" id="error"></div>
       <section class="view active" id="view-overview">
         <div class="periods" id="periods"></div>
+        <article class="panel trend-panel">
+          <div class="panel-heading"><h2>直近14日間のゲーム数</h2><span class="trend-summary" id="trend-summary">—</span></div>
+          <div class="trend-chart" id="trend-chart" aria-label="直近14日間の日別ゲーム数"></div>
+          <p class="trend-note">JSTの日付単位。今日の値は現在時点です。</p>
+        </article>
         <div class="overview-lower">
           <article class="panel"><h2>本日の運用</h2><dl class="summary"><div><dt>提案</dt><dd id="today-proposals">—</dd></div><div><dt>新規ユーザー</dt><dd id="today-users">—</dd></div><div><dt>稼働ルール</dt><dd id="active-rules">—</dd></div><div><dt>評価</dt><dd id="today-evaluations">—</dd></div></dl><p class="updated" id="updated"></p></article>
           <article class="panel"><h2>提案ステータス</h2><div class="status-grid" id="status-grid"></div></article>
@@ -206,6 +223,7 @@ export const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
   </div>
   <script>
     const nf = new Intl.NumberFormat("ja-JP");
+    const compactNumber = new Intl.NumberFormat("ja-JP", { notation:"compact", maximumFractionDigits:1 });
     const dt = new Intl.DateTimeFormat("ja-JP", { timeZone:"Asia/Tokyo", month:"numeric", day:"numeric", hour:"2-digit", minute:"2-digit" });
     const labels = { screening:"審査中", implementing:"実装中", released:"公開済み", rejected:"却下", failed:"実装失敗" };
     const ruleLabels = { active:"公開中", disabled:"停止中", removed:"削除済み" };
@@ -227,11 +245,18 @@ export const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
     function showError(error) { const box=el("error"); box.textContent=error instanceof Error?error.message:String(error); box.style.display="block"; }
     function clearError() { el("error").style.display="none"; }
     function metric(label,value,unit,primary) { return '<div class="metric'+(primary?' primary':'')+'"><span>'+label+'</span><strong>'+nf.format(value)+'<em>'+unit+'</em></strong></div>'; }
+    function renderDailyGames(items) {
+      const games=items.map(item=>item.games);const max=Math.max(1,...games);const total=games.reduce((sum,value)=>sum+value,0);
+      el("trend-summary").textContent="合計 "+nf.format(total)+"ゲーム ・ 1日平均 "+nf.format(Math.round(total/items.length*10)/10);
+      el("trend-chart").setAttribute("aria-label",items.map(item=>{const parts=item.date.split("-");return Number(parts[1])+"月"+Number(parts[2])+"日 "+nf.format(item.games)+"ゲーム";}).join("、"));
+      el("trend-chart").innerHTML=items.map(item=>{const parts=item.date.split("-");const label=Number(parts[1])+"/"+Number(parts[2]);const height=item.games===0?0:Math.max(3,Math.round(item.games/max*100));return '<div class="trend-column" title="'+label+' '+nf.format(item.games)+'ゲーム"><span class="trend-value">'+compactNumber.format(item.games)+'</span><div class="trend-track"><div class="trend-bar" style="height:'+height+'%"></div></div><span class="trend-date">'+label+'</span></div>';}).join("");
+    }
 
     async function loadOverview() {
       const data = await api("/admin/api/overview");
-      const periods=[["last30m","直近30分"],["last3h","直近3時間"],["today","本日（JST）"]];
+      const periods=[["last30m","直近30分"],["last3h","直近3時間"],["last24h","直近24時間"]];
       el("periods").innerHTML=periods.map(([key,label])=>{ const a=data.database.windows[key]; const t=data.traffic?.windows?.[key]; return '<article class="card period"><h2>'+label+'</h2><div class="metrics">'+metric("接続",t?.websocketConnections??0,"回",false)+metric("新規",a.newUsers,"人",false)+metric("完走",a.completedSets,"卓",true)+metric("プレイ",a.gamesPlayed,"ゲーム",true)+'</div><p class="detail">開始 '+nf.format(a.setsStarted)+'卓 ・ 進行中/離脱 '+nf.format(a.ongoingSets)+'卓 ・ 途中終了 '+nf.format(a.partialSets)+'卓<br>'+(t?'HTTP '+nf.format(t.responses)+'件 ・ ':'Flyアクセス指標は取得できません ・ ')+'操作のあった卓 '+nf.format(a.actionSets)+'卓</p></article>'; }).join("");
+      renderDailyGames(data.database.dailyGames);
       el("today-proposals").textContent=nf.format(data.database.proposals.today);
       el("today-users").textContent=nf.format(data.database.users.today);
       el("active-rules").textContent=nf.format(data.database.rules.active);

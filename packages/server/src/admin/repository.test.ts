@@ -98,9 +98,29 @@ describe('AdminRepository', () => {
   });
 
   test('概要へ既存運用指標とユーザー・提案集計をまとめる', () => {
-    const repository = fixture().admin;
+    const persistence = fixture();
+    const repository = persistence.admin;
+    const now = 1_700_000_000_000;
+    const day = 24 * 60 * 60 * 1_000;
+    const jstOffset = 9 * 60 * 60 * 1_000;
+    const today = Math.floor((now + jstOffset) / day) * day - jstOffset;
+    const trendStart = today - 13 * day;
+    const raw = instances.at(-1)!.raw;
+    const insertSet = raw.prepare(
+      `INSERT INTO game_sets (
+         id, room_id, started_at, ended_at, games_played, completion, standings
+       ) VALUES (?, 'admin-room', ?, ?, ?, 'completed', '[]')`,
+    );
+    insertSet.run('outside-trend', trendStart - 2_000, trendStart - 1, 9);
+    insertSet.run('first-trend-day', trendStart, trendStart + 1_000, 2);
+    insertSet.run('previous-day', today - day, today - day + 1_000, 3);
+    insertSet.run('today', today, today + 1_000, 4);
 
-    expect(repository.overview(1_700_000_000_000)).toMatchObject({
+    const overview = repository.overview(now);
+    expect(overview).toMatchObject({
+      windows: {
+        last24h: { gamesPlayed: 4 },
+      },
       proposals: {
         total: 1,
         byStatus: { screening: 1 },
@@ -109,5 +129,16 @@ describe('AdminRepository', () => {
       rules: { active: 0 },
       queue: { screening: 1, implementation: 0 },
     });
+    expect(overview.dailyGames).toHaveLength(14);
+    expect(overview.dailyGames[0]).toEqual({ date: '2023-11-02', games: 2 });
+    expect(overview.dailyGames.at(-2)).toEqual({
+      date: '2023-11-14',
+      games: 3,
+    });
+    expect(overview.dailyGames.at(-1)).toEqual({
+      date: '2023-11-15',
+      games: 4,
+    });
+    expect(overview.dailyGames[1]).toEqual({ date: '2023-11-03', games: 0 });
   });
 });

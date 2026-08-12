@@ -166,7 +166,10 @@ describe('AdminConsole', () => {
       },
     });
     expect(dashboard.status).toBe(200);
-    await expect(dashboard.text()).resolves.toContain('管理コンソール');
+    const dashboardHtml = await dashboard.text();
+    expect(dashboardHtml).toContain('管理コンソール');
+    expect(dashboardHtml).toContain('直近24時間');
+    expect(dashboardHtml).toContain('直近14日間のゲーム数');
 
     const overview = await fetch(`${baseUrl}/admin/api/overview`, {
       headers: {

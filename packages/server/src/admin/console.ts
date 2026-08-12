@@ -17,7 +17,7 @@ const SECURE_HEADERS = {
 } as const;
 
 type TrafficSnapshot = {
-  windows: Record<'last30m' | 'last3h' | 'today', TrafficWindow>;
+  windows: Record<'last30m' | 'last3h' | 'last24h', TrafficWindow>;
 };
 
 type AdminRuleService = Pick<

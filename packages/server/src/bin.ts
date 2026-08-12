@@ -28,7 +28,7 @@ import {
   type AdminAuthProvider,
 } from './admin/auth.js';
 import { AdminConsole } from './admin/console.js';
-import { loadTrafficDashboardWithToken } from './operations/dashboard-local.js';
+import { loadAdminTrafficDashboardWithToken } from './operations/dashboard-local.js';
 
 function errorFields(error: unknown): Record<string, unknown> {
   return error instanceof Error
@@ -141,7 +141,7 @@ if (
   let trafficCache:
     | {
         fetchedAt: number;
-        value: Awaited<ReturnType<typeof loadTrafficDashboardWithToken>>;
+        value: Awaited<ReturnType<typeof loadAdminTrafficDashboardWithToken>>;
       }
     | undefined;
   const traffic = flyMetricsToken
@@ -150,11 +150,10 @@ if (
         if (trafficCache && now - trafficCache.fetchedAt < 45_000) {
           return trafficCache.value;
         }
-        const value = await loadTrafficDashboardWithToken(
+        const value = await loadAdminTrafficDashboardWithToken(
           flyApp,
           flyOrganization,
           flyMetricsToken,
-          now,
         );
         trafficCache = { fetchedAt: now, value };
         return value;
