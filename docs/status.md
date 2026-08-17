@@ -30,7 +30,6 @@
 - **Epic 間連絡(decision-log E 節)の「未反映」15 件** — 大半は台帳側で追跡する。個別に注意が要るのは **E-14(ルール名 12 文字 vs C-3 の 40 文字。実装は 40 文字で確定済みで、裁定記録がないまま実装が先行)** と **E-13(DS-02 受け入れ条件 2 の最終クローズ。E1/E3 は完了済みなので逸脱チェック手順の再適用が宙に浮いている)**、**E-16(`playerRetired` の席バッジ・告知の設計)**
 - **E4「詰まっている点」の残り 2 件** — 7 = 上記 E-13 と同一、11 = 実機のノッチ確認(外部ゲート節と同一項目)
 - **AI 席の表示名プール差替え — 実施か受容かの裁定** — E4 のトーン確定(A-5、2026-07-26)が差替えのトリガーだったが、`reducer.ts` は今も `AIプレイヤーA/B…` のハードコード。以後の設計・実装文書は機械名を正として扱っており実質受容の公算が高いが、裁定記録がない。出典: [archive/impl-progress.md](archive/impl-progress.md) E3 の仮定・次工程表 / [epics/E03-multiplayer.md](epics/E03-multiplayer.md) §3.2
-- **Q-7: 待機画面の自席表示規則(「なまえ(あなた)」)** — 正準表示関数への集約は完了、表示規則の変更は未裁定・未実施(`packages/web/src/game/table.ts` の `SELF_DISPLAY_NAME` に集約済み)。出典: [archive/workorders/2026-08-02-auth-account-ui-0-overview.md](archive/workorders/2026-08-02-auth-account-ui-0-overview.md) §2
 - **G-26 備考: 「サインアウト」を「ログアウト」に改めるか** — 未決。出典: [decision-log.md](decision-log.md) G-26
 - **OP-01 の受け入れ条件改訂の正式化** — コードは非強制の読み取り専用なので裁定後の手戻りはない。D-5 と対。出典: [archive/impl-progress.md](archive/impl-progress.md)「E10 OP-01」節
 - **E11 の `disabled` 表示** — E11 §3.2(g) が未決のまま、仮定 E11-P1-2 で図鑑・summary から除外中。台帳に項目がない

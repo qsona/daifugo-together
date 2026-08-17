@@ -29,12 +29,16 @@ export function SetRankRows({ ranks }: { ranks: readonly SetRankView[] }) {
         <div
           key={champion.name}
           className={cx(styles.champion, champion.isYou && styles.you)}
+          {...(champion.isYou
+            ? { 'aria-label': `${champion.name}（自分）` }
+            : {})}
         >
           <span className={styles.crown}>{champion.place}位</span>
           {champion.title && (
             <span className={styles.championTitle}>{champion.title}</span>
           )}
           <span className={styles.championName}>{champion.name}</span>
+          {champion.isYou && <span className={styles.youBadge}>自分</span>}
           <span className={styles.championScore}>
             {String(champion.totalPoints)}点
           </span>
@@ -48,9 +52,11 @@ export function SetRankRows({ ranks }: { ranks: readonly SetRankView[] }) {
           <li
             key={rank.name}
             className={cx(styles.row, rank.isYou && styles.you)}
+            {...(rank.isYou ? { 'aria-label': `${rank.name}（自分）` } : {})}
           >
             <span className={styles.place}>{rank.place}位</span>
             <span className={styles.name}>{rank.name}</span>
+            {rank.isYou && <span className={styles.youBadge}>自分</span>}
             {rank.title && <span className={styles.title}>{rank.title}</span>}
             {/* 合計点。数字だけで足りるので「合計」の見出し語は置かない。 */}
             <span className={styles.score}>{String(rank.totalPoints)}点</span>

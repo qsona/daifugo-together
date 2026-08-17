@@ -2887,7 +2887,7 @@ describe('対局終了時の最後の手', () => {
     render(<App client={observable.client} />);
 
     expect(
-      screen.getByRole('dialog', { name: 'あなたがあがり!' }),
+      screen.getByRole('dialog', { name: 'ホストがあがり!' }),
     ).toBeTruthy();
     expect(screen.getByRole('img', { name: 'スペードの8' })).toBeTruthy();
 
@@ -2895,14 +2895,14 @@ describe('対局終了時の最後の手', () => {
       vi.advanceTimersByTime(1_799);
     });
     expect(
-      screen.getByRole('dialog', { name: 'あなたがあがり!' }),
+      screen.getByRole('dialog', { name: 'ホストがあがり!' }),
     ).toBeTruthy();
 
     act(() => {
       vi.advanceTimersByTime(1);
     });
     expect(
-      screen.queryByRole('dialog', { name: 'あなたがあがり!' }),
+      screen.queryByRole('dialog', { name: 'ホストがあがり!' }),
     ).toBeNull();
     expect(screen.getByRole('button', { name: '第2戦へ' })).toBeTruthy();
   });

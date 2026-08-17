@@ -5,7 +5,13 @@ import styles from './MemberList.module.css';
 
 /** 待機画面の 1 席が表示する内容だけを持つ view-model。 */
 export type MemberView =
-  | { kind: 'human'; name: string; role?: string; status?: string }
+  | {
+      kind: 'human';
+      name: string;
+      isSelf?: boolean;
+      role?: string;
+      status?: string;
+    }
   | { kind: 'ai'; name: string; status?: string }
   | { kind: 'empty' };
 
@@ -31,13 +37,23 @@ export function MemberList({ members }: { members: readonly MemberView[] }) {
       {members.map((member, index) => (
         <li
           key={index}
-          className={cx(styles.slot, member.kind === 'empty' && styles.empty)}
+          className={cx(
+            styles.slot,
+            member.kind === 'empty' && styles.empty,
+            member.kind === 'human' && member.isSelf && styles.self,
+          )}
+          {...(member.kind === 'human' && member.isSelf
+            ? { 'aria-label': `${member.name}（自分）` }
+            : {})}
         >
           <span className={styles.avatar}>
             {member.kind !== 'empty' && <PersonIcon />}
           </span>
           <span className={styles.name}>
             {member.kind === 'empty' ? '(あき)' : member.name}
+            {member.kind === 'human' && member.isSelf && (
+              <small className={styles.selfBadge}>自分</small>
+            )}
             {member.kind === 'human' && member.role && (
               <small className={styles.role}>{member.role}</small>
             )}

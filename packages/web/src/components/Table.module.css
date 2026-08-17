@@ -107,6 +107,20 @@
   text-overflow: ellipsis;
 }
 
+.self .chip {
+  background: var(--color-blue-100);
+  border-width: var(--border-bold);
+}
+
+.selfBadge {
+  padding: 0 var(--space-1);
+  background: var(--color-navy-600);
+  border-radius: var(--radius-s);
+  color: var(--color-bg-surface);
+  font-size: var(--font-size-micro);
+  line-height: 1.4;
+}
+
 /* 枚数・順位・状態の行。席が狭いときだけ折り返す。 */
 .meta {
   display: flex;
@@ -163,6 +177,12 @@
   transform: scale(1.08);
 }
 
+/* 自分の手番でも自席の青を消さず、金は縁で示す。 */
+.turn.self .chip {
+  background: var(--color-blue-100);
+  border-color: var(--color-gold-400);
+}
+
 /* パスした席は沈める。色だけでは「休み」と読めないので短い状態語を添える。 */
 .passed .chip {
   background: var(--color-navy-100);
@@ -177,6 +197,12 @@
 .finished .chip {
   background: var(--color-navy-100);
   color: var(--color-text-secondary);
+}
+
+/* パス・あがり後も、自席であることは青い面で保つ。 */
+.self.passed .chip,
+.self.finished .chip {
+  background: var(--color-blue-100);
 }
 
 .finished .pile {

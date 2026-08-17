@@ -26,6 +26,21 @@
   background: var(--color-gold-200);
 }
 
+.you {
+  background: var(--color-blue-100);
+  border-width: var(--border-heavy);
+}
+
+.youBadge {
+  flex-shrink: 0;
+  padding: 1px var(--space-1);
+  background: var(--color-navy-600);
+  border-radius: var(--radius-s);
+  color: var(--color-bg-surface);
+  font-size: var(--font-size-micro);
+  font-weight: var(--font-weight-bold);
+}
+
 .place {
   width: 40px;
   flex-shrink: 0;

@@ -8,11 +8,11 @@ import type { CardView } from '../components/Card';
 import type { TableSeat } from '../components/Table';
 import type { CardDiscardNotice, SeatFinish } from '../screens/GameScreen';
 
-/** 自席名の表示規則。Q-7 の裁定後も変更点をここだけに保つ。 */
-export const SELF_DISPLAY_NAME = 'あなた';
-
 export function seatDisplayName(name: string, isSelf: boolean): string {
-  return isSelf ? SELF_DISPLAY_NAME : name;
+  // 自分かどうかは各 UI の色と「自分」バッジで示し、名前は置き換えない。
+  // isSelf は呼び出し側の意図を明示し、表示規則をこの関数へ集約するため残す。
+  void isSelf;
+  return name;
 }
 
 export function cards(

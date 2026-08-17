@@ -46,6 +46,24 @@
   color: var(--color-text-secondary);
 }
 
+/* 自席は名前を保ったまま、面の色と明示ラベルで区別する。 */
+.self {
+  background: var(--color-blue-100);
+  border-width: var(--border-bold);
+}
+
+.selfBadge {
+  display: inline-block;
+  margin-left: var(--space-2);
+  padding: 0 var(--space-1);
+  background: var(--color-navy-600);
+  border-radius: var(--radius-s);
+  color: var(--color-bg-surface);
+  font-size: var(--font-size-micro);
+  font-weight: var(--font-weight-bold);
+  vertical-align: middle;
+}
+
 /* 空き枠は破線+淡色で「まだ埋まっていないが開始できる」ことを示す。 */
 .empty {
   border-style: dashed;

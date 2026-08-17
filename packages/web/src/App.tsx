@@ -589,6 +589,7 @@ function waitingMembers(room: PlayerRoomView): MemberListView[] {
             member.displayName,
             member.memberId === room.you.memberId,
           ),
+          isSelf: member.memberId === room.you.memberId,
           ...(member.isHost ? { role: 'ホスト' } : {}),
           ...(!member.connected ? { status: '切断中' } : {}),
         },
@@ -630,6 +631,7 @@ function gameRanks(room: PlayerRoomView): GameRankView[] {
         title: standing.title,
         gainedPoints: standing.points,
         totalPoints: cumulative.get(standing.seat) ?? standing.points,
+        isYou: member?.memberId === room.you.memberId,
       };
     });
 }
@@ -668,6 +670,7 @@ function finalGameRanks(room: PlayerRoomView): GameRankView[] {
         totalPoints: member
           ? (totals.get(member.memberId) ?? standing.points)
           : standing.points,
+        isYou: member?.memberId === room.you.memberId,
       };
     });
 }

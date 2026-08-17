@@ -8,11 +8,12 @@ afterEach(cleanup);
 const RANKS = [
   {
     place: 1,
-    name: 'あなた',
+    name: 'たろう',
     kind: 'human' as const,
     title: '大富豪',
     gainedPoints: 5,
     totalPoints: 13,
+    isYou: true,
   },
   {
     place: 2,
@@ -31,6 +32,14 @@ describe('GameRankRows', () => {
     expect(screen.getByText('大富豪')).toBeTruthy();
     expect(screen.getByText('+5')).toBeTruthy();
     expect(screen.getByText('+3')).toBeTruthy();
+  });
+
+  it('自分の名前と「自分」の目印を両方出す', () => {
+    render(<GameRankRows ranks={RANKS} countUp={false} />);
+
+    expect(screen.getByLabelText('たろう（自分）')).toBeTruthy();
+    expect(screen.getByText('たろう')).toBeTruthy();
+    expect(screen.getByText('自分')).toBeTruthy();
   });
 
   it('合計点は獲得前から数え上がり、最後は合計に落ち着く', async () => {

@@ -17,6 +17,7 @@ export type GameRankView = {
   gainedPoints: number;
   /** この戦を終えた時点のセット累計点。 */
   totalPoints: number;
+  isYou?: boolean;
 };
 
 /** 1 点あたりの間。5 点で 300ms 前後に収まる速さ。 */
@@ -59,9 +60,17 @@ function GameRankRow({
     countUp,
   );
   return (
-    <li className={cx(styles.row, rank.place === 1 && styles.top)}>
+    <li
+      className={cx(
+        styles.row,
+        rank.place === 1 && styles.top,
+        rank.isYou && styles.you,
+      )}
+      {...(rank.isYou ? { 'aria-label': `${rank.name}（自分）` } : {})}
+    >
       <span className={styles.place}>{rank.place}</span>
       <span className={styles.name}>{rank.name}</span>
+      {rank.isYou && <span className={styles.youBadge}>自分</span>}
       {rank.title && <span className={styles.title}>{rank.title}</span>}
       {/* 得点は数字だけで足りる。「合計」「今回」の見出し語は置かない。 */}
       <span className={styles.score}>

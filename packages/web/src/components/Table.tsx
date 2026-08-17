@@ -121,13 +121,18 @@ export function Table({
                 seat.isCurrentTurn && styles.turn,
                 seat.hasPassed && styles.passed,
                 isFinished && styles.finished,
+                seat.isSelf && styles.self,
                 seat.name === leadSeatName && styles.lead,
               )}
+              {...(seat.isSelf ? { 'aria-label': `${seat.name}（自分）` } : {})}
             >
               {/* 名前 / 枚数・順位 / 状態 を 1 つのチップに詰めず、行で分ける。 */}
               <span className={styles.info}>
                 <span className={styles.chip}>
                   <span className={styles.name}>{displayName}</span>
+                  {seat.isSelf && (
+                    <span className={styles.selfBadge}>自分</span>
+                  )}
                   {seat.kind === 'ai' && <Tag variant="ai">AI</Tag>}
                 </span>
                 <span className={styles.meta}>

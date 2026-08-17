@@ -85,6 +85,13 @@ describe('hasPendingFieldClear', () => {
 });
 
 describe('tableSeats', () => {
+  it('自席も「あなた」に置き換えず表示名を保つ', () => {
+    expect(tableSeats(roomAfterEightCut())[0]).toMatchObject({
+      name: 'ホスト',
+      isSelf: true,
+    });
+  });
+
   it('既定では場が流れた状態（札なし）を描く', () => {
     expect(tableSeats(roomAfterEightCut())[0]!.plays).toEqual([]);
   });
@@ -147,7 +154,7 @@ describe('cardDiscardNotices', () => {
       {
         id: '1:4',
         ruleName: '10捨て',
-        playerName: 'あなた',
+        playerName: 'ホスト',
         cards: [{ id: 'H07', suit: 'heart', rank: '7' }],
       },
     ]);
