@@ -169,5 +169,6 @@
 - 第1パス中心実装: Node.js 26.5.0で対象4 test files・31 tests成功。`pnpm verify` 成功（format / lint / design lint / typecheck / 172 test files・1323 tests / build）。保守diff-guardも3ルールの15ファイル差分に対して成功。
 - 独立中間レビュー: `GO`。Node.js 26.5.0で172 files・1323 testsとbuild、保守diff-guardを独立再検証。裁定G-31〜G-33を `docs/decision-log.md` へ記録し、条件付き採用のprovenance区別を保守runbookへ追記。
 - 第2パスお知らせ: 詳細ページ、安定URL、戻る操作、全ユーザー1回配信と提案者3人包含のサーバーテスト、配信後確認SQLを実装。対象3 test files・13 tests成功。Node.js 26.5.0で `pnpm verify` 成功（format / lint / design lint / typecheck / 173 test files・1322 tests / build）。375×812の実表示で3ルールの変更前・変更後・理由と反映日を確認し、`scrollWidth = clientWidth = 375`、お知らせBoxへの戻る操作を確認。
+- 仕上げ統合検証: リアルボンバーの通常参加者・1人参加者・同じゲーム・後続ゲーム・新set・条件外プレイを実エンジン遷移で追加確認。3ルールと通知変更を合わせ、Node.js 26.5.0で `pnpm verify` 成功（format / lint / design lint / typecheck / 173 test files・1330 tests / build）。最新 `origin/main...HEAD` の15ファイルに対する保守diff-guardも成功。
 
 ### 積み残し・提案
