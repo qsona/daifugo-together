@@ -5,7 +5,7 @@
 
 ## 進行中
 
-- **3ルールのバランス調整（ラッキー7・ボンバーマン・リアルボンバー）** — [PRD](specs/2026-08-17-rule-balance-adjustment.md)。実装中: 既存生成ルールの安全な保守経路を先行整備し、その後3ルールを同一保守PRで変更する。レビュー: 2パス + 中間レビュー + 完了レビュー
+- **3ルールのバランス調整（ラッキー7・ボンバーマン・リアルボンバー）** — [PRD](specs/2026-08-17-rule-balance-adjustment.md)。第2パス実装・中間レビューGOまで完了。残り: 全体検証、独立完了レビュー、3ルール同一保守PRの人間レビュー、本番反映・確認後のお知らせ1回配信
 - **ログイン導線改称(G-26/27/28)が本番未反映** — 実装は `main` にあるが `origin/release` へ未昇格。デプロイは `release` への push で走る(`.github/workflows/deploy.yml`)。出典: [decision-log.md](decision-log.md) G-26〜G-28
 - **通知設定画面 × 認証の残件 J9-4 / J9-5 / J9-7(+ J9-3)** — 端末の通知状態を読まない / 購読・解除がブラウザとサーバーでずれる / OS 拒否後の回復導線なし / 失敗文言が 1 種。着手前に発注書 §5 の不変条件(user activation の維持、ガードのない入口を足すと J9-2 が再発)を読むこと。出典: [archive/workorders/2026-08-02-auth-account-ui-5-push-crossing-followup.md](archive/workorders/2026-08-02-auth-account-ui-5-push-crossing-followup.md)
 - **C-14: all-rules simulation をリリース CI ゲートへ移す** — 決定済み・実装待ち。現状は `rule-pr-checks.yml` がルール PR ごとに実行している。出典: [decision-log.md](decision-log.md) C-14

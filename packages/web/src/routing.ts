@@ -10,6 +10,7 @@ const SCREEN_PATHS: Record<ScreenId, string> = {
   proposal: '/proposals/new',
   myProposals: '/proposals/mine',
   notifications: '/notifications',
+  ruleBalanceNotice: '/notifications/rule-balance-2026-08-17',
   pushSettings: '/notifications/settings',
   activeRules: '/demo/rules/active',
   ruleDex: '/rules',

@@ -4,6 +4,18 @@ import { SqlitePersistence } from '../persistence.js';
 import { proposalContentHash } from '../proposal/repository.js';
 import { NotificationService } from './service.js';
 
+const RULE_BALANCE_ANNOUNCEMENT = {
+  title: '3つのルールを調整しました',
+  body: '対局のテンポと、カードを捨てる効果の強さを整えるため、ラッキー7・ボンバーマン・リアルボンバーを調整しました。変更内容と理由を確認できます。',
+  url: '/notifications/rule-balance-2026-08-17?released=2026-08-22',
+};
+
+const RULE_BALANCE_PROPOSALS = [
+  ['01KZ0F33DXRJFH9QB47SSJEB3D', 'ラッキー7'],
+  ['01KZ41N2RPV012951SHW3G99KD', 'ボンバーマン'],
+  ['01KZ4JJ2KM3F2BTS237DPGM478', 'リアルボンバー'],
+] as const;
+
 function proposal(
   persistence: SqlitePersistence,
   authorId: string,
@@ -207,6 +219,47 @@ describe('E16 notification center', () => {
     expect(emitNew).toHaveBeenCalledTimes(2);
     expect(send).toHaveBeenCalledTimes(2);
     expect(service.listAnnouncements()).toEqual([announcement]);
+    persistence.close();
+  });
+
+  it('3ルール調整のお知らせを1件だけ全ユーザーへ保存し、元提案者3人を含める', () => {
+    const persistence = new SqlitePersistence(':memory:');
+    const authors = RULE_BALANCE_PROPOSALS.map(([proposalId, name]) => {
+      const session = persistence.sessions.resolve(undefined);
+      proposal(persistence, session.userId, proposalId, name, 100);
+      return session;
+    });
+    const other = persistence.sessions.resolve(undefined);
+    const service = new NotificationService(persistence.notifications, {
+      now: () => 1_000,
+    });
+
+    const announcement = service.publishAnnouncement({
+      ...RULE_BALANCE_ANNOUNCEMENT,
+      createdBy: 'admin@example.com',
+    });
+
+    expect(announcement).toMatchObject({
+      id: 1,
+      recipientCount: 4,
+      ...RULE_BALANCE_ANNOUNCEMENT,
+    });
+    expect(service.listAnnouncements()).toEqual([announcement]);
+    for (const session of [...authors, other]) {
+      expect(service.list(session.userToken)).toMatchObject({
+        status: 200,
+        body: {
+          unreadCount: 1,
+          items: [
+            {
+              type: 'announcement',
+              ...RULE_BALANCE_ANNOUNCEMENT,
+              payload: { announcementId: announcement.id },
+            },
+          ],
+        },
+      });
+    }
     persistence.close();
   });
 });

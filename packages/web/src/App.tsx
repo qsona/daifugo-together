@@ -49,6 +49,7 @@ import { GameScreen } from './screens/GameScreen';
 import { MenuScreen } from './screens/MenuScreen';
 import { MyProposalsScreen } from './screens/MyProposalsScreen';
 import { NotificationsScreen } from './screens/NotificationsScreen';
+import { RuleBalanceNoticeScreen } from './screens/RuleBalanceNoticeScreen';
 import { NextSetWaitingScreen } from './screens/NextSetWaitingScreen';
 import { PushSettingsScreen } from './screens/PushSettingsScreen';
 import { ActiveRulesScreen } from './screens/ActiveRulesScreen';
@@ -2186,6 +2187,14 @@ function ConnectedApp({
             ),
           });
         }}
+      />,
+    );
+  }
+  if (!sharedInviteCode && current === 'ruleBalanceNotice') {
+    return show(
+      <RuleBalanceNoticeScreen
+        releasedOn={new URLSearchParams(window.location.search).get('released')}
+        onBack={() => go('notifications')}
       />,
     );
   }
