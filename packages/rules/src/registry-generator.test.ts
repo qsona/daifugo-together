@@ -4,10 +4,16 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 const execute = promisify(execFile);
 const directories: string[] = [];
+
+beforeAll(async () => {
+  await execute(process.execPath, [
+    resolve('packages/rules/scripts/generate-registry.mjs'),
+  ]);
+});
 
 afterEach(async () => {
   await Promise.all(
@@ -18,6 +24,21 @@ afterEach(async () => {
 });
 
 describe('generated rule registry', () => {
+  it('全ルールのcode側metaがmeta.jsonと一致する', async () => {
+    const { generatedRuleLocations } = await import('../generated/registry.js');
+    await Promise.all(
+      generatedRuleLocations.map(async ({ module }) => {
+        const metadata = JSON.parse(
+          await readFile(
+            resolve('packages/rules', module.meta.ruleId, 'meta.json'),
+            'utf8',
+          ),
+        ) as unknown;
+        expect(module.meta).toEqual(metadata);
+      }),
+    );
+  });
+
   it('実ruleディレクトリだけを決定順で静的importへ変換する', async () => {
     const root = await mkdtemp(join(tmpdir(), 'rule-registry-'));
     directories.push(root);

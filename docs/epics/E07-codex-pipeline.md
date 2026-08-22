@@ -320,6 +320,8 @@ pnpm -w typecheck && pnpm --filter @daifugo/rules test -- r0042-yagiri が成功
 | rule-tests | 新ルールの `rule.test.ts` が存在し、3 ケース以上が実行され、`rule.ts` の行カバレッジ 70% 以上(vitest coverage を該当ディレクトリに絞って判定) | テストが形骸 |
 | simulation | E1 のハーネスで自動対局(対戦 AI 使用)。構成: (a) 基本ルール + 新ルールのみ (b) リポジトリ内の全ルール(`packages/rules/rules-exclude.json` 記載分を除く)+ 新ルール。各 200 ゲーム × シード 5 系列(決定的)。不変条件: ゲームが上限手数内に必ず終了する / カードが増殖・消失しない / 不正な状態遷移がない / ルールの例外・無効 Effect が 1 件もない。**ジョブ自体にタイムアウト(10 分)を設定する** — ネイティブ実行では無限ループを内側から止められないため、ジョブタイムアウトが検出器を兼ねる | 進行破壊・共存破壊(AI-02 の検証を兼ねる) |
 
+既存生成ルールの挙動を人間レビュー付きで変更する場合は、新規 `rule/**` や恒久巻き戻しの `revert/**` を流用せず、[既存生成ルール保守runbook](../runbooks/E07-rule-maintenance.md)の `maintenance/rules/**` 経路を使う。信頼済みbaseのdiff-guardが、PRDと対象ルールの宣言、元提案の識別情報、各ルール4ファイルの同期、version/bundleの +1、許可差分を検査する。
+
 - 実行時間予算: 合計 15 分以内(simulation は 5 分以内。超えるならゲーム数を減らす)。リポジトリは public(A-2)のため Actions 分数の制約はない。
 - **運用方針(2026-07-30、decision-log C-14)**: 上表の全量 simulation (`new-only` / `all-rules` の 2 構成 × 200 ゲーム × 5 seed)は、将来のリリース CI を作成した時点でルール PR の必須検査からリリース時の必須ゲートへ移す。移行後のルール PR は diff-guard・quality・rule-tests を維持し、必要なら短時間の smoke simulation だけを残す。リリース CI が未実装の間は検証の空白を避けるため、現行の PR simulation を維持する。
 - 構成 (b) の「全ルール」は**リポジトリに存在する全ルール**で近似する(CI から DB の有効フラグは見えない)。恒久ロールバックされたルールは revert でリポジトリからも消える運用(§3.4)なので、この近似は安全側に働く。**disable 済み・未 revert** のルールが構成 (b) を落とし続ける場合は `packages/rules/rules-exclude.json`(**人手 PR でのみ変更** — ルール PR では差分ガードが構造的に変更を禁じる)で暫定的に外し、revert 完了時にエントリを削除する(§3.4 の runbook に組み込み)。
