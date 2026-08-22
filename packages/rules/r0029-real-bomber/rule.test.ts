@@ -182,8 +182,12 @@ function completeRealBomber(participantCount = 4) {
   if (!pending || pending.kind !== 'cards') {
     throw new Error('Real bomber did not reach the winner card choice');
   }
-  const selected = pending.optionCardIds.slice(0, pending.count);
-  expect(selected).toHaveLength(pending.count);
+  const { optionCardIds, count } = pending;
+  if (!optionCardIds || count === undefined) {
+    throw new Error('Real bomber card choice is incomplete');
+  }
+  const selected = optionCardIds.slice(0, count);
+  expect(selected).toHaveLength(count);
   return reduceGame(
     config,
     transition.state,
