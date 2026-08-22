@@ -28,6 +28,9 @@ describe('画面ルーティング', () => {
     expect(screenFromPathname('/account')).toBe('account');
     expect(screenFromPathname('/account/name')).toBe('name');
     expect(screenFromPathname('/rules')).toBe('ruleDex');
+    expect(screenFromPathname('/notifications/rule-balance-2026-08-17')).toBe(
+      'ruleBalanceNotice',
+    );
     expect(screenFromPathname('/proposals/new/')).toBe('proposal');
   });
 

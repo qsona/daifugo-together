@@ -121,3 +121,82 @@ WHERE revoked_at IS NULL;
 ## 7. 完了記録
 
 実施記録は本 runbook 末尾の「実施記録」節へ追記し(節がなければ作る)、`docs/status.md` の該当行(E16/E17 の実 Push 受入)を更新する(完了なら行を削除する)。追記する内容は、実施日、ブラウザ/OS、375×812 の結果、Push 受信・夜間抑止・ログアウト解除の結果。VAPID 鍵、endpoint、`user_token`、Google 識別子は記録しない。
+
+## 8. 3ルールのバランス調整を配信する
+
+この手順は `docs/specs/2026-08-17-rule-balance-adjustment.md` 専用です。ルール保守PRのマージ後、同じreleaseでラッキー7 v2、ボンバーマン v3、リアルボンバー v2を本番へ反映し、新しく開始したセットで3件とも動作確認してから実行します。確認前や、いずれかのルールをdisableした状態では配信しません。
+
+本番DBへreadonly接続し、`@deployed_at_ms`を本番反映時刻のUnixミリ秒へ設定して次を確認します。
+
+```sql
+.parameter set @deployed_at_ms 0
+
+SELECT r.id, r.status, r.disabled_reason, v.version, v.bundle_hash
+FROM rules AS r
+JOIN rule_versions AS v ON v.rule_id = r.id AND v.is_current = 1
+WHERE r.id IN (
+  'r0015-lucky-seven',
+  'r0027-bomberman',
+  'r0029-real-bomber'
+)
+ORDER BY r.id;
+
+SELECT rule_id, type, set_id, detail, created_at
+FROM rule_incidents
+WHERE rule_id IN (
+  'r0015-lucky-seven',
+  'r0027-bomberman',
+  'r0029-real-bomber'
+)
+  AND created_at >= @deployed_at_ms
+ORDER BY created_at;
+
+SELECT set_results.set_id,
+       json_extract(fired.value, '$.count') AS real_bomber_count
+FROM set_results, json_each(set_results.fired_rules) AS fired
+WHERE set_results.created_at >= @deployed_at_ms
+  AND json_extract(fired.value, '$.ruleId') = 'r0029-real-bomber'
+ORDER BY set_results.created_at;
+```
+
+- 3件がすべて`active`で、versionが順に2、3、2、bundle hashがmanifestと一致する。
+- 本番反映後の`rule_incidents`が0件である。
+- 本番反映後に完了した各setの`real_bomber_count`が1以下である。
+
+続いて7:00〜21:00 JSTに管理画面の「運営お知らせ」で次を入力します。`YYYY-MM-DD`は本番反映を確認したJST日付へ置き換えます。確認ダイアログでは、タイトル、本文、URLと、既存一覧に同じタイトルの配信がないことを再確認し、1回だけ送信します。
+
+```text
+タイトル: 3つのルールを調整しました
+本文: 対局のテンポと、カードを捨てる効果の強さを整えるため、ラッキー7・ボンバーマン・リアルボンバーを調整しました。変更内容と理由を確認できます。
+URL: /notifications/rule-balance-2026-08-17?released=YYYY-MM-DD
+```
+
+配信結果の`announcementId`を控え、readonly接続で次を実行します。ID以外の値は変更しません。
+
+```sql
+.parameter set @announcement_id 0
+
+SELECT id, title, body, url, recipient_count, created_at
+FROM announcements
+WHERE id = @announcement_id;
+
+WITH targets(proposal_id, rule_name) AS (
+  VALUES
+    ('01KZ0F33DXRJFH9QB47SSJEB3D', 'ラッキー7'),
+    ('01KZ41N2RPV012951SHW3G99KD', 'ボンバーマン'),
+    ('01KZ4JJ2KM3F2BTS237DPGM478', 'リアルボンバー')
+)
+SELECT targets.rule_name,
+       proposals.author_id,
+       notifications.id AS notification_id,
+       notifications.created_at
+FROM targets
+JOIN proposals ON proposals.id = targets.proposal_id
+LEFT JOIN notifications
+  ON notifications.user_id = proposals.author_id
+ AND notifications.type = 'announcement'
+ AND notifications.dedupe_key = CAST(@announcement_id AS TEXT)
+ORDER BY targets.rule_name;
+```
+
+お知らせ行のタイトル、本文、日付付きURLが入力値と一致し、提案者3人の`notification_id`がすべて非NULLであることを確認します。管理画面の一覧でも同じお知らせが1件だけであること、375×812で詳細ページを開けて「もどる」でお知らせBoxへ戻れることを確認し、実施日時・反映日・announcementId・recipient count・提案者3件の確認結果を本節へ追記します。
