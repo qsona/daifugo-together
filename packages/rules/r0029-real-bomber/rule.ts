@@ -7,6 +7,7 @@ import type {
 
 const MINI_GAME_CHOICE_ID = 'real_bomber_bomb_throw';
 const DISCARD_CHOICE_PREFIX = 'real_bomber_discard_s';
+const FIRED_MEMORY_KEY = 'fired';
 
 function participants(context: RuleContext): string[] {
   return context.game.players
@@ -40,7 +41,7 @@ export const rule: RuleModule = {
     ruleId: 'r0029-real-bomber',
     name: 'リアルボンバー',
     description:
-      '自然な4を1枚で出すと約17秒のボム投げミニゲームが始まり、勝者は手札を最大2枚捨てる。',
+      '1セットで最初に自然な4を1枚で出したときだけ約17秒のボム投げミニゲームが始まり、勝者は手札を最大2枚捨てる。',
     kind: 'original',
     proposalId: '01KZ4JJ2KM3F2BTS237DPGM478',
     contractVersion: 2,
@@ -59,6 +60,7 @@ export const rule: RuleModule = {
         play.cards[0]?.kind === 'natural' &&
         play.cards[0].rank === '4';
       if (!isTrigger) return [];
+      if (context.memory.set[FIRED_MEMORY_KEY] === true) return [];
 
       if (
         input?.kind === 'cards' &&
@@ -78,6 +80,13 @@ export const rule: RuleModule = {
             type: 'announce',
             messageKey: 'real_bomber_result',
             params: { winner: `プレイヤー${String(seat + 1)}` },
+          },
+          {
+            type: 'setMemory',
+            scope: 'set',
+            key: FIRED_MEMORY_KEY,
+            value: true,
+            silent: true,
           },
         ];
       }

@@ -19,7 +19,7 @@ export const rule: RuleModule = {
     ruleId: 'r0015-lucky-seven',
     name: 'ラッキー7',
     description:
-      '自然なランク7を2枚以上同時に出したプレイヤーは、その手に含まれる7の枚数と残り手札枚数の小さい方と同じ枚数のカードを残り手札から必ず選び、捨て札へ移す。',
+      '自然なランク7を3枚以上同時に出したプレイヤーは、残り手札があれば1枚を必ず選び、捨て札へ移す。',
     kind: 'local',
     proposalId: '01KZ0F33DXRJFH9QB47SSJEB3D',
     contractVersion: 2,
@@ -33,11 +33,11 @@ export const rule: RuleModule = {
         (card) => card.kind === 'natural' && card.rank === '7',
       ).length;
       const actor = context.game.field.current?.by;
-      if (sevenCount < 2 || !actor) return [];
+      if (sevenCount < 3 || !actor) return [];
 
       const actorState = context.game.players.find(({ id }) => id === actor);
       if (!actorState) return [];
-      const count = Math.min(sevenCount, actorState.hand.length);
+      const count = Math.min(1, actorState.hand.length);
       if (count === 0) return [];
 
       if (input) {
