@@ -1,5 +1,21 @@
-import type { Card, Play, RuleContext } from '@daifugo/core';
-import { BASE_STRENGTH_ORDER } from '@daifugo/core';
+import type {
+  Card,
+  GameConfig,
+  GameState,
+  Play,
+  RuleContext,
+  RuleRuntime,
+} from '@daifugo/core';
+import {
+  BASE_STRENGTH_ORDER,
+  BOMB_THROW_COUNTDOWN_MS,
+  BOMB_THROW_PLAY_MS,
+  BOMB_THROW_RESULT_MS,
+  BOMB_THROW_TICK_MS,
+  createInProcessRuleChainPort,
+  reduceGame,
+  seedRng,
+} from '@daifugo/core';
 import { describe, expect, it } from 'vitest';
 
 import { rule } from './rule.js';
@@ -40,6 +56,145 @@ function context(
     memory: { game: {}, set: setMemory },
     rng: { next: () => 0.5, int: () => 42 },
   } as RuleContext;
+}
+
+function natural(id: string, rank: '4' | '5' | '6' | '7'): Card {
+  const suit = {
+    S: 'spade',
+    H: 'heart',
+    C: 'club',
+    D: 'diamond',
+  }[id[0]!];
+  if (!suit) throw new Error(`Unknown suit: ${id}`);
+  return { kind: 'natural', id, suit, rank } as Card;
+}
+
+function engineFixture(
+  participantCount = 4,
+  gameIndex = 0,
+  triggerRank: '4' | '5' = '4',
+): { config: GameConfig; state: GameState; runtime: RuleRuntime } {
+  const seats = ['p1', 'p2', 'p3', 'p4'];
+  const hands: Record<string, Card[]> = {
+    p1: [natural(`S0${triggerRank}`, triggerRank), natural('H05', '5')],
+    p2: [natural('H04', '4'), natural('C06', '6')],
+    p3: [natural('C04', '4'), natural('D06', '6')],
+    p4: [natural('D04', '4'), natural('S07', '7')],
+  };
+  for (let index = participantCount; index < seats.length; index += 1) {
+    hands[seats[index]!] = [];
+  }
+  return {
+    config: {
+      gameIndex,
+      seats,
+      gameSeed: `real-bomber-${String(gameIndex)}-${String(participantCount)}`,
+      ruleChain: [
+        {
+          ruleId: rule.meta.ruleId,
+          name: rule.meta.name,
+          position: 0,
+          priority: {
+            score: 0,
+            activatedAt: 0,
+            ruleId: rule.meta.ruleId,
+          },
+          bundleHash: 'real-bomber-test',
+          contractVersion: rule.meta.contractVersion,
+        },
+      ],
+    },
+    state: {
+      public: {
+        phase: 'awaitingPlay',
+        direction: 1,
+        turn: 'p1',
+        field: { passedSinceLastPlay: [] },
+        discard: [],
+        standingsTaken: [],
+        history: [],
+        firedRules: [],
+        turnCount: 0,
+      },
+      private: {
+        excluded: [],
+        memory: {},
+        rng: seedRng('real-bomber-test'),
+        hookCalls: {},
+      },
+      players: Object.fromEntries(
+        seats.map((id) => [
+          id,
+          { id, hand: hands[id]!, status: 'active' as const, skipCount: 0 },
+        ]),
+      ),
+    },
+    runtime: {
+      port: createInProcessRuleChainPort([rule]),
+      setHistory: [],
+      setMemory: {},
+    },
+  };
+}
+
+function completeRealBomber(participantCount = 4) {
+  const { config, state, runtime } = engineFixture(participantCount);
+  let transition = reduceGame(
+    config,
+    state,
+    { type: 'play', player: 'p1', cards: ['S04'] },
+    runtime,
+  );
+  if (participantCount > 1) {
+    expect(transition.state.private.pendingChoice).toMatchObject({
+      kind: 'miniGame',
+      choiceId: 'real_bomber_bomb_throw',
+    });
+    const ticksUntilComplete =
+      (BOMB_THROW_COUNTDOWN_MS + BOMB_THROW_PLAY_MS + BOMB_THROW_RESULT_MS) /
+      BOMB_THROW_TICK_MS;
+    for (let index = 0; index < ticksUntilComplete; index += 1) {
+      const miniGame = transition.state.private.pendingChoice?.miniGameState;
+      expect(miniGame).toBeDefined();
+      transition = reduceGame(
+        config,
+        transition.state,
+        {
+          type: 'miniGameTick',
+          player: 'p1',
+          miniGameId: miniGame!.id,
+          automatedPlayerIds: ['p1', 'p2', 'p3', 'p4'].slice(
+            0,
+            participantCount,
+          ),
+        },
+        { ...runtime, setMemory: transition.setMemory ?? {} },
+      );
+      expect(transition.rejections).toEqual([]);
+    }
+  }
+
+  const pending = transition.state.private.pendingChoice;
+  expect(pending).toMatchObject({
+    kind: 'cards',
+    choiceId: expect.stringMatching(/^real_bomber_discard_s[0-3]$/u),
+  });
+  if (!pending || pending.kind !== 'cards') {
+    throw new Error('Real bomber did not reach the winner card choice');
+  }
+  const selected = pending.optionCardIds.slice(0, pending.count);
+  expect(selected).toHaveLength(pending.count);
+  return reduceGame(
+    config,
+    transition.state,
+    {
+      type: 'ruleInput',
+      player: pending.player,
+      choiceId: pending.choiceId,
+      cardIds: selected,
+    },
+    { ...runtime, setMemory: transition.setMemory ?? {} },
+  );
 }
 
 describe('リアルボンバー', () => {
@@ -162,5 +317,71 @@ describe('リアルボンバー', () => {
     expect(rule.hooks.afterPlay?.(context({}, {}), trigger)).toMatchObject([
       { type: 'requestChoice', kind: 'miniGame' },
     ]);
+  });
+
+  it.each([4, 1])(
+    '%i人参加の完了経路で発動済みsetメモリを保存する',
+    (participantCount) => {
+      const completed = completeRealBomber(participantCount);
+      expect(completed.rejections).toEqual([]);
+      expect(completed.state.private.pendingChoice).toBeUndefined();
+      expect(completed.setMemory).toEqual({
+        [rule.meta.ruleId]: { fired: true },
+      });
+      expect(completed.state.public.discard.length).toBeGreaterThan(0);
+    },
+  );
+
+  it('エンジン遷移後の同じゲームと後続ゲームでは抑止し、新しいsetでは再発動する', () => {
+    const completed = completeRealBomber();
+    const firedMemory = completed.setMemory ?? {};
+
+    for (const gameIndex of [0, 1]) {
+      const fixture = engineFixture(4, gameIndex);
+      const suppressed = reduceGame(
+        fixture.config,
+        fixture.state,
+        { type: 'play', player: 'p1', cards: ['S04'] },
+        { ...fixture.runtime, setMemory: firedMemory },
+      );
+      expect(suppressed.rejections).toEqual([]);
+      expect(suppressed.state.private.pendingChoice).toBeUndefined();
+      expect(suppressed.setMemory).toEqual(firedMemory);
+    }
+
+    const nextSet = engineFixture();
+    const refired = reduceGame(
+      nextSet.config,
+      nextSet.state,
+      { type: 'play', player: 'p1', cards: ['S04'] },
+      nextSet.runtime,
+    );
+    expect(refired.state.private.pendingChoice).toMatchObject({
+      kind: 'miniGame',
+      choiceId: 'real_bomber_bomb_throw',
+    });
+  });
+
+  it('条件外プレイはsetの発動回数を消費しない', () => {
+    const outside = engineFixture(4, 0, '5');
+    const ignored = reduceGame(
+      outside.config,
+      outside.state,
+      { type: 'play', player: 'p1', cards: ['S05'] },
+      outside.runtime,
+    );
+    expect(ignored.rejections).toEqual([]);
+    expect(ignored.setMemory).toEqual({});
+
+    const triggerFixture = engineFixture();
+    const triggered = reduceGame(
+      triggerFixture.config,
+      triggerFixture.state,
+      { type: 'play', player: 'p1', cards: ['S04'] },
+      { ...triggerFixture.runtime, setMemory: ignored.setMemory ?? {} },
+    );
+    expect(triggered.state.private.pendingChoice).toMatchObject({
+      kind: 'miniGame',
+    });
   });
 });
