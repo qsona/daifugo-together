@@ -51,6 +51,8 @@ pnpm rules:check-versions
 
 前者が対象ルールの `rule-versions.json` と `rule-bundles.json` を更新します。保守PRの差分ガードは、宣言したルールだけが +1 され、新しいbundle hashになっていることを検査します。CIの `rules:check-versions` は実際のbuild結果からhashを再計算します。
 
+保守変更のprovenanceは、`rule-versions.json` と `rule-bundles.json` の変更コミットから保守PRのGitHubマージ履歴をたどって確認します。DBの `rule_versions.pr_number` と `rule_versions.merge_sha` は元提案の実装ジョブを指し、保守PRの番号やmerge SHAへは更新されません。保守変更の追跡にこれらのDB列を使わないでください。
+
 ## 4. 検証とレビュー
 
 対象ルールの単体テスト、共有相互作用テスト、全体検証を実行します。
