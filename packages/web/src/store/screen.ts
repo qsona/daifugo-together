@@ -14,6 +14,7 @@ export type ScreenId =
   | 'proposal'
   | 'myProposals'
   | 'notifications'
+  | 'ruleBalanceNotice'
   | 'pushSettings'
   | 'activeRules'
   | 'ruleDex'

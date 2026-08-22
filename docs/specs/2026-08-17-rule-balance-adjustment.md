@@ -152,6 +152,7 @@
 | 保守PRは `maintenance/rules/<PRDの拡張子なしファイル名>` ブランチとし、PR本文の機械可読ブロックでPRDパスと対象ルールIDを宣言する | PRD・ブランチ・変更対象を信頼済みbase上の差分ガードで一意に結び付け、人間レビュー済みの履歴をGitから追跡できるため | 命名規則を変える場合は差分ガード、テスト、runbook、保守PR本文を同時に更新する |
 | 保守版のprovenanceは既存の `rule-versions.json` / `rule-bundles.json` と保守PRのGitHubマージ履歴で記録し、専用DB列は追加しない | 起動時同期が既にversion・bundle hash・PR番号・merge SHAを記録し、重複する永続化を増やさず必要な追跡性を満たすため | DBだけで保守理由を検索する要件が加わる場合はmigrationと同期処理の追加が必要になる |
 | リアルボンバーの発動済みフラグは、通常参加者・1人参加者とも必ず到達する勝者のカード選択正常応答で保存する。参加者0人は有効発動に数えない | 参加者は `active` かつ手札1枚以上に限定され、勝者には必ず1〜2枚の選択要求が生じる。入力待ち中は次のプレイへ進めず、既存Effect語彙だけで原子的に報酬・告知・フラグ保存を完了できるため | 参加者条件や「勝者がカードを捨てない」完了経路を将来追加する場合は、その経路にもsetメモリ保存を追加する |
+| 詳細ページの安定パスを `/notifications/rule-balance-2026-08-17` とし、確認済みの本番反映日をお知らせURLの `released=YYYY-MM-DD` で渡す | 人間レビューと本番確認が終わる前に反映日を決め打ちせず、静的ページのURLを変えずに配信時点の確定日をJSTで表示できるため | URLパラメータを失った直接アクセスでは反映日を表示できない。配信前の管理画面確認と配信後SQLで日付付きURLを検査する |
 
 ### 詳細仕様の変更
 
@@ -159,11 +160,14 @@
 |---|---|
 | 保守モードを `maintenance/rules/<PRD名>` とPR本文の `daifugo-rule-maintenance` 宣言で識別し、複数の宣言済み既存ルールを1PRで扱う | 3ルールを同じ本番反映単位にしつつ、対象PRD・対象ルール・人間レビュー履歴を機械的に結び付けるため |
 | 保守PRの許可差分を各ルールの4ファイル、共有相互作用テスト、version/bundle管理ファイルに限定する | 新規ルールPRとrevert PRの制約を変更せず、保守変更へ無関係な製品コードを混入させないため |
+| お知らせ詳細ページは安定パスに静的な変更内容を持ち、本番反映日のみ `released` クエリで受け取る | 本番確認後まで配信日を確定できない一方、反映日表示と変更されないアプリ内パスを両立するため |
 
 ### 検証
 
 - 保守経路先行実装: Node.js 26.5.0で `pnpm verify` 成功（format / lint / design lint / typecheck / 172 test files・1319 tests / build）。
 - `scripts/diff-guard.test.ts` と `packages/rules/src/registry-generator.test.ts`: 2 files・27 tests成功。保守モード、新規ルールモード、revertモード、code側meta同期を回帰確認。
 - 第1パス中心実装: Node.js 26.5.0で対象4 test files・31 tests成功。`pnpm verify` 成功（format / lint / design lint / typecheck / 172 test files・1323 tests / build）。保守diff-guardも3ルールの15ファイル差分に対して成功。
+- 独立中間レビュー: `GO`。Node.js 26.5.0で172 files・1323 testsとbuild、保守diff-guardを独立再検証。裁定G-31〜G-33を `docs/decision-log.md` へ記録し、条件付き採用のprovenance区別を保守runbookへ追記。
+- 第2パスお知らせ: 詳細ページ、安定URL、戻る操作、全ユーザー1回配信と提案者3人包含のサーバーテスト、配信後確認SQLを実装。対象3 test files・13 tests成功。Node.js 26.5.0で `pnpm verify` 成功（format / lint / design lint / typecheck / 173 test files・1322 tests / build）。375×812の実表示で3ルールの変更前・変更後・理由と反映日を確認し、`scrollWidth = clientWidth = 375`、お知らせBoxへの戻る操作を確認。
 
 ### 積み残し・提案
