@@ -1,0 +1,110 @@
+name: Discord CI notification
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      test_result:
+        description: Notification route to test
+        required: true
+        default: success
+        type: choice
+        options:
+          - success
+          - failure
+
+permissions: {}
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Prepare notification
+        id: meta
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          TEST_RESULT: ${{ inputs.test_result }}
+          RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          RUN_NAME: ${{ github.event.workflow_run.name }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          RUN_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          RUN_ACTOR: ${{ github.event.workflow_run.actor.login }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            conclusion="$TEST_RESULT"
+            source_name="CI notification test"
+            source_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions"
+            source_branch="$GITHUB_REF_NAME"
+            source_actor="$GITHUB_ACTOR"
+            test_marker="[TEST] "
+          else
+            conclusion="$RUN_CONCLUSION"
+            source_name="$RUN_NAME"
+            source_url="$RUN_URL"
+            source_branch="$RUN_BRANCH"
+            source_actor="$RUN_ACTOR"
+            test_marker=""
+          fi
+
+          alert=false
+          case "$conclusion" in
+            success)
+              status=Success
+              ;;
+            cancelled)
+              status=Cancelled
+              ;;
+            failure|timed_out|startup_failure|action_required)
+              status=Failure
+              alert=true
+              ;;
+            *)
+              status=Cancelled
+              ;;
+          esac
+
+          {
+            echo "status=$status"
+            echo "alert=$alert"
+            echo "title=${test_marker}${source_name}"
+            echo "url=$source_url"
+            echo "description<<EOF"
+            printf 'Repository: `%s`\n' "$GITHUB_REPOSITORY"
+            printf 'Branch: `%s`\n' "$source_branch"
+            printf 'Actor: `%s`\n' "$source_actor"
+            printf 'Conclusion: `%s`\n' "$conclusion"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Notify CI channel
+        uses: sarisia/actions-status-discord@eb045afee445dc055c18d3d90bd0f244fd062708 # v1.16.0
+        with:
+          webhook: ${{ secrets.DISCORD_CI_WEBHOOK_URL }}
+          status: ${{ steps.meta.outputs.status }}
+          title: ${{ steps.meta.outputs.title }}
+          description: ${{ steps.meta.outputs.description }}
+          url: ${{ steps.meta.outputs.url }}
+          username: GitHub Actions
+          nocontext: true
+          nofail: false
+
+      - name: Notify alert channel
+        if: ${{ always() && steps.meta.outputs.alert == 'true' }}
+        uses: sarisia/actions-status-discord@eb045afee445dc055c18d3d90bd0f244fd062708 # v1.16.0
+        with:
+          webhook: ${{ secrets.DISCORD_ALERT_WEBHOOK_URL }}
+          status: Failure
+          title: Alert - ${{ steps.meta.outputs.title }}
+          description: ${{ steps.meta.outputs.description }}
+          url: ${{ steps.meta.outputs.url }}
+          username: GitHub Actions
+          nocontext: true
+          nofail: false
