@@ -171,5 +171,9 @@
 - 第2パスお知らせ: 詳細ページ、安定URL、戻る操作、全ユーザー1回配信と提案者3人包含のサーバーテスト、配信後確認SQLを実装。対象3 test files・13 tests成功。Node.js 26.5.0で `pnpm verify` 成功（format / lint / design lint / typecheck / 173 test files・1322 tests / build）。375×812の実表示で3ルールの変更前・変更後・理由と反映日を確認し、`scrollWidth = clientWidth = 375`、お知らせBoxへの戻る操作を確認。
 - 仕上げ統合検証: リアルボンバーの通常参加者・1人参加者・同じゲーム・後続ゲーム・新set・条件外プレイを実エンジン遷移で追加確認。3ルールと通知変更を合わせ、Node.js 26.5.0で `pnpm verify` 成功（format / lint / design lint / typecheck / 173 test files・1330 tests / build）。最新 `origin/main...HEAD` の15ファイルに対する保守diff-guardも成功。
 - 独立完了レビュー: 要件 `PASS`、品質 `APPROVED`、出荷判定 `GO`、Critical / Important / Minorはいずれも0件。重点9 files・75 tests、`pnpm verify` 173 files・1330 tests、実PR宣言による保守diff-guardを独立再検証。G-34を `docs/decision-log.md` へ採用記録。
+- 本番反映: 保守PR [#40](https://github.com/qsona/daifugo-together/pull/40) を人間の依頼に基づきGitHub CLIでマージし、merge SHA `e10f11ff7e65a79a75c6cc46b99c56fc8e024ee4` を `release` へ同一単位で反映。CI run `32563499203` と production deploy run `32563636740` は成功し、Fly.ioの稼働イメージ・対象SHAが一致した。
+- 本番動作確認: `/health` は `status=ok, db=ok`、Fly health checkはpassing。反映後に開始したセットで3ルールすべてが調整後bundle hash（ラッキー7 `c4687dcd…30d99`、ボンバーマン `9c7552a7…79434`、リアルボンバー `e52457b7…e1c5`）として固定され、3戦セット `912c80f3-ffc3-467f-a9f6-61fc99593262:set:1` を実経路で完走して結果保存まで確認した。対象3ルールはactive、current versionは2 / 3 / 2、反映後の対象インシデントは0件、完走セットのリアルボンバー複数回発火は0件。お知らせ詳細ページの本番bundleと安定パスも確認済み。
 
 ### 積み残し・提案
+
+- 運営お知らせは未配信。管理画面の最終確認後、`released=2026-08-22` を付けて1回だけ配信し、runbookのSQLで全ユーザー実体化と元提案者3人の通知行を確認する。
