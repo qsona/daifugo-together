@@ -7,6 +7,13 @@ const GENERATED_RULE_PATH =
   /^packages\/rules\/(r\d{4,}-[a-z0-9]+(?:-[a-z0-9]+)*)\/(.+)$/;
 const SCAFFOLD_FILES = ['meta.json', 'SPEC.json'];
 const GENERATED_FILES = ['rule.ts', 'rule.test.ts'];
+const MAINTENANCE_FILES = [
+  'packages/rules/rule-versions.json',
+  'packages/rules/rule-bundles.json',
+];
+const INTERACTION_TEST = 'packages/rules/src/rule-interactions.test.ts';
+const MAINTENANCE_PRD =
+  /^docs\/specs\/(\d{4}-\d{2}-\d{2}-[a-z0-9]+(?:-[a-z0-9]+)*)\.md$/u;
 
 function git(cwd, args, options = {}) {
   return execFileSync('git', args, {
@@ -111,6 +118,160 @@ export function pipelineMetadataFromBody(body) {
         baseSha: baseMatches[0][1],
       }
     : null;
+}
+
+export function maintenanceMetadataFromBody(body) {
+  const blocks = [
+    ...body.matchAll(
+      /<!-- daifugo-rule-maintenance\s+([\s\S]*?)\s+end-daifugo-rule-maintenance -->/g,
+    ),
+  ];
+  if (blocks.length !== 1) return null;
+  const prdMatches = [
+    ...blocks[0][1].matchAll(/(?:^|\n)prd:\s*(\S+)\s*(?=\n|$)/g),
+  ];
+  const ruleMatches = [
+    ...blocks[0][1].matchAll(
+      /(?:^|\n)rule:\s*(r\d{4,}-[a-z0-9]+(?:-[a-z0-9]+)*)\s*(?=\n|$)/g,
+    ),
+  ];
+  const rules = ruleMatches.map((match) => match[1]);
+  if (
+    prdMatches.length !== 1 ||
+    rules.length === 0 ||
+    new Set(rules).size !== rules.length
+  ) {
+    return null;
+  }
+  return { prd: prdMatches[0][1], rules };
+}
+
+function jsonAt(cwd, revision, path) {
+  return JSON.parse(git(cwd, ['show', `${revision}:${path}`]));
+}
+
+function stableJson(value) {
+  if (Array.isArray(value)) return value.map(stableJson);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, nested]) => [key, stableJson(nested)]),
+    );
+  }
+  return value;
+}
+
+function jsonEqual(left, right) {
+  return JSON.stringify(stableJson(left)) === JSON.stringify(stableJson(right));
+}
+
+function validateMaintenanceManifests(cwd, base, head, directories) {
+  const violations = [];
+  try {
+    const baseVersions = jsonAt(cwd, base, 'packages/rules/rule-versions.json');
+    const headVersions = jsonAt(cwd, head, 'packages/rules/rule-versions.json');
+    const baseBundles = jsonAt(cwd, base, 'packages/rules/rule-bundles.json');
+    const headBundles = jsonAt(cwd, head, 'packages/rules/rule-bundles.json');
+    const expectedVersions = { ...baseVersions };
+    const expectedBundles = structuredClone(baseBundles);
+    for (const directory of directories) {
+      const baseVersion = baseVersions[directory] ?? 1;
+      const nextVersion = baseVersion + 1;
+      const baseBundle = baseBundles[directory];
+      const headBundle = headBundles[directory];
+      if (
+        !baseBundle ||
+        typeof baseBundle !== 'object' ||
+        baseBundle.version !== baseVersion
+      ) {
+        violations.push(
+          `${directory}: baseのversion宣言とbundle記録が一致しません。`,
+        );
+        continue;
+      }
+      expectedVersions[directory] = nextVersion;
+      if (
+        !headBundle ||
+        typeof headBundle !== 'object' ||
+        headBundle.version !== nextVersion ||
+        typeof headBundle.hash !== 'string' ||
+        !/^[0-9a-f]{64}$/u.test(headBundle.hash) ||
+        headBundle.hash === baseBundle.hash
+      ) {
+        violations.push(
+          `${directory}: bundle記録をv${String(nextVersion)}の新しいSHA-256 hashへ更新してください。`,
+        );
+        continue;
+      }
+      expectedBundles[directory] = headBundle;
+    }
+    if (!jsonEqual(headVersions, expectedVersions)) {
+      violations.push(
+        'rule-versions.jsonは宣言した各ルールだけを正確に1 version繰り上げてください。',
+      );
+    }
+    if (!jsonEqual(headBundles, expectedBundles)) {
+      violations.push(
+        'rule-bundles.jsonは宣言した各ルールの新version/hashだけを更新してください。',
+      );
+    }
+  } catch {
+    violations.push('ルールversion/bundle差分を解析できません。');
+  }
+  return violations;
+}
+
+function validateMaintenanceRule(cwd, base, head, directory) {
+  const violations = [];
+  const paths = expectedPaths(directory);
+  for (const path of paths) {
+    if (gitExitCode(cwd, ['cat-file', '-e', `${base}:${path}`]) !== 0) {
+      violations.push(`${path}: baseに存在する既存ルールファイルが必要です。`);
+    }
+    const treeEntry = git(cwd, ['ls-tree', head, '--', path]).trim();
+    if (!treeEntry.startsWith('100644 blob ')) {
+      violations.push(`${path}: regular file mode 100644が必要です。`);
+    }
+  }
+  try {
+    const beforeMeta = jsonAt(
+      cwd,
+      base,
+      `packages/rules/${directory}/meta.json`,
+    );
+    const afterMeta = jsonAt(
+      cwd,
+      head,
+      `packages/rules/${directory}/meta.json`,
+    );
+    for (const key of ['ruleId', 'proposalId', 'kind', 'prefecture']) {
+      if (!jsonEqual(beforeMeta[key], afterMeta[key])) {
+        violations.push(`${directory}: meta.jsonの${key}は変更できません。`);
+      }
+    }
+    violations.push(...validateMeta(afterMeta, directory));
+  } catch {
+    violations.push(`${directory}: meta.jsonを読み取り・解析できません。`);
+  }
+  try {
+    const beforeSpec = jsonAt(
+      cwd,
+      base,
+      `packages/rules/${directory}/SPEC.json`,
+    );
+    const afterSpec = jsonAt(
+      cwd,
+      head,
+      `packages/rules/${directory}/SPEC.json`,
+    );
+    if (!jsonEqual(beforeSpec.source, afterSpec.source)) {
+      violations.push(`${directory}: SPEC.jsonの元sourceは変更できません。`);
+    }
+  } catch {
+    violations.push(`${directory}: SPEC.jsonを読み取り・解析できません。`);
+  }
+  return violations;
 }
 
 function validateMeta(meta, directory) {
@@ -235,7 +396,9 @@ export function validateRulePullRequest(options) {
     ? 'pipeline'
     : branch.startsWith('revert/')
       ? 'revert'
-      : 'ordinary';
+      : branch.startsWith('maintenance/rules/')
+        ? 'maintenance'
+        : 'ordinary';
   const normalizedAllowedAuthors = new Set(
     allowedAuthors.map((value) => value.trim().toLowerCase()).filter(Boolean),
   );
@@ -264,6 +427,74 @@ export function validateRulePullRequest(options) {
     violations.push(
       `PR作成者 ${author} は許可されたpipeline作成者ではありません。`,
     );
+  }
+  if (mode === 'maintenance') {
+    const metadata = maintenanceMetadataFromBody(prBody);
+    if (!metadata) {
+      violations.push(
+        'PR本文の機械可読blockにprdを1件、重複しないruleを1件以上宣言してください。',
+      );
+      return {
+        entries,
+        mode,
+        directory: null,
+        scaffoldSha: null,
+        recordedBaseSha: null,
+        violations,
+      };
+    }
+    const prdMatch = MAINTENANCE_PRD.exec(metadata.prd);
+    if (!prdMatch) {
+      violations.push('保守PRのprdはASCII名のdocs/specs/*.mdが必要です。');
+    } else if (branch !== `maintenance/rules/${prdMatch[1]}`) {
+      violations.push(
+        `branch ${branch} が maintenance/rules/${prdMatch[1]} と一致しません。`,
+      );
+    }
+    if (gitExitCode(cwd, ['cat-file', '-e', `${base}:${metadata.prd}`]) !== 0) {
+      violations.push(`宣言したPRD ${metadata.prd} がbaseに存在しません。`);
+    }
+    const declared = new Set(metadata.rules);
+    const expectedRulePaths = metadata.rules.flatMap(expectedPaths);
+    const allowedPaths = new Set([
+      ...expectedRulePaths,
+      ...MAINTENANCE_FILES,
+      INTERACTION_TEST,
+    ]);
+    for (const entry of entries) {
+      if (!allowedPaths.has(entry.path)) {
+        violations.push(
+          `${entry.path}: ルール保守PRで許可された差分ではありません。`,
+        );
+      } else if (entry.status !== 'M') {
+        violations.push(
+          `${entry.path}: ルール保守PRでは既存ファイルの変更(M)だけ許可します(status=${entry.status})。`,
+        );
+      }
+      const match = RULE_PATH.exec(entry.path);
+      if (match && !declared.has(match[1])) {
+        violations.push(`${entry.path}: PR本文で宣言されていないルールです。`);
+      }
+    }
+    for (const path of [...expectedRulePaths, ...MAINTENANCE_FILES]) {
+      if (!entries.some((entry) => entry.path === path)) {
+        violations.push(`${path}: ルール保守PRの必須差分がありません。`);
+      }
+    }
+    for (const directory of metadata.rules) {
+      violations.push(...validateMaintenanceRule(cwd, base, head, directory));
+    }
+    violations.push(
+      ...validateMaintenanceManifests(cwd, base, head, metadata.rules),
+    );
+    return {
+      entries,
+      mode,
+      directory: metadata.rules.join(','),
+      scaffoldSha: null,
+      recordedBaseSha: null,
+      violations,
+    };
   }
   if (mode === 'revert') {
     const revertDirectories = new Set();

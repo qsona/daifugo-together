@@ -91,6 +91,113 @@ function check(
   });
 }
 
+function createMaintenanceRepository() {
+  const repository = createRepository();
+  write(
+    repository.cwd,
+    `packages/rules/${directory}/SPEC.json`,
+    `${JSON.stringify(
+      {
+        specVersion: 1,
+        summary: 'before',
+        source: { kind: 'local', title: '八切り', body: '8を出す' },
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  write(
+    repository.cwd,
+    'packages/rules/src/rule-interactions.test.ts',
+    "export const interaction = 'before';\n",
+  );
+  write(repository.cwd, 'packages/rules/rule-versions.json', '{}\n');
+  write(
+    repository.cwd,
+    'packages/rules/rule-bundles.json',
+    `${JSON.stringify(
+      { [directory]: { version: 1, hash: 'a'.repeat(64) } },
+      null,
+      2,
+    )}\n`,
+  );
+  write(
+    repository.cwd,
+    'docs/specs/2026-08-17-rule-balance-adjustment.md',
+    '# balance adjustment\n',
+  );
+  repository.base = commit(repository.cwd, 'existing generated rule');
+
+  const changedMeta = JSON.parse(meta()) as Record<string, unknown>;
+  changedMeta.description = '8を出すと場を流す';
+  write(
+    repository.cwd,
+    `packages/rules/${directory}/meta.json`,
+    `${JSON.stringify(changedMeta, null, 2)}\n`,
+  );
+  write(
+    repository.cwd,
+    `packages/rules/${directory}/SPEC.json`,
+    `${JSON.stringify(
+      {
+        specVersion: 1,
+        summary: 'after',
+        source: { kind: 'local', title: '八切り', body: '8を出す' },
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  write(
+    repository.cwd,
+    `packages/rules/${directory}/rule.ts`,
+    'export const changed = true;\n',
+  );
+  write(
+    repository.cwd,
+    `packages/rules/${directory}/rule.test.ts`,
+    'export const cases = [1, 2, 3, 4];\n',
+  );
+  write(
+    repository.cwd,
+    'packages/rules/src/rule-interactions.test.ts',
+    "export const interaction = 'after';\n",
+  );
+  write(
+    repository.cwd,
+    'packages/rules/rule-versions.json',
+    `${JSON.stringify({ [directory]: 2 }, null, 2)}\n`,
+  );
+  write(
+    repository.cwd,
+    'packages/rules/rule-bundles.json',
+    `${JSON.stringify(
+      { [directory]: { version: 2, hash: 'b'.repeat(64) } },
+      null,
+      2,
+    )}\n`,
+  );
+  repository.head = commit(repository.cwd, 'maintain generated rule');
+  return repository;
+}
+
+function checkMaintenance(
+  repository: ReturnType<typeof createMaintenanceRepository>,
+  overrides: Partial<Parameters<typeof validateRulePullRequest>[0]> = {},
+) {
+  return validateRulePullRequest({
+    ...repository,
+    branch: 'maintenance/rules/2026-08-17-rule-balance-adjustment',
+    prBody: `<!-- daifugo-rule-maintenance
+prd: docs/specs/2026-08-17-rule-balance-adjustment.md
+rule: ${directory}
+end-daifugo-rule-maintenance -->`,
+    author: 'qsona',
+    allowedAuthors: ['qsona'],
+    ...overrides,
+  });
+}
+
 afterEach(() => {
   for (const repository of repositories.splice(0)) {
     rmSync(repository, { recursive: true, force: true });
@@ -407,6 +514,99 @@ end-daifugo-pipeline -->`,
         author: 'attacker',
       }).violations,
     ).toContain('PR作成者 attacker は許可されたpipeline作成者ではありません。');
+  });
+
+  it('宣言済みの既存ルール4ファイルとversion管理・相互作用テストの保守を許可する', () => {
+    const repository = createMaintenanceRepository();
+
+    expect(checkMaintenance(repository)).toMatchObject({
+      mode: 'maintenance',
+      directory,
+      violations: [],
+    });
+  });
+
+  it('保守PRの専用branch・許可author・機械可読宣言を必須にする', () => {
+    const repository = createMaintenanceRepository();
+
+    expect(
+      checkMaintenance(repository, { branch: 'maintenance/rules/other' })
+        .violations,
+    ).toContain(
+      'branch maintenance/rules/other が maintenance/rules/2026-08-17-rule-balance-adjustment と一致しません。',
+    );
+    expect(
+      checkMaintenance(repository, { author: 'attacker' }).violations,
+    ).toContain('PR作成者 attacker は許可されたpipeline作成者ではありません。');
+    expect(checkMaintenance(repository, { prBody: '' }).violations).toContain(
+      'PR本文の機械可読blockにprdを1件、重複しないruleを1件以上宣言してください。',
+    );
+  });
+
+  it('保守PRで元提案の識別情報とsourceを変えられない', () => {
+    const repository = createMaintenanceRepository();
+    const changedMeta = JSON.parse(meta()) as Record<string, unknown>;
+    changedMeta.proposalId = 'replacement';
+    write(
+      repository.cwd,
+      `packages/rules/${directory}/meta.json`,
+      `${JSON.stringify(changedMeta, null, 2)}\n`,
+    );
+    const changedSpec = JSON.parse(
+      git(
+        repository.cwd,
+        'show',
+        `${repository.head}:packages/rules/${directory}/SPEC.json`,
+      ),
+    ) as Record<string, unknown>;
+    changedSpec.source = { kind: 'local', title: '改変', body: '別提案' };
+    write(
+      repository.cwd,
+      `packages/rules/${directory}/SPEC.json`,
+      `${JSON.stringify(changedSpec, null, 2)}\n`,
+    );
+    repository.head = commit(repository.cwd, 'tamper maintenance identity');
+
+    expect(checkMaintenance(repository).violations).toEqual(
+      expect.arrayContaining([
+        `${directory}: meta.jsonのproposalIdは変更できません。`,
+        `${directory}: SPEC.jsonの元sourceは変更できません。`,
+      ]),
+    );
+  });
+
+  it('保守PRで宣言外ファイルと4ファイル未同期を拒否する', () => {
+    const repository = createMaintenanceRepository();
+    write(repository.cwd, 'packages/core/src/index.ts', 'export {};\n');
+    git(
+      repository.cwd,
+      'checkout',
+      repository.base,
+      '--',
+      `packages/rules/${directory}/SPEC.json`,
+    );
+    repository.head = commit(repository.cwd, 'unsafe maintenance scope');
+
+    expect(checkMaintenance(repository).violations).toEqual(
+      expect.arrayContaining([
+        'packages/core/src/index.ts: ルール保守PRで許可された差分ではありません。',
+        `packages/rules/${directory}/SPEC.json: ルール保守PRの必須差分がありません。`,
+      ]),
+    );
+  });
+
+  it('保守PRは対象ルールだけを厳密に1 version繰り上げる', () => {
+    const repository = createMaintenanceRepository();
+    write(
+      repository.cwd,
+      'packages/rules/rule-versions.json',
+      `${JSON.stringify({ [directory]: 3, 'r0002-other': 2 }, null, 2)}\n`,
+    );
+    repository.head = commit(repository.cwd, 'invalid maintenance versions');
+
+    expect(checkMaintenance(repository).violations).toContain(
+      'rule-versions.jsonは宣言した各ルールだけを正確に1 version繰り上げてください。',
+    );
   });
 
   it('revert時のrules-exclude変更は対象entryの削除だけを許可する', () => {
