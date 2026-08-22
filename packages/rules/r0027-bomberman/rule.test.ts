@@ -15,6 +15,7 @@ const hand = [
   natural('H2', '4'),
   natural('H3', '5'),
   natural('H4', '6'),
+  natural('H5', '7'),
 ];
 
 function sequence(count = 3): Play {
@@ -76,41 +77,44 @@ function context(playerHand: readonly Card[] = hand): RuleContext {
 }
 
 describe('ボンバーマン', () => {
-  it('3枚の階段で出した本人の残り手札から正確に3枚を選ばせる', () => {
-    expect(rule.hooks.afterPlay?.(context(), sequence())).toEqual([
-      {
-        type: 'requestChoice',
-        player: 'p1',
-        choiceId: 'bomberman_discard',
-        from: { kind: 'hand', player: 'p1' },
-        cards: { kind: 'all' },
-        count: 3,
-        messageKey: 'bomberman_select_cards',
-      },
-    ]);
-  });
+  it.each([3, 4, 5])(
+    '%d枚の階段で出した本人の残り手札から正確に1枚を選ばせる',
+    (count) => {
+      expect(rule.hooks.afterPlay?.(context(), sequence(count))).toEqual([
+        {
+          type: 'requestChoice',
+          player: 'p1',
+          choiceId: 'bomberman_discard',
+          from: { kind: 'hand', player: 'p1' },
+          cards: { kind: 'all' },
+          count: 1,
+          messageKey: 'bomberman_select_cards',
+        },
+      ]);
+    },
+  );
 
   it('選択したカードを本人の手札から捨て札へ移す', () => {
     expect(
       rule.hooks.afterPlay?.(context(), sequence(), {
         kind: 'cards',
         choiceId: 'bomberman_discard',
-        cardIds: ['H2', 'H4', 'H1'],
+        cardIds: ['H2'],
       }),
     ).toEqual([
       {
         type: 'moveCards',
         from: { kind: 'hand', player: 'p1' },
         to: { kind: 'discard' },
-        cards: { kind: 'specific', cardIds: ['H2', 'H4', 'H1'] },
+        cards: { kind: 'specific', cardIds: ['H2'] },
       },
     ]);
   });
 
-  it('5枚の階段で残り手札が2枚なら正確に2枚を選ばせる', () => {
+  it('残り手札が1枚ならその1枚を選ばせる', () => {
     expect(
-      rule.hooks.afterPlay?.(context(hand.slice(0, 2)), sequence(5)),
-    ).toEqual([expect.objectContaining({ type: 'requestChoice', count: 2 })]);
+      rule.hooks.afterPlay?.(context(hand.slice(0, 1)), sequence(5)),
+    ).toEqual([expect.objectContaining({ type: 'requestChoice', count: 1 })]);
   });
 
   it.each(['single', 'set'] as const)(

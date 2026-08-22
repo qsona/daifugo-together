@@ -44,8 +44,8 @@
     "hash": "c282fb48dbf915a7de2ed07e0361456cc42b3d85c980a5f43284b7f0686e3e23"
   },
   "r0015-lucky-seven": {
-    "version": 1,
-    "hash": "98d44d536a06289bc32e3527f6fb615d5893be6fbbe1591d6f005aa9dd266b1f"
+    "version": 2,
+    "hash": "c4687dcdcc6765f38ae7a22109f4c8b783dd5ef05f36759948c019caf2c30d99"
   },
   "r0016-daifugo-murder-case": {
     "version": 1,
@@ -76,15 +76,15 @@
     "hash": "cc1894d2c7d4ef54b2ed56e5a100538bf864e6ad6a0e1d90ef974e350147e5f8"
   },
   "r0027-bomberman": {
-    "version": 2,
-    "hash": "6ebdc629d04a416240a9f6606c82fa986b297744c1ff2296e276e49c8e79b628"
+    "version": 3,
+    "hash": "9c7552a7225b89bc53b1d4c36ac2de9a6e107927baf9f76a1c05605385679434"
   },
   "r0028-poisoned-bun": {
     "version": 1,
     "hash": "c221bd55db19a3c267c1058c6f756dfa428c3ed5e85efd1cf760f9eab07d490c"
   },
   "r0029-real-bomber": {
-    "version": 1,
-    "hash": "7c3e4ea6a8dc5fa5b0f0012080836cdd526ffa9060781980a8ef0a70c5d9c1a6"
+    "version": 2,
+    "hash": "e52457b7c6ad273b7de902a2dacadbd8eb118c25e258738d57355dc7eb7de1c5"
   }
 }

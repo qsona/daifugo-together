@@ -2,7 +2,7 @@
   "ruleId": "r0029-real-bomber",
   "proposalId": "01KZ4JJ2KM3F2BTS237DPGM478",
   "name": "リアルボンバー",
-  "description": "自然な4を1枚で出すと約17秒のボム投げミニゲームが始まり、勝者は手札を最大2枚捨てる。",
+  "description": "1セットで最初に自然な4を1枚で出したときだけ約17秒のボム投げミニゲームが始まり、勝者は手札を最大2枚捨てる。",
   "kind": "original",
   "contractVersion": 2,
   "messages": {

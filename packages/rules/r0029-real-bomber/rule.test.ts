@@ -12,7 +12,10 @@ const four: Card = {
 };
 const trigger: Play = { kind: 'single', cards: [four], count: 1, repRank: '4' };
 
-function context(hands: Record<string, Card[]> = {}): RuleContext {
+function context(
+  hands: Record<string, Card[]> = {},
+  setMemory: Record<string, unknown> = {},
+): RuleContext {
   return {
     contractVersion: 2,
     game: {
@@ -34,7 +37,7 @@ function context(hands: Record<string, Card[]> = {}): RuleContext {
       strength: BASE_STRENGTH_ORDER,
     },
     setHistory: [],
-    memory: { game: {}, set: {} },
+    memory: { game: {}, set: setMemory },
     rng: { next: () => 0.5, int: () => 42 },
   } as RuleContext;
 }
@@ -130,6 +133,34 @@ describe('リアルボンバー', () => {
         messageKey: 'real_bomber_result',
         params: { winner: 'プレイヤー2' },
       },
+      {
+        type: 'setMemory',
+        scope: 'set',
+        key: 'fired',
+        value: true,
+        silent: true,
+      },
+    ]);
+  });
+
+  it('同じsetで発動済みなら同じゲームでも後続ゲームでも発動しない', () => {
+    expect(
+      rule.hooks.afterPlay?.(context({}, { fired: true }), trigger),
+    ).toEqual([]);
+    expect(
+      rule.hooks.afterPlay?.(
+        {
+          ...context({}, { fired: true }),
+          game: { ...context().game, gameIndex: 2 },
+        },
+        trigger,
+      ),
+    ).toEqual([]);
+  });
+
+  it('新しい空のsetメモリでは再び1回発動できる', () => {
+    expect(rule.hooks.afterPlay?.(context({}, {}), trigger)).toMatchObject([
+      { type: 'requestChoice', kind: 'miniGame' },
     ]);
   });
 });
