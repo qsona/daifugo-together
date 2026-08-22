@@ -151,6 +151,7 @@
 |---|---|---|
 | 保守PRは `maintenance/rules/<PRDの拡張子なしファイル名>` ブランチとし、PR本文の機械可読ブロックでPRDパスと対象ルールIDを宣言する | PRD・ブランチ・変更対象を信頼済みbase上の差分ガードで一意に結び付け、人間レビュー済みの履歴をGitから追跡できるため | 命名規則を変える場合は差分ガード、テスト、runbook、保守PR本文を同時に更新する |
 | 保守版のprovenanceは既存の `rule-versions.json` / `rule-bundles.json` と保守PRのGitHubマージ履歴で記録し、専用DB列は追加しない | 起動時同期が既にversion・bundle hash・PR番号・merge SHAを記録し、重複する永続化を増やさず必要な追跡性を満たすため | DBだけで保守理由を検索する要件が加わる場合はmigrationと同期処理の追加が必要になる |
+| リアルボンバーの発動済みフラグは、通常参加者・1人参加者とも必ず到達する勝者のカード選択正常応答で保存する。参加者0人は有効発動に数えない | 参加者は `active` かつ手札1枚以上に限定され、勝者には必ず1〜2枚の選択要求が生じる。入力待ち中は次のプレイへ進めず、既存Effect語彙だけで原子的に報酬・告知・フラグ保存を完了できるため | 参加者条件や「勝者がカードを捨てない」完了経路を将来追加する場合は、その経路にもsetメモリ保存を追加する |
 
 ### 詳細仕様の変更
 
@@ -163,5 +164,6 @@
 
 - 保守経路先行実装: Node.js 26.5.0で `pnpm verify` 成功（format / lint / design lint / typecheck / 172 test files・1319 tests / build）。
 - `scripts/diff-guard.test.ts` と `packages/rules/src/registry-generator.test.ts`: 2 files・27 tests成功。保守モード、新規ルールモード、revertモード、code側meta同期を回帰確認。
+- 第1パス中心実装: Node.js 26.5.0で対象4 test files・31 tests成功。`pnpm verify` 成功（format / lint / design lint / typecheck / 172 test files・1323 tests / build）。保守diff-guardも3ルールの15ファイル差分に対して成功。
 
 ### 積み残し・提案
