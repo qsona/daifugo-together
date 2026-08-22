@@ -27,3 +27,12 @@ PR を作成するのは、原則としてルール実装のワークフロー�
 ## 実装フローのドキュメント
 
 機能実装の進め方は `docs/implementation-guide.md`、独立レビューは `docs/review-guide.md` に従う。対象機能の PRD は `docs/specs/` にあり、現在の残件は `docs/status.md` で管理する。設計側セッションが PRD を書いて実装を依頼するときは `.claude/skills/feature-prd/` のスキルを使う。
+
+## dev-state(プロジェクト状態管理)
+
+このプロジェクトの状態は `/Users/qsona/dev-state/daifugo-together/` で管理する(全worktree共通。ディレクトリ名から推測せず、必ずこの絶対パスを使う)。
+
+- セッションの区切り(まとまった作業の完了時)に `STATUS.md` を更新する: リリース状態 / 判断待ち(人間が考えること) / 進行中・浮いているブランチ / やらないと決めたこと / 再開するならここから。事実は git 等の証拠に基づき、不確実な点は「未確認」と明記する
+- プランの受け渡しは `plans/NNN-slug.md`(frontmatter: `status: draft|ready|claimed|done`, `claimed_by`, `created`, `prd`)。実装セッションは開始時に `status: ready` のプランを探し、あれば `claimed` + `claimed_by` を書いてから着手し、完了時に `done` にして結果メモを末尾に追記する
+- 恒久的な仕様・PRD はこのリポジトリの `docs/` に書き、plans には参照だけを置く(dev-state=ワーキングメモリ、repo=長期記憶)
+- dev-state 側の commit/push は自動同期に任せてよい。詳細規約は `/Users/qsona/dev-state/README.md`
