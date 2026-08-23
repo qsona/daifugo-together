@@ -1,0 +1,12 @@
+{
+  "ruleId": "r0031-binary-quiz",
+  "name": "2択クイズ",
+  "description": "自然な2を1枚だけ出すと、出した人を含む退場していない全プレイヤーで二択クイズを行う。1問4秒で未回答はAとし、正解者全員に1点を与える。3点へ同じ問題で到達した全員を勝者とし、各勝者は手札から最大3枚を選んで捨てる。",
+  "kind": "original",
+  "proposalId": "01KZG805WWSPYW8P0MBRGSRD8A",
+  "contractVersion": 2,
+  "messages": {
+    "binary_quiz_start": "二択クイズを開始します",
+    "binary_quiz_discard": "勝者は捨てるカードを選んでください"
+  }
+}
