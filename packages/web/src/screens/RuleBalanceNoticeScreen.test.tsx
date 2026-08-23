@@ -21,6 +21,19 @@ describe('RuleBalanceNoticeScreen', () => {
       expect(section?.textContent).toContain('変更後');
       expect(section?.textContent).toContain('変更理由');
     }
+    expect(
+      screen.getByText(
+        '数字が7のカードを2枚以上同時に出すと、出した7の枚数分を捨てる',
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        '階段を出すと、枚数にかかわらず、残り手札から1枚を必ずえらんで捨てる',
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getByText('数字が4のカードを1枚で出すたびに発動する'),
+    ).toBeTruthy();
 
     await userEvent.click(screen.getByRole('button', { name: 'もどる' }));
     expect(onBack).toHaveBeenCalledOnce();
