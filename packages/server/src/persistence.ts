@@ -203,29 +203,46 @@ function replayAction(
                 ...(action.throwBomb === undefined
                   ? {}
                   : { throwBomb: action.throwBomb }),
+                ...(action.round === undefined ? {} : { round: action.round }),
+                ...(action.option === undefined
+                  ? {}
+                  : { option: action.option }),
               }
             : action.type === 'miniGameTick'
-              ? {
-                  type: 'miniGameTick',
-                  player:
-                    previous.engine?.currentGame?.private.pendingChoice
-                      ?.player ?? '',
-                  miniGameId: action.miniGameId,
-                  automatedPlayerIds:
-                    previous.engine?.currentGame?.private.pendingChoice?.participants?.filter(
-                      (playerId) => {
-                        const member = previous.members.find(
-                          (candidate) => candidate.memberId === playerId,
-                        );
-                        return (
-                          !member ||
-                          member.isAI ||
-                          member.aiActing ||
-                          !member.connected
-                        );
-                      },
-                    ) ?? [],
-                }
+              ? action.question &&
+                previous.engine?.currentGame?.private.pendingChoice
+                  ?.miniGameState?.kind === 'binary_quiz_race'
+                ? {
+                    type: 'miniGameQuestion',
+                    player:
+                      previous.engine.currentGame.private.pendingChoice.player,
+                    miniGameId: action.miniGameId,
+                    round:
+                      previous.engine.currentGame.private.pendingChoice
+                        .miniGameState.round,
+                    question: action.question,
+                  }
+                : {
+                    type: 'miniGameTick',
+                    player:
+                      previous.engine?.currentGame?.private.pendingChoice
+                        ?.player ?? '',
+                    miniGameId: action.miniGameId,
+                    automatedPlayerIds:
+                      previous.engine?.currentGame?.private.pendingChoice?.participants?.filter(
+                        (playerId) => {
+                          const member = previous.members.find(
+                            (candidate) => candidate.memberId === playerId,
+                          );
+                          return (
+                            !member ||
+                            member.isAI ||
+                            member.aiActing ||
+                            !member.connected
+                          );
+                        },
+                      ) ?? [],
+                  }
               : action.type === 'autoAct'
                 ? action.cards
                   ? {

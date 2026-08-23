@@ -1,4 +1,5 @@
 import type {
+  BinaryQuizQuestion,
   CardId,
   GameResult,
   RuleChainEntry,
@@ -173,9 +174,16 @@ export type RoomAction =
       miniGameId: string;
       direction?: 'up' | 'down' | 'left' | 'right' | 'stop';
       throwBomb?: boolean;
+      round?: number;
+      option?: 'a' | 'b';
       now: number;
     }
-  | { type: 'miniGameTick'; miniGameId: string; now: number }
+  | {
+      type: 'miniGameTick';
+      miniGameId: string;
+      question?: BinaryQuizQuestion;
+      now: number;
+    }
   | {
       type: 'autoAct';
       memberId: string;

@@ -326,48 +326,113 @@ function gameView(
         null,
     })),
     miniGame: game.private.pendingChoice?.miniGameState
-      ? {
-          id: game.private.pendingChoice.miniGameState.id,
-          kind: game.private.pendingChoice.miniGameState.kind,
-          phase: game.private.pendingChoice.miniGameState.phase,
-          elapsedMs: game.private.pendingChoice.miniGameState.elapsedMs,
-          durationMs: game.private.pendingChoice.miniGameState.durationMs,
-          width: game.private.pendingChoice.miniGameState.width,
-          height: game.private.pendingChoice.miniGameState.height,
-          obstacles: game.private.pendingChoice.miniGameState.obstacles,
-          players: Object.values(
-            game.private.pendingChoice.miniGameState.players,
-          ).map((player) => ({
-            seat: requiredSeat(seats, player.playerId),
-            x: player.x,
-            y: player.y,
-            direction: player.direction,
-            score: player.score,
-            hitsTaken: player.hitsTaken,
-            invulnerable:
-              player.invulnerableUntilMs >
-              game.private.pendingChoice!.miniGameState!.elapsedMs,
-          })),
-          bombs: game.private.pendingChoice.miniGameState.bombs.map((bomb) => ({
-            id: bomb.id,
-            seat: requiredSeat(seats, bomb.ownerPlayerId),
-            x: bomb.x,
-            y: bomb.y,
-          })),
-          blasts: game.private.pendingChoice.miniGameState.blasts.map(
-            (blast) => ({
-              seat: requiredSeat(seats, blast.ownerPlayerId),
-              x: blast.x,
-              y: blast.y,
-            }),
-          ),
-          winnerSeat: game.private.pendingChoice.miniGameState.winnerPlayerId
-            ? requiredSeat(
-                seats,
-                game.private.pendingChoice.miniGameState.winnerPlayerId,
-              )
-            : null,
-        }
+      ? game.private.pendingChoice.miniGameState.kind === 'bomb_throw_15'
+        ? {
+            id: game.private.pendingChoice.miniGameState.id,
+            kind: game.private.pendingChoice.miniGameState.kind,
+            phase: game.private.pendingChoice.miniGameState.phase,
+            elapsedMs: game.private.pendingChoice.miniGameState.elapsedMs,
+            durationMs: game.private.pendingChoice.miniGameState.durationMs,
+            width: game.private.pendingChoice.miniGameState.width,
+            height: game.private.pendingChoice.miniGameState.height,
+            obstacles: game.private.pendingChoice.miniGameState.obstacles,
+            players: Object.values(
+              game.private.pendingChoice.miniGameState.players,
+            ).map((player) => ({
+              seat: requiredSeat(seats, player.playerId),
+              x: player.x,
+              y: player.y,
+              direction: player.direction,
+              score: player.score,
+              hitsTaken: player.hitsTaken,
+              invulnerable:
+                player.invulnerableUntilMs >
+                game.private.pendingChoice!.miniGameState!.elapsedMs,
+            })),
+            bombs: game.private.pendingChoice.miniGameState.bombs.map(
+              (bomb) => ({
+                id: bomb.id,
+                seat: requiredSeat(seats, bomb.ownerPlayerId),
+                x: bomb.x,
+                y: bomb.y,
+              }),
+            ),
+            blasts: game.private.pendingChoice.miniGameState.blasts.map(
+              (blast) => ({
+                seat: requiredSeat(seats, blast.ownerPlayerId),
+                x: blast.x,
+                y: blast.y,
+              }),
+            ),
+            winnerSeat: game.private.pendingChoice.miniGameState.winnerPlayerId
+              ? requiredSeat(
+                  seats,
+                  game.private.pendingChoice.miniGameState.winnerPlayerId,
+                )
+              : null,
+          }
+        : {
+            id: game.private.pendingChoice.miniGameState.id,
+            kind: game.private.pendingChoice.miniGameState.kind,
+            phase: game.private.pendingChoice.miniGameState.phase,
+            round: game.private.pendingChoice.miniGameState.round,
+            elapsedMs: game.private.pendingChoice.miniGameState.elapsedMs,
+            phaseElapsedMs:
+              game.private.pendingChoice.miniGameState.phaseElapsedMs,
+            roundDurationMs:
+              game.private.pendingChoice.miniGameState.roundDurationMs,
+            defaultOption:
+              game.private.pendingChoice.miniGameState.defaultOption,
+            targetScore: game.private.pendingChoice.miniGameState.targetScore,
+            maxRounds: game.private.pendingChoice.miniGameState.maxRounds,
+            question: game.private.pendingChoice.miniGameState.question
+              ? {
+                  id: game.private.pendingChoice.miniGameState.question.id,
+                  prompt:
+                    game.private.pendingChoice.miniGameState.question.prompt,
+                  options: structuredClone(
+                    game.private.pendingChoice.miniGameState.question.options,
+                  ),
+                  ...(game.private.pendingChoice.miniGameState.phase ===
+                    'reveal' ||
+                  game.private.pendingChoice.miniGameState.phase === 'result'
+                    ? {
+                        correctOption:
+                          game.private.pendingChoice.miniGameState.question
+                            .correctOption,
+                      }
+                    : {}),
+                }
+              : null,
+            hasAnswered:
+              game.private.pendingChoice.miniGameState.answers[memberId] !==
+              undefined,
+            scores: game.private.pendingChoice.miniGameState.participants.map(
+              (playerId) => ({
+                seat: requiredSeat(seats, playerId),
+                score:
+                  pending?.miniGameState?.kind === 'binary_quiz_race'
+                    ? (pending.miniGameState.scores[playerId] ?? 0)
+                    : 0,
+              }),
+            ),
+            lastRound: game.private.pendingChoice.miniGameState.lastRound
+              ? {
+                  round:
+                    game.private.pendingChoice.miniGameState.lastRound.round,
+                  correctOption:
+                    game.private.pendingChoice.miniGameState.lastRound
+                      .correctOption,
+                  correctSeats:
+                    game.private.pendingChoice.miniGameState.lastRound.correctPlayerIds.map(
+                      (playerId) => requiredSeat(seats, playerId),
+                    ),
+                }
+              : null,
+            winnerSeats: (
+              game.private.pendingChoice.miniGameState.winnerPlayerIds ?? []
+            ).map((playerId) => requiredSeat(seats, playerId)),
+          }
       : null,
     pendingChoice: displayedPending
       ? {

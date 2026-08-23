@@ -749,12 +749,16 @@ export function attachRoomSocketGateway(
           type: 'miniGameInput',
           memberId: current.member.memberId,
           miniGameId: parsed.data.miniGameId,
-          ...(parsed.data.direction === undefined
+          ...(!('direction' in parsed.data) ||
+          parsed.data.direction === undefined
             ? {}
             : { direction: parsed.data.direction }),
-          ...(parsed.data.throwBomb === undefined
+          ...(!('throwBomb' in parsed.data) ||
+          parsed.data.throwBomb === undefined
             ? {}
             : { throwBomb: parsed.data.throwBomb }),
+          ...('round' in parsed.data ? { round: parsed.data.round } : {}),
+          ...('option' in parsed.data ? { option: parsed.data.option } : {}),
           now: now(),
         });
         const error = roomFailure(transition);

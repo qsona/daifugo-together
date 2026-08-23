@@ -211,6 +211,13 @@ export type RuleInput =
       miniGameId: string;
       winnerPlayerId: PlayerId;
       scores: Record<PlayerId, { score: number; hitsTaken: number }>;
+    }
+  | {
+      kind: 'miniGameMultiResult';
+      choiceId: string;
+      miniGameId: string;
+      winnerPlayerIds: PlayerId[];
+      scores: Record<PlayerId, { score: number }>;
     };
 
 /** RuleInput の全 kind 文字列。 */
@@ -218,6 +225,7 @@ export const RULE_INPUT_KINDS = [
   'cards',
   'player',
   'miniGameResult',
+  'miniGameMultiResult',
 ] as const satisfies readonly RuleInput['kind'][];
 
 // RuleInput に kind を追加/削除したのにここを更新し忘れると、この行がコンパイルエラーになる。
@@ -242,20 +250,36 @@ export interface PlayerChoiceRequest {
   messageKey: string;
 }
 
-export interface MiniGameChoiceRequest {
+interface MiniGameChoiceRequestBase {
   kind: 'miniGame';
   player: PlayerId;
   choiceId: string;
-  miniGame: 'bomb_throw_15';
   participants: PlayerId[];
-  durationMs: number;
   seed: string;
   messageKey: string;
 }
 
+export interface BombThrowMiniGameChoiceRequest extends MiniGameChoiceRequestBase {
+  miniGame: 'bomb_throw_15';
+  durationMs: number;
+}
+
+export interface BinaryQuizRaceChoiceRequest extends MiniGameChoiceRequestBase {
+  miniGame: 'binary_quiz_race';
+  questionSet: 'general_v1';
+  defaultOption: 'a' | 'b';
+  roundDurationMs: number;
+  targetScore: number;
+  maxRounds: number;
+}
+
+export type MiniGameChoiceRequest =
+  BombThrowMiniGameChoiceRequest | BinaryQuizRaceChoiceRequest;
+
 /** 実装済みミニゲーム id。 */
 export const MINI_GAME_IDS = [
   'bomb_throw_15',
+  'binary_quiz_race',
 ] as const satisfies readonly MiniGameChoiceRequest['miniGame'][];
 
 // MiniGameChoiceRequest.miniGame に id を追加/削除したのにここを更新し忘れると、この行がコンパイルエラーになる。

@@ -202,6 +202,52 @@ const miniGameRule: RuleModule = {
   },
 };
 
+const binaryQuizRule: RuleModule = {
+  meta: {
+    ruleId: 'r-binary-quiz',
+    name: 'binary quiz fixture',
+    description: 'multi-winner server-authoritative quiz fixture',
+    kind: 'original',
+    proposalId: 'binary-quiz-fixture',
+    contractVersion: 2,
+    messages: { start: 'start' },
+  },
+  hooks: {
+    afterPlay(_context, play, input) {
+      if (!play.cards.some((played) => played.id === 'S10')) return [];
+      if (input?.kind === 'miniGameMultiResult') {
+        return [
+          {
+            type: 'setMemory',
+            scope: 'game',
+            key: 'winners',
+            value: [...input.winnerPlayerIds],
+            silent: true,
+          },
+        ];
+      }
+      if (input !== undefined) return [];
+      return [
+        {
+          type: 'requestChoice',
+          kind: 'miniGame',
+          player: 'p1',
+          choiceId: 'binary_quiz',
+          miniGame: 'binary_quiz_race',
+          participants: ['p1', 'p2', 'p3', 'p4'],
+          questionSet: 'general_v1',
+          defaultOption: 'a',
+          roundDurationMs: 1_000,
+          targetScore: 3,
+          maxRounds: 12,
+          seed: 'quiz-seed',
+          messageKey: 'start',
+        },
+      ];
+    },
+  },
+};
+
 const secondChoiceRule: RuleModule = {
   meta: {
     ruleId: 'r-choice-second',
@@ -902,5 +948,112 @@ describe('contract v2 rule choices', () => {
     expect(
       transition.state.private.pendingChoice?.miniGameState,
     ).toBeUndefined();
+  });
+
+  it('二択クイズの複数勝者を権威結果として同じルールへ返す', () => {
+    const { config, state, runtime } = fixture(binaryQuizRule);
+    let currentRuntime = runtime;
+    let transition = reduceGame(
+      config,
+      state,
+      { type: 'play', player: 'p1', cards: ['S10'] },
+      currentRuntime,
+    );
+    expect(transition.state.private.pendingChoice?.miniGameState).toMatchObject(
+      { kind: 'binary_quiz_race', phase: 'awaitingQuestion', round: 1 },
+    );
+
+    for (let round = 1; round <= 3; round += 1) {
+      const miniGame = transition.state.private.pendingChoice?.miniGameState;
+      expect(miniGame?.kind).toBe('binary_quiz_race');
+      transition = reduceGame(
+        config,
+        transition.state,
+        {
+          type: 'miniGameQuestion',
+          player: 'p1',
+          miniGameId: miniGame!.id,
+          round,
+          question: {
+            id: `quiz_question_${String(round)}`,
+            prompt: `問題${String(round)}`,
+            options: [
+              { id: 'a', label: '正解' },
+              { id: 'b', label: '不正解' },
+            ],
+            correctOption: 'a',
+          },
+        },
+        currentRuntime,
+      );
+      for (const [player, option] of [
+        ['p1', 'a'],
+        ['p2', 'a'],
+        ['p3', 'b'],
+        ['p4', 'b'],
+      ] as const) {
+        transition = reduceGame(
+          config,
+          transition.state,
+          {
+            type: 'miniGameCommand',
+            player,
+            miniGameId: miniGame!.id,
+            round,
+            option,
+          },
+          currentRuntime,
+        );
+      }
+      transition = reduceGame(
+        config,
+        transition.state,
+        {
+          type: 'miniGameTick',
+          player: 'p1',
+          miniGameId: miniGame!.id,
+          deltaMs: 1_000,
+        },
+        currentRuntime,
+      );
+      transition = reduceGame(
+        config,
+        transition.state,
+        {
+          type: 'miniGameTick',
+          player: 'p1',
+          miniGameId: miniGame!.id,
+          deltaMs: 1_000,
+        },
+        currentRuntime,
+      );
+      currentRuntime = {
+        ...currentRuntime,
+        setMemory: transition.setMemory ?? currentRuntime.setMemory,
+      };
+    }
+
+    const resultState = transition.state.private.pendingChoice?.miniGameState;
+    expect(resultState).toMatchObject({
+      kind: 'binary_quiz_race',
+      phase: 'result',
+      winnerPlayerIds: ['p1', 'p2'],
+    });
+    transition = reduceGame(
+      config,
+      transition.state,
+      {
+        type: 'miniGameTick',
+        player: 'p1',
+        miniGameId: resultState!.id,
+        deltaMs: 1_000,
+      },
+      currentRuntime,
+    );
+
+    expect(transition.rejections).toEqual([]);
+    expect(transition.state.private.memory['r-binary-quiz']).toEqual({
+      winners: ['p1', 'p2'],
+    });
   });
 });

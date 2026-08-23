@@ -1,10 +1,11 @@
 import { randomUUID } from 'node:crypto';
 
-import type { CardId } from '@daifugo/core';
+import type { BinaryQuizQuestion, CardId } from '@daifugo/core';
 
 import type { RoomCloseReason } from './protocol.js';
 import type { RoomState, RoomTransition } from './types.js';
 import { nextRoomChoiceRequest } from './pending-choice.js';
+import { binaryQuizQuestion } from '../quiz/catalog.js';
 
 export interface RoomTimerAuthority {
   get(roomId: string): RoomState | undefined;
@@ -34,7 +35,12 @@ export interface RoomTimerAuthority {
           now: number;
           expectedAt: number;
         }
-      | { type: 'miniGameTick'; miniGameId: string; now: number },
+      | {
+          type: 'miniGameTick';
+          miniGameId: string;
+          question?: BinaryQuizQuestion;
+          now: number;
+        },
   ): RoomTransition | undefined;
 }
 
@@ -186,8 +192,12 @@ export class RoomTimerCoordinator {
         : undefined;
     if (miniGame) {
       return {
-        fingerprint: `${state.engine!.setId}:miniGame:${miniGame.id}:${miniGame.elapsedMs}`,
-        delayMs: 200,
+        fingerprint: `${state.engine!.setId}:miniGame:${miniGame.id}:${miniGame.kind}:${miniGame.phase}:${'round' in miniGame ? String(miniGame.round) : '0'}:${miniGame.elapsedMs}`,
+        delayMs:
+          miniGame.kind === 'binary_quiz_race' &&
+          miniGame.phase === 'awaitingQuestion'
+            ? 0
+            : 200,
         kind: 'miniGame',
       };
     }
@@ -278,13 +288,36 @@ export class RoomTimerCoordinator {
       }
       const transition =
         scheduled.kind === 'miniGame'
-          ? this.#authority.apply(roomId, {
-              type: 'miniGameTick',
-              miniGameId:
+          ? (() => {
+              const miniGameState =
                 previous.engine?.currentGame?.private.pendingChoice
-                  ?.miniGameState?.id ?? '',
-              now: this.#now(),
-            })
+                  ?.miniGameState;
+              const question =
+                miniGameState?.kind === 'binary_quiz_race' &&
+                miniGameState.phase === 'awaitingQuestion'
+                  ? binaryQuizQuestion({
+                      questionSet: miniGameState.questionSet,
+                      seed: miniGameState.seed,
+                      round: miniGameState.round,
+                      usedQuestionIds: miniGameState.usedQuestionIds,
+                    })
+                  : undefined;
+              if (
+                miniGameState?.kind === 'binary_quiz_race' &&
+                miniGameState.phase === 'awaitingQuestion' &&
+                !question
+              ) {
+                throw new Error(
+                  `No binary quiz question for ${miniGameState.questionSet}`,
+                );
+              }
+              return this.#authority.apply(roomId, {
+                type: 'miniGameTick',
+                miniGameId: miniGameState?.id ?? '',
+                ...(question ? { question } : {}),
+                now: this.#now(),
+              });
+            })()
           : previous.phase === 'setResult'
             ? this.#authority.apply(roomId, {
                 type: 'expireSetResult',

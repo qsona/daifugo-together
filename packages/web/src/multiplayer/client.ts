@@ -203,10 +203,12 @@ export class MultiplayerClient {
 
   async miniGameInput(
     miniGameId: string,
-    input: {
-      direction?: 'up' | 'down' | 'left' | 'right' | 'stop';
-      throwBomb?: boolean;
-    },
+    input:
+      | {
+          direction?: 'up' | 'down' | 'left' | 'right' | 'stop';
+          throwBomb?: boolean;
+        }
+      | { round: number; option: 'a' | 'b' },
   ): Promise<void> {
     await this.#request((ack) =>
       this.#socket.emit('game:miniGameInput', { miniGameId, ...input }, ack),

@@ -13,7 +13,10 @@ import {
 
 import styles from './BombThrowMiniGame.module.css';
 
-type MiniGame = NonNullable<MultiplayerGameView['miniGame']>;
+type MiniGame = Extract<
+  NonNullable<MultiplayerGameView['miniGame']>,
+  { kind: 'bomb_throw_15' }
+>;
 type Direction = MiniGame['players'][number]['direction'];
 const MIN_POINTER_MOVE_MS = BOMB_THROW_TICK_MS + 40;
 

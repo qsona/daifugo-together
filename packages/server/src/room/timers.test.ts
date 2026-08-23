@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  createBinaryQuizRace,
   createBombThrowMiniGame,
   createInProcessRuleChainPort,
   type RuleChainEntry,
@@ -479,6 +480,92 @@ describe('RoomTimerCoordinator', () => {
     timers[0]?.callback();
     expect(room.actions).toEqual([
       { type: 'miniGameTick', miniGameId: 'mini-game-1', now: 2_000 },
+    ]);
+  });
+
+  it('二択クイズの次ラウンドには版付きカタログから即時に問題を出す', () => {
+    const started = reduceRoom(
+      state(),
+      {
+        type: 'start',
+        memberId: 'member-1',
+        now: 1_000,
+        setSeed: 'binary-quiz-timer-set',
+      },
+      { random: () => 0.999_999 },
+    ).state;
+    const participantIds = started.members
+      .filter((member) => member.seatId !== null)
+      .slice(0, 2)
+      .map((member) => member.memberId);
+    const miniGameState = createBinaryQuizRace({
+      id: 'binary-quiz-1',
+      seed: 'quiz-seed',
+      participants: participantIds,
+      questionSet: 'general_v1',
+      defaultOption: 'a',
+      roundDurationMs: 4_000,
+      targetScore: 3,
+      maxRounds: 12,
+    });
+    const withMiniGame: RoomState = {
+      ...started,
+      engine: {
+        ...started.engine!,
+        currentGame: {
+          ...started.engine!.currentGame!,
+          public: {
+            ...started.engine!.currentGame!.public,
+            phase: 'awaitingChoice',
+          },
+          private: {
+            ...started.engine!.currentGame!.private,
+            pendingChoice: {
+              kind: 'miniGame',
+              ruleId: 'r-binary-quiz',
+              player: participantIds[0]!,
+              choiceId: 'binary_quiz',
+              messageKey: 'start',
+              participants: participantIds,
+              miniGame: 'binary_quiz_race',
+              questionSet: 'general_v1',
+              defaultOption: 'a',
+              roundDurationMs: 4_000,
+              targetScore: 3,
+              maxRounds: 12,
+              seed: 'quiz-seed',
+              miniGameState,
+            },
+          },
+        },
+      },
+      turnDeadlineAt: null,
+    };
+    const room = authority(withMiniGame);
+    const timers: FakeTimer[] = [];
+    const coordinator = new RoomTimerCoordinator(room.api, {
+      now: () => 2_000,
+      decideTurn: async () => null,
+      setTimer: (callback, delayMs) => {
+        const timer = { callback, delayMs, cleared: false };
+        timers.push(timer);
+        return timer;
+      },
+    });
+
+    coordinator.sync(withMiniGame);
+    expect(timers[0]?.delayMs).toBe(0);
+    timers[0]?.callback();
+    expect(room.actions).toEqual([
+      {
+        type: 'miniGameTick',
+        miniGameId: 'binary-quiz-1',
+        question: expect.objectContaining({
+          id: expect.stringMatching(/^general_v1_/u),
+          correctOption: expect.stringMatching(/^[ab]$/u),
+        }),
+        now: 2_000,
+      },
     ]);
   });
 

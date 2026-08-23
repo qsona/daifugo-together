@@ -1261,23 +1261,39 @@ function miniGameAction(
   });
   const setAction: Parameters<typeof reduceSet>[1] =
     action.type === 'miniGameInput'
-      ? {
-          type: 'miniGameCommand',
-          player: actor.memberId,
-          miniGameId: action.miniGameId,
-          ...(action.direction === undefined
-            ? {}
-            : { direction: action.direction }),
-          ...(action.throwBomb === undefined
-            ? {}
-            : { throwBomb: action.throwBomb }),
-        }
-      : {
-          type: 'miniGameTick',
-          player: actor.memberId,
-          miniGameId: action.miniGameId,
-          automatedPlayerIds,
-        };
+      ? action.round !== undefined && action.option !== undefined
+        ? {
+            type: 'miniGameCommand',
+            player: actor.memberId,
+            miniGameId: action.miniGameId,
+            round: action.round,
+            option: action.option,
+          }
+        : {
+            type: 'miniGameCommand',
+            player: actor.memberId,
+            miniGameId: action.miniGameId,
+            ...(action.direction === undefined
+              ? {}
+              : { direction: action.direction }),
+            ...(action.throwBomb === undefined
+              ? {}
+              : { throwBomb: action.throwBomb }),
+          }
+      : action.question && pending.miniGameState.kind === 'binary_quiz_race'
+        ? {
+            type: 'miniGameQuestion',
+            player: actor.memberId,
+            miniGameId: action.miniGameId,
+            round: pending.miniGameState.round,
+            question: action.question,
+          }
+        : {
+            type: 'miniGameTick',
+            player: actor.memberId,
+            miniGameId: action.miniGameId,
+            automatedPlayerIds,
+          };
   const transition = reduceSet(
     state.engine,
     setAction,

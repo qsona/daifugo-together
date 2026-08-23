@@ -1,7 +1,7 @@
 import { MINI_GAME_IDS } from '@daifugo/core';
 import type { PendingCxJudgement } from '@daifugo/server';
 
-export const CX01_PROMPT_VERSION = 'cx01-v15';
+export const CX01_PROMPT_VERSION = 'cx01-v17';
 
 // 実装済みミニゲームの一言説明と、エンジンが強制する固定制約。MINI_GAME_IDS に id を
 // 追加してここを更新し忘れると satisfies がコンパイルエラーになる。
@@ -10,6 +10,12 @@ const MINI_GAME_SUMMARIES = {
     'ボムスロー15。対戦ミニゲームで勝者1人を決める。参加者は2〜4人' +
     '（誰を参加させるかはルールが選べる）、対戦時間は12秒固定（演出込みで約17秒）。' +
     'この範囲を外れる人数・時間の指定は現行語彙では書けない（拡張候補）',
+  binary_quiz_race:
+    '二択クイズレース。参加者2〜4人へ同じ二択問題を出し、正解者全員に1点を与える。' +
+    '問題集合はgeneral_v1。1問の回答時間は1〜4秒、目標点は1〜3点、最大12問。' +
+    '未回答時の選択肢はA/Bから' +
+    'ルールが指定できる。同じ問題で目標点へ達した全員が勝者になり、最大問題数では' +
+    '最高得点者全員が勝者になる。問題と正解、時計、得点、同点処理は共通ランタイムが所有する',
 } satisfies Record<(typeof MINI_GAME_IDS)[number], string>;
 
 const MINI_GAME_LIST = MINI_GAME_IDS.map(
@@ -35,13 +41,17 @@ Effect 語彙:
   直列処理し、先行Effect適用後の手札から後続ルールの要求を再計算する。
 - requestChoice への応答は kind: 'cards'（選ばれたカード）/ 'player'（選ばれた相手）の
   入力として同じフックへ戻り、そこで通常 Effect を返す。
-- requestChoice は contract v2 の afterPlay から kind: 'miniGame' も1件返せる
-  （miniGame は実装済みid、ほかに player / participants / durationMs / seed /
-  choiceId / messageKey）。時間管理・操作・勝敗判定はサーバー権威の共通ランタイムが行い、
+- requestChoice は contract v2 の afterPlay から kind: 'miniGame' も1件返せる。
+  共通項目は miniGame（実装済みid）/ player / participants / seed / choiceId / messageKey。
+  bomb_throw_15 は durationMs、binary_quiz_race は questionSet / defaultOption /
+  roundDurationMs / targetScore / maxRounds も指定する。時間管理・操作・勝敗判定は
+  サーバー権威の共通ランタイムが行い、
   ルールはミニゲームの状態・時計・得点を保持しない。AIや切断中の参加者はbotが代打ちするので
-  進行は止まらない。完了するとエンジンが同じ afterPlay を kind: 'miniGameResult'
-  （choiceId, miniGameId, winnerPlayerId, scores）の入力で再実行し、ルールは勝者IDを
-  報酬処理（カード選択の requestChoice、moveCards、announce 等）に使える。
+  進行は止まらない。単一勝者のミニゲームは完了するとエンジンが同じ afterPlay を
+  kind: 'miniGameResult'（choiceId, miniGameId, winnerPlayerId, scores）、複数勝者対応の
+  ミニゲームは kind: 'miniGameMultiResult'（choiceId, miniGameId, winnerPlayerIds, scores）
+  の入力で再実行する。ルールは勝者IDまたは勝者ID列を報酬処理（カード選択の
+  requestChoice、moveCards、announce 等）に使える。
 - 実装済みミニゲーム（この一覧にあるものは現行語彙で再利用できる）:
 ${MINI_GAME_LIST}
 - forceRank の rank は 1〜4 の順位または 'lowest'（最下位）。反則あがり系は 'lowest' を使う
@@ -66,7 +76,7 @@ engineFeatures 宣言（ルールが有効化できるエンジン機能）:
 現行契約で表現できないもの（契約の拡張候補。reject 理由にはならない）:
 - カード選択・プレイヤー選択以外のプレイヤー宣言・自由入力・応答
 - engineFeatures にない手型・カード種の新設、ゲーム状態の形の追加
-- 上の実装済み一覧にないミニゲームの新設（例: 二択投票、早押し）
+- 上の実装済み一覧にないミニゲームの新設（例: 早押し、神経衰弱）
 
 構造的に不可能なもの（ゲーム内で完結しない）:
 - 実世界の情報（天気・日付・ゲーム外の出来事）への依存、外部 I/O

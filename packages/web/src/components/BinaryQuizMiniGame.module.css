@@ -1,0 +1,120 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  color: var(--color-text-on-fill);
+  background: var(--color-overlay);
+  backdrop-filter: blur(8px);
+}
+
+.panel {
+  width: min(100%, 560px);
+  padding: 16px;
+  border: var(--border-bold) solid var(--color-gold-400);
+  border-radius: var(--radius-l);
+  background: linear-gradient(
+    155deg,
+    var(--color-navy-800),
+    var(--color-navy-900) 68%
+  );
+  box-shadow: var(--shadow-hard-l);
+}
+
+.header,
+.scoreboard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.header h2,
+.eyebrow,
+.round,
+.footer {
+  margin: 0;
+}
+
+.eyebrow,
+.round {
+  color: var(--color-gold-400);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+
+.timer {
+  min-width: 78px;
+  padding: 8px 10px;
+  border-radius: var(--radius-m);
+  color: var(--color-navy-900);
+  text-align: center;
+  background: var(--color-gold-400);
+  font-variant-numeric: tabular-nums;
+}
+
+.scoreboard {
+  margin-block: 14px;
+  flex-wrap: wrap;
+}
+
+.scoreboard span {
+  padding: 5px 8px;
+  border-radius: var(--radius-s);
+  background: var(--color-navy-700);
+}
+
+.scoreboard span[data-you='true'] {
+  color: var(--color-navy-900);
+  background: var(--color-gold-400);
+}
+
+.question {
+  min-height: 280px;
+  display: grid;
+  align-content: center;
+  gap: 16px;
+  padding: 20px;
+  border-radius: var(--radius-l);
+  color: var(--color-navy-900);
+  background: var(--color-cream-100);
+}
+
+.question h3 {
+  margin: 0;
+  font-size: clamp(1.35rem, 6vw, 2rem);
+  line-height: 1.35;
+}
+
+.options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.options button[data-correct='true'] {
+  outline: var(--border-heavy) solid var(--color-green-600);
+  outline-offset: 2px;
+}
+
+.waiting {
+  margin: 0;
+  text-align: center;
+  font-weight: 900;
+}
+
+.footer {
+  min-height: 2.8em;
+  padding-block-start: 12px;
+  text-align: center;
+  font-weight: 800;
+}
+
+@media (max-width: 420px) {
+  .options {
+    grid-template-columns: 1fr;
+  }
+}

@@ -10,6 +10,7 @@ export default tseslint.config(
       '**/node_modules/**',
       '**/coverage/**',
       '.pnpm-store/**',
+      '.claude/**',
     ],
   },
   eslint.configs.recommended,

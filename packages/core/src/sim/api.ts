@@ -187,28 +187,46 @@ export function createSimulationApi(
         const resumed = reduceGame(
           config,
           transition.state,
-          pending.kind === 'miniGame' && pending.miniGameState
+          pending.kind === 'miniGame' &&
+            pending.miniGameState?.kind === 'binary_quiz_race' &&
+            pending.miniGameState.phase === 'awaitingQuestion'
             ? {
-                type: 'miniGameTick',
+                type: 'miniGameQuestion',
                 player: pending.player,
                 miniGameId: pending.miniGameState.id,
-                automatedPlayerIds: pending.participants ?? [],
+                round: pending.miniGameState.round,
+                question: {
+                  id: `simulation_${String(pending.miniGameState.round)}`,
+                  prompt: 'Simulation question',
+                  options: [
+                    { id: 'a', label: 'A' },
+                    { id: 'b', label: 'B' },
+                  ],
+                  correctOption: 'a',
+                },
               }
-            : {
-                type: 'ruleInput',
-                player: request.player,
-                choiceId: request.choiceId,
-                ...((request.kind ?? 'cards') === 'player'
-                  ? {
-                      playerId:
-                        [...(request.optionPlayerIds ?? [])].sort()[0] ?? '',
-                    }
-                  : {
-                      cardIds: [...(request.optionCardIds ?? [])]
-                        .sort()
-                        .slice(0, request.count ?? 0),
-                    }),
-              },
+            : pending.kind === 'miniGame' && pending.miniGameState
+              ? {
+                  type: 'miniGameTick',
+                  player: pending.player,
+                  miniGameId: pending.miniGameState.id,
+                  automatedPlayerIds: pending.participants ?? [],
+                }
+              : {
+                  type: 'ruleInput',
+                  player: request.player,
+                  choiceId: request.choiceId,
+                  ...((request.kind ?? 'cards') === 'player'
+                    ? {
+                        playerId:
+                          [...(request.optionPlayerIds ?? [])].sort()[0] ?? '',
+                      }
+                    : {
+                        cardIds: [...(request.optionCardIds ?? [])]
+                          .sort()
+                          .slice(0, request.count ?? 0),
+                      }),
+                },
           {
             ...runtimeFor(position),
             setMemory: transition.setMemory ?? position.setMemory,

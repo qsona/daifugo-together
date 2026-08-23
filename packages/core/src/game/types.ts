@@ -8,6 +8,11 @@ import type {
   BombThrowDirection,
   BombThrowMiniGameState,
 } from '../minigame/bomb-throw.js';
+import type {
+  BinaryQuizOption,
+  BinaryQuizQuestion,
+  BinaryQuizRaceState,
+} from '../minigame/binary-quiz-race.js';
 
 export type PlayerId = string;
 export type RuleId = string;
@@ -146,11 +151,16 @@ export interface PendingChoiceRequest {
   optionCardIds?: CardId[];
   optionPlayerIds?: PlayerId[];
   count?: number;
-  miniGame?: 'bomb_throw_15';
+  miniGame?: 'bomb_throw_15' | 'binary_quiz_race';
   participants?: PlayerId[];
   durationMs?: number;
+  questionSet?: string;
+  defaultOption?: BinaryQuizOption;
+  roundDurationMs?: number;
+  targetScore?: number;
+  maxRounds?: number;
   seed?: string;
-  miniGameState?: BombThrowMiniGameState;
+  miniGameState?: BombThrowMiniGameState | BinaryQuizRaceState;
   simultaneous?: boolean;
 }
 
@@ -233,11 +243,31 @@ export type GameAction =
       playerId?: never;
     }
   | {
+      type: 'ruleInput';
+      player: PlayerId;
+      choiceId: string;
+      miniGameId: string;
+      winnerPlayerIds: PlayerId[];
+      scores: Record<PlayerId, { score: number }>;
+      cardIds?: never;
+      playerId?: never;
+      winnerPlayerId?: never;
+    }
+  | {
       type: 'miniGameCommand';
       player: PlayerId;
       miniGameId: string;
       direction?: BombThrowDirection;
       throwBomb?: boolean;
+      round?: number;
+      option?: BinaryQuizOption;
+    }
+  | {
+      type: 'miniGameQuestion';
+      player: PlayerId;
+      miniGameId: string;
+      round: number;
+      question: BinaryQuizQuestion;
     }
   | {
       type: 'miniGameTick';

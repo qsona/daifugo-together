@@ -4,7 +4,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { BombThrowMiniGame } from './BombThrowMiniGame';
 
-const game: NonNullable<MultiplayerGameView['miniGame']> = {
+const game: Extract<
+  NonNullable<MultiplayerGameView['miniGame']>,
+  { kind: 'bomb_throw_15' }
+> = {
   id: 'mini-1',
   kind: 'bomb_throw_15',
   phase: 'playing',

@@ -163,6 +163,56 @@ export interface GameResultView {
   firedRuleIds: string[];
 }
 
+export interface BombThrowMiniGameView {
+  id: string;
+  kind: 'bomb_throw_15';
+  phase: 'countdown' | 'playing' | 'result';
+  elapsedMs: number;
+  durationMs: number;
+  width: number;
+  height: number;
+  obstacles: { x: number; y: number }[];
+  players: {
+    seat: SeatId;
+    x: number;
+    y: number;
+    direction: BombThrowDirection;
+    score: number;
+    hitsTaken: number;
+    invulnerable: boolean;
+  }[];
+  bombs: { id: string; seat: SeatId; x: number; y: number }[];
+  blasts: { x: number; y: number; seat: SeatId }[];
+  winnerSeat: SeatId | null;
+}
+
+export interface BinaryQuizMiniGameView {
+  id: string;
+  kind: 'binary_quiz_race';
+  phase: 'awaitingQuestion' | 'answering' | 'reveal' | 'result';
+  round: number;
+  elapsedMs: number;
+  phaseElapsedMs: number;
+  roundDurationMs: number;
+  defaultOption: 'a' | 'b';
+  targetScore: number;
+  maxRounds: number;
+  question: {
+    id: string;
+    prompt: string;
+    options: readonly [{ id: 'a'; label: string }, { id: 'b'; label: string }];
+    correctOption?: 'a' | 'b';
+  } | null;
+  hasAnswered: boolean;
+  scores: { seat: SeatId; score: number }[];
+  lastRound: {
+    round: number;
+    correctOption: 'a' | 'b';
+    correctSeats: SeatId[];
+  } | null;
+  winnerSeats: SeatId[];
+}
+
 export interface MultiplayerGameView {
   gameNo: number;
   status: 'playing' | 'intermission';
@@ -204,28 +254,7 @@ export interface MultiplayerGameView {
     name: string;
     message: string | null;
   }[];
-  miniGame?: {
-    id: string;
-    kind: 'bomb_throw_15';
-    phase: 'countdown' | 'playing' | 'result';
-    elapsedMs: number;
-    durationMs: number;
-    width: number;
-    height: number;
-    obstacles: { x: number; y: number }[];
-    players: {
-      seat: SeatId;
-      x: number;
-      y: number;
-      direction: BombThrowDirection;
-      score: number;
-      hitsTaken: number;
-      invulnerable: boolean;
-    }[];
-    bombs: { id: string; seat: SeatId; x: number; y: number }[];
-    blasts: { x: number; y: number; seat: SeatId }[];
-    winnerSeat: SeatId | null;
-  } | null;
+  miniGame?: BombThrowMiniGameView | BinaryQuizMiniGameView | null;
   pendingChoice?: {
     kind?: 'cards' | 'player' | 'miniGame';
     ruleId: string;
@@ -317,16 +346,25 @@ export const clientPayloadSchemas = {
       })
       .strict(),
   ]),
-  'game:miniGameInput': z
-    .object({
-      miniGameId: z.string().min(1).max(200),
-      direction: z.enum(['up', 'down', 'left', 'right', 'stop']).optional(),
-      throwBomb: z.boolean().optional(),
-    })
-    .strict()
-    .refine(
-      (value) => value.direction !== undefined || value.throwBomb === true,
-    ),
+  'game:miniGameInput': z.union([
+    z
+      .object({
+        miniGameId: z.string().min(1).max(200),
+        direction: z.enum(['up', 'down', 'left', 'right', 'stop']).optional(),
+        throwBomb: z.boolean().optional(),
+      })
+      .strict()
+      .refine(
+        (value) => value.direction !== undefined || value.throwBomb === true,
+      ),
+    z
+      .object({
+        miniGameId: z.string().min(1).max(200),
+        round: z.number().int().min(1).max(12),
+        option: z.enum(['a', 'b']),
+      })
+      .strict(),
+  ]),
   'game:pass': z.object({ turnSeq: turnSeqSchema }).strict(),
   'game:readyNext': emptyPayloadSchema,
   'sync:request': emptyPayloadSchema,

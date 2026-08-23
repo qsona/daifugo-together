@@ -5,6 +5,7 @@ export * from './game/start-game.js';
 export * from './game/pending-choice.js';
 export * from './game/types.js';
 export * from './minigame/bomb-throw.js';
+export * from './minigame/binary-quiz-race.js';
 export * from './notification.js';
 export * from './play/candidates.js';
 export * from './play/play.js';

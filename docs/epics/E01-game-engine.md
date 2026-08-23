@@ -632,7 +632,7 @@ export interface CandidateGenerator {
 
 - `afterPlay` と `onGameStart` の `requestChoice` は、対象プレイヤー自身の手札から正確な枚数を要求する。`additionalChoices` で複数プレイヤー分を宣言した場合は先頭から直列処理し、全件完了まで次の手番または最初の手番を進めない。
 - `requestChoice.players` は列挙された候補からプレイヤー1人を選ぶ。応答付き `afterPlay` が次の `requestChoice` を返した場合は同一ルールの動的な次段として直列処理する。
-- `requestChoice.kind = 'miniGame'` は共通のサーバー権威ミニゲームを開始し、完了時にエンジンが検証した `miniGameResult` だけを同じフックへ返す。ルールはゲーム内の操作・時計・勝敗を所有しない。詳細は `docs/specs/2026-08-04-mini-game-runtime-design.md`。
+- `requestChoice.kind = 'miniGame'` は共通のサーバー権威ミニゲームを開始し、完了時にエンジンが検証した単一勝者の `miniGameResult` または複数勝者の `miniGameMultiResult` だけを同じフックへ返す。ルールはゲーム内の操作・時計・得点・勝敗を所有しない。`binary_quiz_race` は2〜4人、1問1〜4秒、目標1〜3点、最大12問の二択クイズで、正解者全員へ1点を与え、同じラウンドで目標点へ達した全員を勝者とする。最大問数では最高得点者全員が勝者となる。問題集合はserver側で版管理し、正解は回答締切までclientへ隠す。出題スナップショット、回答、tickをactionへ記録してreplayを固定する。共通ランタイムは `docs/specs/2026-08-04-mini-game-runtime-design.md`、二択クイズ拡張は `docs/specs/2026-08-23-binary-quiz-race-mini-game-design.md` を正準とする。
 - エンジンはプレイを確定したあと `awaitingChoice` で停止し、`ruleInput` をリプレイ可能な通常アクションとして受け取る。
 - 応答は要求元ルールの同じ `afterPlay` だけへ渡り、ルールは `moveCards` 等の通常 Effect を返す。
 - 同じプレイで複数ルールが要求した場合は優先順位順に直列化し、各応答のEffect適用後に残りルールの要求を再評価する。

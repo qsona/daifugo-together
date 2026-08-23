@@ -3,6 +3,10 @@ import type { RuleId } from '../game/types.js';
 import type { Effect, PriorityKey, RuleChainEntry } from '../rules/contract.js';
 import type { EffectHook } from '../rules/chain.js';
 import type { BombThrowMiniGameState } from '../minigame/bomb-throw.js';
+import type {
+  BinaryQuizOption,
+  BinaryQuizRaceState,
+} from '../minigame/binary-quiz-race.js';
 
 export type Resolution =
   | { status: 'adopted' }
@@ -26,11 +30,16 @@ export interface EffectEmission {
     optionCardIds?: CardId[];
     optionPlayerIds?: string[];
     count?: number;
-    miniGame?: 'bomb_throw_15';
+    miniGame?: 'bomb_throw_15' | 'binary_quiz_race';
     participants?: string[];
     durationMs?: number;
+    questionSet?: string;
+    defaultOption?: BinaryQuizOption;
+    roundDurationMs?: number;
+    targetScore?: number;
+    maxRounds?: number;
     seed?: string;
-    miniGameState?: BombThrowMiniGameState;
+    miniGameState?: BombThrowMiniGameState | BinaryQuizRaceState;
     simultaneous?: boolean;
   }[];
 }

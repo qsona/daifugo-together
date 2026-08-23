@@ -15,6 +15,10 @@ import { buildCxJudgePrompt, CX01_PROMPT_VERSION } from './judge-prompt.js';
 const PROMPT_HASHES: Record<string, string> = {
   'cx01-v15':
     'b527437a6e0ff9f708897dabd46135ed26eb3594317db65355d12caca414c6ab',
+  'cx01-v16':
+    '421b10c172f3c9231ece23795d9adfe2d3ed7291527ce1bb5b15cef1649560e7',
+  'cx01-v17':
+    'a95f20a420ac3bed889e35ca124c70c9d9c9a2e8237513443b1e375aec47bb70',
 };
 
 const TEXT = 'ダミー\nダミー本文。';

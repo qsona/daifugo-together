@@ -42,6 +42,11 @@ import {
   createBombThrowMiniGame,
   type BombThrowMiniGameState,
 } from '../minigame/bomb-throw.js';
+import {
+  createBinaryQuizRace,
+  type BinaryQuizOption,
+  type BinaryQuizRaceState,
+} from '../minigame/binary-quiz-race.js';
 
 const MEMORY_MAX_KEYS = 32;
 const MEMORY_MAX_VALUE_BYTES = 1024;
@@ -56,11 +61,16 @@ export interface ChoiceRequest {
   optionCardIds?: CardId[];
   optionPlayerIds?: string[];
   count?: number;
-  miniGame?: 'bomb_throw_15';
+  miniGame?: 'bomb_throw_15' | 'binary_quiz_race';
   participants?: string[];
   durationMs?: number;
+  questionSet?: string;
+  defaultOption?: BinaryQuizOption;
+  roundDurationMs?: number;
+  targetScore?: number;
+  maxRounds?: number;
   seed?: string;
-  miniGameState?: BombThrowMiniGameState;
+  miniGameState?: BombThrowMiniGameState | BinaryQuizRaceState;
   simultaneous?: boolean;
 }
 
@@ -615,35 +625,67 @@ function playerChoiceRequestValid(value: unknown): boolean {
 }
 
 function miniGameChoiceRequestValid(value: unknown): boolean {
-  return (
-    isRecord(value) &&
-    hasExactKeys(value, [
-      'kind',
-      'player',
-      'choiceId',
-      'miniGame',
-      'participants',
-      'durationMs',
-      'seed',
-      'messageKey',
-    ]) &&
-    value.kind === 'miniGame' &&
+  if (!isRecord(value) || value.kind !== 'miniGame') return false;
+  const commonValid =
     typeof value.player === 'string' &&
     typeof value.choiceId === 'string' &&
     /^[a-z][a-z0-9_]{0,63}$/u.test(value.choiceId) &&
-    value.miniGame === 'bomb_throw_15' &&
     Array.isArray(value.participants) &&
     value.participants.length >= 2 &&
     value.participants.length <= 4 &&
     value.participants.every((player) => typeof player === 'string') &&
     new Set(value.participants).size === value.participants.length &&
     value.participants.includes(value.player) &&
-    value.durationMs === 12_000 &&
     typeof value.seed === 'string' &&
     value.seed.length >= 1 &&
     value.seed.length <= 64 &&
     typeof value.messageKey === 'string' &&
-    /^[a-z][a-z0-9_.-]{0,63}$/u.test(value.messageKey)
+    /^[a-z][a-z0-9_.-]{0,63}$/u.test(value.messageKey);
+  if (!commonValid) return false;
+  if (value.miniGame === 'bomb_throw_15') {
+    return (
+      hasExactKeys(value, [
+        'kind',
+        'player',
+        'choiceId',
+        'miniGame',
+        'participants',
+        'durationMs',
+        'seed',
+        'messageKey',
+      ]) && value.durationMs === 12_000
+    );
+  }
+  return (
+    hasExactKeys(value, [
+      'kind',
+      'player',
+      'choiceId',
+      'miniGame',
+      'participants',
+      'questionSet',
+      'defaultOption',
+      'roundDurationMs',
+      'targetScore',
+      'maxRounds',
+      'seed',
+      'messageKey',
+    ]) &&
+    value.miniGame === 'binary_quiz_race' &&
+    value.questionSet === 'general_v1' &&
+    (value.defaultOption === 'a' || value.defaultOption === 'b') &&
+    typeof value.roundDurationMs === 'number' &&
+    Number.isInteger(value.roundDurationMs) &&
+    value.roundDurationMs >= 1_000 &&
+    value.roundDurationMs <= 4_000 &&
+    typeof value.targetScore === 'number' &&
+    Number.isInteger(value.targetScore) &&
+    value.targetScore >= 1 &&
+    value.targetScore <= 3 &&
+    typeof value.maxRounds === 'number' &&
+    Number.isInteger(value.maxRounds) &&
+    value.maxRounds >= value.targetScore &&
+    value.maxRounds <= 12
   );
 }
 
@@ -698,6 +740,11 @@ function effectPayloadValid(effect: unknown): effect is Effect {
               'miniGame',
               'participants',
               'durationMs',
+              'questionSet',
+              'defaultOption',
+              'roundDurationMs',
+              'targetScore',
+              'maxRounds',
               'seed',
               'kind',
               'additionalChoices',
@@ -988,33 +1035,69 @@ export function executeEffectHook(
                   ...(effect.additionalChoices ?? []),
                 ].map((request) =>
                   'miniGame' in request
-                    ? {
-                        kind: 'miniGame' as const,
-                        player: request.player,
-                        choiceId: request.choiceId,
-                        messageKey: request.messageKey,
-                        miniGame: request.miniGame,
-                        participants: request.participants.filter(
-                          (player) =>
-                            invocation.state.players[player]?.status ===
-                            'active',
-                        ),
-                        durationMs: request.durationMs,
-                        seed: request.seed,
-                        miniGameState: createBombThrowMiniGame({
-                          id: `${ruleId}:${request.choiceId}:${request.seed}`,
-                          seed: request.seed,
+                    ? request.miniGame === 'bomb_throw_15'
+                      ? {
+                          kind: 'miniGame' as const,
+                          player: request.player,
+                          choiceId: request.choiceId,
+                          messageKey: request.messageKey,
+                          miniGame: request.miniGame,
                           participants: request.participants.filter(
                             (player) =>
                               invocation.state.players[player]?.status ===
                               'active',
                           ),
                           durationMs: request.durationMs,
-                        }),
-                        ...(effect.simultaneous === true
-                          ? { simultaneous: true }
-                          : {}),
-                      }
+                          seed: request.seed,
+                          miniGameState: createBombThrowMiniGame({
+                            id: `${ruleId}:${request.choiceId}:${request.seed}`,
+                            seed: request.seed,
+                            participants: request.participants.filter(
+                              (player) =>
+                                invocation.state.players[player]?.status ===
+                                'active',
+                            ),
+                            durationMs: request.durationMs,
+                          }),
+                          ...(effect.simultaneous === true
+                            ? { simultaneous: true }
+                            : {}),
+                        }
+                      : {
+                          kind: 'miniGame' as const,
+                          player: request.player,
+                          choiceId: request.choiceId,
+                          messageKey: request.messageKey,
+                          miniGame: request.miniGame,
+                          participants: request.participants.filter(
+                            (player) =>
+                              invocation.state.players[player]?.status !==
+                              'retired',
+                          ),
+                          questionSet: request.questionSet,
+                          defaultOption: request.defaultOption,
+                          roundDurationMs: request.roundDurationMs,
+                          targetScore: request.targetScore,
+                          maxRounds: request.maxRounds,
+                          seed: request.seed,
+                          miniGameState: createBinaryQuizRace({
+                            id: `${ruleId}:${request.choiceId}:${request.seed}`,
+                            seed: request.seed,
+                            participants: request.participants.filter(
+                              (player) =>
+                                invocation.state.players[player]?.status !==
+                                'retired',
+                            ),
+                            questionSet: request.questionSet,
+                            defaultOption: request.defaultOption,
+                            roundDurationMs: request.roundDurationMs,
+                            targetScore: request.targetScore,
+                            maxRounds: request.maxRounds,
+                          }),
+                          ...(effect.simultaneous === true
+                            ? { simultaneous: true }
+                            : {}),
+                        }
                     : 'players' in request
                       ? {
                           kind: 'player' as const,

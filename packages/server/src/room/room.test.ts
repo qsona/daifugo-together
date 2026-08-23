@@ -1,6 +1,10 @@
 import {
+  advanceBinaryQuizRace,
   BASE_STRENGTH_ORDER,
+  answerBinaryQuiz,
+  createBinaryQuizRace,
   enumerateLegalPlays,
+  setBinaryQuizQuestion,
   type RuleChainEntry,
 } from '@daifugo/core';
 import { describe, expect, it } from 'vitest';
@@ -88,6 +92,66 @@ function expectNoOtherHands(state: RoomState): void {
       }
     }
   }
+}
+
+function binaryQuizRoomState(started: RoomState): RoomState {
+  const game = started.engine!.currentGame!;
+  const participants = started.members
+    .filter((member) => member.seatId !== null)
+    .slice(0, 2)
+    .map((member) => member.memberId);
+  const initial = createBinaryQuizRace({
+    id: 'binary-quiz-view',
+    seed: 'quiz-view-seed',
+    participants,
+    questionSet: 'general_v1',
+    defaultOption: 'a',
+    roundDurationMs: 4_000,
+    targetScore: 3,
+    maxRounds: 12,
+  });
+  const miniGameState = setBinaryQuizQuestion(initial, {
+    round: 1,
+    question: {
+      id: 'general_v1_test',
+      prompt: '海水は淡水より塩分が多い？',
+      options: [
+        { id: 'a', label: 'はい' },
+        { id: 'b', label: 'いいえ' },
+      ],
+      correctOption: 'a',
+    },
+  });
+  return {
+    ...started,
+    engine: {
+      ...started.engine!,
+      currentGame: {
+        ...game,
+        public: { ...game.public, phase: 'awaitingChoice' },
+        private: {
+          ...game.private,
+          pendingChoice: {
+            kind: 'miniGame',
+            ruleId: 'r-binary-quiz',
+            player: participants[0]!,
+            choiceId: 'binary_quiz',
+            messageKey: 'start',
+            participants,
+            miniGame: 'binary_quiz_race',
+            questionSet: 'general_v1',
+            defaultOption: 'a',
+            roundDurationMs: 4_000,
+            targetScore: 3,
+            maxRounds: 12,
+            seed: 'quiz-view-seed',
+            miniGameState,
+          },
+        },
+      },
+    },
+    turnDeadlineAt: null,
+  };
 }
 
 function finishSet(initial: RoomState): {
@@ -1475,6 +1539,77 @@ describe('pure room reducer', () => {
 });
 
 describe('per-player room view allow-list', () => {
+  it('二択クイズは回答中の正解と他席の回答状態を隠し、確定後だけ正解を公開する', () => {
+    const started = binaryQuizRoomState(start(fourHumanRoom()));
+    const pending = started.engine!.currentGame!.private.pendingChoice!;
+    if (pending.miniGameState?.kind !== 'binary_quiz_race') {
+      throw new Error('Expected binary quiz state');
+    }
+    const [first, second] = pending.participants!;
+    const answeredState = answerBinaryQuiz(pending.miniGameState, {
+      playerId: first!,
+      round: 1,
+      option: 'a',
+    });
+    const answered: RoomState = {
+      ...started,
+      engine: {
+        ...started.engine!,
+        currentGame: {
+          ...started.engine!.currentGame!,
+          private: {
+            ...started.engine!.currentGame!.private,
+            pendingChoice: { ...pending, miniGameState: answeredState },
+          },
+        },
+      },
+    };
+
+    const firstView = viewFor(answered, first!).game?.miniGame;
+    const secondView = viewFor(answered, second!).game?.miniGame;
+    expect(firstView).toMatchObject({
+      kind: 'binary_quiz_race',
+      hasAnswered: true,
+      question: { id: 'general_v1_test' },
+    });
+    expect(secondView).toMatchObject({
+      kind: 'binary_quiz_race',
+      hasAnswered: false,
+      question: { id: 'general_v1_test' },
+    });
+    if (
+      firstView?.kind !== 'binary_quiz_race' ||
+      secondView?.kind !== 'binary_quiz_race'
+    ) {
+      throw new Error('Expected binary quiz views');
+    }
+    expect(firstView.question?.correctOption).toBeUndefined();
+    expect(secondView.question?.correctOption).toBeUndefined();
+
+    const revealedState = advanceBinaryQuizRace(answeredState, {
+      deltaMs: 4_000,
+    });
+    const revealed: RoomState = {
+      ...answered,
+      engine: {
+        ...answered.engine!,
+        currentGame: {
+          ...answered.engine!.currentGame!,
+          private: {
+            ...answered.engine!.currentGame!.private,
+            pendingChoice: { ...pending, miniGameState: revealedState },
+          },
+        },
+      },
+    };
+    const revealedView = viewFor(revealed, second!).game?.miniGame;
+    expect(revealedView).toMatchObject({
+      kind: 'binary_quiz_race',
+      phase: 'reveal',
+      question: { correctOption: 'a' },
+    });
+  });
+
   it('異なるseedと合法手選択で生成した多数局面でも、他席の手札を漏らさない', () => {
     for (let sample = 0; sample < 16; sample += 1) {
       let state = reduceRoom(

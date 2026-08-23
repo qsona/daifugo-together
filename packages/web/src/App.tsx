@@ -28,6 +28,7 @@ import { Button } from './components/Button';
 import { Dialog, DialogBody } from './components/Dialog';
 import { Toast } from './components/Toast';
 import { BombThrowMiniGame } from './components/BombThrowMiniGame';
+import { BinaryQuizMiniGame } from './components/BinaryQuizMiniGame';
 import { RuleDetailModal } from './components/RuleDetailModal';
 import type { RuleVote, SetFunRating } from './screens/SetResultScreen';
 import {
@@ -1984,7 +1985,7 @@ function ConnectedApp({
             </DialogBody>
           </Dialog>
         )}
-        {game.miniGame && (
+        {game.miniGame?.kind === 'bomb_throw_15' && (
           <BombThrowMiniGame
             game={game.miniGame}
             yourSeat={room.you.seatId}
@@ -1997,6 +1998,23 @@ function ConnectedApp({
             )}
             onCommand={(input) => {
               invoke(client.miniGameInput(game.miniGame!.id, input));
+            }}
+          />
+        )}
+        {game.miniGame?.kind === 'binary_quiz_race' && (
+          <BinaryQuizMiniGame
+            game={game.miniGame}
+            yourSeat={room.you.seatId}
+            names={Object.fromEntries(
+              room.members.flatMap((member) =>
+                member.seatId === null
+                  ? []
+                  : [[member.seatId, member.displayName] as const],
+              ),
+            )}
+            onAnswer={(round, option) => {
+              if (game.miniGame?.kind !== 'binary_quiz_race') return;
+              invoke(client.miniGameInput(game.miniGame.id, { round, option }));
             }}
           />
         )}
