@@ -195,8 +195,18 @@ JOIN proposals ON proposals.id = targets.proposal_id
 LEFT JOIN notifications
   ON notifications.user_id = proposals.author_id
  AND notifications.type = 'announcement'
- AND notifications.dedupe_key = CAST(@announcement_id AS TEXT)
+ AND CAST(notifications.dedupe_key AS INTEGER) = @announcement_id
 ORDER BY targets.rule_name;
 ```
 
 お知らせ行のタイトル、本文、日付付きURLが入力値と一致し、提案者3人の`notification_id`がすべて非NULLであることを確認します。管理画面の一覧でも同じお知らせが1件だけであること、375×812で詳細ページを開けて「もどる」でお知らせBoxへ戻れることを確認し、実施日時・反映日・announcementId・recipient count・提案者3件の確認結果を本節へ追記します。
+
+### 実施記録: 3ルールのバランス調整
+
+- 実施日時: 2026-08-23 12:59 JST
+- 本番反映日: 2026-08-22
+- 本番イメージ: `c6d2753574318e97c8e91b2c7802035412867716`
+- 配信結果: announcementId `1`、recipient count `152`。同じタイトルは1件、タイトル・本文・日付付きURLは入力値と完全一致し、`announcement`通知は152件・152ユーザーだった。
+- 元提案者: ラッキー7はnotificationId `213`、ボンバーマンは`173`、リアルボンバーは`187`。3件ともannouncementId `1`に対して1件ずつ作成された。
+- 詳細ページ: 375×812で変更内容・反映日を確認し、横方向のはみ出しなし。配信後の本番画面で「もどる」からお知らせBoxへ戻り、同じお知らせが1件表示されることを確認した。
+- 確認SQLの注意: `dedupe_key`はTEXT列のため、数値パラメータを右辺だけTEXTへcastする比較は実行環境によって偽陰性になり得る。上記SQLは列をINTEGERへcastしてannouncementIdと比較する。
