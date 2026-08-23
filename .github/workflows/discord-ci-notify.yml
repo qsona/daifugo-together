@@ -4,6 +4,7 @@ on:
   workflow_run:
     workflows:
       - CI
+      - Deploy production
     types:
       - completed
   workflow_dispatch:
@@ -40,7 +41,7 @@ jobs:
 
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
             conclusion="$TEST_RESULT"
-            source_name="CI notification test"
+            source_name="Workflow notification test"
             source_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions"
             source_branch="$GITHUB_REF_NAME"
             source_actor="$GITHUB_ACTOR"

@@ -44,20 +44,3 @@ jobs:
           --wait-timeout 10m
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-
-      - name: Notify Discord when production deploy fails
-        if: ${{ failure() }}
-        env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-        run: |
-          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
-            echo "::notice::DISCORD_WEBHOOK_URL is not configured; skipping notification"
-            exit 0
-          fi
-          jq -n \
-            --arg content "🚨 **Production deploy failed**\nRepository: $GITHUB_REPOSITORY\nCommit: ${{ github.event.workflow_run.head_sha }}\n<$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID>" \
-            '{content: $content}' \
-            | curl --fail-with-body --retry 2 \
-                -H 'Content-Type: application/json' \
-                --data-binary @- \
-                "$DISCORD_WEBHOOK_URL"
