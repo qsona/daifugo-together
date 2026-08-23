@@ -61,7 +61,7 @@ import {
   type MultiplayerClient,
 } from './multiplayer/client';
 import { ConnectionStatus } from './multiplayer/ConnectionStatus';
-import { PlaySheet } from './screens/PlaySheet';
+import { PlaySheet, type PlayResumeIntent } from './screens/PlaySheet';
 import { getBrowserProposalClient, type ProposalApi } from './proposal/client';
 import { ProposalFormScreen } from './screens/ProposalFormScreen';
 import {
@@ -141,6 +141,7 @@ const AUTH_STARTED_REGISTERED_KEY = 'daifugo.authStartedRegistered';
 const AUTH_COMPLETED_SET_COUNT_KEY = 'daifugo.authCompletedSetCount';
 const AUTH_LAST_COUNTED_SET_KEY = 'daifugo.authLastCountedSet';
 const AUTH_MENU_PROMPT_LAST_COUNT_KEY = 'daifugo.authMenuPromptLastCount';
+const AUTH_PLAY_RESUME_KEY = 'daifugo.authPlayResume';
 const AUTH_MENU_PROMPT_FREQUENCY = 3;
 
 type AuthResultDialog =
@@ -162,6 +163,33 @@ function safeSessionSet(key: string, value: string): void {
   } catch {
     // 認証自体は保存領域が使えない環境でも続ける。
   }
+}
+
+function safeSessionRemove(key: string): void {
+  try {
+    window.sessionStorage.removeItem(key);
+  } catch {
+    // 保存できない環境では復帰情報も使わない。
+  }
+}
+
+function readAuthPlayResume(): PlayResumeIntent | null {
+  const raw = safeSessionGet(AUTH_PLAY_RESUME_KEY);
+  if (!raw) return null;
+  try {
+    const value = JSON.parse(raw) as Partial<PlayResumeIntent>;
+    if (value.kind === 'create') return { kind: 'create' };
+    if (
+      value.kind === 'join' &&
+      typeof value.inviteCode === 'string' &&
+      /^\d{0,5}$/u.test(value.inviteCode)
+    ) {
+      return { kind: 'join', inviteCode: value.inviteCode };
+    }
+  } catch {
+    // 壊れた復帰情報は無視する。
+  }
+  return null;
 }
 
 function storageNumber(
@@ -790,8 +818,17 @@ function ConnectedApp({
     typeof window === 'undefined'
       ? null
       : inviteCodeFromSearch(window.location.search);
+  const authCallbackAtRender =
+    typeof window !== 'undefined' &&
+    window.location.hash.startsWith('#/auth/complete');
+  const initialPlayResume = useRef<PlayResumeIntent | null>(
+    authCallbackAtRender ? readAuthPlayResume() : null,
+  );
+  const [playResume, setPlayResume] = useState<PlayResumeIntent | null>(
+    initialPlayResume.current,
+  );
   const [isChoosingRoom, setIsChoosingRoom] = useState(
-    sharedInviteCode !== null,
+    sharedInviteCode !== null || initialPlayResume.current !== null,
   );
   const [joinSeatChoice, setJoinSeatChoice] = useState<{
     inviteCode: string;
@@ -817,6 +854,7 @@ function ConnectedApp({
   const [authPending, setAuthPending] = useState(false);
   const [connectDialog, setConnectDialog] = useState<{
     continueToPush: boolean;
+    resumePlay?: PlayResumeIntent;
   } | null>(null);
   const [accountDialog, setAccountDialog] = useState<
     'switch' | 'signOut' | null
@@ -884,9 +922,12 @@ function ConnectedApp({
   );
   const finalPlayReveal = useFinalPlayReveal(room);
   const openConnectDialog = useCallback(
-    (continueToPush = false) => {
+    (continueToPush = false, resumePlay?: PlayResumeIntent) => {
       if (continueToPush) pushApi.markOfferAfterLogin();
-      setConnectDialog({ continueToPush });
+      setConnectDialog({
+        continueToPush,
+        ...(resumePlay ? { resumePlay } : {}),
+      });
     },
     [pushApi],
   );
@@ -902,6 +943,14 @@ function ConnectedApp({
       return;
     }
     safeSessionSet(AUTH_STARTED_REGISTERED_KEY, String(state.registered));
+    if (connectDialog?.resumePlay) {
+      safeSessionSet(
+        AUTH_PLAY_RESUME_KEY,
+        JSON.stringify(connectDialog.resumePlay),
+      );
+    } else {
+      safeSessionRemove(AUTH_PLAY_RESUME_KEY);
+    }
     setAuthPending(true);
     try {
       try {
@@ -913,6 +962,7 @@ function ConnectedApp({
         await auth.begin(await waitForReadySession(client));
       }
     } catch (error) {
+      safeSessionRemove(AUTH_PLAY_RESUME_KEY);
       setAuthPending(false);
       if (connectDialog?.continueToPush) pushApi.consumeOfferAfterLogin();
       setConnectDialog(null);
@@ -1341,6 +1391,7 @@ function ConnectedApp({
     const query = hash.includes('?') ? hash.slice(hash.indexOf('?') + 1) : '';
     const parameters = new URLSearchParams(query);
     const error = parameters.get('error');
+    safeSessionRemove(AUTH_PLAY_RESUME_KEY);
     window.history.replaceState(null, '', '/menu');
     go('menu');
     const continueToPush = pushApi.consumeOfferAfterLogin();
@@ -1579,7 +1630,10 @@ function ConnectedApp({
                 variant="primary"
                 onClick={() => {
                   setAuthResultDialog(null);
-                  openConnectDialog();
+                  openConnectDialog(
+                    false,
+                    playResume === null ? undefined : playResume,
+                  );
                 }}
               >
                 もう一度ためす
@@ -2222,6 +2276,7 @@ function ConnectedApp({
     <>
       <MenuScreen
         onPlay={() => {
+          setPlayResume(null);
           setPlaySheetError(null);
           setJoinSeatChoice(null);
           setIsChoosingRoom(true);
@@ -2251,22 +2306,43 @@ function ConnectedApp({
           {...(!state.registered
             ? { anonymousDisplayName: state.displayName }
             : {})}
-          {...(sharedInviteCode ? { initialInviteCode: sharedInviteCode } : {})}
+          {...(sharedInviteCode || playResume?.kind === 'join'
+            ? {
+                initialInviteCode:
+                  sharedInviteCode ??
+                  (playResume?.kind === 'join' ? playResume.inviteCode : ''),
+              }
+            : {})}
+          {...(playResume ? { initialStep: playResume.kind } : {})}
           initialMode={playSheetError === GRADUATION_ERROR ? 'community' : null}
           seatOptions={joinSeatChoice?.seats ?? null}
           takeoverPendingMemberId={takeoverPendingMemberId}
-          onCreate={(mode) => {
+          onLogin={(resume) => {
+            setPlayResume(resume);
+            openConnectDialog(false, resume);
+          }}
+          onCreate={(mode, displayName) => {
             setPlaySheetError(null);
             setJoinSeatChoice(null);
-            invoke(
-              client.createRoom(mode).then(() => {
+            const renameBeforeCreate =
+              !state.registered &&
+              displayName !== undefined &&
+              displayName !== state.displayName
+                ? client.rename(displayName)
+                : Promise.resolve();
+            void renameBeforeCreate
+              .then(() => client.createRoom(mode))
+              .then(() => {
+                setPlayResume(null);
                 setIsChoosingRoom(false);
                 // ひとりで練習する部屋は待つ相手がいないので待機室を挟まない。
                 // 開始に失敗したらそのまま待機室に残す。部屋の主は自分ひとりで、
                 // 目の前の「はじめる」を押せばやり直せるため、専用の文言は出さない。
                 if (mode === 'basic') invoke(client.startRoom());
-              }),
-            );
+              })
+              .catch(() => {
+                setPlaySheetError(RETRY_GENERIC_ERROR);
+              });
           }}
           onJoin={(inviteCode, displayName) => {
             setPlaySheetError(null);
@@ -2279,6 +2355,7 @@ function ConnectedApp({
             void renameBeforeJoin
               .then(() => client.joinRoom(inviteCode))
               .then(() => {
+                setPlayResume(null);
                 setIsChoosingRoom(false);
               })
               .catch((error: unknown) => {
@@ -2306,6 +2383,7 @@ function ConnectedApp({
               .joinRoom(inviteCode, memberId)
               .then(() => {
                 setJoinSeatChoice(null);
+                setPlayResume(null);
                 setIsChoosingRoom(false);
               })
               .catch(async (error: unknown) => {
@@ -2318,6 +2396,7 @@ function ConnectedApp({
                 try {
                   await client.joinRoom(inviteCode);
                   setJoinSeatChoice(null);
+                  setPlayResume(null);
                   setIsChoosingRoom(false);
                 } catch (retryError: unknown) {
                   if (
@@ -2341,6 +2420,8 @@ function ConnectedApp({
             setPlaySheetError(null);
           }}
           onClose={() => {
+            setPlayResume(null);
+            safeSessionRemove(AUTH_PLAY_RESUME_KEY);
             setIsChoosingRoom(false);
             setPlaySheetError(null);
             setJoinSeatChoice(null);

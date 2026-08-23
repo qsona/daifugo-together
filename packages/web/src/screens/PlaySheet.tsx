@@ -5,13 +5,14 @@ import { Button } from '../components/Button';
 import { ChoiceSheet } from '../components/ChoiceSheet';
 import { InputField } from '../components/Field';
 import { NameField, validateDisplayName } from '../components/NameField';
-import { JOIN_FRIEND_ROOM_LABEL } from '../messages';
+import { GOOGLE_LOGIN_LABEL, JOIN_FRIEND_ROOM_LABEL } from '../messages';
 
 import styles from './PlaySheet.module.css';
 
 type PlaySheetProps = {
-  onCreate: (mode: RoomMode) => void;
+  onCreate: (mode: RoomMode, displayName?: string) => void;
   onJoin: (code: string, displayName?: string) => void;
+  onLogin?: (resume: PlayResumeIntent) => void;
   onTakeover?: (memberId: string) => void;
   onBackFromSeatChoice?: () => void;
   onClose: () => void;
@@ -20,12 +21,16 @@ type PlaySheetProps = {
   /** 招待リンクから開いたときの初期コード。この場合は参加フォームから始める。 */
   initialInviteCode?: string;
   initialMode?: RoomMode | null;
+  initialStep?: 'create' | 'join';
   error?: string | null;
   seatOptions?: readonly SeatOption[] | null;
   takeoverPendingMemberId?: string | null;
 };
 
-type Step = 'root' | 'community' | 'join';
+export type PlayResumeIntent =
+  { kind: 'create' } | { kind: 'join'; inviteCode: string };
+
+type Step = 'root' | 'community' | 'create' | 'join';
 
 /**
  * 「あそぶ」を押したときに下から出る選択シート。
@@ -38,12 +43,14 @@ type Step = 'root' | 'community' | 'join';
 export function PlaySheet({
   onCreate,
   onJoin,
+  onLogin,
   onTakeover = () => undefined,
   onBackFromSeatChoice = () => undefined,
   onClose,
   anonymousDisplayName,
   initialInviteCode,
   initialMode = null,
+  initialStep,
   error,
   seatOptions = null,
   takeoverPendingMemberId = null,
@@ -61,7 +68,9 @@ export function PlaySheet({
   );
   const [displayName, setDisplayName] = useState(anonymousDisplayName ?? '');
   const [step, setStep] = useState<Step>(() => {
-    if (initialInviteCode !== undefined) return 'join';
+    if (initialStep === 'create') return 'create';
+    if (initialInviteCode !== undefined || initialStep === 'join')
+      return 'join';
     if (initialMode === 'community') return 'community';
     return 'root';
   });
@@ -77,6 +86,7 @@ export function PlaySheet({
   if (errorAt.error !== error) setErrorAt({ error, step });
   const visibleError =
     errorAt.error === error && errorAt.step === step ? error : null;
+  const isCreating = step === 'create';
   const isJoining = step === 'join';
   const isChoosingSeat = seatOptions !== null;
   const asksDisplayName = anonymousDisplayName !== undefined;
@@ -91,11 +101,13 @@ export function PlaySheet({
       label={
         isChoosingSeat
           ? '途中参加する席をえらぶ'
-          : isJoining
-            ? JOIN_FRIEND_ROOM_LABEL
-            : step === 'community'
-              ? 'みんなのルールであそぶ'
-              : 'あそびかたをえらぶ'
+          : isCreating
+            ? '部屋を立てる'
+            : isJoining
+              ? JOIN_FRIEND_ROOM_LABEL
+              : step === 'community'
+                ? 'みんなのルールであそぶ'
+                : 'あそびかたをえらぶ'
       }
       onClose={onClose}
     >
@@ -141,6 +153,39 @@ export function PlaySheet({
             </Button>
           </div>
         </>
+      ) : isCreating ? (
+        <>
+          {asksDisplayName && (
+            <NameField
+              label="なまえ"
+              value={displayName}
+              onChange={setDisplayName}
+            />
+          )}
+          {asksDisplayName && onLogin && (
+            <div className={styles.login}>
+              <Button size="small" onClick={() => onLogin({ kind: 'create' })}>
+                {GOOGLE_LOGIN_LABEL}
+              </Button>
+            </div>
+          )}
+          <Button
+            variant="primary"
+            block
+            disabled={asksDisplayName && normalizedDisplayName === undefined}
+            onClick={() => {
+              onCreate('community', normalizedDisplayName);
+            }}
+          >
+            部屋を立てる
+          </Button>
+          {visibleError && <p role="alert">{visibleError}</p>}
+          <div className={styles.back}>
+            <Button size="small" onClick={() => setStep('community')}>
+              もどる
+            </Button>
+          </div>
+        </>
       ) : isJoining ? (
         <>
           <InputField
@@ -163,6 +208,16 @@ export function PlaySheet({
               value={displayName}
               onChange={setDisplayName}
             />
+          )}
+          {asksDisplayName && onLogin && (
+            <div className={styles.login}>
+              <Button
+                size="small"
+                onClick={() => onLogin({ kind: 'join', inviteCode: code })}
+              >
+                {GOOGLE_LOGIN_LABEL}
+              </Button>
+            </div>
           )}
           <Button
             variant="primary"
@@ -199,6 +254,10 @@ export function PlaySheet({
             variant="primary"
             block
             onClick={() => {
+              if (asksDisplayName) {
+                setStep('create');
+                return;
+              }
               onCreate('community');
             }}
           >

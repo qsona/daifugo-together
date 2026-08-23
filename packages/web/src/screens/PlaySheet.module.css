@@ -52,6 +52,11 @@
   justify-content: center;
 }
 
+.login {
+  display: flex;
+  justify-content: center;
+}
+
 .seatHelp {
   margin: 0;
   color: var(--color-text-secondary);

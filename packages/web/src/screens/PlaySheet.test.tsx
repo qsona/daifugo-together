@@ -150,6 +150,85 @@ describe('TU-01: あそぶ導線の選択', () => {
     expect(onJoin).toHaveBeenCalledWith('01234', 'たろう');
   });
 
+  it('匿名ユーザーは部屋を立てる前になまえを設定できる', async () => {
+    const user = userEvent.setup();
+    const onCreate = vi.fn();
+    render(
+      <PlaySheet
+        anonymousDisplayName="ゲスト000001"
+        onCreate={onCreate}
+        onJoin={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole('button', { name: 'みんなのルールであそぶ' }),
+    );
+    await user.click(screen.getByRole('button', { name: '部屋を立てる' }));
+
+    expect(screen.getByRole('dialog', { name: '部屋を立てる' })).toBeTruthy();
+    expect(onCreate).not.toHaveBeenCalled();
+    const nameInput = screen.getByLabelText('なまえ') as HTMLInputElement;
+    expect(nameInput.value).toBe('ゲスト000001');
+
+    await user.clear(nameInput);
+    await user.type(nameInput, ' たろう ');
+    await user.click(screen.getByRole('button', { name: '部屋を立てる' }));
+
+    expect(onCreate).toHaveBeenCalledWith('community', 'たろう');
+  });
+
+  it('匿名の作成・参加画面には説明文なしでGoogleログインを出す', async () => {
+    const user = userEvent.setup();
+    const onLogin = vi.fn();
+    render(
+      <PlaySheet
+        anonymousDisplayName="ゲスト000001"
+        onCreate={vi.fn()}
+        onJoin={vi.fn()}
+        onLogin={onLogin}
+        onClose={vi.fn()}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole('button', { name: 'みんなのルールであそぶ' }),
+    );
+    await user.click(screen.getByRole('button', { name: '部屋を立てる' }));
+    expect(screen.queryByText(/前にあそんだことがある人は/u)).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Googleでログイン' }));
+    expect(onLogin).toHaveBeenLastCalledWith({ kind: 'create' });
+
+    await user.click(screen.getByRole('button', { name: 'もどる' }));
+    await user.click(
+      screen.getByRole('button', { name: '友だちの部屋にはいる' }),
+    );
+    await user.type(screen.getByLabelText('招待コード'), '01234');
+    await user.click(screen.getByRole('button', { name: 'Googleでログイン' }));
+    expect(onLogin).toHaveBeenLastCalledWith({
+      kind: 'join',
+      inviteCode: '01234',
+    });
+  });
+
+  it('OAuthからの復帰では匿名の部屋作成画面から始める', () => {
+    render(
+      <PlaySheet
+        anonymousDisplayName="ゲスト000001"
+        initialStep="create"
+        onCreate={vi.fn()}
+        onJoin={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('dialog', { name: '部屋を立てる' })).toBeTruthy();
+    expect((screen.getByLabelText('なまえ') as HTMLInputElement).value).toBe(
+      'ゲスト000001',
+    );
+  });
+
   it('招待リンクから開くとコード入力済みの参加フォームから始める', () => {
     render(
       <PlaySheet

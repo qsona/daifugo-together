@@ -2117,6 +2117,94 @@ describe('TU-03: はじめての1戦のガイド', () => {
   });
 });
 
+describe('部屋作成前のなまえ確認', () => {
+  beforeEach(() => {
+    window.history.replaceState(null, '', '/menu');
+    useScreenStore.setState({ current: 'menu' });
+  });
+
+  afterEach(cleanup);
+
+  it('匿名ホストは改名を保存してからcommunity部屋を作る', async () => {
+    const user = userEvent.setup();
+    const order: string[] = [];
+    const state: MultiplayerState = {
+      connection: 'ready',
+      registered: false,
+      displayName: 'ゲスト000001',
+      room: null,
+      roomClosedReason: null,
+      error: null,
+    };
+    const rename = vi.fn(async (displayName: string) => {
+      order.push(`rename:${displayName}`);
+    });
+    const createRoom = vi.fn(async (mode: string) => {
+      order.push(`create:${mode}`);
+    });
+    const client = {
+      subscribe: () => () => undefined,
+      snapshot: () => state,
+      rename,
+      createRoom,
+    } as unknown as MultiplayerClient;
+    render(<App client={client} />);
+
+    await user.click(screen.getByRole('button', { name: 'あそぶ' }));
+    await user.click(
+      screen.getByRole('button', { name: 'みんなのルールであそぶ' }),
+    );
+    await user.click(screen.getByRole('button', { name: '部屋を立てる' }));
+    const nameInput = screen.getByLabelText('なまえ');
+    await user.clear(nameInput);
+    await user.type(nameInput, 'たろう');
+    await user.click(screen.getByRole('button', { name: '部屋を立てる' }));
+
+    await waitFor(() =>
+      expect(order).toEqual(['rename:たろう', 'create:community']),
+    );
+  });
+
+  it('改名に失敗したら部屋を作らず同じ画面で再試行できる', async () => {
+    const user = userEvent.setup();
+    const state: MultiplayerState = {
+      connection: 'ready',
+      registered: false,
+      displayName: 'ゲスト000001',
+      room: null,
+      roomClosedReason: null,
+      error: null,
+    };
+    const rename = vi.fn(async () => {
+      throw new Error('rename failed');
+    });
+    const createRoom = vi.fn();
+    const client = {
+      subscribe: () => () => undefined,
+      snapshot: () => state,
+      rename,
+      createRoom,
+    } as unknown as MultiplayerClient;
+    render(<App client={client} />);
+
+    await user.click(screen.getByRole('button', { name: 'あそぶ' }));
+    await user.click(
+      screen.getByRole('button', { name: 'みんなのルールであそぶ' }),
+    );
+    await user.click(screen.getByRole('button', { name: '部屋を立てる' }));
+    const nameInput = screen.getByLabelText('なまえ');
+    await user.clear(nameInput);
+    await user.type(nameInput, 'たろう');
+    await user.click(screen.getByRole('button', { name: '部屋を立てる' }));
+
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'もう一度ためしてください',
+    );
+    expect(createRoom).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog', { name: '部屋を立てる' })).toBeTruthy();
+  });
+});
+
 describe('TU-04: みんなのルールへの卒業導線', () => {
   afterEach(cleanup);
 
@@ -2467,6 +2555,7 @@ describe('TU-04: みんなのルールへの卒業導線', () => {
     expect(leaveRoom).toHaveBeenCalledOnce();
     expect(createRoom).toHaveBeenNthCalledWith(1, 'community');
 
+    await user.click(screen.getByRole('button', { name: '部屋を立てる' }));
     await user.click(screen.getByRole('button', { name: '部屋を立てる' }));
     await waitFor(() => expect(createRoom).toHaveBeenCalledTimes(2));
     expect(createRoom).toHaveBeenNthCalledWith(2, 'community');
@@ -2911,6 +3000,7 @@ describe('対局終了時の最後の手', () => {
 describe('AU-01: 認証完了のアプリ統合', () => {
   afterEach(() => {
     cleanup();
+    window.sessionStorage.removeItem('daifugo.authPlayResume');
     window.history.replaceState(null, '', '/');
   });
 
@@ -3032,6 +3122,131 @@ describe('AU-01: 認証完了のアプリ統合', () => {
     await waitFor(() =>
       expect(auth.begin).toHaveBeenCalledWith('live-socket-token'),
     );
+  });
+
+  it('部屋作成前のログイン開始時にOAuth後の復帰先を保存する', async () => {
+    useScreenStore.setState({ current: 'menu' });
+    window.history.replaceState(null, '', '/menu');
+    const state: MultiplayerState = {
+      connection: 'ready',
+      registered: false,
+      displayName: 'ゲスト000001',
+      room: null,
+      roomClosedReason: null,
+      error: null,
+    };
+    const auth = {
+      begin: vi.fn(async () => undefined),
+      complete: vi.fn(),
+    };
+    const user = userEvent.setup();
+    render(<App client={authClient(state)} auth={auth} push={authPush()} />);
+
+    await user.click(screen.getByRole('button', { name: 'あそぶ' }));
+    await user.click(
+      screen.getByRole('button', { name: 'みんなのルールであそぶ' }),
+    );
+    await user.click(screen.getByRole('button', { name: '部屋を立てる' }));
+    await user.click(screen.getByRole('button', { name: 'Googleでログイン' }));
+    await user.click(screen.getByRole('button', { name: 'Googleへ進む' }));
+
+    await waitFor(() => expect(auth.begin).toHaveBeenCalledOnce());
+    expect(
+      JSON.parse(window.sessionStorage.getItem('daifugo.authPlayResume')!),
+    ).toEqual({ kind: 'create' });
+  });
+
+  it('ログイン確認を閉じると入力途中の部屋作成画面へ戻る', async () => {
+    useScreenStore.setState({ current: 'menu' });
+    window.history.replaceState(null, '', '/menu');
+    const state: MultiplayerState = {
+      connection: 'ready',
+      registered: false,
+      displayName: 'ゲスト000001',
+      room: null,
+      roomClosedReason: null,
+      error: null,
+    };
+    const user = userEvent.setup();
+    render(<App client={authClient(state)} push={authPush()} />);
+
+    await user.click(screen.getByRole('button', { name: 'あそぶ' }));
+    await user.click(
+      screen.getByRole('button', { name: 'みんなのルールであそぶ' }),
+    );
+    await user.click(screen.getByRole('button', { name: '部屋を立てる' }));
+    const nameInput = screen.getByLabelText('なまえ');
+    await user.clear(nameInput);
+    await user.type(nameInput, 'たろう');
+    await user.click(screen.getByRole('button', { name: 'Googleでログイン' }));
+
+    const loginDialog = screen.getByRole('dialog', {
+      name: 'Googleでログインしますか?',
+    });
+    await user.click(
+      within(loginDialog).getByRole('button', { name: 'もどる' }),
+    );
+
+    expect(
+      screen.queryByRole('dialog', { name: 'Googleでログインしますか?' }),
+    ).toBeNull();
+    expect(screen.getByRole('dialog', { name: '部屋を立てる' })).toBeTruthy();
+    expect((screen.getByLabelText('なまえ') as HTMLInputElement).value).toBe(
+      'たろう',
+    );
+  });
+
+  it('OAuthをキャンセルして戻ると部屋作成前のなまえ画面を復元する', async () => {
+    useScreenStore.setState({ current: 'title' });
+    window.sessionStorage.setItem(
+      'daifugo.authPlayResume',
+      JSON.stringify({ kind: 'create' }),
+    );
+    window.history.replaceState(null, '', '/#/auth/complete?error=denied');
+    const state: MultiplayerState = {
+      connection: 'ready',
+      registered: false,
+      displayName: 'ゲスト000001',
+      room: null,
+      roomClosedReason: null,
+      error: null,
+    };
+
+    render(<App client={authClient(state)} push={authPush()} />);
+
+    expect(
+      await screen.findByRole('dialog', { name: '部屋を立てる' }),
+    ).toBeTruthy();
+    expect((screen.getByLabelText('なまえ') as HTMLInputElement).value).toBe(
+      'ゲスト000001',
+    );
+    expect(window.sessionStorage.getItem('daifugo.authPlayResume')).toBeNull();
+  });
+
+  it('OAuthから参加画面へ戻ると入力済みの招待コードを復元する', async () => {
+    useScreenStore.setState({ current: 'title' });
+    window.sessionStorage.setItem(
+      'daifugo.authPlayResume',
+      JSON.stringify({ kind: 'join', inviteCode: '01234' }),
+    );
+    window.history.replaceState(null, '', '/#/auth/complete?error=denied');
+    const state: MultiplayerState = {
+      connection: 'ready',
+      registered: false,
+      displayName: 'ゲスト000001',
+      room: null,
+      roomClosedReason: null,
+      error: null,
+    };
+
+    render(<App client={authClient(state)} push={authPush()} />);
+
+    expect(
+      await screen.findByRole('dialog', { name: '友だちの部屋にはいる' }),
+    ).toBeTruthy();
+    expect(
+      (screen.getByLabelText('招待コード') as HTMLInputElement).value,
+    ).toBe('01234');
   });
 
   it('503では再試行させずアプリ内の失敗ダイアログに留める', async () => {
