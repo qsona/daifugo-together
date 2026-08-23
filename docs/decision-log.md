@@ -109,7 +109,7 @@ E04 §5 の 6 件。実装(DS-01/DS-02)の完了時点での状態を併記す�
 | G-1 | CI の基準 Node.js 26 / pnpm 11.17.0 固定 | **採用（ユーザー判断で更新）** | 趣味プロジェクトとして最新追随を優先。TypeScript は `typescript-eslint` 8.65.0 の対応範囲に合わせ 6.0.3、`@types/node` は Node 26 系を採用 |
 | G-2 | ルール PR の識別ラベル名 = `rule-change` | **採用** | E7 の pipeline(PR 作成処理)とリポジトリのラベル定義は同名を使うこと。ラベル付与には write 権限が必要なため、外部 PR が勝手にガード対象へ入ることはない(A-2 のワーカー検査と併用) |
 | G-3 | Prettier は `docs/` を検査対象外 | **採用** | 設計書は実装で変更しない契約と整合。`docs/impl-progress.md` も除外される点は許容 |
-| G-4 | 差分ガードは `packages/rules/` 配下かのパス検査までとし、「単一の新規ルールディレクトリ + 許可ファイル(rule.ts/rule.test.ts/meta.json)のみ」の厳格化は E7 で行う | **採用(条件付き)** | E7 着手時の入口条件として必須: ①単一新規ディレクトリ+許可ファイルリスト化 ②PR 作成者=ワーカー検査(A-2) ③ガードのトリガー見直し(現行 `pull_request` は PR 側がワークフロー定義自体を書き換え可能。`pull_request_target` 化 or required workflow 化)④branch protection でガードを required check に登録 |
+| G-4 | 差分ガードは `packages/rules/` 配下かのパス検査までとし、「単一の新規ルールディレクトリ + 許可ファイル(rule.ts/rule.test.ts/meta.json)のみ」の厳格化は E7 で行う | **採用(条件付き)** | E7 着手時の入口条件として必須: ①単一新規ディレクトリ+許可ファイルリスト化 ②PR 作成者=ワーカー検査(A-2) ③ガードのトリガー見直し(現行 `pull_request` は PR 側がワークフロー定義自体を書き換え可能。`pull_request_target` 化 or required workflow 化) |
 
 ### MP-03 / DS-05 実装判断(2026-07-27)
 

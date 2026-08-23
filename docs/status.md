@@ -15,7 +15,6 @@
 
 ## 外部ゲート・受入待ち
 
-- **【最重要】main の branch protection / `rule/**` ruleset が未登録** — 実測で Branch not protected・rulesets 空。public リポジトリでルール PR がマージされ続けている。`diff-guard` / `quality` / `rule-tests` / `simulation` の 4 required check 登録と `rule/**` の force-push・workflow 変更拒否が未達。出典: [decision-log.md](decision-log.md) G-4 ④ / [archive/impl-progress.md](archive/impl-progress.md)「E7 CX-03」節
 - **E16/E17 の実 Push 受入(デスクトップ / iOS)** — VAPID 本番設定(WP-T2)は完了。実 Push・夜間抑止・ログアウト解除の受入記録が runbook 指定先にない。出典: [runbooks/E16-E17-notifications.md](runbooks/E16-E17-notifications.md) §7 / [epics/E17-web-push.md](epics/E17-web-push.md) §7
 - **E15 の実 Google 通し受入** — 本番 OAuth は稼働しているが、実セット完走後の登録導線・最終文言を一つずつ確認した記録がない。出典: [runbooks/E15-google-oauth.md](runbooks/E15-google-oauth.md) §7 / [production-e2e-test-plan-2026-08-02.md](production-e2e-test-plan-2026-08-02.md)
 - **⚠ 上 2 件の前提: runbook の文言が G-26 改称前のまま** — [runbooks/E15-google-oauth.md](runbooks/E15-google-oauth.md) 内の旧語彙(「Googleでつなぐ」語族)全箇所と [runbooks/E16-E17-notifications.md](runbooks/E16-E17-notifications.md) L58。実装は「Googleでログイン」。**受入は「最終文言の確認」を含むため、runbook を先に直さないと実行できない**
