@@ -665,6 +665,7 @@ export interface SimulationApi {
 
 - **カード選択セレクタの具象化**(E09 §5.3-2 の要求)も core の公開純粋関数として提供する: `resolveCardSelector(view: GameView, from: Zone, selector: CardSelector, rng: RuleRng): CardId[]`。`resolveEffectBatch` の moveCards 競合判定(union-find。§2.5.3)と Effect 適用の双方がこれを使う。
 - **権威記録との分離**: `SimulationApi` 経由の適用・照会は渡された `state`(複製)の中だけで完結する。`hookCalls` と `firedRules` も複製内でのみ進み、権威状態の発動判定(§2.5.7)・乱数列(§2.6)に影響しない。純粋関数なのでこれは構造的に保証される。
+- **共通ミニゲームの自動解決**: `SimulationApi.applyPlay` は `awaitingChoice` を決定的な代行入力で解決する。`binary_quiz_race` は探索用の synthetic question に対して全参加者の未回答をルール指定の `defaultOption` で確定し、各ラウンドの回答・公開・結果 phase の境界まで `miniGameTick.deltaMs` を進める。これにより全員同着の報酬 choice を常に検査しつつ、200ms の実時間 tick を探索内で逐次再生しない。通過する reducer と権威状態遷移は本番と同じであり、問題設定、締切回答、得点、複数勝者、報酬 choice は省略しない。本番の bot 回答、tick、保存される replay action の意味は変更しない。
 - **isolate への持ち込み**(E02 §3.1(d) の sim isolate): core は Node API 非依存の純 TS であり、QuickJS(WASM)isolate 内でもそのまま動作する。E2 は「core + 有効ルールバンドル」を AI 専用 isolate に読み込み、プレイアウトを isolate 内で一括実行できる。`serialize` / 逆直列化(`JSON.parse` + 型検証)が状態の持ち込み口。isolate 内では `RuleChainPort` は境界越えのないプロセス内(isolate 内)実装になる。
 - スループットの実測は TS-03(E02 §5 が計測項目を追加依頼済み)。E1 としての提供物はこの API の形と純粋性・JSON 直列化可能性の保証まで。
 

@@ -102,6 +102,55 @@ function choiceModule(ruleId: string, choiceId: string): RuleModule {
   };
 }
 
+function binaryQuizModule(ruleId: string): RuleModule {
+  return {
+    meta: {
+      ruleId,
+      name: ruleId,
+      description: 'binary quiz simulation fixture',
+      kind: 'original',
+      proposalId: 'fixture',
+      contractVersion: 2,
+      messages: { start: 'start' },
+    },
+    hooks: {
+      afterPlay(context, _play, input) {
+        if (input?.kind === 'miniGameMultiResult') {
+          return [
+            {
+              type: 'setMemory',
+              scope: 'game',
+              key: 'completed',
+              value: true,
+              silent: true,
+            },
+          ];
+        }
+        if (input !== undefined) return [];
+        const player = context.game.field.current?.by;
+        if (!player) return [];
+        return [
+          {
+            type: 'requestChoice',
+            kind: 'miniGame',
+            player,
+            choiceId: 'binary_quiz',
+            miniGame: 'binary_quiz_race',
+            participants: [...context.game.seats],
+            questionSet: 'general_v1',
+            defaultOption: 'a',
+            roundDurationMs: 4_000,
+            targetScore: 3,
+            maxRounds: 12,
+            seed: 'simulation-binary-quiz',
+            messageKey: 'start',
+          },
+        ];
+      },
+    },
+  };
+}
+
 describe('E1 SimulationApi', () => {
   it('E2向けの合法手・適用・ビュー・fallback・直列化を一つの公開面で提供する', () => {
     const state = startGame(config).state;
@@ -262,6 +311,30 @@ describe('E1 SimulationApi', () => {
     expect(
       applied.events.filter((event) => event.type === 'cardsMoved'),
     ).toHaveLength(2);
+  });
+
+  it('二択クイズを各phase境界へ進めて決定的に自動解決する', () => {
+    const ruleEntry = entry('r1004-binary-quiz', 2);
+    const module = binaryQuizModule(ruleEntry.ruleId);
+    const ruleConfig = { ...config, ruleChain: [ruleEntry] };
+    const ruleRuntime = runtime(module);
+    const state = startGame(ruleConfig, ruleRuntime).state;
+    const player = state.public.turn!;
+    const api = createSimulationApi({
+      config: ruleConfig,
+      snapshotContext,
+      runtime: ruleRuntime,
+    });
+    const position = api.createPosition(state);
+    const fallback = api.fallbackPlay(position, player);
+
+    const applied = api.applyPlay(position, fallback);
+
+    expect(applied.position.state.public.phase).toBe('awaitingPlay');
+    expect(applied.position.state.private.pendingChoice).toBeUndefined();
+    expect(
+      applied.position.state.private.memory[ruleEntry.ruleId]?.completed,
+    ).toBe(true);
   });
 
   it('リードで単騎が禁止されても合法な組をfallbackとして返す', () => {
