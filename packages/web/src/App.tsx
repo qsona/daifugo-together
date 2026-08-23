@@ -2467,16 +2467,16 @@ function friendlyError(error: string | null): string | null {
   if (!error) return null;
   return (
     {
-      ROOM_NOT_FOUND: '部屋が見つかりません。コードをたしかめてください',
+      ROOM_NOT_FOUND: '部屋が見つかりません。コードをたしかめてください。',
       ROOM_FULL: 'この部屋は満員です',
       ROOM_IN_GAME: 'この部屋は対戦中です',
       SEAT_CHOICE_REQUIRED:
-        'この部屋は対戦中です。空いている席をえらんでください',
+        'この部屋は対戦中です。空いている席をえらんでください。',
       SEAT_TAKEN: 'その席は埋まりました',
       ROOM_SOLO_ONLY:
         'この部屋はひとりで練習する部屋です。友だちの部屋の招待コードをたしかめてください。',
       RATE_LIMITED: 'しばらく待ってから、もう一度ためしてください',
-    }[error] ?? '操作に失敗しました。もう一度ためしてください'
+    }[error] ?? '操作に失敗しました。もう一度ためしてください。'
   );
 }
 
