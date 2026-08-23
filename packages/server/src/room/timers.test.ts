@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { createBombThrowMiniGame } from '@daifugo/core';
+import {
+  createBombThrowMiniGame,
+  createInProcessRuleChainPort,
+  type RuleChainEntry,
+} from '@daifugo/core';
+import { loadRuleCodeBundles } from '@daifugo/rules';
 
 import { createRoomState, reduceRoom } from './reducer.js';
 import { RoomManager } from './manager.js';
@@ -8,7 +13,12 @@ import {
   RoomTimerCoordinator,
   type RoomTimerAuthority,
 } from './timers.js';
-import type { RoomAction, RoomState, RoomTransition } from './types.js';
+import type {
+  RoomAction,
+  RoomReducerOptions,
+  RoomState,
+  RoomTransition,
+} from './types.js';
 
 interface FakeTimer {
   callback: () => void;
@@ -68,6 +78,34 @@ function authority(initial: RoomState): {
   };
 }
 
+function reducingAuthority(
+  initial: RoomState,
+  options: RoomReducerOptions,
+): {
+  api: RoomTimerAuthority;
+  actions: RoomAction[];
+  set(next: RoomState): void;
+} {
+  let current: RoomState | undefined = initial;
+  const actions: RoomAction[] = [];
+  return {
+    api: {
+      get: () => current,
+      apply: (_roomId, action) => {
+        actions.push(action);
+        if (!current) return undefined;
+        const transition = reduceRoom(current, action, options);
+        if (transition.accepted) current = transition.state;
+        return transition;
+      },
+    },
+    actions,
+    set(next) {
+      current = next;
+    },
+  };
+}
+
 function setResult(base: RoomState, respondBy: number): RoomState {
   return {
     ...base,
@@ -77,6 +115,200 @@ function setResult(base: RoomState, respondBy: number): RoomState {
 }
 
 describe('RoomTimerCoordinator', () => {
+  it('切断AI代行の7渡しは接続が揺れるたび期限が延び、100秒超後に自動回答する', async () => {
+    const sevenPass = (await loadRuleCodeBundles()).find(
+      ({ module }) => module.meta.ruleId === 'r0011-seven-pass',
+    );
+    expect(sevenPass).toBeDefined();
+    if (!sevenPass) return;
+
+    const entry: RuleChainEntry = {
+      ruleId: sevenPass.module.meta.ruleId,
+      name: sevenPass.module.meta.name,
+      position: 0,
+      priority: {
+        score: 0,
+        activatedAt: 0,
+        ruleId: sevenPass.module.meta.ruleId,
+      },
+      bundleHash: sevenPass.bundleHash,
+      contractVersion: sevenPass.module.meta.contractVersion,
+    };
+    const port = createInProcessRuleChainPort([sevenPass.module]);
+    const reducerOptions: RoomReducerOptions = {
+      random: () => 0.999_999,
+      rulePort: port,
+    };
+    let waiting = state();
+    for (let index = 2; index <= 4; index += 1) {
+      const joined = reduceRoom(waiting, {
+        type: 'join',
+        member: {
+          memberId: `member-${String(index)}`,
+          userId: `user-${String(index)}`,
+          displayName: `プレイヤー${String(index)}`,
+        },
+        now: index,
+      });
+      expect(joined.accepted).toBe(true);
+      waiting = joined.state;
+    }
+    const started = reduceRoom(
+      waiting,
+      {
+        type: 'start',
+        memberId: 'member-1',
+        now: 1_000,
+        setSeed: 'seven-pass-disconnect-1',
+        availableRules: [entry],
+      },
+      reducerOptions,
+    ).state;
+    const actorId = started.engine!.currentGame!.public.turn!;
+    const seven = started.engine!.currentGame!.players[actorId]!.hand.find(
+      (card) => card.kind === 'natural' && card.rank === '7',
+    );
+    expect(actorId).toBe('member-3');
+    expect(seven?.id).toBe('C07');
+    if (!seven) return;
+
+    const disconnected = reduceRoom(
+      started,
+      { type: 'disconnect', memberId: actorId, now: 2_000 },
+      reducerOptions,
+    ).state;
+    expect(
+      disconnected.members.find((member) => member.memberId === actorId),
+    ).toMatchObject({ connected: false, aiActing: true, controller: 'ai' });
+    expect(disconnected.turnDeadlineAt).toBe(7_000);
+
+    let now = 2_000;
+    const room = reducingAuthority(disconnected, reducerOptions);
+    const timers: FakeTimer[] = [];
+    const automaticallySelected: string[][] = [];
+    const coordinator = new RoomTimerCoordinator(room.api, {
+      now: () => now,
+      decideTurn: async (roomState, memberId) => {
+        const pending = roomState.engine?.currentGame?.private.pendingChoice;
+        if (pending) {
+          const cards = [...(pending.optionCardIds ?? [])]
+            .sort()
+            .slice(0, pending.count ?? 0);
+          automaticallySelected.push(cards);
+          return cards;
+        }
+        expect(memberId).toBe(actorId);
+        return [seven.id];
+      },
+      setTimer: (callback, delayMs) => {
+        const timer = { callback, delayMs, cleared: false };
+        timers.push(timer);
+        return timer;
+      },
+      clearTimer: (handle) => {
+        (handle as FakeTimer).cleared = true;
+      },
+    });
+
+    coordinator.sync(disconnected);
+    expect(timers[0]?.delayMs).toBe(5_000);
+
+    now = 7_000;
+    timers[0]?.callback();
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+    const awaitingChoice = room.api.get(disconnected.roomId)!;
+    expect(awaitingChoice.engine?.currentGame?.public.phase).toBe(
+      'awaitingChoice',
+    );
+    expect(
+      awaitingChoice.engine?.currentGame?.private.pendingChoice,
+    ).toMatchObject({
+      ruleId: 'r0011-seven-pass',
+      player: actorId,
+      choiceId: 'seven_pass_choice',
+      count: 1,
+    });
+    expect(awaitingChoice.turnDeadlineAt).toBe(12_000);
+    expect(timers[1]?.delayMs).toBe(5_000);
+
+    const changeConnection = (type: 'disconnect' | 'reconnect', at: number) => {
+      now = at;
+      const transition = reduceRoom(
+        room.api.get(disconnected.roomId)!,
+        { type, memberId: actorId, now },
+        reducerOptions,
+      );
+      expect(transition.accepted).toBe(true);
+      room.set(transition.state);
+      coordinator.sync(transition.state);
+      return transition.state;
+    };
+
+    const reconnectedOnce = changeConnection('reconnect', 10_000);
+    expect(reconnectedOnce.turnDeadlineAt).toBe(70_000);
+    expect(timers[1]?.cleared).toBe(true);
+    expect(timers[2]?.delayMs).toBe(60_000);
+
+    const disconnectedAgain = changeConnection('disconnect', 69_000);
+    expect(disconnectedAgain.turnDeadlineAt).toBe(74_000);
+    expect(timers[2]?.cleared).toBe(true);
+    expect(timers[3]?.delayMs).toBe(5_000);
+
+    const reconnectedAgain = changeConnection('reconnect', 72_000);
+    expect(reconnectedAgain.turnDeadlineAt).toBe(132_000);
+    expect(timers[3]?.cleared).toBe(true);
+    expect(timers[4]?.delayMs).toBe(60_000);
+
+    const finallyDisconnected = changeConnection('disconnect', 103_500);
+    expect(finallyDisconnected.turnDeadlineAt).toBe(108_500);
+    expect(timers[4]?.cleared).toBe(true);
+    expect(timers[5]?.delayMs).toBe(5_000);
+    expect(108_500 - 7_000).toBe(101_500);
+
+    const targetId = awaitingChoice.members.find(
+      (member) => member.seatId === 3,
+    )!.memberId;
+    const targetHandBefore = awaitingChoice.engine!.currentGame!.players[
+      targetId
+    ]!.hand.map((card) => card.id);
+
+    now = 108_500;
+    timers[5]?.callback();
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+    const advanced = room.api.get(disconnected.roomId)!;
+    const passedCard = automaticallySelected[0]?.[0];
+    expect(passedCard).toBeDefined();
+    expect(advanced.engine?.currentGame?.private.pendingChoice).toBeUndefined();
+    expect(advanced.engine?.currentGame?.public.phase).toBe('awaitingPlay');
+    expect(advanced.engine?.currentGame?.public.turn).toBe(targetId);
+    expect(
+      advanced.engine?.currentGame?.players[actorId]?.hand.map(
+        (card) => card.id,
+      ),
+    ).not.toContain(passedCard);
+    expect(
+      advanced.engine?.currentGame?.players[targetId]?.hand.map(
+        (card) => card.id,
+      ),
+    ).toEqual(expect.arrayContaining([...targetHandBefore, passedCard!]));
+    expect(room.actions).toEqual([
+      expect.objectContaining({
+        type: 'autoAct',
+        memberId: actorId,
+        cards: ['C07'],
+        reason: 'ai',
+      }),
+      expect.objectContaining({
+        type: 'autoAct',
+        memberId: actorId,
+        cards: [passedCard],
+        reason: 'ai',
+      }),
+    ]);
+  });
+
   it('同時選択では未回答AIを人間待ちでブロックせずautoActする', async () => {
     const basic = createRoomState({
       roomId: 'simultaneous-ai-choice',
@@ -540,7 +772,7 @@ describe('RoomTimerCoordinator', () => {
     expect(room.actions).toEqual([]);
   });
 
-  it('同じ手番中のdisconnect/reconnectで15秒・60秒timerへ張り替える', () => {
+  it('同じ手番中のdisconnect/reconnectで5秒・60秒timerへ張り替える', () => {
     const started = reduceRoom(
       state(),
       {
@@ -596,7 +828,7 @@ describe('RoomTimerCoordinator', () => {
     room.set(disconnected);
     coordinator.sync(disconnected);
     expect(timers[0]?.cleared).toBe(true);
-    expect(timers[1]?.delayMs).toBe(15_000);
+    expect(timers[1]?.delayMs).toBe(5_000);
 
     now = 3_000;
     const reconnected = reduceRoom(disconnected, {

@@ -448,7 +448,7 @@ describe('pure room reducer', () => {
       { type: 'disconnect', memberId: 'member-1', now: 2_000 },
       { random: () => 0 },
     ).state;
-    expect(disconnected.turnDeadlineAt).toBe(17_000);
+    expect(disconnected.turnDeadlineAt).toBe(7_000);
   });
 
   it('きほんでも人間2人なら通常タイマーを残し、communityの席順は従来どおりシャッフルする', () => {
@@ -1063,7 +1063,7 @@ describe('pure room reducer', () => {
       memberId: player,
       now: 2_000,
     });
-    expect(disconnected.state.turnDeadlineAt).toBe(17_000);
+    expect(disconnected.state.turnDeadlineAt).toBe(7_000);
     const reconnected = reduceRoom(disconnected.state, {
       type: 'reconnect',
       memberId: player,

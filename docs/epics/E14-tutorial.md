@@ -93,7 +93,7 @@ export interface PlayerRoomView {
 チュートリアル設計 §4 は「きほんの部屋(ひとりで練習する)にターンタイマーは付けない / AI の思考時間はゆっくりめ」と定める。現状はどちらもルーム単位で変えられない。きほんが 1 人固定になった今も、実装側の分岐は「きほん + 人間 1 人」のまま安全側に残す。
 
 - **ターンタイマー**: `reducer.ts` の `deadlineAtForTurn`(410 行付近)が `options.turnLimitMs ?? 60_000` を返している。ここに `state.mode` と「人間が 1 人だけか」を見る分岐を足し、**きほん + 人間 1 人のときだけ `null`** を返す。
-  - **切断中の 15 秒(`disconnectedTurnLimitMs`)は残す。** これを外すと、切断した人間の手番でゲームが永久に止まる。
+  - **切断中の 5 秒(`disconnectedTurnLimitMs`)は残す。** これを外すと、切断した人間の手番でゲームが永久に止まる。
   - タイマーを外すと「接続中の人間が放置した部屋」を閉じる仕掛けが無くなる。`abandonAt` は**接続中の人間が 0 人になったとき**だけ設定される(`reducer.ts` 789 行付近)ので、この経路では働かない。V3 の未解決事項として §5 に挙げる。
 - **AI の間合い**: `timers.ts` の `aiDelayMinMs=800` / `aiDelayMaxMs=2500` は `attachRoomSocketGateway` のオプションでプロセス全体に効く。ルーム単位で伸ばすには `RoomTimerCoordinator` が対象ルームのモードを参照できる必要がある。**ゲートウェイ全体の既定値を変えない**こと(みんなのルール側のテンポを巻き添えにしない)。
 
@@ -236,7 +236,7 @@ export function reduceGuide(state: GuideState, input: GuideInput):
 
 **V3-a 環境(教材の場を作る)**
 
-1. `deadlineAtForTurn` にモード分岐(きほん + 人間 1 人 → タイマーなし。切断中の 15 秒は残す)。
+1. `deadlineAtForTurn` にモード分岐(きほん + 人間 1 人 → タイマーなし。切断中の 5 秒は残す)。
 2. AI の間合いをルーム単位で伸ばせるようにする(既定は変えない)。
 3. 席順固定(はじめての 1 戦の部屋のみ人間を seat 0 に)。
 
