@@ -15,6 +15,10 @@ import {
   evaluateCandidates,
   generateCandidates,
 } from '../play/candidates.js';
+import {
+  BINARY_QUIZ_RESULT_MS,
+  BINARY_QUIZ_REVEAL_MS,
+} from '../minigame/binary-quiz-race.js';
 import type { Play } from '../play/play.js';
 import { BASE_STRENGTH_ORDER, type StrengthOrder } from '../play/strength.js';
 import { noRuleRuntime, type RuleRuntime } from '../rules/chain.js';
@@ -23,6 +27,8 @@ import { safeModifyStrength } from '../rules/safe-port.js';
 import { engineFeaturesOf, type Standings } from '../rules/contract.js';
 import { buildPlayerSnapshot } from '../snapshot/snapshot.js';
 import { outstandingChoiceRequests } from '../game/pending-choice.js';
+
+const MAX_BINARY_QUIZ_SIMULATION_STEPS = 48;
 
 export interface CreateSimulationApiInput {
   config: GameConfig;
@@ -178,10 +184,24 @@ export function createSimulationApi(
           )}`,
         );
       }
+      const binaryQuizSteps = new Map<string, number>();
       while (transition.state.public.phase === 'awaitingChoice') {
         const pending = transition.state.private.pendingChoice;
         if (pending === undefined) {
           throw new Error('Simulation choice phase has no pending choice');
+        }
+        if (
+          pending.kind === 'miniGame' &&
+          pending.miniGameState?.kind === 'binary_quiz_race'
+        ) {
+          const miniGameId = pending.miniGameState.id;
+          const steps = (binaryQuizSteps.get(miniGameId) ?? 0) + 1;
+          if (steps > MAX_BINARY_QUIZ_SIMULATION_STEPS) {
+            throw new Error(
+              `Simulation binary quiz exceeded ${String(MAX_BINARY_QUIZ_SIMULATION_STEPS)} choice steps`,
+            );
+          }
+          binaryQuizSteps.set(miniGameId, steps);
         }
         const request = outstandingChoiceRequests(pending)[0] ?? pending;
         const resumed = reduceGame(
@@ -210,7 +230,20 @@ export function createSimulationApi(
                   type: 'miniGameTick',
                   player: pending.player,
                   miniGameId: pending.miniGameState.id,
-                  automatedPlayerIds: pending.participants ?? [],
+                  automatedPlayerIds:
+                    pending.miniGameState.kind === 'binary_quiz_race'
+                      ? []
+                      : (pending.participants ?? []),
+                  ...(pending.miniGameState.kind === 'binary_quiz_race'
+                    ? {
+                        deltaMs:
+                          pending.miniGameState.phase === 'answering'
+                            ? pending.miniGameState.roundDurationMs
+                            : pending.miniGameState.phase === 'reveal'
+                              ? BINARY_QUIZ_REVEAL_MS
+                              : BINARY_QUIZ_RESULT_MS,
+                      }
+                    : {}),
                 }
               : {
                   type: 'ruleInput',

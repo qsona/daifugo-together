@@ -154,6 +154,21 @@ unionへ変える。`bomb_throw_15` のpayload、単一勝者結果、状態遷�
 古いclientが新しい画面を描画できなくても、未回答は既定側として処理されるため対局は
 停止しない。新clientは`kind`で既存`BombThrowMiniGame`と新しいクイズ画面を出し分ける。
 
+## SimulationApi の phase fast-forward
+
+AI探索とCIシミュレーションは本番の200ms tick間隔を待つ必要がない。ただし結果を直接生成すると
+権威reducerとの乖離を作るため、`SimulationApi` は同じ `miniGameQuestion` / `miniGameTick` /
+`ruleInput` を通しつつ、二択クイズの `answering`、`reveal`、`result` の各phase境界まで
+`deltaMs`を進める。探索用のsynthetic questionでは全参加者の未回答をルール指定の
+`defaultOption`で確定し、全員同着の報酬choiceを毎回検査する。問題設定、締切時の得点、
+複数勝者、後続の報酬choiceはすべて通常どおり処理する。productionのbot回答、tick予約、
+保存action、replayの意味は変えない。
+
+1つの二択クイズは最大12ラウンドなので、simulation内では1 mini-game IDあたり48 choice stepを
+上限とする。phase fast-forwardを誤って外した場合は、長時間のMCTSやCI job timeoutになる前に
+ローカルテストで検出する。既存の `bomb_throw_15` はtickごとの移動・投擲が結果を変えるため、
+このfast-forwardの対象外とする。
+
 ## 語彙同期と実装箇所
 
 - `packages/core/src/rules/contract.ts`: mini-game request union、`MINI_GAME_IDS`、
@@ -179,3 +194,18 @@ SPECのhook/effect/engineFeatures語彙は増えないため
 `packages/pipeline/src/app-server-judge.ts`と`packages/server/src/pipeline/service.ts`のallow-set、
 `scripts/diff-guard.mjs`は変更しない。既存ルールの`rule.ts`も変更しないため
 `packages/rules/rule-versions.json`の更新も不要である。
+
+## 実装記録: binary quiz simulation fast-forward
+
+- 着手時点のコミット: `fbd06e78d6c3181cb9fd339b1610f5c97626b2e4`
+- 背景: CX-02 job 27 のrule PR simulationが20分上限でcancelされた。50-gameのローカル比較で、
+  既存ルールのみは59.8秒・違反0、二択クイズ追加時は77.6秒・AI fallback 2件だった。
+- 判断: contract語彙とproduction runtimeは要求を満たしており、ルール内の回避や結果の直生成は行わない。
+  `SimulationApi`だけが同じreducer actionでphase境界へ進み、synthetic questionでは
+  `defaultOption`を決定的な探索用代行として使う。
+- 後方互換性: rule hook / Effect / engineFeature / server / replay schemaは変更しない。
+- 検証: `packages/core/src/sim/api.test.ts` は6件成功。job 27 bundleを使う50-game / 1-seedの
+  new-only + all-rules測定は、修正前77.6秒・AI fallback 2件から修正後65.5秒・fallback 0件へ
+  改善し、execution issue、failsafe、不変条件違反も0件だった。`pnpm verify` のformat、lint、
+  design lint、typecheckは成功し、sandboxのローカル待受制限で中断したtestは権限付き再実行で
+  176ファイル・1355件成功、buildも成功した。CX-02全量CIは行政的rebuild後に確認する。
