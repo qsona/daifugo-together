@@ -1,0 +1,10 @@
+{
+  "ruleId": "r0037-arthur",
+  "name": "アーサー",
+  "description": "自然なKをちょうど3枚含む合法な手を出すと、そのゲームの終了まで、ジョーカーは組や階段で他のカードを代用できなくなり、単体および比較時の強さが10とJの間になる。",
+  "kind": "local",
+  "proposalId": "01M07A7RVPW1X8VEDR6NH056A5",
+  "contractVersion": 1,
+  "engineFeatures": ["jokers"],
+  "messages": {}
+}
