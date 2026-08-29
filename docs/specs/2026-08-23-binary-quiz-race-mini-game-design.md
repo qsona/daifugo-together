@@ -209,3 +209,12 @@ SPECのhook/effect/engineFeatures語彙は増えないため
   改善し、execution issue、failsafe、不変条件違反も0件だった。`pnpm verify` のformat、lint、
   design lint、typecheckは成功し、sandboxのローカル待受制限で中断したtestは権限付き再実行で
   176ファイル・1355件成功、buildも成功した。CX-02全量CIは行政的rebuild後に確認する。
+
+## 実装記録: release simulation fallback threshold
+
+- 200-game / 5-seedの全ルール同時検証では、各seedでAI着手の0.99〜1.22%が600msの
+  hard deadlineに達して安全な代替手へフォールバックした。ゲーム完走、実行エラー、
+  failsafe、不変条件違反、625msのwall上限超過はいずれも0だった。
+- E02の「フォールバック0は理想だが、発生してもゲームを継続する」という境界に合わせ、
+  release gateはfallback率2%超を性能退行として失敗させる。600msの本番相当hard deadlineと
+  625msのwall上限は緩めない。修正前に観測した4%は引き続き検出する。

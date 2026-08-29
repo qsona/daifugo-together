@@ -8,6 +8,7 @@ import { rule as jokersRule } from './test-fixtures/jokers-rule.js';
 import { rule as sequenceRule } from './test-fixtures/sequence-rule.js';
 import { rule as simRule } from './test-fixtures/sim-rule.js';
 import {
+  CI_MAX_FALLBACK_RATE,
   CI_MAX_MOVE_WALL_MS,
   ruleChainEntries,
   runAiRuleSimulations,
@@ -69,6 +70,47 @@ describe('CX-03 simulation runner', () => {
           (run.aiStats?.maxMoveWallMs ?? Infinity) <= CI_MAX_MOVE_WALL_MS,
       ),
     ).toBe(true);
+  }, 20_000);
+
+  it('AI fallback率がrelease上限以下なら継続し、上限超過は違反にする', async () => {
+    const moduleUrl = new URL('./test-fixtures/sim-rule.js', import.meta.url);
+    const bundles = [
+      {
+        module: simRule as RuleModule,
+        moduleUrl: moduleUrl.href,
+        bundleHash: createHash('sha256')
+          .update(await readFile(moduleUrl))
+          .digest('hex'),
+      },
+    ];
+    const budget = { softMs: 1, hardMs: 1, maxPlayouts: 64, sliceMs: 1 };
+    const tolerated = await runAiRuleSimulations({
+      bundles,
+      newRuleId: simRule.meta.ruleId,
+      games: 1,
+      seeds: 1,
+      configurations: ['new-only'],
+      budget,
+      maxFallbackRate: 1,
+      maxMoveWallMs: 2_000,
+    });
+    const rejected = await runAiRuleSimulations({
+      bundles,
+      newRuleId: simRule.meta.ruleId,
+      games: 1,
+      seeds: 1,
+      configurations: ['new-only'],
+      budget,
+      maxFallbackRate: 0,
+      maxMoveWallMs: 2_000,
+    });
+
+    expect(CI_MAX_FALLBACK_RATE).toBe(0.02);
+    expect(tolerated[0]!.aiStats!.fallbackRate).toBeGreaterThan(0);
+    expect(simulationViolations(tolerated)).toEqual([]);
+    expect(simulationViolations(rejected)).toEqual([
+      expect.stringContaining('ai-fallback'),
+    ]);
   }, 20_000);
 
   it('new-only/allの2構成を固定seedで完走する', () => {

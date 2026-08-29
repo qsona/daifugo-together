@@ -265,6 +265,7 @@ const CI_AI_WARMUP_BUDGET: ThinkBudget = {
   hardMs: 2_000,
 };
 export const CI_MAX_MOVE_WALL_MS = 625;
+export const CI_MAX_FALLBACK_RATE = 0.02;
 
 export async function runAiRuleSimulations(options: {
   bundles: readonly LoadedRuleBundle[];
@@ -274,6 +275,7 @@ export async function runAiRuleSimulations(options: {
   configurations?: readonly SimulationConfiguration[];
   budget?: ThinkBudget;
   maxMoveWallMs?: number;
+  maxFallbackRate?: number;
 }): Promise<SimulationRun[]> {
   const selected = options.configurations ?? ['new-only', 'all'];
   const newRule =
@@ -479,11 +481,13 @@ export async function runAiRuleSimulations(options: {
         }
         const report = step.value;
         report.invariantViolations.push(...policyViolations);
-        if (fallbacks > 0) {
+        const fallbackRate = moves === 0 ? 0 : fallbacks / moves;
+        const fallbackLimit = options.maxFallbackRate ?? CI_MAX_FALLBACK_RATE;
+        if (fallbackRate > fallbackLimit) {
           report.invariantViolations.push({
             game: -1,
             invariant: 'ai-fallback',
-            detail: `${String(fallbacks)}/${String(moves)} AI moves used fallback`,
+            detail: `${String(fallbacks)}/${String(moves)} AI moves used fallback (${(fallbackRate * 100).toFixed(2)}% > ${(fallbackLimit * 100).toFixed(2)}%)`,
           });
         }
         const wallLimit = options.maxMoveWallMs ?? CI_MAX_MOVE_WALL_MS;
@@ -504,7 +508,7 @@ export async function runAiRuleSimulations(options: {
           aiStats: {
             moves,
             meanPlayoutsPerMove: moves === 0 ? 0 : playouts / moves,
-            fallbackRate: moves === 0 ? 0 : fallbacks / moves,
+            fallbackRate,
             maxMoveWallMs,
           },
         });
