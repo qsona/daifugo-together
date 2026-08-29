@@ -82,6 +82,7 @@ describe('CX-03 red-team suite', () => {
     expect(prWorkflow).toMatch(
       /simulation:\n\s+needs: quality\n\s+runs-on:[\s\S]*?timeout-minutes: 10/u,
     );
+    expect(prWorkflow).toContain('--configuration new-only');
     expect(prWorkflow).toContain('--games 20 --seeds 1');
     expect(releaseWorkflow).toContain('release-simulation:');
     expect(releaseWorkflow).toContain("github.ref == 'refs/heads/release'");
