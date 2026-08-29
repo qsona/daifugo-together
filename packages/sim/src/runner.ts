@@ -38,6 +38,20 @@ export interface SimulationRun {
   };
 }
 
+export type SimulationConfiguration = SimulationRun['configuration'];
+
+function configurations<T>(options: {
+  newOnly: T;
+  all: T;
+  selected?: readonly SimulationConfiguration[];
+}): { name: SimulationConfiguration; value: T }[] {
+  const selected = options.selected ?? ['new-only', 'all'];
+  return selected.map((name) => ({
+    name,
+    value: name === 'new-only' ? options.newOnly : options.all,
+  }));
+}
+
 export function ruleChainEntries(
   modules: readonly RuleModule[],
 ): RuleChainEntry[] {
@@ -62,21 +76,28 @@ export function ruleChainEntries(
 
 export function runRuleSimulations(options: {
   modules: readonly RuleModule[];
-  newRuleId: string;
+  newRuleId?: string;
   games: number;
   seeds: number;
+  configurations?: readonly SimulationConfiguration[];
 }): SimulationRun[] {
-  const newRule = options.modules.find(
-    (module) => module.meta.ruleId === options.newRuleId,
-  );
-  if (!newRule)
-    throw new Error(`new rule was not loaded: ${options.newRuleId}`);
-  const configurations = [
-    { name: 'new-only' as const, modules: [newRule] },
-    { name: 'all' as const, modules: [...options.modules] },
-  ];
+  const selected = options.configurations ?? ['new-only', 'all'];
+  const newRule =
+    options.newRuleId === undefined
+      ? undefined
+      : options.modules.find(
+          (module) => module.meta.ruleId === options.newRuleId,
+        );
+  if (selected.includes('new-only') && !newRule) {
+    throw new Error(`new rule was not loaded: ${String(options.newRuleId)}`);
+  }
+  const selectedConfigurations = configurations({
+    newOnly: newRule ? [newRule] : [],
+    all: [...options.modules],
+    selected,
+  }).map(({ name, value }) => ({ name, modules: value }));
   const runs: SimulationRun[] = [];
-  for (const configuration of configurations) {
+  for (const configuration of selectedConfigurations) {
     for (let seed = 0; seed < options.seeds; seed += 1) {
       const executionIssues: RuleExecutionIssue[] = [];
       const report = simulate({
@@ -247,23 +268,30 @@ export const CI_MAX_MOVE_WALL_MS = 625;
 
 export async function runAiRuleSimulations(options: {
   bundles: readonly LoadedRuleBundle[];
-  newRuleId: string;
+  newRuleId?: string;
   games: number;
   seeds: number;
+  configurations?: readonly SimulationConfiguration[];
   budget?: ThinkBudget;
   maxMoveWallMs?: number;
 }): Promise<SimulationRun[]> {
-  const newRule = options.bundles.find(
-    (bundle) => bundle.module.meta.ruleId === options.newRuleId,
-  );
-  if (!newRule)
-    throw new Error(`new rule was not loaded: ${options.newRuleId}`);
-  const configurations = [
-    { name: 'new-only' as const, bundles: [newRule] },
-    { name: 'all' as const, bundles: [...options.bundles] },
-  ];
+  const selected = options.configurations ?? ['new-only', 'all'];
+  const newRule =
+    options.newRuleId === undefined
+      ? undefined
+      : options.bundles.find(
+          (bundle) => bundle.module.meta.ruleId === options.newRuleId,
+        );
+  if (selected.includes('new-only') && !newRule) {
+    throw new Error(`new rule was not loaded: ${String(options.newRuleId)}`);
+  }
+  const selectedConfigurations = configurations({
+    newOnly: newRule ? [newRule] : [],
+    all: [...options.bundles],
+    selected,
+  }).map(({ name, value }) => ({ name, bundles: value }));
   const runs: SimulationRun[] = [];
-  for (const configuration of configurations) {
+  for (const configuration of selectedConfigurations) {
     for (let seed = 0; seed < options.seeds; seed += 1) {
       const executionIssues: RuleExecutionIssue[] = [];
       const ruleChain = ruleChainEntries(

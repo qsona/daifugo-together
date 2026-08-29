@@ -7,7 +7,9 @@ import { loadRuleModules } from './loader.js';
 
 const roots: string[] = [];
 
-async function fixture(options: { mismatch?: boolean } = {}) {
+async function fixture(
+  options: { mismatch?: boolean; excluded?: boolean } = {},
+) {
   const root = await mkdtemp(join(tmpdir(), 'rule-loader-'));
   roots.push(root);
   const id = 'r0001-example';
@@ -22,7 +24,10 @@ async function fixture(options: { mismatch?: boolean } = {}) {
   };
   await mkdir(join(root, id), { recursive: true });
   await mkdir(join(root, 'dist', id), { recursive: true });
-  await writeFile(join(root, 'rules-exclude.json'), '[]\n');
+  await writeFile(
+    join(root, 'rules-exclude.json'),
+    `${JSON.stringify(options.excluded ? [id] : [])}\n`,
+  );
   await writeFile(join(root, id, 'meta.json'), JSON.stringify(meta));
   await writeFile(
     join(root, 'dist', id, 'rule.js'),
@@ -55,5 +60,14 @@ describe('compiled rule loader', () => {
     await expect(
       loadRuleModules({ rulesRoot: root, newRuleId: id }),
     ).rejects.toThrow('rule.ts meta differs from meta.json');
+  });
+
+  it('all構成ではexclude済みルールを読み込まない', async () => {
+    const { root, id } = await fixture({ excluded: true });
+
+    await expect(loadRuleModules({ rulesRoot: root })).resolves.toEqual([]);
+    await expect(
+      loadRuleModules({ rulesRoot: root, newRuleId: id }),
+    ).resolves.toHaveLength(1);
   });
 });

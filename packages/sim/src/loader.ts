@@ -29,7 +29,7 @@ function ruleModule(value: unknown): value is RuleModule {
 
 export async function loadRuleBundles(options: {
   rulesRoot: string;
-  newRuleId: string;
+  newRuleId?: string;
 }): Promise<LoadedRuleBundle[]> {
   const excludes = JSON.parse(
     await readFile(join(options.rulesRoot, 'rules-exclude.json'), 'utf8'),
@@ -78,7 +78,7 @@ export async function loadRuleBundles(options: {
 
 export async function loadRuleModules(options: {
   rulesRoot: string;
-  newRuleId: string;
+  newRuleId?: string;
 }): Promise<RuleModule[]> {
   return (await loadRuleBundles(options)).map((bundle) => bundle.module);
 }

@@ -23,7 +23,7 @@
 |---|---|---|
 | main の branch protection / `rule/**` ruleset が未登録(PUBLIC リポジトリで E7 入口条件 G-4 ④が未達) | `docs/archive/impl-progress.md:917-918`、実測(`gh api` で Branch not protected / rulesets 空) | 告知前に required checks(diff-guard / quality / rule-tests / simulation)を登録するのが安全 |
 | DP-03「落ちたことは通知されないことを許容」の記述が stale(CI/CD には既に Discord webhook 送出が実装済みで、runbook も確立済み) | `docs/product-backlog.md:286`、`deploy.yml:51-63` | 外形監視 + webhook 登録は §6-4 で**無条件実施**。残件は backlog 側の記述更新のみ |
-| C-14: 全ルール同時有効の all-rules simulation をリリースゲートにする決定が実装待ち | `docs/decision-log.md:64` | 告知前に 1 回手動実行するか、初週送りを明示する(§7-2) |
+| C-14: 全量 simulation のリリースゲート | `docs/decision-log.md:64` | 2026-08-29 に release CI の必須ジョブとして実装済み |
 | /about(プライバシー・保存データ説明)が未実装(連絡先リンクのみ実装済み) | チェックリスト推奨-2 | Google Console の Branding が Privacy policy URL を必須にしている場合のみ必須昇格(§2-1 で判定) |
 
 ## 1. 道具と役割

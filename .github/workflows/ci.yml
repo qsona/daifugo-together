@@ -63,3 +63,65 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+  release-simulation:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/release'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Find rules changed since the previous release
+        id: changed-rules
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          BASE_SHA="$BEFORE_SHA"
+          if [[ ! "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]] || [[ "$BASE_SHA" =~ ^0+$ ]]; then
+            BASE_SHA="$(git rev-list --max-parents=0 HEAD)"
+          fi
+          {
+            echo 'rule_ids<<EOF'
+            git diff --name-only "$BASE_SHA" HEAD -- packages/rules \
+              | sed -nE 's#^packages/rules/(r[0-9]{4,}-[a-z0-9]+(-[a-z0-9]+)*)/.*#\1#p' \
+              | sort -u
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Run full standalone simulations for changed rules
+        env:
+          RULE_IDS: ${{ steps.changed-rules.outputs.rule_ids }}
+        run: |
+          while IFS= read -r RULE_ID; do
+            if [[ -z "$RULE_ID" ]]; then
+              continue
+            fi
+            pnpm --filter @daifugo/sim start -- \
+              --rule "$RULE_ID" \
+              --configuration new-only \
+              --games 200 \
+              --seeds 5
+          done <<< "$RULE_IDS"
+
+      - name: Run full all-rules simulation
+        run: >-
+          pnpm --filter @daifugo/sim start --
+          --configuration all
+          --games 200
+          --seeds 5

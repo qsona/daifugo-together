@@ -323,7 +323,7 @@ pnpm -w typecheck && pnpm --filter @daifugo/rules test -- r0042-yagiri が成功
 既存生成ルールの挙動を人間レビュー付きで変更する場合は、新規 `rule/**` や恒久巻き戻しの `revert/**` を流用せず、[既存生成ルール保守runbook](../runbooks/E07-rule-maintenance.md)の `maintenance/rules/**` 経路を使う。信頼済みbaseのdiff-guardが、PRDと対象ルールの宣言、元提案の識別情報、各ルール4ファイルの同期、version/bundleの +1、許可差分を検査する。
 
 - 実行時間予算: 合計 15 分以内(simulation は 5 分以内。超えるならゲーム数を減らす)。リポジトリは public(A-2)のため Actions 分数の制約はない。
-- **運用方針(2026-07-30、decision-log C-14)**: 上表の全量 simulation (`new-only` / `all-rules` の 2 構成 × 200 ゲーム × 5 seed)は、将来のリリース CI を作成した時点でルール PR の必須検査からリリース時の必須ゲートへ移す。移行後のルール PR は diff-guard・quality・rule-tests を維持し、必要なら短時間の smoke simulation だけを残す。リリース CI が未実装の間は検証の空白を避けるため、現行の PR simulation を維持する。
+- **運用方針(2026-08-29実装、decision-log C-14)**: 全量 simulation は release push の CI で実行する。前回 release から変更された各ルールの `new-only` と全ルール同時有効の `all-rules` を各 200 ゲーム × 5 seed で検証し、成功するまでデプロイしない。ルール PR は同じ2構成を 20 ゲーム × 1 seed の smoke とし、diff-guard・quality・rule-testsを維持する。
 - 構成 (b) の「全ルール」は**リポジトリに存在する全ルール**で近似する(CI から DB の有効フラグは見えない)。恒久ロールバックされたルールは revert でリポジトリからも消える運用(§3.4)なので、この近似は安全側に働く。**disable 済み・未 revert** のルールが構成 (b) を落とし続ける場合は `packages/rules/rules-exclude.json`(**人手 PR でのみ変更** — ルール PR では差分ガードが構造的に変更を禁じる)で暫定的に外し、revert 完了時にエントリを削除する(§3.4 の runbook に組み込み)。
 - TS-02 レビューの入口条件(decision-log G-4)を本 Epic 着手時に消化する: ①差分ガードの「単一新規ディレクトリ + 許可ファイルリスト」厳格化 ②PR 作成者検査(上記 (7)) ③**ガードのトリガー見直し**(現行 `pull_request` は PR 側がワークフロー定義自体を書き換え可能。`pull_request_target` 化 or required workflow 化)。
 
