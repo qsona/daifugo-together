@@ -112,6 +112,7 @@ export const CX01_OUTPUT_SCHEMA = {
                 type: 'string',
                 enum: [
                   'clearField',
+                  'clearSuitBinding',
                   'requestChoice',
                   'skipTurns',
                   'reverseTurnOrder',

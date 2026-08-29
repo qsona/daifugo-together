@@ -178,6 +178,8 @@ export interface GameView {
   readonly gameIndex: number;
   /** セット開始時に固定されたルールチェーンのID。優先順位順。 */
   readonly ruleIds: readonly RuleId[];
+  /** clearSuitBinding が解除した公開プレイ。未解除なら null。 */
+  readonly suitBindingResetAfter?: readonly CardId[] | null;
   readonly seats: readonly PlayerId[];
   readonly direction: 1 | -1;
   readonly turn: PlayerId | null;
@@ -300,21 +302,23 @@ export type ChoiceRequestPayload =
  *
  * | Effect | afterPlay | afterFieldClear | onGameStart | onGameEnd |
  * | --- | --- | --- | --- | --- |
- * | clearField | yes | no | no | no |
+ * | clearField / clearSuitBinding | yes | no | no | no |
  * | requestChoice (contract v2) | yes | no | yes | no |
  * | skipTurns / reverseTurnOrder / forceRank / moveCards | yes | yes | yes | no |
  * | setMemory | yes | yes | yes | set scope only |
  * | announce | yes | yes | yes | yes |
  *
  * Conflict keys are exhaustively implemented by `priority/conflictKeyOf`:
- * field, choice:{ruleId}, turn:{player}, turnOrder, rank:{player}, resolved
- * card-set union, and memory:{ruleId}:{key}. Independent choice requests are
+ * field, suitBinding, choice:{ruleId}, turn:{player}, turnOrder,
+ * rank:{player}, resolved card-set union, and memory:{ruleId}:{key}.
+ * Independent choice requests are
  * serialized by rule priority. `announce` has no key and follows suppression.
  * Adding an Effect variant requires updating both this table and the exhaustive
  * switch; otherwise TypeScript compilation must fail.
  */
 export type Effect =
   | { type: 'clearField' }
+  | { type: 'clearSuitBinding' }
   | ({
       type: 'requestChoice';
       additionalChoices?: ChoiceRequestPayload[];
@@ -368,6 +372,7 @@ export type Effect =
 /** Effect の全 type 文字列。順序は宣言順。 */
 export const EFFECT_TYPES = [
   'clearField',
+  'clearSuitBinding',
   'requestChoice',
   'skipTurns',
   'reverseTurnOrder',

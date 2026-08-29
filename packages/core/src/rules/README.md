@@ -70,7 +70,7 @@ export const rule: RuleModule = {
 
 | Effect                                                       | `afterPlay` | `afterFieldClear` | `onGameStart` | `onGameEnd` |
 | ------------------------------------------------------------ | ----------- | ----------------- | ------------- | ----------- |
-| `clearField`                                                 | ○           | ×                 | ×             | ×           |
+| `clearField` / `clearSuitBinding`                            | ○           | ×                 | ×             | ×           |
 | `requestChoice` (contract v2)                                | ○           | ×                 | ○             | ×           |
 | `skipTurns` / `reverseTurnOrder` / `forceRank` / `moveCards` | ○           | ○                 | ○             | ×           |
 | `setMemory`                                                  | ○           | ○                 | ○             | set のみ    |
@@ -105,6 +105,12 @@ KV はルール・スコープごとに分離し、最大 32 キー、1 値 1KB�
 `context.game.ruleIds` は、セット開始時に固定された有効ルールIDを優先順位順で
 保持します。別ルールが同じゲームに適用されている場合だけ発動・非発動を切り替える
 合成条件は、この配列を参照してください。ルール間のKVメモリ共有には使いません。
+
+スート縛りは `suitBindingFromHistory(context.game.history,
+context.game.suitBindingResetAfter)` で共有状態として読み取ります。
+`clearSuitBinding` は現在の公開プレイを解除境界として記録し、その手より前に成立した
+縛りだけを解除します。場が流れた後は通常どおり縛りなしに戻り、その後に同じスート
+構成が連続すれば新しい縛りが成立します。
 
 `forceRank` の `rank` は `1`〜`4` または `'lowest'` を受け付けます。`'lowest'` は適用時にプレイヤー数(最下位順位)へ解決されます。反則あがりのように「最下位」を意図する場合は `'lowest'` を使い、数値を直書きしないでください。複数のプレイヤーが `forceRank` で同じ順位(例: `'lowest'`)を指定された場合、先に適用された対象がその順位を確保し、後の対象は近傍の空きスロットへ再割当されます(先に反則した方がより低い順位になる、エンジンが保証する挙動です)。
 
@@ -157,6 +163,7 @@ player または `choiceId` を重複させてはいけません。先頭から�
 | Effect             | 競合単位                                                                                |
 | ------------------ | --------------------------------------------------------------------------------------- |
 | `clearField`       | `field`                                                                                 |
+| `clearSuitBinding` | `suitBinding`                                                                           |
 | `requestChoice`    | `choice:{ruleId}`（同一・異なるルールとも要求順に直列処理）                             |
 | `skipTurns`        | `turn:{player}`                                                                         |
 | `reverseTurnOrder` | `turnOrder`                                                                             |

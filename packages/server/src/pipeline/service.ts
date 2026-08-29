@@ -26,6 +26,7 @@ const HOOKS = new Set([
 ]);
 const EFFECTS = new Set([
   'clearField',
+  'clearSuitBinding',
   'requestChoice',
   'skipTurns',
   'reverseTurnOrder',

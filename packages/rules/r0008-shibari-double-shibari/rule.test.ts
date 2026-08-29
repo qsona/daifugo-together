@@ -49,12 +49,16 @@ const played = (playValue: Play, player = 'p1'): PublicGameEvent => ({
   play: playValue,
 });
 
-const context = (history: PublicGameEvent[] = []): RuleContext =>
+const context = (
+  history: PublicGameEvent[] = [],
+  suitBindingResetAfter: string[] | null = null,
+): RuleContext =>
   ({
     contractVersion: 1,
     game: {
       gameIndex: 0,
       ruleIds: [rule.meta.ruleId],
+      suitBindingResetAfter,
       seats: ['p1', 'p2', 'p3', 'p4'],
       direction: 1,
       turn: 'p1',
@@ -291,6 +295,51 @@ describe('縛り・ダブル縛り', () => {
       ),
     ).toEqual({ legal: true });
     expect(rule.hooks.afterFieldClear).toBeUndefined();
+  });
+
+  it('共有の解除マーカー以後は以前の縛りを無視し、新しい縛りを成立させる', () => {
+    const heartFive = single(card('heart', '5'));
+    const heartEight = single(card('heart', '8'));
+    const heartQueen = single(card('heart', 'Q'));
+    const spadeFive = single(card('spade', '5'));
+    const spadeEight = single(card('spade', '8'));
+    const resetMarker = heartQueen.cards.map((candidate) => candidate.id);
+    const released = context(
+      [
+        played(heartFive),
+        played(heartEight, 'p2'),
+        played(heartQueen, 'p3'),
+        played(spadeFive, 'p4'),
+      ],
+      resetMarker,
+    );
+
+    expect(
+      rule.hooks.modifyLegality?.(released, single(card('diamond', '8')), {
+        legal: true,
+      }),
+    ).toEqual({ legal: true });
+
+    const rebound = context(
+      [
+        played(heartFive),
+        played(heartEight, 'p2'),
+        played(heartQueen, 'p3'),
+        played(spadeFive, 'p4'),
+        played(spadeEight, 'p1'),
+      ],
+      resetMarker,
+    );
+    expect(
+      rule.hooks.modifyLegality?.(rebound, single(card('spade', '10')), {
+        legal: true,
+      }),
+    ).toEqual({ legal: true });
+    expect(
+      rule.hooks.modifyLegality?.(rebound, single(card('heart', '10')), {
+        legal: true,
+      }),
+    ).toEqual({ legal: false });
   });
 
   it('縛り未成立の通常プレイではカットインを出さない', () => {

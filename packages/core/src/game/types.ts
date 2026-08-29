@@ -181,6 +181,8 @@ export interface PrivateGameState {
   memory: RuleMemory;
   rng: RngState;
   hookCalls: Record<string, number>;
+  /** The public play after which the current field's suit binding was reset. */
+  suitBindingResetAfter?: CardId[];
   /** Targeted announce Effects. Kept outside public history. */
   ruleNotices?: {
     id: number;

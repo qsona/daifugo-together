@@ -93,6 +93,22 @@ describe('effect priority and conflict resolution', () => {
     ]);
   });
 
+  it('clearSuitBindingを共有キーで重複除去する', () => {
+    const batch = resolveEffectBatch('afterPlay', [
+      emission('r-high', 0, 0, { type: 'clearSuitBinding' }),
+      emission('r-low', 1, 0, { type: 'clearSuitBinding' }),
+    ]);
+
+    expect(batch.entries.map((entry) => entry.conflictKey)).toEqual([
+      'suitBinding',
+      'suitBinding',
+    ]);
+    expect(batch.entries.map((entry) => entry.resolution)).toEqual([
+      { status: 'adopted' },
+      { status: 'deduped', winnerRuleId: 'r-high' },
+    ]);
+  });
+
   it('競合は最高優先を採用し、敗者のannounceを抑制する', () => {
     const batch = resolveEffectBatch('afterPlay', [
       emission('r-high', 0, 0, {

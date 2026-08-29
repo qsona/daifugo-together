@@ -370,7 +370,7 @@ export type SetAction =
    c. この経路(**権威判定**)での変換フックの `influenced`(§2.3)を `GameState.firedRules` の判定材料として記録する(§2.5.7)。AI の照会(§2.12)は権威判定ではないため記録しない。
 4. **プレイ適用**: カードを手札 → 場へ移動。`field.passedSinceLastPlay` をクリア。`played` イベント。
 5. **あがり判定**: 手札が 0 になったら、その場で順位スロットの空き最上位を割り当て `status = "finished"`(§2.10 の割当規則)。`playerFinished` イベント。**この確定は手順 6 のフックから `ctx` 経由で見える**(都落ちの発火条件。E12 §4.6(2))。
-6. **afterPlay フック**: 全ルールから Effect を収集 → 競合解決(§2.5.3)→ 適用(§2.5.4)。採用された `clearField` はこの時点では**場流れ予約フラグを立てるだけ**で、場のカードはまだ動かさない(移動とイベントは手順 8 に一元化)。
+6. **afterPlay フック**: 全ルールから Effect を収集 → 競合解決(§2.5.3)→ 適用(§2.5.4)。採用された `clearField` はこの時点では**場流れ予約フラグを立てるだけ**で、場のカードはまだ動かさない(移動とイベントは手順 8 に一元化)。`clearSuitBinding` は現在の公開プレイを境界として、それ以前に成立したスート縛りを解除する。
 7. **ゲーム終了判定**: アクティブが 1 人以下なら残者に残スロットを割り当て、`onGameEnd` フック(許可 Effect は表 §2.5.6 のとおり限定)→ `gameEnded` イベントで `finished` へ。以降の手順は行わない。
 8. **場流れ判定**: 手順 6 で場流れ予約フラグが立ったか、または自然条件(BR-8: 最後に出した者以外の全アクティブが連続パス — play 直後は該当しない)なら、**ここで**場 → 捨て札へ移動し `fieldCleared` イベント(場の実移動はこの手順でのみ起きる)。続けて **afterFieldClear フック**(収集 → 解決 → 適用。ここでの `clearField` は場が空なので no-op)。
 9. **次手番決定**: `direction`・`skipCount`・非アクティブのスキップを反映して次の手番者を決める(§2.10)。`skipCount` の消化はパスとして扱い `field.passedSinceLastPlay` に加える(BR-8。E09 §3.1(b) トレース 3 のようなスキップ系ルールとの相互作用)。スキップ消化の結果として全員パス条件(BR-8)が成立した場合は、その場で手順 8 へ戻って場流れを処理してから次手番を決め直す。場が流れた場合のリードは「最後に出した者。その者が非アクティブなら、そこから回り順で次のアクティブ」。リード者自身が `skipCount` を持つ場合もスキップは消化され、リード権はそこから回り順で次のアクティブへ移る。`turnChanged` イベント。
@@ -386,7 +386,7 @@ E12 §4.6(2) の要請に基づく確定表。この表は契約ドキュメン�
 |---|---|---|---|
 | `modifyLegality` | 合法性判定のたび(プレイ検証・候補列挙 §2.9・AI 照会) | 縛り、あがり禁止系(2 あがり禁止) | 候補配列を一括で受ける。**状態を変えられない**(判定のみ) |
 | `modifyStrength` | 強さ比較の前(合法性判定・候補列挙に内包) | 革命(`ctx.memory` の発動状態を見て反転) | 判定のみ |
-| `afterPlay` | プレイ適用・あがり確定の**後**(手順 6) | 8切り(`clearField`)、都落ち(1 位確定を見て `forceRank`)、革命の発動記録(`setMemory`) | あがり確定済みの順位が `ctx` から見える |
+| `afterPlay` | プレイ適用・あがり確定の**後**(手順 6) | 8切り(`clearField`)、Q解き(`clearSuitBinding`)、都落ち(1 位確定を見て `forceRank`)、革命の発動記録(`setMemory`) | あがり確定済みの順位が `ctx` から見える |
 | `afterFieldClear` | 場が流れた直後(自然流れ・Effect 起因の両方) | 「流れたら次は縛り解除」系の記録 | ここでの `clearField` は no-op |
 | `onGameStart` | 配札直後・第 1 手番の前 | ゲーム開始時の宣言・(将来)献上系 | 都落ちをここで書くのは**誤り**(E12 §4.6(2)) |
 | `onGameEnd` | 全順位確定直後 | ゲームまたぎの記録(`setMemory` の set スコープ) | 状態変更系 Effect はほぼ無効(表 §2.5.6) |
@@ -410,6 +410,7 @@ Effect を返す 4 フックの `ctx.game.strength` は、同じ状態に
 | Effect | 競合キー(E09 表記) | 同一ペイロード時 | ペイロード相違時 |
 |---|---|---|---|
 | `clearField` | `"field"` | `deduped`(場は 1 回だけ流れる) | (ペイロードなし) |
+| `clearSuitBinding` | `"suitBinding"` | `deduped`(現在の縛りは 1 回だけ解除する) | (ペイロードなし) |
 | `skipTurns` | `"turn:{player}"` | `deduped` | 矛盾 → 最高優先を `adopted`、他は `rejected`(回数は合算しない) |
 | `reverseTurnOrder` | `"turnOrder"` | `deduped`(反転は 1 回だけ。パリティ累積させない) | (ペイロードなし) |
 | `forceRank` | `"rank:{player}"` | `deduped` | 矛盾 → 最高優先のみ `adopted` |
@@ -429,6 +430,7 @@ Effect を返す 4 フックの `ctx.game.strength` は、同じ状態に
 | Effect | 適用 |
 |---|---|
 | `clearField` | **場流れ予約フラグを立てるのみ**。場 → 捨て札の実移動と `fieldCleared` イベントは §2.5.1 手順 8 に一元化(移動時点の二重定義を避ける) |
+| `clearSuitBinding` | 現在の公開プレイの CardId 集合を共有の解除境界として保存する。以後の `suitBindingFromHistory` は境界以前の縛りを無視し、境界後のプレイだけから新しい縛りを再計算する |
 | `skipTurns` | 対象の `skipCount += count`(count は 1〜3 に clamp。過大値は縮めて記録)。消化時はパス扱い(§2.5.1 手順 9・BR-8) |
 | `reverseTurnOrder` | `direction` を反転 |
 | `forceRank` | §2.10 の退場・再割当処理 |
@@ -450,6 +452,7 @@ Effect を返す 4 フックの `ctx.game.strength` は、同じ状態に
 | Effect \ フック | afterPlay | afterFieldClear | onGameStart | onGameEnd |
 |---|---|---|---|---|
 | clearField | ○ | ×(no-op) | ×(場が空) | × |
+| clearSuitBinding | ○ | × | × | × |
 | requestChoice (contract v2) | ○ | × | ○ | × |
 | skipTurns | ○ | ○ | ○ | × |
 | reverseTurnOrder | ○ | ○ | ○ | × |
@@ -576,6 +579,7 @@ export type MemoryScope = "game" | "set";
 - **スコープの実体**: `game` は `GameState.memory`(ゲーム終了で破棄)、`set` は `SetState.setMemory`(セット終了で破棄。次セットへは持ち越さない)。
 - **分離**: ルールは**自ルールの名前空間しか読み書きできない**(`memory[ruleId]` のみ)。ルール間のデータ共有は契約 v1 では提供しない(共有は暗黙の結合を生み、単独ロールバック(CX-04)を壊すため)。革命相当の状態など、エンジンがすでに計算している派生概念は、Effect フックの `ctx.game.strength` のような合成済み読み取りビューで共有する。
 - **有効ルール構成の参照**: `ctx.game.ruleIds` はセット開始時に固定したルールチェーンのIDを優先順位順で公開する。別ルールの有効・無効だけに依存する合成条件はこの読み取りビューで判定し、他ルールのKVは参照しない。
+- **スート縛りの共有**: `ctx.game.suitBindingResetAfter` と `suitBindingFromHistory` は、`clearSuitBinding` が記録した公開プレイ以後の履歴だけから現在の縛りを決定する。縛りルールと解除ルールはこの共通計算を使い、優先順位や他ルールのKVに依存しない。
 - **クォータ**: 1 ルール・1 スコープあたりキー 32 個・値は JSON 文字列化で 1KB まで・名前空間合計 16KB まで。超過した `setMemory` は棄却 + 記録(ゲームは続行)。
 - 都落ちが参照する「前ゲームの順位」は KV ではなく `ctx.setHistory`(エンジン提供)から読む(E12 §4.6(2) の確定を踏襲)。
 
@@ -1057,6 +1061,7 @@ export interface RuleContext {
 export interface GameView {
   gameIndex: number;
   ruleIds: RuleId[];                  // セット開始時に固定された有効ルールID（優先順位順）
+  suitBindingResetAfter: CardId[] | null; // clearSuitBinding が記録した公開プレイ
   seats: PlayerId[];
   direction: 1 | -1;
   turn: PlayerId | null;
@@ -1086,6 +1091,7 @@ export type CardSelector =
 
 export type Effect =
   | { type: "clearField" }
+  | { type: "clearSuitBinding" }
   | { type: "skipTurns"; player: PlayerId; count: number }
   | { type: "reverseTurnOrder" }
   | { type: "forceRank"; player: PlayerId; rank: Standing | "lowest" }

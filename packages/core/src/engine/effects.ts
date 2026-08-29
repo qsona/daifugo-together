@@ -140,6 +140,9 @@ function effectAllowed(hook: EffectHook, effect: Effect): boolean {
   if (effect.type === 'clearField') {
     return hook === 'afterPlay';
   }
+  if (effect.type === 'clearSuitBinding') {
+    return hook === 'afterPlay';
+  }
   if (effect.type === 'requestChoice') {
     return hook === 'afterPlay' || hook === 'onGameStart';
   }
@@ -726,6 +729,7 @@ function effectPayloadValid(effect: unknown): effect is Effect {
     switch (effect.type) {
       case 'clearField':
       case 'reverseTurnOrder':
+      case 'clearSuitBinding':
         return hasExactKeys(effect, ['type']);
       case 'requestChoice':
         return (
@@ -1217,6 +1221,27 @@ export function executeEffectHook(
       case 'clearField':
         clearRequested = true;
         break;
+      case 'clearSuitBinding': {
+        const current = nextState.public.field.current;
+        if (!current) {
+          entry.resolution = {
+            status: 'rejected',
+            winnerRuleId: entry.ruleId,
+          };
+          details.set(index, { applied: false, reason: 'empty-field' });
+          break;
+        }
+        const marker = current.play.cards.map((card) => card.id).sort();
+        nextState = {
+          ...nextState,
+          private: {
+            ...nextState.private,
+            suitBindingResetAfter: marker,
+          },
+        };
+        details.set(index, { applied: true, resetAfter: marker });
+        break;
+      }
       case 'requestChoice':
         break;
       case 'skipTurns': {

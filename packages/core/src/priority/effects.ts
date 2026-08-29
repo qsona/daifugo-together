@@ -81,6 +81,8 @@ export function conflictKeyOf(
   switch (effect.type) {
     case 'clearField':
       return 'field';
+    case 'clearSuitBinding':
+      return 'suitBinding';
     case 'requestChoice':
       return `choice:${ruleId}`;
     case 'skipTurns':

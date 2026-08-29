@@ -20,6 +20,7 @@ export * from './rules/chain.js';
 export * from './rules/catalog.js';
 export * from './rules/contract.js';
 export * from './rules/in-process.js';
+export * from './rules/suit-binding.js';
 export * from './rules/trusted-simulation.js';
 export * from './set/scoring.js';
 export * from './set/set-reducer.js';

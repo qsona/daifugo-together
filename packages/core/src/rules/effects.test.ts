@@ -132,6 +132,46 @@ describe('GE-04 effect pipeline and lifecycle hooks', () => {
     expect(started.state.public.firedRules).not.toContain(silentEntry.ruleId);
   });
 
+  it('clearSuitBindingは現在の公開プレイを共有解除マーカーとして保存する', () => {
+    const ruleEntry = entry('r-clear-suit-binding');
+    const module: RuleModule = {
+      meta: {
+        ruleId: ruleEntry.ruleId,
+        name: '縛り解除',
+        description: 'clear suit binding fixture',
+        kind: 'original',
+        proposalId: 'fixture',
+        contractVersion: 1,
+        messages: {},
+      },
+      hooks: {
+        afterPlay: () => [{ type: 'clearSuitBinding' }],
+      },
+    };
+    const { config, state } = oneCardState([ruleEntry]);
+    const card = state.players.p1?.hand[0];
+    if (!card) throw new Error('Expected opening card');
+
+    const transition = reduceGame(
+      config,
+      state,
+      { type: 'play', player: 'p1', cards: [card.id] },
+      runtime(module),
+    );
+
+    expect(transition.rejections).toEqual([]);
+    expect(transition.state.private.suitBindingResetAfter).toEqual([card.id]);
+    expect(transition.state.public.firedRules).toContain(ruleEntry.ruleId);
+    expect(transition.events).toContainEqual(
+      expect.objectContaining({
+        type: 'effectApplied',
+        ruleId: ruleEntry.ruleId,
+        effect: { type: 'clearSuitBinding' },
+        conflictKey: 'suitBinding',
+      }),
+    );
+  });
+
   it('対象者限定announceをprivate stateだけへ記録し公開発動に数えない', () => {
     const privateEntry = entry('r-private-notice');
     const privateRule: RuleModule = {

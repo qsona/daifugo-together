@@ -56,6 +56,7 @@ function buildGameView(
   const view = {
     gameIndex: config.gameIndex,
     ruleIds: config.ruleChain.map((entry) => entry.ruleId),
+    suitBindingResetAfter: state.private.suitBindingResetAfter ?? null,
     seats: config.seats,
     direction: state.public.direction,
     turn: state.public.turn,

@@ -1,7 +1,7 @@
 import { MINI_GAME_IDS } from '@daifugo/core';
 import type { PendingCxJudgement } from '@daifugo/server';
 
-export const CX01_PROMPT_VERSION = 'cx01-v18';
+export const CX01_PROMPT_VERSION = 'cx01-v19';
 
 // 実装済みミニゲームの一言説明と、エンジンが強制する固定制約。MINI_GAME_IDS に id を
 // 追加してここを更新し忘れると satisfies がコンパイルエラーになる。
@@ -29,7 +29,9 @@ const CONTRACT = `
 - afterPlay / afterFieldClear / onGameStart / onGameEnd: Effect を返す
 
 Effect 語彙:
-- clearField, requestChoice, skipTurns, reverseTurnOrder, forceRank, moveCards, setMemory, announce
+- clearField, clearSuitBinding, requestChoice, skipTurns, reverseTurnOrder, forceRank, moveCards, setMemory, announce
+- clearSuitBinding は afterPlay で現在のスート縛りだけを解除する。Q解きなど、
+  縛りを満たして合法に出された手の解決後から縛りを外すルールに使う
 - requestChoice は contract v2 の afterPlay / onGameStart で使える。対象者自身の
   手札から正確な枚数を選ばせ、応答を受けた同じフックが
   moveCards 等の通常 Effect を返す。onGameStart では完了まで最初の手番を開始しない。
@@ -60,8 +62,8 @@ ${MINI_GAME_LIST}
 
 hook別のEffect許可:
 - afterPlay: 全Effect（requestChoice は contract v2 のみ）
-- afterFieldClear: requestChoice / clearField以外
-- onGameStart: clearField以外（requestChoice を含む）
+- afterFieldClear: requestChoice / clearField / clearSuitBinding以外
+- onGameStart: clearField / clearSuitBinding以外（requestChoice を含む）
 - onGameEnd: setMemory(set scopeのみ) / announce
 - modifyLegality / modifyStrength: Effectなし（戻り値の変換だけ）
 - 実効 StrengthOrder の revolution は永続的な革命状態を表す。革命系ルールは
@@ -70,6 +72,8 @@ hook別のEffect許可:
   例: { stronger: '3', weaker: 'joker' }。省略時は直前の例外を維持する
 - context.game.ruleIds はセット開始時に固定された有効ルールIDを優先順位順で返す。
   別ルールが同じゲームで有効かどうかに依存する条件は、この配列で判定できる
+- スート縛りは suitBindingFromHistory(context.game.history,
+  context.game.suitBindingResetAfter) で共有状態として読める。解除後の再成立も共通計算が扱う
 
 engineFeatures 宣言（ルールが有効化できるエンジン機能）:
 - sequence: 階段（同スートで連続する3枚以上の手型）

@@ -21,6 +21,8 @@ const PROMPT_HASHES: Record<string, string> = {
     'a95f20a420ac3bed889e35ca124c70c9d9c9a2e8237513443b1e375aec47bb70',
   'cx01-v18':
     'd916175ae9b3df4c930dd2e729c9e4dac052bdc8bcdc65ccc264aba348e5bc79',
+  'cx01-v19':
+    'f99277d70db9b7a652a567e0907c6e3b01a409b6fc04574bd74286523d9a2ef6',
 };
 
 const TEXT = 'ダミー\nダミー本文。';
