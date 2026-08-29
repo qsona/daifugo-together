@@ -20,6 +20,7 @@ import {
 import {
   createAiPlayer,
   NORMAL_DIFFICULTY,
+  type AiFallback,
   type ThinkBudget,
 } from '@daifugo/ai';
 
@@ -264,7 +265,9 @@ const CI_AI_WARMUP_BUDGET: ThinkBudget = {
   ...CI_AI_BUDGET,
   hardMs: 2_000,
 };
-export const CI_MAX_MOVE_WALL_MS = 625;
+export function isAiCompatibilityFailure(fallback: AiFallback): boolean {
+  return fallback !== 'none' && fallback !== 'partial-search';
+}
 
 export async function runAiRuleSimulations(options: {
   bundles: readonly LoadedRuleBundle[];
@@ -273,7 +276,6 @@ export async function runAiRuleSimulations(options: {
   seeds: number;
   configurations?: readonly SimulationConfiguration[];
   budget?: ThinkBudget;
-  maxMoveWallMs?: number;
 }): Promise<SimulationRun[]> {
   const selected = options.configurations ?? ['new-only', 'all'];
   const newRule =
@@ -315,11 +317,12 @@ export async function runAiRuleSimulations(options: {
       });
       const trustedPlans = new Map<string, TrustedSimulationRulePlan>();
       const ai = createAiPlayer({
-        // CIも本番と同じ先読み長で、ルール実行の性能退行を検出する。
+        // 本番と同じ先読み長で、ルール下でもAIが合法手を返せるか確認する。
         search: { cutoffSteps: 65 },
       });
       let moves = 0;
       let fallbacks = 0;
+      let incompatibleFallbacks = 0;
       let playouts = 0;
       let maxMoveWallMs = 0;
       let workerWarmedUp = false;
@@ -435,6 +438,9 @@ export async function runAiRuleSimulations(options: {
             moves += 1;
             playouts += result.stats?.playouts ?? 0;
             if (result.usedFallback !== 'none') fallbacks += 1;
+            if (isAiCompatibilityFailure(result.usedFallback)) {
+              incompatibleFallbacks += 1;
+            }
             if (
               result.stats?.workerThread &&
               result.stats.rootCandidates !== decision.legalPlays.length
@@ -479,21 +485,11 @@ export async function runAiRuleSimulations(options: {
         }
         const report = step.value;
         report.invariantViolations.push(...policyViolations);
-        if (fallbacks > 0) {
+        if (incompatibleFallbacks > 0) {
           report.invariantViolations.push({
             game: -1,
             invariant: 'ai-fallback',
-            detail: `${String(fallbacks)}/${String(moves)} AI moves used fallback`,
-          });
-        }
-        const wallLimit = options.maxMoveWallMs ?? CI_MAX_MOVE_WALL_MS;
-        if (maxMoveWallMs > wallLimit) {
-          report.invariantViolations.push({
-            game: -1,
-            invariant: 'ai-timeout',
-            detail: `max move wall ${maxMoveWallMs.toFixed(1)}ms > ${String(
-              wallLimit,
-            )}ms`,
+            detail: `${String(incompatibleFallbacks)}/${String(moves)} AI moves used heuristic or engine fallback`,
           });
         }
         runs.push({

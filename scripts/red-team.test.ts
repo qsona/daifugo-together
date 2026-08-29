@@ -83,6 +83,8 @@ describe('CX-03 red-team suite', () => {
       /simulation:\n\s+needs: quality\n\s+runs-on:[\s\S]*?timeout-minutes: 10/u,
     );
     expect(prWorkflow).toContain('--configuration new-only');
+    expect(prWorkflow).toContain('--mode invariants');
+    expect(prWorkflow).toContain('--mode ai-smoke');
     expect(prWorkflow).toContain('--games 20 --seeds 1');
     expect(releaseWorkflow).toContain('release-standalone-simulation:');
     expect(releaseWorkflow).toContain('release-all-rules-simulation:');
@@ -91,7 +93,11 @@ describe('CX-03 red-team suite', () => {
     ).toHaveLength(2);
     expect(releaseWorkflow).toContain('--configuration new-only');
     expect(releaseWorkflow).toContain('--configuration all');
+    expect(releaseWorkflow).toContain('--mode invariants');
+    expect(releaseWorkflow).toContain('--mode ai-smoke');
     expect(releaseWorkflow).toContain('--games 200');
     expect(releaseWorkflow).toContain('--seeds 5');
+    expect(releaseWorkflow).toContain('--games 20');
+    expect(releaseWorkflow).toContain('--seeds 1');
   });
 });

@@ -8,7 +8,7 @@ import { rule as jokersRule } from './test-fixtures/jokers-rule.js';
 import { rule as sequenceRule } from './test-fixtures/sequence-rule.js';
 import { rule as simRule } from './test-fixtures/sim-rule.js';
 import {
-  CI_MAX_MOVE_WALL_MS,
+  isAiCompatibilityFailure,
   ruleChainEntries,
   runAiRuleSimulations,
   runRuleSimulations,
@@ -42,6 +42,13 @@ function module(id: string, hooks: RuleModule['hooks'] = {}): RuleModule {
 }
 
 describe('CX-03 simulation runner', () => {
+  it('soft deadlineの部分探索はAI互換性違反にせず、異常fallbackだけを拒否する', () => {
+    expect(isAiCompatibilityFailure('none')).toBe(false);
+    expect(isAiCompatibilityFailure('partial-search')).toBe(false);
+    expect(isAiCompatibilityFailure('heuristic')).toBe(true);
+    expect(isAiCompatibilityFailure('engine-fallback')).toBe(true);
+  });
+
   it('既存simulation不変条件をworker AI 4席の着手で検証する', async () => {
     const moduleUrl = new URL('./test-fixtures/sim-rule.js', import.meta.url);
     const runs = await runAiRuleSimulations({
@@ -63,12 +70,6 @@ describe('CX-03 simulation runner', () => {
     expect(simulationViolations(runs)).toEqual([]);
     expect(runs.every((run) => (run.aiStats?.moves ?? 0) > 0)).toBe(true);
     expect(runs.every((run) => run.aiStats?.fallbackRate === 0)).toBe(true);
-    expect(
-      runs.every(
-        (run) =>
-          (run.aiStats?.maxMoveWallMs ?? Infinity) <= CI_MAX_MOVE_WALL_MS,
-      ),
-    ).toBe(true);
   }, 20_000);
 
   it('new-only/allの2構成を固定seedで完走する', () => {

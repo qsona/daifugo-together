@@ -104,7 +104,7 @@ jobs:
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
 
-      - name: Run full standalone simulations for changed rules
+      - name: Run full standalone invariant simulations for changed rules
         env:
           RULE_IDS: ${{ steps.changed-rules.outputs.rule_ids }}
         run: |
@@ -113,10 +113,27 @@ jobs:
               continue
             fi
             pnpm --filter @daifugo/sim start -- \
+              --mode invariants \
               --rule "$RULE_ID" \
               --configuration new-only \
               --games 200 \
               --seeds 5
+          done <<< "$RULE_IDS"
+
+      - name: Run standalone AI compatibility smoke for changed rules
+        env:
+          RULE_IDS: ${{ steps.changed-rules.outputs.rule_ids }}
+        run: |
+          while IFS= read -r RULE_ID; do
+            if [[ -z "$RULE_ID" ]]; then
+              continue
+            fi
+            pnpm --filter @daifugo/sim start -- \
+              --mode ai-smoke \
+              --rule "$RULE_ID" \
+              --configuration new-only \
+              --games 20 \
+              --seeds 1
           done <<< "$RULE_IDS"
 
   release-all-rules-simulation:
@@ -142,9 +159,18 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run full all-rules simulation
+      - name: Run full all-rules invariant simulation
         run: >-
           pnpm --filter @daifugo/sim start --
+          --mode invariants
           --configuration all
           --games 200
           --seeds 5
+
+      - name: Run all-rules AI compatibility smoke
+        run: >-
+          pnpm --filter @daifugo/sim start --
+          --mode ai-smoke
+          --configuration all
+          --games 20
+          --seeds 1

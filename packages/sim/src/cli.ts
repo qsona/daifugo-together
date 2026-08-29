@@ -4,9 +4,12 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { loadRuleBundles } from './loader.js';
 import {
   runAiRuleSimulations,
+  runRuleSimulations,
   simulationViolations,
   type SimulationConfiguration,
 } from './runner.js';
+
+export type SimulationMode = 'invariants' | 'ai-smoke';
 
 function argument(name: string): string | undefined {
   const index = process.argv.indexOf(name);
@@ -37,16 +40,28 @@ export function simulationConfigurations(
   }
 }
 
+export function simulationMode(value: string | undefined): SimulationMode {
+  switch (value ?? 'ai-smoke') {
+    case 'invariants':
+      return 'invariants';
+    case 'ai-smoke':
+      return 'ai-smoke';
+    default:
+      throw new Error('--mode must be invariants or ai-smoke');
+  }
+}
+
 export function defaultRulesRoot(moduleUrl = import.meta.url): string {
   return resolve(dirname(fileURLToPath(moduleUrl)), '../../rules');
 }
 
 async function main(): Promise<void> {
+  const mode = simulationMode(argument('--mode'));
   const configurations = simulationConfigurations(argument('--configuration'));
   const newRuleId = argument('--rule');
   if (configurations.includes('new-only') && !newRuleId) {
     throw new Error(
-      'usage: sim [--rule r0001-slug] [--configuration both|new-only|all] [--games 200] [--seeds 5] [--rules-root packages/rules]; --rule is required for new-only',
+      'usage: sim [--mode invariants|ai-smoke] [--rule r0001-slug] [--configuration both|new-only|all] [--games 200] [--seeds 5] [--rules-root packages/rules]; --rule is required for new-only',
     );
   }
   const rulesRoot = resolve(argument('--rules-root') ?? defaultRulesRoot());
@@ -56,16 +71,22 @@ async function main(): Promise<void> {
     rulesRoot,
     ...(newRuleId === undefined ? {} : { newRuleId }),
   });
-  const runs = await runAiRuleSimulations({
-    bundles,
+  const commonOptions = {
     ...(newRuleId === undefined ? {} : { newRuleId }),
     games,
     seeds,
     configurations,
-  });
+  };
+  const runs =
+    mode === 'invariants'
+      ? runRuleSimulations({
+          ...commonOptions,
+          modules: bundles.map((bundle) => bundle.module),
+        })
+      : await runAiRuleSimulations({ bundles, ...commonOptions });
   const violations = simulationViolations(runs);
   process.stdout.write(
-    `${JSON.stringify({ ...(newRuleId ? { newRuleId } : {}), games, seeds, runs, violations })}\n`,
+    `${JSON.stringify({ mode, ...(newRuleId ? { newRuleId } : {}), games, seeds, runs, violations })}\n`,
   );
   if (violations.length > 0) process.exitCode = 1;
 }
