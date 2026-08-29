@@ -86,5 +86,9 @@
   "r0029-real-bomber": {
     "version": 2,
     "hash": "e52457b7c6ad273b7de902a2dacadbd8eb118c25e258738d57355dc7eb7de1c5"
+  },
+  "r0031-binary-quiz": {
+    "version": 1,
+    "hash": "791d7a60765135cb0b200b70ebbb02e3a6909bf32ceabe7b0a4a9602ef0d28be"
   }
 }
