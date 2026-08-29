@@ -1,0 +1,120 @@
+name: Discord CI recovery notification
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+      - Deploy production
+    types:
+      - completed
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  notify-recovery:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Detect recovery
+        id: meta
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          RUN_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_NAME: ${{ github.event.workflow_run.name }}
+          RUN_NUMBER: ${{ github.event.workflow_run.run_number }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          RUN_WORKFLOW_ID: ${{ github.event.workflow_run.workflow_id }}
+        run: |
+          set -euo pipefail
+
+          failure_conclusions='^(failure|timed_out|startup_failure|action_required)$'
+
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            recovered=true
+            previous_conclusion=failure
+            source_name="Workflow notification test"
+            source_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions"
+            source_branch="$GITHUB_REF_NAME"
+            test_marker="[TEST] "
+          else
+            recovered=false
+            source_name="$RUN_NAME"
+            source_url="$RUN_URL"
+            source_branch="$RUN_BRANCH"
+            test_marker=""
+
+            if (( RUN_ATTEMPT > 1 )); then
+              previous_attempt=$((RUN_ATTEMPT - 1))
+              previous_url="$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/attempts/$previous_attempt"
+              previous_conclusion="$(
+                curl --fail --silent --show-error --retry 3 \
+                  -H 'Accept: application/vnd.github+json' \
+                  -H 'X-GitHub-Api-Version: 2022-11-28' \
+                  "$previous_url" \
+                  | jq -r '.conclusion // ""'
+              )"
+            else
+              runs_url="$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/workflows/$RUN_WORKFLOW_ID/runs"
+              previous_conclusion="$(
+                curl --fail --silent --show-error --retry 3 --get \
+                  -H 'Accept: application/vnd.github+json' \
+                  -H 'X-GitHub-Api-Version: 2022-11-28' \
+                  --data-urlencode "branch=$RUN_BRANCH" \
+                  --data-urlencode 'status=completed' \
+                  --data-urlencode 'per_page=100' \
+                  "$runs_url" \
+                  | jq -r --argjson current_run_number "$RUN_NUMBER" '
+                      [
+                        .workflow_runs[]
+                        | select(.run_number < $current_run_number)
+                        | select(
+                            .conclusion == "success" or
+                            .conclusion == "failure" or
+                            .conclusion == "timed_out" or
+                            .conclusion == "startup_failure" or
+                            .conclusion == "action_required"
+                          )
+                      ]
+                      | sort_by(.run_number)
+                      | last
+                      | .conclusion // ""
+                    '
+              )"
+            fi
+
+            if [[ "$previous_conclusion" =~ $failure_conclusions ]]; then
+              recovered=true
+            fi
+          fi
+
+          {
+            echo "recovered=$recovered"
+            echo "title=${test_marker}Recovered - ${source_name}"
+            echo "url=$source_url"
+            echo "description<<EOF"
+            printf 'Repository: `%s`\n' "$GITHUB_REPOSITORY"
+            printf 'Branch: `%s`\n' "$source_branch"
+            printf 'Previous conclusion: `%s`\n' "${previous_conclusion:-none}"
+            printf 'Conclusion: `success`\n'
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Notify alert channel of recovery
+        if: ${{ steps.meta.outputs.recovered == 'true' }}
+        uses: sarisia/actions-status-discord@eb045afee445dc055c18d3d90bd0f244fd062708 # v1.16.0
+        with:
+          webhook: ${{ secrets.DISCORD_ALERT_WEBHOOK_URL }}
+          status: Success
+          title: ${{ steps.meta.outputs.title }}
+          description: ${{ steps.meta.outputs.description }}
+          url: ${{ steps.meta.outputs.url }}
+          username: GitHub Actions
+          nocontext: true
+          nofail: false
