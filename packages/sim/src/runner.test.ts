@@ -86,6 +86,27 @@ describe('CX-03 simulation runner', () => {
     expect(simulationViolations(runs)).toEqual([]);
   });
 
+  it('releaseではnew-onlyとallを別々に実行できる', () => {
+    const modules = [module('r0001-one'), module('r0002-two')];
+    const standalone = runRuleSimulations({
+      modules,
+      newRuleId: 'r0002-two',
+      games: 1,
+      seeds: 1,
+      configurations: ['new-only'],
+    });
+    const all = runRuleSimulations({
+      modules,
+      games: 1,
+      seeds: 1,
+      configurations: ['all'],
+    });
+
+    expect(standalone.map((run) => run.configuration)).toEqual(['new-only']);
+    expect(all.map((run) => run.configuration)).toEqual(['all']);
+    expect(simulationViolations([...standalone, ...all])).toEqual([]);
+  });
+
   it('rule例外を握りつぶさずCI違反として報告する', () => {
     const runs = runRuleSimulations({
       modules: [

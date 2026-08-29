@@ -72,13 +72,22 @@ describe('CX-03 red-team suite', () => {
     expect(result.signal).toBe('SIGKILL');
   });
 
-  it('実workflowのsimulation jobにも20分timeoutとquality依存がある', async () => {
-    const workflow = await readFile(
+  it('PR smokeとrelease全量simulationがそれぞれ必須ゲートになっている', async () => {
+    const prWorkflow = await readFile(
       '.github/workflows/rule-pr-checks.yml',
       'utf8',
     );
-    expect(workflow).toMatch(
-      /simulation:\n\s+needs: quality\n\s+runs-on:[\s\S]*?timeout-minutes: 20/u,
+    const releaseWorkflow = await readFile('.github/workflows/ci.yml', 'utf8');
+
+    expect(prWorkflow).toMatch(
+      /simulation:\n\s+needs: quality\n\s+runs-on:[\s\S]*?timeout-minutes: 10/u,
     );
+    expect(prWorkflow).toContain('--games 20 --seeds 1');
+    expect(releaseWorkflow).toContain('release-simulation:');
+    expect(releaseWorkflow).toContain("github.ref == 'refs/heads/release'");
+    expect(releaseWorkflow).toContain('--configuration new-only');
+    expect(releaseWorkflow).toContain('--configuration all');
+    expect(releaseWorkflow).toContain('--games 200');
+    expect(releaseWorkflow).toContain('--seeds 5');
   });
 });

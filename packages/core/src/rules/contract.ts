@@ -176,6 +176,8 @@ export type DeepReadonly<T> = T extends (...args: never[]) => unknown
 
 export interface GameView {
   readonly gameIndex: number;
+  /** セット開始時に固定されたルールチェーンのID。優先順位順。 */
+  readonly ruleIds: readonly RuleId[];
   readonly seats: readonly PlayerId[];
   readonly direction: 1 | -1;
   readonly turn: PlayerId | null;

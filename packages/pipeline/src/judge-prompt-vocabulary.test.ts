@@ -103,4 +103,9 @@ describe('CX-01 プロンプトとエンジン語彙のパリティ', () => {
       new Set(ENGINE_FEATURES),
     );
   });
+
+  it('ルール合成条件に使う固定ルールID一覧を説明する', () => {
+    expect(prompt).toContain('context.game.ruleIds');
+    expect(prompt).toContain('有効ルールID');
+  });
 });
