@@ -575,6 +575,7 @@ export type MemoryScope = "game" | "set";
 - 理由: 接頭辞方式(例: `"set:"` で始まるキー)は文字列規約であり、型検査で守れず codex の書き間違いが実行時まで検出されない。フィールド方式は契約の型(`scope` は union 型)で強制でき、判断基準「型による制約」(E12 §2-1)に合う。
 - **スコープの実体**: `game` は `GameState.memory`(ゲーム終了で破棄)、`set` は `SetState.setMemory`(セット終了で破棄。次セットへは持ち越さない)。
 - **分離**: ルールは**自ルールの名前空間しか読み書きできない**(`memory[ruleId]` のみ)。ルール間のデータ共有は契約 v1 では提供しない(共有は暗黙の結合を生み、単独ロールバック(CX-04)を壊すため)。革命相当の状態など、エンジンがすでに計算している派生概念は、Effect フックの `ctx.game.strength` のような合成済み読み取りビューで共有する。
+- **有効ルール構成の参照**: `ctx.game.ruleIds` はセット開始時に固定したルールチェーンのIDを優先順位順で公開する。別ルールの有効・無効だけに依存する合成条件はこの読み取りビューで判定し、他ルールのKVは参照しない。
 - **クォータ**: 1 ルール・1 スコープあたりキー 32 個・値は JSON 文字列化で 1KB まで・名前空間合計 16KB まで。超過した `setMemory` は棄却 + 記録(ゲームは続行)。
 - 都落ちが参照する「前ゲームの順位」は KV ではなく `ctx.setHistory`(エンジン提供)から読む(E12 §4.6(2) の確定を踏襲)。
 
@@ -1055,6 +1056,7 @@ export interface RuleContext {
 
 export interface GameView {
   gameIndex: number;
+  ruleIds: RuleId[];                  // セット開始時に固定された有効ルールID（優先順位順）
   seats: PlayerId[];
   direction: 1 | -1;
   turn: PlayerId | null;

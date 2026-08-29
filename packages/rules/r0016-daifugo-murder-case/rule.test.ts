@@ -60,6 +60,7 @@ function context(
     contractVersion: 2,
     game: {
       gameIndex: options.previousGame === false ? 0 : 1,
+      ruleIds: [rule.meta.ruleId],
       seats: ['p1', 'p2', 'p3', 'p4'],
       direction: 1,
       turn: 'p1',

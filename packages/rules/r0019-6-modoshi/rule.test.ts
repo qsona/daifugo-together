@@ -41,6 +41,7 @@ function context(history: PublicGameEvent[]): RuleContext {
     contractVersion: 1,
     game: {
       gameIndex: 0,
+      ruleIds: [rule.meta.ruleId],
       seats: [player, 'p2', 'p3', 'p4'],
       direction: 1,
       turn: player,

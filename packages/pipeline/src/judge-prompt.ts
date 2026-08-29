@@ -1,7 +1,7 @@
 import { MINI_GAME_IDS } from '@daifugo/core';
 import type { PendingCxJudgement } from '@daifugo/server';
 
-export const CX01_PROMPT_VERSION = 'cx01-v17';
+export const CX01_PROMPT_VERSION = 'cx01-v18';
 
 // 実装済みミニゲームの一言説明と、エンジンが強制する固定制約。MINI_GAME_IDS に id を
 // 追加してここを更新し忘れると satisfies がコンパイルエラーになる。
@@ -68,6 +68,8 @@ hook別のEffect許可:
   ランキングとこの値を反転し、一時的な強さ反転はランキングだけを反転する
 - StrengthOrder.comparisonOverrides は特定の2ランク間だけの強弱例外を表す。
   例: { stronger: '3', weaker: 'joker' }。省略時は直前の例外を維持する
+- context.game.ruleIds はセット開始時に固定された有効ルールIDを優先順位順で返す。
+  別ルールが同じゲームで有効かどうかに依存する条件は、この配列で判定できる
 
 engineFeatures 宣言（ルールが有効化できるエンジン機能）:
 - sequence: 階段（同スートで連続する3枚以上の手型）

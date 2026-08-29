@@ -56,6 +56,7 @@ function context(hands: Record<string, Card[]>, actor = 'p1'): RuleContext {
     contractVersion: 2,
     game: {
       gameIndex: 0,
+      ruleIds: [rule.meta.ruleId],
       seats,
       direction: 1,
       turn: actor,
