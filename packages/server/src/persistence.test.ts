@@ -3,9 +3,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import {
+  createInProcessRuleChainPort,
   enumerateLegalPlays,
+  replaySet,
   TITLE_BY_STANDING,
   type GameResult,
+  type ReplayAction,
+  type RuleModule,
   type SetOutcome,
   type Standing,
 } from '@daifugo/core';
@@ -111,6 +115,158 @@ describe('SQLite persistence', () => {
       verified.prepare('SELECT value FROM migration_sentinel').get(),
     ).toEqual({ value: 'kept' });
     verified.close();
+  });
+
+  it('AIの自動choiceをカード・プレイヤーともruleInputとして保存する', () => {
+    const persistence = new SqlitePersistence(':memory:');
+    const rule: RuleModule = {
+      meta: {
+        ruleId: 'r-auto-choice-replay',
+        name: '自動choice replay',
+        description: '自動choiceをリプレイへ保存するfixture',
+        kind: 'original',
+        proposalId: 'auto-choice-replay-fixture',
+        contractVersion: 2,
+        messages: { card: 'card', player: 'player' },
+      },
+      hooks: {
+        afterPlay(context, _play, input) {
+          const actor = context.game.field.current?.by;
+          if (!actor) return [];
+          if (input?.kind === 'player') return [];
+          if (input?.kind === 'cards') {
+            return [
+              {
+                type: 'requestChoice',
+                player: actor,
+                choiceId: 'choose_player',
+                players: context.game.seats.filter((id) => id !== actor),
+                messageKey: 'player',
+              },
+            ];
+          }
+          return [
+            {
+              type: 'requestChoice',
+              player: actor,
+              choiceId: 'choose_card',
+              from: { kind: 'hand', player: actor },
+              cards: { kind: 'all' },
+              count: 1,
+              messageKey: 'card',
+            },
+          ];
+        },
+      },
+    };
+    const port = createInProcessRuleChainPort([rule]);
+    const chain = {
+      ruleId: rule.meta.ruleId,
+      name: rule.meta.name,
+      position: 0,
+      priority: {
+        score: 0,
+        activatedAt: 1,
+        ruleId: rule.meta.ruleId,
+      },
+      bundleHash: 'auto-choice-replay-fixture',
+      contractVersion: 2 as const,
+    };
+    const rooms = new RoomManager({
+      ...persistence.roomManagerOptions(),
+      availableRules: () => [chain],
+      createRoomId: () => 'auto-choice-replay-room',
+      createMemberId: () => 'auto-choice-replay-host',
+      randomIndex: () => 0,
+      reducer: { rulePort: port, random: () => 0.999_999 },
+    });
+    const created = rooms.create({
+      userId: 'auto-choice-replay-user',
+      displayName: '自動choiceユーザー',
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    let state = rooms.apply(created.value.room.roomId, {
+      type: 'start',
+      memberId: created.value.member.memberId,
+      now: 100,
+      setSeed: 'auto-choice-replay-seed',
+    })!.state;
+    const engine = state.engine!;
+    const player = engine.currentGame!.public.turn!;
+    const legal = enumerateLegalPlays(
+      {
+        gameIndex: 0,
+        seats: engine.members.map((member) => member.id),
+        gameSeed: `${engine.setSeed}:0`,
+        ruleChain: engine.ruleChain,
+      },
+      engine.currentGame!,
+      player,
+      { port, setHistory: [], setMemory: engine.setMemory },
+    );
+    state = rooms.apply(state.roomId, {
+      type: 'play',
+      memberId: player,
+      turnSeq: state.turnSeq,
+      cards: legal[0]!.cards.map((card) => card.id),
+      now: 101,
+    })!.state;
+    const cardRequest = state.engine!.currentGame!.private.pendingChoice!;
+    const selectedCard = [...(cardRequest.optionCardIds ?? [])].sort()[0]!;
+    state = rooms.apply(state.roomId, {
+      type: 'autoAct',
+      memberId: player,
+      turnSeq: state.turnSeq,
+      cards: [selectedCard],
+      reason: 'ai',
+      now: 102,
+    })!.state;
+    const playerRequest = state.engine!.currentGame!.private.pendingChoice!;
+    const selectedPlayer = [
+      ...(playerRequest.optionPlayerIds ?? []),
+    ].sort()[0]!;
+    state = rooms.apply(state.roomId, {
+      type: 'autoAct',
+      memberId: player,
+      turnSeq: state.turnSeq,
+      cards: [],
+      reason: 'ai',
+      now: 103,
+    })!.state;
+
+    const [init, ...actions] = persistence.replay(engine.setId);
+    if (!init || !('formatVersion' in init)) {
+      throw new Error('Expected replay init');
+    }
+    const replayActions = actions.filter(
+      (record): record is ReplayAction => 'action' in record,
+    );
+    expect(replayActions).toMatchObject([
+      { seq: 0, action: { type: 'play', player } },
+      {
+        seq: 1,
+        action: {
+          type: 'ruleInput',
+          player,
+          choiceId: 'choose_card',
+          cardIds: [selectedCard],
+        },
+      },
+      {
+        seq: 2,
+        action: {
+          type: 'ruleInput',
+          player,
+          choiceId: 'choose_player',
+          playerId: selectedPlayer,
+        },
+      },
+    ]);
+    expect(
+      replaySet(init, replayActions, port).state.currentGame?.public.phase,
+    ).toBe(state.engine!.currentGame!.public.phase);
+    persistence.close();
   });
 
   it('セット開始時に固定ルールchainを保存し、終了前の評価は開かない', () => {

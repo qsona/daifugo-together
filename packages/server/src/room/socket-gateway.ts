@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import {
+  chooseHeuristicCardIdsForView,
   chooseHeuristicPlayForView,
   createAiPlayer,
   DEFAULT_THINK_BUDGET,
@@ -297,18 +298,38 @@ export function attachRoomSocketGateway(
           setHistory: engine.results,
           setMemory: engine.setMemory,
         };
-        const pending = game.private.pendingChoice;
-        const memberPending = pendingChoiceRequestForPlayer(pending, memberId);
-        if (game.public.phase === 'awaitingChoice' && memberPending) {
-          return (memberPending.kind ?? 'cards') === 'cards'
-            ? [...(memberPending.optionCardIds ?? [])]
-                .sort()
-                .slice(0, memberPending.count ?? 0)
-            : [];
-        }
         const effectiveRules = () =>
           options.effectiveRuleChainForSet?.(engine.setId, engine.ruleChain) ??
           engine.ruleChain;
+        const pending = game.private.pendingChoice;
+        const memberPending = pendingChoiceRequestForPlayer(pending, memberId);
+        if (game.public.phase === 'awaitingChoice' && memberPending) {
+          if ((memberPending.kind ?? 'cards') !== 'cards') return [];
+          const pendingRuleChain = effectiveRules();
+          const pendingConfig = {
+            gameIndex,
+            seats: engine.members.map((member) => member.id),
+            gameSeed: `${engine.setSeed}:${gameIndex}`,
+            ruleChain: pendingRuleChain,
+          };
+          const pendingView = buildPlayerSnapshot(
+            pendingConfig,
+            game,
+            {
+              setId: engine.setId,
+              setPhase: engine.phase,
+              members: engine.members,
+              setResults: engine.results,
+            },
+            memberId,
+            runtime,
+          );
+          return chooseHeuristicCardIdsForView(
+            pendingView.pendingChoice?.cards ?? [],
+            memberPending.count ?? 0,
+            pendingView,
+          );
+        }
         let ruleChain = effectiveRules();
         let config = {
           gameIndex,
