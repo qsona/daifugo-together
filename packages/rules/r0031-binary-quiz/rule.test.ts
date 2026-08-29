@@ -42,6 +42,7 @@ function context(
     game: {
       gameIndex: 7,
       seats: players.map(({ id }) => id),
+      ruleIds: [],
       direction: 1,
       turn: 'p2',
       players: players.map(({ id, status = 'active', hand = [] }) => ({
