@@ -84,8 +84,11 @@ describe('CX-03 red-team suite', () => {
     );
     expect(prWorkflow).toContain('--configuration new-only');
     expect(prWorkflow).toContain('--games 20 --seeds 1');
-    expect(releaseWorkflow).toContain('release-simulation:');
-    expect(releaseWorkflow).toContain("github.ref == 'refs/heads/release'");
+    expect(releaseWorkflow).toContain('release-standalone-simulation:');
+    expect(releaseWorkflow).toContain('release-all-rules-simulation:');
+    expect(
+      releaseWorkflow.match(/github\.ref == 'refs\/heads\/release'/gu),
+    ).toHaveLength(2);
     expect(releaseWorkflow).toContain('--configuration new-only');
     expect(releaseWorkflow).toContain('--configuration all');
     expect(releaseWorkflow).toContain('--games 200');
