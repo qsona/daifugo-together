@@ -1,0 +1,9 @@
+{
+  "ruleId": "r0038-q-toki",
+  "name": "Q解き",
+  "description": "しばり中にQを含む合法な手を出すと、その手の解決後に現在のしばりを解除する。Qを出す手自体には解除前のしばりを適用する。",
+  "kind": "local",
+  "proposalId": "01M07AB117T52NWAT1RX9X4AHX",
+  "contractVersion": 1,
+  "messages": {}
+}
