@@ -39,6 +39,7 @@ function context(
     contractVersion: 1,
     game: {
       gameIndex: 0,
+      ruleIds: [rule.meta.ruleId],
       seats,
       direction,
       turn: actor,

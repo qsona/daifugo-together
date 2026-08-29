@@ -43,6 +43,7 @@ function context(currentPlay: Play, hand: Card[]): RuleContext {
     contractVersion: 2,
     game: {
       gameIndex: 0,
+      ruleIds: [rule.meta.ruleId],
       seats,
       direction: 1,
       turn: 'p1',

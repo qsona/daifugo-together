@@ -55,6 +55,7 @@ function buildGameView(
 ): GameView {
   const view = {
     gameIndex: config.gameIndex,
+    ruleIds: config.ruleChain.map((entry) => entry.ruleId),
     seats: config.seats,
     direction: state.public.direction,
     turn: state.public.turn,

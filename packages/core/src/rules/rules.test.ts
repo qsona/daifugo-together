@@ -173,7 +173,9 @@ describe('GE-04 independent rule modules', () => {
 
   it('ルールへ渡すビューを権威状態から切り離し、深く凍結する', () => {
     const entry = fixtureEntry('r0002-mutation-probe', 0);
+    const companionEntry = fixtureEntry('r0003-companion', 1);
     let mutationRejected = false;
+    let observedRuleIds: readonly string[] = [];
     const mutationProbe: RuleModule = {
       meta: {
         ruleId: entry.ruleId,
@@ -186,6 +188,7 @@ describe('GE-04 independent rule modules', () => {
       },
       hooks: {
         afterPlay(context) {
+          observedRuleIds = context.game.ruleIds;
           try {
             (
               context.game.field as unknown as {
@@ -199,11 +202,23 @@ describe('GE-04 independent rule modules', () => {
         },
       },
     };
+    const companion: RuleModule = {
+      meta: {
+        ruleId: companionEntry.ruleId,
+        name: companionEntry.name,
+        description: '固定ルール一覧の順序確認用',
+        kind: 'original',
+        proposalId: 'fixture',
+        contractVersion: 1,
+        messages: {},
+      },
+      hooks: {},
+    };
     const config: GameConfig = {
       gameIndex: 0,
       seats: ['p1', 'p2', 'p3', 'p4'],
       gameSeed: 'immutable-rule-view',
-      ruleChain: [entry],
+      ruleChain: [entry, companionEntry],
     };
     const started = startGame(config).state;
     const player = started.public.turn;
@@ -217,13 +232,15 @@ describe('GE-04 independent rule modules', () => {
       started,
       { type: 'play', player, cards: [card.id] },
       {
-        port: createInProcessRuleChainPort([mutationProbe]),
+        port: createInProcessRuleChainPort([mutationProbe, companion]),
         setHistory: [],
         setMemory: {},
       },
     );
 
     expect(mutationRejected).toBe(true);
+    expect(observedRuleIds).toEqual([entry.ruleId, companionEntry.ruleId]);
+    expect(Object.isFrozen(observedRuleIds)).toBe(true);
     expect(transition.state.public.field.current?.play.cards).toContainEqual(
       card,
     );

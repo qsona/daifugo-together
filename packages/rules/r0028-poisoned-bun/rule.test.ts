@@ -57,6 +57,7 @@ function context(
     contractVersion: 1,
     game: {
       gameIndex: previousGame ? 1 : 0,
+      ruleIds: [rule.meta.ruleId],
       seats: ['p1', 'p2', 'p3', 'p4'],
       direction: 1,
       turn: 'p1',
