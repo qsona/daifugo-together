@@ -255,15 +255,16 @@ function differentialSimulationProblem(input: {
   }
 }
 
+export const CI_AI_HARD_MS = 2_000;
+
 const CI_AI_BUDGET: ThinkBudget = {
   softMs: 50,
-  hardMs: 600,
+  hardMs: CI_AI_HARD_MS,
   maxPlayouts: 64,
   sliceMs: 10,
 };
 const CI_AI_WARMUP_BUDGET: ThinkBudget = {
   ...CI_AI_BUDGET,
-  hardMs: 2_000,
 };
 export function isAiCompatibilityFailure(fallback: AiFallback): boolean {
   return fallback !== 'none' && fallback !== 'partial-search';

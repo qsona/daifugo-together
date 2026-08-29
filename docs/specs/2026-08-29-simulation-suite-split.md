@@ -36,6 +36,9 @@ CX-03 の大量シミュレーションは、生成ルール単体および全�
 - CLI は `--mode invariants|ai-smoke` を受け付ける。未指定時は既存互換のため `ai-smoke` とする。
 - rule PR でも 20 ゲーム × 1 seed の両モードを実行し、軽量段階で両経路の破損を検知する。
 - release の変更ルール単体検証は、従来どおり変更ルールごとに直列実行する。
+- AI smoke の soft deadline は本番相当の50msとし、部分探索を通常の成功として扱う。
+  hard deadline はCIのCPU速度で互換性異常を誤検知しない2秒とする。2秒以内にworkerが
+  応答できず heuristic / engine fallback へ落ちた場合は、従来どおり失敗にする。
 
 ## 6. 技術設計メモ [参考]
 
@@ -62,7 +65,7 @@ CX-03 の大量シミュレーションは、生成ルール単体および全�
 
 | 変更 | 理由 |
 |---|---|
-| なし | - |
+| AI smoke の hard deadline を600msから2秒へ変更 | 600ms上限を約3ms超えるだけでheuristic fallbackとなる事象がrelease CIで連続再現した。AI実時間性能は受け入れ条件上このsmokeの合否に含めず、workerが応答不能な異常は2秒後も検出するため |
 
 ### 検証
 

@@ -8,6 +8,7 @@ import { rule as jokersRule } from './test-fixtures/jokers-rule.js';
 import { rule as sequenceRule } from './test-fixtures/sequence-rule.js';
 import { rule as simRule } from './test-fixtures/sim-rule.js';
 import {
+  CI_AI_HARD_MS,
   isAiCompatibilityFailure,
   ruleChainEntries,
   runAiRuleSimulations,
@@ -43,6 +44,7 @@ function module(id: string, hooks: RuleModule['hooks'] = {}): RuleModule {
 
 describe('CX-03 simulation runner', () => {
   it('soft deadlineの部分探索はAI互換性違反にせず、異常fallbackだけを拒否する', () => {
+    expect(CI_AI_HARD_MS).toBe(2_000);
     expect(isAiCompatibilityFailure('none')).toBe(false);
     expect(isAiCompatibilityFailure('partial-search')).toBe(false);
     expect(isAiCompatibilityFailure('heuristic')).toBe(true);
