@@ -98,5 +98,13 @@
   "r0036-gekokujo": {
     "version": 1,
     "hash": "fafe26c7e5bedda7726639fbc57c80eec258d37a93998a4d73b3799a41035b67"
+  },
+  "r0037-arthur": {
+    "version": 1,
+    "hash": "f1ed8da06507cca0ea89b8883dcf31bb8203a384ae9c7724cffd621cfd5699ba"
+  },
+  "r0038-q-toki": {
+    "version": 1,
+    "hash": "c6968b093cd56ee835b2a321d0883f001df9cfb163a5759946ef1d1f9ecc79ba"
   }
 }
