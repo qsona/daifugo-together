@@ -8,6 +8,7 @@ import type {
   RuleChainEntry,
   RuleContext,
   RuleModule,
+  RulePass,
   Standings,
 } from './contract.js';
 import { contextForRule, detachedFrozen } from './context.js';
@@ -200,6 +201,13 @@ export function createInProcessRuleChainPort(
                   input?.ruleId === entry.ruleId
                     ? detachedFrozen(input.value)
                     : undefined,
+                ) ?? [],
+              );
+            } else if (hookName === 'afterPass') {
+              effects = detachedEffectList(
+                hooks.afterPass?.(
+                  ruleContext,
+                  detachedFrozen(argument as RulePass),
                 ) ?? [],
               );
             } else if (hookName === 'onGameStart') {

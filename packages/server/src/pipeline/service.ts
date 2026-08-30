@@ -20,6 +20,7 @@ const HOOKS = new Set([
   'modifyLegality',
   'modifyStrength',
   'afterPlay',
+  'afterPass',
   'afterFieldClear',
   'onGameStart',
   'onGameEnd',
@@ -40,6 +41,14 @@ const EFFECTS_BY_HOOK: Readonly<Record<string, ReadonlySet<string>>> = {
   modifyLegality: new Set(),
   modifyStrength: new Set(),
   afterPlay: EFFECTS,
+  afterPass: new Set([
+    'skipTurns',
+    'reverseTurnOrder',
+    'forceRank',
+    'moveCards',
+    'setMemory',
+    'announce',
+  ]),
   afterFieldClear: new Set([
     'skipTurns',
     'reverseTurnOrder',

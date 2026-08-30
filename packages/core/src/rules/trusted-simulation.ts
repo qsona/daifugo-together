@@ -10,6 +10,7 @@ import type {
   Legality,
   RuleChainEntry,
   RuleModule,
+  RulePass,
   Standings,
 } from './contract.js';
 import { contextForRule } from './context.js';
@@ -86,12 +87,18 @@ export function compileTrustedSimulationRulePlan(
     ({ module }) => module.hooks.modifyStrength !== undefined,
   );
   const effectRules = new Map<EffectHook, readonly PlannedRule[]>(
-    (['afterPlay', 'afterFieldClear', 'onGameStart', 'onGameEnd'] as const).map(
-      (hook) => [
-        hook,
-        highToLow.filter(({ module }) => module.hooks[hook] !== undefined),
-      ],
-    ),
+    (
+      [
+        'afterPlay',
+        'afterPass',
+        'afterFieldClear',
+        'onGameStart',
+        'onGameEnd',
+      ] as const
+    ).map((hook) => [
+      hook,
+      highToLow.filter(({ module }) => module.hooks[hook] !== undefined),
+    ]),
   );
   return { legalityRules, strengthRules, effectRules };
 }
@@ -190,6 +197,9 @@ export function createTrustedSimulationRuleChainPort(
                 argument as Play,
                 input?.ruleId === entry.ruleId ? input.value : undefined,
               ) ?? [];
+          } else if (hookName === 'afterPass') {
+            effects =
+              hooks.afterPass?.(ruleContext, argument as RulePass) ?? [];
           } else if (hookName === 'onGameStart') {
             effects =
               hooks.onGameStart?.(

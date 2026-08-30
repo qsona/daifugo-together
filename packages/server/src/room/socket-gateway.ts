@@ -742,7 +742,9 @@ export function attachRoomSocketGateway(
           choiceId: parsed.data.choiceId,
           ...('playerId' in parsed.data
             ? { playerId: parsed.data.playerId }
-            : { cardIds: [...parsed.data.cardIds] }),
+            : 'value' in parsed.data
+              ? { value: parsed.data.value }
+              : { cardIds: [...parsed.data.cardIds] }),
           now: now(),
         });
         const error = roomFailure(transition);

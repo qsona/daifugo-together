@@ -165,6 +165,17 @@ export type RoomAction =
       choiceId: string;
       playerId: string;
       cardIds?: never;
+      value?: never;
+      now: number;
+    }
+  | {
+      type: 'ruleInput';
+      memberId: string;
+      turnSeq: number;
+      choiceId: string;
+      value: number;
+      cardIds?: never;
+      playerId?: never;
       now: number;
     }
   | { type: 'pass'; memberId: string; turnSeq: number; now: number }

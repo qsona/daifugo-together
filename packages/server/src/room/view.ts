@@ -461,6 +461,21 @@ function gameView(
                       ?.displayName ?? player,
                 }))
               : null,
+          min:
+            displayedPending.player === memberId &&
+            displayedPending.kind === 'integer'
+              ? (displayedPending.min ?? null)
+              : null,
+          max:
+            displayedPending.player === memberId &&
+            displayedPending.kind === 'integer'
+              ? (displayedPending.max ?? null)
+              : null,
+          defaultValue:
+            displayedPending.player === memberId &&
+            displayedPending.kind === 'integer'
+              ? (displayedPending.defaultValue ?? null)
+              : null,
         }
       : null,
   };

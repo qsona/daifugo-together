@@ -792,6 +792,60 @@ describe('7の同時発動でのルール選択表示', () => {
   );
 });
 
+describe('整数ルール選択表示', () => {
+  afterEach(cleanup);
+
+  it('4〜12のスライダーを8で開き、選んだ値を送信する', async () => {
+    const user = userEvent.setup();
+    const room = tutorialHintRoom('community', null);
+    const ruleIntegerInput = vi.fn(async () => undefined);
+    const client = {
+      ...tutorialHintClient(room),
+      ruleIntegerInput,
+    } as unknown as MultiplayerClient;
+    const chooserSeat = room.you.seatId;
+    if (chooserSeat === null) throw new Error('Expected seated player');
+    const state = {
+      ...client.snapshot(),
+      room: {
+        ...room,
+        activeRules: [
+          { ruleId: 'r0039-guillotine-clock', name: 'ギロチン時計' },
+        ],
+        game: {
+          ...room.game!,
+          pendingChoice: {
+            kind: 'integer' as const,
+            ruleId: 'r0039-guillotine-clock',
+            choiceId: 'pass_count',
+            message: '何回目のパスで落としますか？',
+            seat: chooserSeat,
+            count: 0,
+            cards: null,
+            players: null,
+            min: 4,
+            max: 12,
+            defaultValue: 8,
+          },
+        },
+      },
+    };
+
+    const appClient = {
+      ...client,
+      snapshot: () => state,
+    } as unknown as MultiplayerClient;
+
+    render(<App client={appClient} />);
+
+    expect(screen.getByRole('slider', { name: 'パス回数' })).toBeTruthy();
+    expect(screen.getByText('8回目')).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: '1増やす' }));
+    await user.click(screen.getByRole('button', { name: '9回目に決定' }));
+    expect(ruleIntegerInput).toHaveBeenCalledWith(1, 'pass_count', 9);
+  });
+});
+
 function observableTutorialClient(
   initialRoom: import('@daifugo/core').PlayerRoomView,
 ): {

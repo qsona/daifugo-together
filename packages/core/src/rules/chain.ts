@@ -7,11 +7,12 @@ import type {
   RuleChainEntry,
   RuleContext,
   RuleInput,
+  RulePass,
   Standings,
 } from './contract.js';
 
 export type EffectHook =
-  'afterPlay' | 'afterFieldClear' | 'onGameStart' | 'onGameEnd';
+  'afterPlay' | 'afterPass' | 'afterFieldClear' | 'onGameStart' | 'onGameEnd';
 
 export interface RuleChainPort {
   /**
@@ -43,7 +44,7 @@ export interface RuleChainPort {
     hook: EffectHook,
     entries: RuleChainEntry[],
     context: RuleContext,
-    argument?: Play | Standings,
+    argument?: Play | RulePass | Standings,
     input?: { ruleId: RuleId; value: RuleInput },
   ): { ruleId: RuleId; effects: Effect[] }[];
 }

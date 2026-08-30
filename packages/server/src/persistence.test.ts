@@ -117,7 +117,7 @@ describe('SQLite persistence', () => {
     verified.close();
   });
 
-  it('AIの自動choiceをカード・プレイヤーともruleInputとして保存する', () => {
+  it('AIの自動choiceをカード・プレイヤー・整数ともruleInputとして保存する', () => {
     const persistence = new SqlitePersistence(':memory:');
     const rule: RuleModule = {
       meta: {
@@ -127,13 +127,27 @@ describe('SQLite persistence', () => {
         kind: 'original',
         proposalId: 'auto-choice-replay-fixture',
         contractVersion: 2,
-        messages: { card: 'card', player: 'player' },
+        messages: { card: 'card', player: 'player', integer: 'integer' },
       },
       hooks: {
         afterPlay(context, _play, input) {
           const actor = context.game.field.current?.by;
           if (!actor) return [];
-          if (input?.kind === 'player') return [];
+          if (input?.kind === 'integer') return [];
+          if (input?.kind === 'player') {
+            return [
+              {
+                type: 'requestChoice',
+                kind: 'integer',
+                player: actor,
+                choiceId: 'choose_integer',
+                min: 4,
+                max: 12,
+                defaultValue: 8,
+                messageKey: 'integer',
+              },
+            ];
+          }
           if (input?.kind === 'cards') {
             return [
               {
@@ -234,6 +248,21 @@ describe('SQLite persistence', () => {
       reason: 'ai',
       now: 103,
     })!.state;
+    const integerRequest = state.engine!.currentGame!.private.pendingChoice!;
+    expect(integerRequest).toMatchObject({
+      kind: 'integer',
+      min: 4,
+      max: 12,
+      defaultValue: 8,
+    });
+    state = rooms.apply(state.roomId, {
+      type: 'autoAct',
+      memberId: player,
+      turnSeq: state.turnSeq,
+      cards: [],
+      reason: 'ai',
+      now: 104,
+    })!.state;
 
     const [init, ...actions] = persistence.replay(engine.setId);
     if (!init || !('formatVersion' in init)) {
@@ -260,6 +289,15 @@ describe('SQLite persistence', () => {
           player,
           choiceId: 'choose_player',
           playerId: selectedPlayer,
+        },
+      },
+      {
+        seq: 3,
+        action: {
+          type: 'ruleInput',
+          player,
+          choiceId: 'choose_integer',
+          value: 8,
         },
       },
     ]);

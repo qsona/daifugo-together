@@ -295,8 +295,8 @@ export interface RuleChainPort {
   modifyStrength(entries: RuleChainEntry[], ctx: RuleContext, base: StrengthOrder):
     { result: StrengthOrder; influenced: RuleId[] };
   collectEffects(
-    hook: "afterPlay" | "afterFieldClear" | "onGameStart" | "onGameEnd",
-    entries: RuleChainEntry[], ctx: RuleContext, arg?: Play | Standings,
+    hook: "afterPlay" | "afterPass" | "afterFieldClear" | "onGameStart" | "onGameEnd",
+    entries: RuleChainEntry[], ctx: RuleContext, arg?: Play | RulePass | Standings,
   ): { ruleId: RuleId; effects: Effect[] }[];
 }
 ```
@@ -376,7 +376,7 @@ export type SetAction =
 9. **次手番決定**: `direction`・`skipCount`・非アクティブのスキップを反映して次の手番者を決める(§2.10)。`skipCount` の消化はパスとして扱い `field.passedSinceLastPlay` に加える(BR-8。E09 §3.1(b) トレース 3 のようなスキップ系ルールとの相互作用)。スキップ消化の結果として全員パス条件(BR-8)が成立した場合は、その場で手順 8 へ戻って場流れを処理してから次手番を決め直す。場が流れた場合のリードは「最後に出した者。その者が非アクティブなら、そこから回り順で次のアクティブ」。リード者自身が `skipCount` を持つ場合もスキップは消化され、リード権はそこから回り順で次のアクティブへ移る。`turnChanged` イベント。
 10. **スナップショット生成・配信**(配信自体は server の仕事。エンジンは全員分の `PlayerSnapshot` を返す)。
 
-`pass` アクションは 1 → (合法性: リードでのパスは禁止 §3.1)→ `passed` イベント → 場流れ判定(全員パス条件)→(流れたら afterFieldClear)→ 次手番 → スナップショット、の順。**パスでは afterPlay は発火しない**(パスはプレイではない。パス起点のルールは契約 v1 の対象外。§5)。
+`pass` アクションは 1 → (合法性: リードでのパスは禁止 §3.1)→ `passed` イベント → **afterPass フック** → ゲーム終了判定 → 場流れ判定(全員パス条件)→(流れたら afterFieldClear)→ 次手番 → スナップショット、の順。`afterPass` は手番プレイヤーが送った合法なパスにだけ発火し、`skipTurns` が内部的に消化するスキップには発火しない。**パスでは afterPlay は発火しない**。
 
 #### 2.5.2 フック発火タイミング一覧(codex プロンプト素材)
 
@@ -387,11 +387,12 @@ E12 §4.6(2) の要請に基づく確定表。この表は契約ドキュメン�
 | `modifyLegality` | 合法性判定のたび(プレイ検証・候補列挙 §2.9・AI 照会) | 縛り、あがり禁止系(2 あがり禁止) | 候補配列を一括で受ける。**状態を変えられない**(判定のみ) |
 | `modifyStrength` | 強さ比較の前(合法性判定・候補列挙に内包) | 革命(`ctx.memory` の発動状態を見て反転) | 判定のみ |
 | `afterPlay` | プレイ適用・あがり確定の**後**(手順 6) | 8切り(`clearField`)、Q解き(`clearSuitBinding`)、都落ち(1 位確定を見て `forceRank`)、革命の発動記録(`setMemory`) | あがり確定済みの順位が `ctx` から見える |
+| `afterPass` | 任意パスの受理・`passed` イベントの**後**、場流れ判定の前 | パス回数カウント、ギロチン時計 | `skipTurns` の内部スキップでは発火しない |
 | `afterFieldClear` | 場が流れた直後(自然流れ・Effect 起因の両方) | 「流れたら次は縛り解除」系の記録 | ここでの `clearField` は no-op |
 | `onGameStart` | 配札直後・第 1 手番の前 | ゲーム開始時の宣言・(将来)献上系 | 都落ちをここで書くのは**誤り**(E12 §4.6(2)) |
 | `onGameEnd` | 全順位確定直後 | ゲームまたぎの記録(`setMemory` の set スコープ) | 状態変更系 Effect はほぼ無効(表 §2.5.6) |
 
-Effect を返す 4 フックの `ctx.game.strength` は、同じ状態に
+Effect を返す 5 フックの `ctx.game.strength` は、同じ状態に
 `modifyStrength` チェーンを適用した実効 `StrengthOrder` とする。
 `afterPlay` には、そのプレイの合法性判定で実際に使った
 「プレイ直前」の実効順序を渡す。`StrengthOrder.revolution` は永続的な
@@ -449,17 +450,17 @@ Effect を返す 4 フックの `ctx.game.strength` は、同じ状態に
 
 フックの文脈で意味を持たない Effect は**棄却して記録**する(例外は投げない。生成ルールの誤りでゲームを止めないため)。
 
-| Effect \ フック | afterPlay | afterFieldClear | onGameStart | onGameEnd |
-|---|---|---|---|---|
-| clearField | ○ | ×(no-op) | ×(場が空) | × |
-| clearSuitBinding | ○ | × | × | × |
-| requestChoice (contract v2) | ○ | × | ○ | × |
-| skipTurns | ○ | ○ | ○ | × |
-| reverseTurnOrder | ○ | ○ | ○ | × |
-| forceRank | ○ | ○ | ○(奇習的だが意味は定義される) | × |
-| moveCards | ○ | ○ | ○ | × |
-| setMemory | ○ | ○ | ○ | ○(**set スコープのみ**。game スコープは破棄直前のため棄却) |
-| announce | ○ | ○ | ○ | ○ |
+| Effect \ フック | afterPlay | afterPass | afterFieldClear | onGameStart | onGameEnd |
+|---|---|---|---|---|---|
+| clearField | ○ | × | ×(no-op) | ×(場が空) | × |
+| clearSuitBinding | ○ | × | × | × | × |
+| requestChoice (contract v2) | ○ | × | × | ○ | × |
+| skipTurns | ○ | ○ | ○ | ○ | × |
+| reverseTurnOrder | ○ | ○ | ○ | ○ | × |
+| forceRank | ○ | ○ | ○ | ○(奇習的だが意味は定義される) | × |
+| moveCards | ○ | ○ | ○ | ○ | × |
+| setMemory | ○ | ○ | ○ | ○ | ○(**set スコープのみ**。game スコープは破棄直前のため棄却) |
+| announce | ○ | ○ | ○ | ○ | ○ |
 
 #### 2.5.7 「発動した」の判定(E09 §2.4(7) の実装)
 
@@ -635,16 +636,16 @@ export interface CandidateGenerator {
 正準の状態遷移、秘匿性、AI・タイムアウト、互換性の仕様は
 `docs/specs/2026-07-31-rule-choice-contract-v2-design.md` とする。
 
-- `afterPlay` と `onGameStart` の `requestChoice` は、対象プレイヤー自身の手札から正確な枚数を要求する。`additionalChoices` で複数プレイヤー分を宣言した場合は先頭から直列処理し、全件完了まで次の手番または最初の手番を進めない。
+- `afterPlay` と `onGameStart` の `requestChoice` は、カード、列挙されたプレイヤー、範囲付き整数、または共通ミニゲームの入力を要求できる。`additionalChoices` で複数プレイヤー分を宣言した場合は先頭から直列処理し、全件完了まで次の手番または最初の手番を進めない。
 - `requestChoice.players` は列挙された候補からプレイヤー1人を選ぶ。応答付き `afterPlay` が次の `requestChoice` を返した場合は同一ルールの動的な次段として直列処理する。
 - `requestChoice.kind = 'miniGame'` は共通のサーバー権威ミニゲームを開始し、完了時にエンジンが検証した単一勝者の `miniGameResult` または複数勝者の `miniGameMultiResult` だけを同じフックへ返す。ルールはゲーム内の操作・時計・得点・勝敗を所有しない。`binary_quiz_race` は2〜4人、1問1〜4秒、目標1〜3点、最大12問の二択クイズで、正解者全員へ1点を与え、同じラウンドで目標点へ達した全員を勝者とする。最大問数では最高得点者全員が勝者となる。問題集合はserver側で版管理し、正解は回答締切までclientへ隠す。出題スナップショット、回答、tickをactionへ記録してreplayを固定する。共通ランタイムは `docs/specs/2026-08-04-mini-game-runtime-design.md`、二択クイズ拡張は `docs/specs/2026-08-23-binary-quiz-race-mini-game-design.md` を正準とする。
 - エンジンはプレイを確定したあと `awaitingChoice` で停止し、`ruleInput` をリプレイ可能な通常アクションとして受け取る。
-- 応答は要求元ルールの同じ `afterPlay` だけへ渡り、ルールは `moveCards` 等の通常 Effect を返す。
+- 応答は要求元ルールの同じ `afterPlay` または `onGameStart` へ渡り、ルールは `moveCards` 等の通常 Effect を返す。
 - 同じプレイで複数ルールが要求した場合は優先順位順に直列化し、各応答のEffect適用後に残りルールの要求を再評価する。
 - 選択肢のカード面は対象プレイヤーのスナップショットだけに含める。
 - AI・切断代行・タイムアウト・シミュレーションは決定的な合法選択で即時応答する。
 - contract v1 の既存ルールと version 1 リプレイは引き続きサポートする。
-- v2 の範囲は、各対象者が本人の手札から選ぶカード選択と、列挙候補からのプレイヤー選択である。1回の発動で複数対象者への要求を宣言でき、応答から次の要求を1件返す二段階入力も扱う。同一ルール内は要求順、異なるルール間は優先順位順に直列処理する。自由入力・宣言・パス起点入力は対象外とする。
+- v2 の範囲は、本人の手札からのカード選択、列挙候補からのプレイヤー選択、`min`〜`max` の範囲付き整数選択、共通ミニゲームである。整数入力は安全な整数、最大100候補、範囲内の `defaultValue` を要求し、AI・タイムアウトは既定値を選ぶ。1回の発動で複数対象者への要求を宣言でき、応答から次の要求を1件返す二段階入力も扱う。同一ルール内は要求順、異なるルール間は優先順位順に直列処理する。任意文字列などの自由入力・宣言、および `afterPass` からの入力要求は対象外とする。
 
 ### 2.12 対戦 AI 向けシミュレーション API(E02 §3.1(c) の要求への回答)
 
@@ -1040,6 +1041,7 @@ export interface RuleHooks {
   modifyLegality(ctx: RuleContext, play: Play, base: Legality): Legality;
   modifyStrength(ctx: RuleContext, base: StrengthOrder): StrengthOrder;
   afterPlay(ctx: RuleContext, play: Play, input?: RuleInput): Effect[];
+  afterPass(ctx: RuleContext, pass: RulePass): Effect[];
   afterFieldClear(ctx: RuleContext): Effect[];
   onGameStart(ctx: RuleContext, input?: RuleInput): Effect[];
   onGameEnd(ctx: RuleContext, standings: Standings): Effect[];
@@ -1176,7 +1178,7 @@ export interface SimReport {
 1. **GE-01 基本ルール案(§3.1(b))の承認**。特にジョーカー 2 枚・配り切りの枚数差(BR-2/BR-4)、献上を含めない判断(BR-13)。
 2. **choice 機構は案 A で決定済み(2026-07-31)**。contract v2 の範囲と v1 互換性は §2.11 および choice 設計書を正準とする。
 3. **強制終局ガードの上限値**(§2.5.5 の 1000 手)と KV クォータ(§2.8)の初期値。いずれも保守的な仮置きであり、TS-03 の計測後に調整してよい。
-4. **今後の契約拡張候補**: `afterPass` フック(§5.2-5)/ カード以外のchoice / KV メモリのキー単位可視性区分(E02 §6-3。§5.3 E2-2)/ アトミック Effect グループ(E09 §3.1(f)-1)。実運用の却下・競合データ(OP-02・`conflict_events`)を優先度判断の材料にする。
+4. **今後の契約拡張候補**: 任意文字列など未対応のchoice / KV メモリのキー単位可視性区分(E02 §6-3。§5.3 E2-2)/ アトミック Effect グループ(E09 §3.1(f)-1)。`afterPass` と範囲付き整数choiceは 2026-08-31 に追加済み。実運用の却下・競合データ(OP-02・`conflict_events`)を優先度判断の材料にする。
 
 ### 5.2 E12・E3 への修正提案(相手文書は本書からは変更しない。反映は各文書側の更新で行う)
 
@@ -1186,7 +1188,7 @@ export interface SimReport {
 2. **§4.6(2) Effect 語彙**: `setMemory` の `scope` フィールド、`forceRank` の `Rank` → `Standing` 改名、`announce` の `params`、`Zone`/`CardSelector` の確定(§3.5(b))。骨子コメントの「確定は E1」への回答であり矛盾ではないが、E12 のコード片を確定版に差し替える更新を提案する。
 3. **§4.6(3) 競合解決**: 「矛盾する Effect」の定義・同点タイブレークは **E09 §2.4・§2.2 で確定済み**であり、本書 §2.5.3 はその実装仕様。E12 の暫定文(「同点の暫定案はルール登録の古い順」)の更新は E09 §5.2-1 が既に提案済みのため、本書からの重複提案はしない(E12 更新時は E09 の文言を正とする)。
 4. **§6 合法手列挙**: 「候補生成はエンジンの生成器レジストリが握り、ルールは判定のみ。手の種類追加はエンジン拡張(人手レビュー)」で確定(§2.9)。E2 の探索設計はこの前提でよい(E02 §3.1(b) は両案いずれでも AI 側変更不要と確認済み)。
-5. **パス起点のフックが契約 v1 に無い**: 「パスしたら〜」系の提案ルール(例: パス縛り)は v1 で表現できない。頻出するようなら `afterPass` フックの追加(契約のマイナー拡張)を検討する。CX-01 の線引き資料への追記は §5.3(E7)に含めた。
+5. **パス起点フック(2026-08-31 対応済み)**: 「パスしたら〜」系は、任意パス受理後・場流れ判定前に発火する `afterPass` で表現する。`skipTurns` の内部スキップは対象外で、`requestChoice` は返せない。
 
 **E3 へ**(E03 の該当記述の更新提案):
 
@@ -1240,8 +1242,8 @@ export interface SetOutcome {
 | 却下区分 | 該当する提案 | 根拠 |
 |---|---|---|
 | contract v2 で対応 | 10捨てやQボンバーなど「対象者本人の残り手札から正確な枚数を選ぶ」系 | §2.11。固定済みの複数対象者も approve 対象 |
-| choice 語彙外 | 自由入力・宣言 | §2.11。本人のカード選択、候補からの相手選択、動的な二段階入力は対応済み。語彙外は reject ではなく needs_review |
+| choice 語彙外 | 任意文字列などの自由入力・宣言 | §2.11。本人のカード選択、候補からの相手選択、範囲付き整数、共通ミニゲーム、動的な二段階入力は対応済み。語彙外は reject ではなく needs_review |
 | ~~エンジン拡張が必要(手の種類)~~ | ~~階段など「出せる手の種類を増やす」系~~ | 2026-07-30 改訂: 階段・ジョーカーは engineFeatures 宣言で実装可能になり却下対象外。未対応の手型・カード種は reject でなく needs_review(語彙拡張の検討材料)とする |
-| エンジン拡張が必要(フック不足) | パス起点(「パスしたら〜」)系 | §5.2-5(`afterPass` は v1 に無い)。同上の方針により needs_review とする |
+| contract v1 で対応 | パス起点(「パスしたら〜」)系 | §2.5.1・§5.2-5。任意パスに対する `afterPass` で対応済み。ただしパス直後の追加入力は未対応 |
 
 これらの却下は**採用率(企画書 §11 の成功指標)を構造的に下げる方向に働く**。OP-02 の却下内訳で「契約制約による却下」を独立区分として計測し、頻度が高い区分から契約拡張(v2)の優先度を決める材料にすることを推奨する(E7/E10 へ)。

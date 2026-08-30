@@ -91,13 +91,14 @@ export const CX01_OUTPUT_SCHEMA = {
             summary: { type: 'string' },
             hooks: {
               type: 'array',
-              maxItems: 6,
+              maxItems: 7,
               items: {
                 type: 'string',
                 enum: [
                   'modifyLegality',
                   'modifyStrength',
                   'afterPlay',
+                  'afterPass',
                   'afterFieldClear',
                   'onGameStart',
                   'onGameEnd',

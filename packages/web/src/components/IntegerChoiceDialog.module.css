@@ -1,0 +1,80 @@
+.value {
+  display: block;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-display);
+  font-weight: var(--font-weight-heavy);
+  line-height: var(--line-height-tight);
+}
+
+.controls {
+  display: grid;
+  grid-template-columns: var(--size-tap-min) minmax(0, 1fr) var(--size-tap-min);
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.step {
+  width: var(--size-tap-min);
+  height: var(--size-tap-min);
+  padding: 0;
+  border: var(--border-bold) solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--color-action-secondary-bg);
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: var(--font-size-title-m);
+  font-weight: var(--font-weight-heavy);
+  cursor: pointer;
+}
+
+.step:disabled {
+  border-color: var(--color-navy-200);
+  color: var(--color-text-disabled);
+  cursor: not-allowed;
+}
+
+.sliderColumn {
+  min-width: 0;
+}
+
+.slider {
+  width: 100%;
+  height: var(--size-tap-min);
+  margin: 0;
+  accent-color: var(--color-action-selected);
+  cursor: pointer;
+}
+
+.labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: calc(var(--space-2) * -1);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-micro);
+  font-weight: var(--font-weight-bold);
+}
+
+.ticks {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 var(--space-2);
+  margin-top: calc(var(--space-3) * -1);
+}
+
+.ticks span {
+  width: var(--border-bold);
+  height: var(--space-2);
+  background: var(--color-border-control);
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

@@ -3,6 +3,23 @@ import { describe, expect, it } from 'vitest';
 import { clientPayloadSchemas } from './protocol.js';
 
 describe('shared client payload schemas', () => {
+  it('bounded integer rule input accepts safe integers only', () => {
+    expect(
+      clientPayloadSchemas['game:ruleInput'].safeParse({
+        turnSeq: 3,
+        choiceId: 'pass_count',
+        value: 8,
+      }).success,
+    ).toBe(true);
+    expect(
+      clientPayloadSchemas['game:ruleInput'].safeParse({
+        turnSeq: 3,
+        choiceId: 'pass_count',
+        value: 8.5,
+      }).success,
+    ).toBe(false);
+  });
+
   it('rejects extra keys for empty payload events', () => {
     for (const event of [
       'room:leave',

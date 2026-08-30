@@ -201,6 +201,16 @@ export class MultiplayerClient {
     );
   }
 
+  async ruleIntegerInput(
+    turnSeq: number,
+    choiceId: string,
+    value: number,
+  ): Promise<void> {
+    await this.#request((ack) =>
+      this.#socket.emit('game:ruleInput', { turnSeq, choiceId, value }, ack),
+    );
+  }
+
   async miniGameInput(
     miniGameId: string,
     input:

@@ -31,7 +31,9 @@ import type {
   ChoiceRequestPayload,
   CardSelector,
   Effect,
+  IntegerChoiceRequest,
   RuleInput,
+  RulePass,
   Standings,
   Zone,
 } from '../rules/contract.js';
@@ -53,13 +55,16 @@ const MEMORY_MAX_VALUE_BYTES = 1024;
 const MEMORY_MAX_NAMESPACE_BYTES = 16 * 1024;
 
 export interface ChoiceRequest {
-  kind: 'cards' | 'player' | 'miniGame';
+  kind: 'cards' | 'player' | 'integer' | 'miniGame';
   ruleId: string;
   player: string;
   choiceId: string;
   messageKey: string;
   optionCardIds?: CardId[];
   optionPlayerIds?: string[];
+  min?: number;
+  max?: number;
+  defaultValue?: number;
   count?: number;
   miniGame?: 'bomb_throw_15' | 'binary_quiz_race';
   participants?: string[];
@@ -627,6 +632,39 @@ function playerChoiceRequestValid(value: unknown): boolean {
   );
 }
 
+function integerChoiceRequestValid(
+  value: unknown,
+): value is IntegerChoiceRequest {
+  return (
+    isRecord(value) &&
+    hasExactKeys(value, [
+      'kind',
+      'player',
+      'choiceId',
+      'min',
+      'max',
+      'defaultValue',
+      'messageKey',
+    ]) &&
+    value.kind === 'integer' &&
+    typeof value.player === 'string' &&
+    typeof value.choiceId === 'string' &&
+    /^[a-z][a-z0-9_]{0,63}$/u.test(value.choiceId) &&
+    typeof value.min === 'number' &&
+    Number.isSafeInteger(value.min) &&
+    typeof value.max === 'number' &&
+    Number.isSafeInteger(value.max) &&
+    value.min <= value.max &&
+    value.max - value.min <= 99 &&
+    typeof value.defaultValue === 'number' &&
+    Number.isSafeInteger(value.defaultValue) &&
+    value.defaultValue >= value.min &&
+    value.defaultValue <= value.max &&
+    typeof value.messageKey === 'string' &&
+    /^[a-z][a-z0-9_.-]{0,63}$/u.test(value.messageKey)
+  );
+}
+
 function miniGameChoiceRequestValid(value: unknown): boolean {
   if (!isRecord(value) || value.kind !== 'miniGame') return false;
   const commonValid =
@@ -696,6 +734,7 @@ function choiceRequestValid(value: unknown): value is ChoiceRequestPayload {
   return (
     cardChoiceRequestValid(value) ||
     playerChoiceRequestValid(value) ||
+    integerChoiceRequestValid(value) ||
     miniGameChoiceRequestValid(value)
   );
 }
@@ -751,6 +790,9 @@ function effectPayloadValid(effect: unknown): effect is Effect {
               'maxRounds',
               'seed',
               'kind',
+              'min',
+              'max',
+              'defaultValue',
               'additionalChoices',
               'simultaneous',
             ],
@@ -906,7 +948,7 @@ export function executeEffectHook(
   state: GameState,
   runtime: RuleRuntime,
   hook: EffectHook,
-  argument?: Play | Standings,
+  argument?: Play | RulePass | Standings,
   strength?: StrengthOrder,
   options: {
     previewChoice?: boolean;
@@ -1020,9 +1062,7 @@ export function executeEffectHook(
           effect,
           ...(valid &&
           (effect.type === 'moveCards' ||
-            (effect.type === 'requestChoice' &&
-              !('players' in effect) &&
-              !('miniGame' in effect)))
+            (effect.type === 'requestChoice' && 'from' in effect))
             ? {
                 resolvedCards: resolveCardSelector(
                   invocation.state,
@@ -1102,37 +1142,50 @@ export function executeEffectHook(
                             ? { simultaneous: true }
                             : {}),
                         }
-                    : 'players' in request
+                    : 'kind' in request && request.kind === 'integer'
                       ? {
-                          kind: 'player' as const,
+                          kind: 'integer' as const,
                           player: request.player,
                           choiceId: request.choiceId,
                           messageKey: request.messageKey,
-                          optionPlayerIds: request.players.filter(
-                            (player) =>
-                              invocation.state.players[player]?.status ===
-                              'active',
-                          ),
+                          min: request.min,
+                          max: request.max,
+                          defaultValue: request.defaultValue,
                           ...(effect.simultaneous === true
                             ? { simultaneous: true }
                             : {}),
                         }
-                      : {
-                          kind: 'cards' as const,
-                          player: request.player,
-                          choiceId: request.choiceId,
-                          messageKey: request.messageKey,
-                          optionCardIds: resolveCardSelector(
-                            invocation.state,
-                            request.from,
-                            request.cards,
-                            contextForRule(context, ruleId).rng,
-                          ),
-                          count: request.count,
-                          ...(effect.simultaneous === true
-                            ? { simultaneous: true }
-                            : {}),
-                        },
+                      : 'players' in request
+                        ? {
+                            kind: 'player' as const,
+                            player: request.player,
+                            choiceId: request.choiceId,
+                            messageKey: request.messageKey,
+                            optionPlayerIds: request.players.filter(
+                              (player) =>
+                                invocation.state.players[player]?.status ===
+                                'active',
+                            ),
+                            ...(effect.simultaneous === true
+                              ? { simultaneous: true }
+                              : {}),
+                          }
+                        : {
+                            kind: 'cards' as const,
+                            player: request.player,
+                            choiceId: request.choiceId,
+                            messageKey: request.messageKey,
+                            optionCardIds: resolveCardSelector(
+                              invocation.state,
+                              request.from,
+                              request.cards,
+                              contextForRule(context, ruleId).rng,
+                            ),
+                            count: request.count,
+                            ...(effect.simultaneous === true
+                              ? { simultaneous: true }
+                              : {}),
+                          },
                 ),
               }
             : {}),
@@ -1163,7 +1216,9 @@ export function executeEffectHook(
                               (request.count ?? 0)
                             : request.kind === 'player'
                               ? (request.optionPlayerIds?.length ?? 0) === 0
-                              : (request.participants?.length ?? 0) < 2,
+                              : request.kind === 'integer'
+                                ? false
+                                : (request.participants?.length ?? 0) < 2,
                         )
                       ? 'insufficient-choice-options'
                       : !effectAllowed(hook, effect)

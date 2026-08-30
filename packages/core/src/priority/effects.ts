@@ -23,12 +23,15 @@ export interface EffectEmission {
   effect: Effect;
   resolvedCards?: CardId[];
   resolvedChoices?: {
-    kind: 'cards' | 'player' | 'miniGame';
+    kind: 'cards' | 'player' | 'integer' | 'miniGame';
     player: string;
     choiceId: string;
     messageKey: string;
     optionCardIds?: CardId[];
     optionPlayerIds?: string[];
+    min?: number;
+    max?: number;
+    defaultValue?: number;
     count?: number;
     miniGame?: 'bomb_throw_15' | 'binary_quiz_race';
     participants?: string[];

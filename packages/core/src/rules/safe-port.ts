@@ -11,6 +11,7 @@ import type {
   RuleChainEntry,
   RuleContext,
   RuleInput,
+  RulePass,
   Standings,
 } from './contract.js';
 import { detachedFrozen } from './context.js';
@@ -220,7 +221,7 @@ export function safeCollectEffects(
   hook: EffectHook,
   entries: RuleChainEntry[],
   context: RuleContext,
-  argument?: Play | Standings,
+  argument?: Play | RulePass | Standings,
   input?: { ruleId: string; value: RuleInput },
 ): unknown {
   if (port.trustedSimulation) {
@@ -233,7 +234,7 @@ export function safeCollectEffects(
       context,
       argument === undefined
         ? undefined
-        : (detachedFrozen(argument) as Play | Standings),
+        : (detachedFrozen(argument) as Play | RulePass | Standings),
       input === undefined
         ? undefined
         : (detachedFrozen(input) as { ruleId: string; value: RuleInput }),

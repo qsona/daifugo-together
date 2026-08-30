@@ -478,6 +478,56 @@ describe('pure room reducer', () => {
     expect(firstSubmitted.engine?.currentGame?.public.discard).toEqual([]);
   });
 
+  it('整数選択の範囲は選択者だけへ送り、他プレイヤーには待機状態だけを送る', () => {
+    const started = start(fourHumanRoom());
+    const game = started.engine!.currentGame!;
+    const chooser = started.members[3]!;
+    const withChoice: RoomState = {
+      ...started,
+      engine: {
+        ...started.engine!,
+        currentGame: {
+          ...game,
+          public: { ...game.public, phase: 'awaitingChoice' },
+          private: {
+            ...game.private,
+            pendingChoice: {
+              kind: 'integer',
+              ruleId: 'r-integer-fixture',
+              player: chooser.memberId,
+              choiceId: 'pass_count',
+              messageKey: 'choose',
+              min: 4,
+              max: 12,
+              defaultValue: 8,
+            },
+          },
+        },
+      },
+    };
+
+    expect(viewFor(withChoice, chooser.memberId).game?.pendingChoice).toEqual(
+      expect.objectContaining({
+        kind: 'integer',
+        seat: chooser.seatId,
+        min: 4,
+        max: 12,
+        defaultValue: 8,
+      }),
+    );
+    expect(
+      viewFor(withChoice, started.members[0]!.memberId).game?.pendingChoice,
+    ).toEqual(
+      expect.objectContaining({
+        kind: 'integer',
+        seat: chooser.seatId,
+        min: null,
+        max: null,
+        defaultValue: null,
+      }),
+    );
+  });
+
   it('きほんの1人AI戦は人間のタイマーを外し、初戦だけ人間をseat 0に置く', () => {
     const basic = createRoomState({
       roomId: 'basic-tutorial',

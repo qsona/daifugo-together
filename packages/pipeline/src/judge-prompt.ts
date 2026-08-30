@@ -1,7 +1,7 @@
 import { MINI_GAME_IDS } from '@daifugo/core';
 import type { PendingCxJudgement } from '@daifugo/server';
 
-export const CX01_PROMPT_VERSION = 'cx01-v20';
+export const CX01_PROMPT_VERSION = 'cx01-v21';
 
 // 実装済みミニゲームの一言説明と、エンジンが強制する固定制約。MINI_GAME_IDS に id を
 // 追加してここを更新し忘れると satisfies がコンパイルエラーになる。
@@ -26,14 +26,14 @@ const CONTRACT = `
 契約 v1/v2 のフック:
 - modifyLegality: 合法性だけを同期変換
 - modifyStrength: 強さ順だけを同期変換
-- afterPlay / afterFieldClear / onGameStart / onGameEnd: Effect を返す
+- afterPlay / afterPass / afterFieldClear / onGameStart / onGameEnd: Effect を返す
 
 Effect 語彙:
 - clearField, clearSuitBinding, requestChoice, skipTurns, reverseTurnOrder, forceRank, moveCards, setMemory, announce
 - clearSuitBinding は afterPlay で現在のスート縛りだけを解除する。Q解きなど、
   縛りを満たして合法に出された手の解決後から縛りを外すルールに使う
 - requestChoice は contract v2 の afterPlay / onGameStart で使える。対象者自身の
-  手札から正確な枚数を選ばせ、応答を受けた同じフックが
+  手札から正確な枚数、候補プレイヤー1人、または範囲内の整数を選ばせ、応答を受けた同じフックが
   moveCards 等の通常 Effect を返す。onGameStart では完了まで最初の手番を開始しない。
 - 1回の発動で複数プレイヤーに選ばせる場合、requestChoice の additionalChoices に
   対象者ごとの要求を並べる。エンジンは先頭から直列処理し、全件完了まで手番を進めない。
@@ -41,8 +41,10 @@ Effect 語彙:
   応答後に次の requestChoice を1件返す動的な二段階入力も直列処理できる。
 - 異なるルールが同じプレイで requestChoice を返す場合、エンジンはルール優先順位順に
   直列処理し、先行Effect適用後の手札から後続ルールの要求を再計算する。
-- requestChoice への応答は kind: 'cards'（選ばれたカード）/ 'player'（選ばれた相手）の
-  入力として同じフックへ戻り、そこで通常 Effect を返す。
+- 整数選択は kind: 'integer' と min / max / defaultValue を指定する。範囲は最大100通りで、
+  AI・切断・時間切れでは defaultValue を使う。
+- requestChoice への応答は kind: 'cards'（選ばれたカード）/ 'player'（選ばれた相手）/
+  'integer'（選ばれた整数）の入力として同じフックへ戻り、そこで通常 Effect を返す。
 - requestChoice は contract v2 の afterPlay から kind: 'miniGame' も1件返せる。
   共通項目は miniGame（実装済みid）/ player / participants / seed / choiceId / messageKey。
   bomb_throw_15 は durationMs、binary_quiz_race は questionSet / defaultOption /
@@ -62,6 +64,8 @@ ${MINI_GAME_LIST}
 
 hook別のEffect許可:
 - afterPlay: 全Effect（requestChoice は contract v2 のみ）
+- afterPass: requestChoice / clearField / clearSuitBinding以外。通常のパス操作が受理され、
+  passedイベントが履歴へ入った後、場流れ・次手番決定より前に呼ぶ。skipTurnsによる自動パスでは呼ばない
 - afterFieldClear: requestChoice / clearField / clearSuitBinding以外
 - onGameStart: clearField / clearSuitBinding以外（requestChoice を含む）
 - onGameEnd: setMemory(set scopeのみ) / announce
@@ -76,8 +80,9 @@ hook別のEffect許可:
   ときは played、通常のパスとルールによる自動スキップは passed として記録される。
   fieldCleared / turnChanged / ruleFired 等も含む。modifyLegality / modifyStrength は、
   afterPlay + setMemory で記録した発動時点とこの履歴を同期的に比較し、一定手番・一定回数だけ
-  続く状態や、プレイとパスをまたぐ条件を導出できる。履歴から完全に導出できる提案を、
-  afterPass / onTurnAdvance のような専用フックがないことだけを理由に needs_review にしない
+  続く状態や、プレイとパスをまたぐ条件を導出できる。パス直後に効果を出すルールはafterPassを使う。
+  履歴から完全に導出できる提案を、onTurnAdvanceのような専用フックがないことだけを理由に
+  needs_review にしない
 - スート縛りは suitBindingFromHistory(context.game.history,
   context.game.suitBindingResetAfter) で共有状態として読める。解除後の再成立も共通計算が扱う
 
@@ -86,7 +91,7 @@ engineFeatures 宣言（ルールが有効化できるエンジン機能）:
 - jokers: ジョーカー2枚。単体は最強で革命の影響を受けず、set/階段では任意カードを代用
 
 現行契約で表現できないもの（契約の拡張候補。reject 理由にはならない）:
-- カード選択・プレイヤー選択以外のプレイヤー宣言・自由入力・応答
+- カード選択・プレイヤー選択・範囲内整数選択以外のプレイヤー宣言・自由入力・応答
 - engineFeatures にない手型・カード種の新設、ゲーム状態の形の追加
 - 上の実装済み一覧にないミニゲームの新設（例: 早押し、神経衰弱）
 
@@ -99,7 +104,7 @@ engineFeatures 宣言（ルールが有効化できるエンジン機能）:
 const CRITERIA = `
 線引き（カオスは歓迎、破壊は却下。いまの契約で実装できないことは reject の理由にしない）:
 - A1 は requestChoice で表現できない自由入力・宣言だけ needs_review。本人の残り手札
-  から正確な枚数を選ぶ追加入力、候補から相手1人を選ぶ入力、その応答後のカード選択
+  から正確な枚数を選ぶ追加入力、候補から相手1人を選ぶ入力、範囲内の整数入力、その応答後のカード選択
   という二段階入力は contract v2 で approve できる。
   複数の独立した有効ルールが同じプレイでそれぞれ1回ずつカード選択を要求する
   組み合わせはエンジンが直列化するため approve できる。

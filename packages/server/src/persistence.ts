@@ -198,7 +198,9 @@ function replayAction(
               choiceId: action.choiceId,
               ...('playerId' in action && action.playerId !== undefined
                 ? { playerId: action.playerId }
-                : { cardIds: action.cardIds ?? [] }),
+                : 'value' in action && action.value !== undefined
+                  ? { value: action.value }
+                  : { cardIds: action.cardIds ?? [] }),
             }
           : action.type === 'miniGameInput'
             ? {
@@ -263,7 +265,14 @@ function replayAction(
                               ...(autoActPending.optionPlayerIds ?? []),
                             ].sort()[0] ?? '',
                         }
-                      : { cardIds: action.cards ?? [] }),
+                      : autoActPending.kind === 'integer'
+                        ? {
+                            value:
+                              autoActPending.defaultValue ??
+                              autoActPending.min ??
+                              0,
+                          }
+                        : { cardIds: action.cards ?? [] }),
                   }
                 : action.type === 'autoAct'
                   ? action.cards

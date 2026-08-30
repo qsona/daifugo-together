@@ -1134,7 +1134,9 @@ function gameAction(
           choiceId: action.choiceId,
           ...('playerId' in action && action.playerId !== undefined
             ? { playerId: action.playerId }
-            : { cardIds: action.cardIds ?? [] }),
+            : 'value' in action && action.value !== undefined
+              ? { value: action.value }
+              : { cardIds: action.cardIds ?? [] }),
         }
       : action.type === 'autoAct' && actorPending
         ? {
@@ -1146,7 +1148,9 @@ function gameAction(
                   playerId:
                     [...(actorPending.optionPlayerIds ?? [])].sort()[0] ?? '',
                 }
-              : { cardIds: action.cards ?? [] }),
+              : actorPending.kind === 'integer'
+                ? { value: actorPending.defaultValue ?? actorPending.min ?? 0 }
+                : { cardIds: action.cards ?? [] }),
           }
         : action.type === 'play'
           ? { type: 'play', player: actor.memberId, cards: action.cards }

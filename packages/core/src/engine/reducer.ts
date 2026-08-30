@@ -366,31 +366,55 @@ function reducePass(
     player: action.player,
   };
   const withPassEvent = appendEvents(passed, [passEvent]);
-  if (allOthersPassed(withPassEvent, activePlayers(config, withPassEvent))) {
+  const passEffects = executeEffectHook(
+    config,
+    withPassEvent,
+    runtime,
+    'afterPass',
+    { player: action.player },
+  );
+  const passEvents: EngineEvent[] = [passEvent, ...passEffects.events];
+  const afterPass = appendEvents(passEffects.state, passEffects.events);
+  const afterPassRuntime: RuleRuntime = {
+    ...runtime,
+    setMemory: passEffects.setMemory,
+  };
+
+  if (activePlayers(config, afterPass).length <= 1) {
+    const finished = finishWithHook(config, afterPass, afterPassRuntime);
+    return {
+      state: appendEvents(finished.state, finished.events),
+      events: [...passEvents, ...finished.events],
+      rejections: [],
+      setMemory: finished.setMemory,
+    };
+  }
+
+  if (allOthersPassed(afterPass, activePlayers(config, afterPass))) {
     const cleared = clearFieldWithHook(
       config,
-      withPassEvent,
-      runtime,
+      afterPass,
+      afterPassRuntime,
       'allPassed',
     );
     if (cleared.state.public.turnCount > TURN_LIMIT) {
       const finished = finishForTurnLimit(config, cleared.state, {
-        ...runtime,
+        ...afterPassRuntime,
         setMemory: cleared.setMemory,
       });
       return {
         state: finished.state,
-        events: [passEvent, ...cleared.events, ...finished.events],
+        events: [...passEvents, ...cleared.events, ...finished.events],
         rejections: [],
         setMemory: finished.setMemory,
       };
     }
     if (activePlayers(config, cleared.state).length <= 1) {
       const finished = finishWithHook(config, cleared.state, {
-        ...runtime,
+        ...afterPassRuntime,
         setMemory: cleared.setMemory,
       });
-      const events = [passEvent, ...cleared.events, ...finished.events];
+      const events = [...passEvents, ...cleared.events, ...finished.events];
       return {
         state: appendEvents(finished.state, finished.events),
         events,
@@ -400,40 +424,45 @@ function reducePass(
     }
     return {
       state: cleared.state,
-      events: [passEvent, ...cleared.events],
+      events: [...passEvents, ...cleared.events],
       rejections: [],
       setMemory: cleared.setMemory,
     };
   }
 
-  const advanced = advanceTurn(config, withPassEvent, action.player, runtime);
+  const advanced = advanceTurn(
+    config,
+    afterPass,
+    action.player,
+    afterPassRuntime,
+  );
   if (advanced.state.public.turnCount > TURN_LIMIT) {
     const finished = finishForTurnLimit(config, advanced.state, {
-      ...runtime,
+      ...afterPassRuntime,
       setMemory: advanced.setMemory,
     });
     return {
       state: finished.state,
-      events: [passEvent, ...advanced.events, ...finished.events],
+      events: [...passEvents, ...advanced.events, ...finished.events],
       rejections: [],
       setMemory: finished.setMemory,
     };
   }
   if (activePlayers(config, advanced.state).length <= 1) {
     const finished = finishWithHook(config, advanced.state, {
-      ...runtime,
+      ...afterPassRuntime,
       setMemory: advanced.setMemory,
     });
     return {
       state: appendEvents(finished.state, finished.events),
-      events: [passEvent, ...advanced.events, ...finished.events],
+      events: [...passEvents, ...advanced.events, ...finished.events],
       rejections: [],
       setMemory: finished.setMemory,
     };
   }
   return {
     state: advanced.state,
-    events: [passEvent, ...advanced.events],
+    events: [...passEvents, ...advanced.events],
     rejections: [],
     setMemory: advanced.setMemory,
   };
@@ -936,6 +965,15 @@ function reduceSingleRuleInput(
     'playerId' in action &&
     action.playerId !== undefined &&
     (pending.optionPlayerIds ?? []).includes(action.playerId);
+  const validInteger =
+    pendingKind === 'integer' &&
+    'value' in action &&
+    action.value !== undefined &&
+    Number.isSafeInteger(action.value) &&
+    pending.min !== undefined &&
+    pending.max !== undefined &&
+    action.value >= pending.min &&
+    action.value <= pending.max;
   const canonicalBombResult =
     pending.miniGameState?.kind === 'bomb_throw_15'
       ? bombThrowResult(pending.miniGameState)
@@ -957,7 +995,13 @@ function reduceSingleRuleInput(
     'miniGameId' in action &&
     'winnerPlayerIds' in action &&
     action.miniGameId === pending.miniGameState.id;
-  if (!validCards && !validPlayer && !validMiniGame && !validMultiMiniGame) {
+  if (
+    !validCards &&
+    !validPlayer &&
+    !validInteger &&
+    !validMiniGame &&
+    !validMultiMiniGame
+  ) {
     return reject(state, action.player, 'INVALID_RULE_CHOICE');
   }
   const inputValue: RuleInput =
@@ -979,11 +1023,17 @@ function reduceSingleRuleInput(
               choiceId: pending.choiceId,
               playerId: action.playerId,
             }
-          : {
-              kind: 'cards' as const,
-              choiceId: pending.choiceId,
-              cardIds: [...(('cardIds' in action && action.cardIds) || [])],
-            };
+          : validInteger
+            ? {
+                kind: 'integer' as const,
+                choiceId: pending.choiceId,
+                value: action.value,
+              }
+            : {
+                kind: 'cards' as const,
+                choiceId: pending.choiceId,
+                cardIds: [...(('cardIds' in action && action.cardIds) || [])],
+              };
   const privateState = {
     excluded: state.private.excluded,
     memory: state.private.memory,
@@ -1280,6 +1330,22 @@ function submittedChoice(
       player: action.player,
       choiceId: action.choiceId,
       playerId: action.playerId,
+    };
+  }
+  if (
+    kind === 'integer' &&
+    'value' in action &&
+    action.value !== undefined &&
+    Number.isSafeInteger(action.value) &&
+    request.min !== undefined &&
+    request.max !== undefined &&
+    action.value >= request.min &&
+    action.value <= request.max
+  ) {
+    return {
+      player: action.player,
+      choiceId: action.choiceId,
+      value: action.value,
     };
   }
   return null;

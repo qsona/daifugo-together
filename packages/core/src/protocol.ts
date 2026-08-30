@@ -256,7 +256,7 @@ export interface MultiplayerGameView {
   }[];
   miniGame?: BombThrowMiniGameView | BinaryQuizMiniGameView | null;
   pendingChoice?: {
-    kind?: 'cards' | 'player' | 'miniGame';
+    kind?: 'cards' | 'player' | 'integer' | 'miniGame';
     ruleId: string;
     choiceId: string;
     message: string | null;
@@ -264,6 +264,9 @@ export interface MultiplayerGameView {
     count: number;
     cards: Card[] | null;
     players?: { seat: SeatId; displayName: string }[] | null;
+    min?: number | null;
+    max?: number | null;
+    defaultValue?: number | null;
   } | null;
 }
 
@@ -343,6 +346,13 @@ export const clientPayloadSchemas = {
         turnSeq: turnSeqSchema,
         choiceId: z.string().regex(/^[a-z][a-z0-9_]{0,63}$/),
         playerId: z.string().min(1),
+      })
+      .strict(),
+    z
+      .object({
+        turnSeq: turnSeqSchema,
+        choiceId: z.string().regex(/^[a-z][a-z0-9_]{0,63}$/),
+        value: z.number().int().safe(),
       })
       .strict(),
   ]),

@@ -458,7 +458,111 @@ const gameStartChoiceRule: RuleModule = {
   },
 };
 
+const integerChoiceRule: RuleModule = {
+  meta: {
+    ruleId: 'r-choice-integer',
+    name: 'integer choice fixture',
+    description: 'contract v2 bounded integer choice fixture',
+    kind: 'original',
+    proposalId: 'choice-fixture-integer',
+    contractVersion: 2,
+    messages: { choose_number: '回数を選んでください' },
+  },
+  hooks: {
+    onGameStart(_context, input) {
+      if (input?.kind === 'integer' && input.choiceId === 'pass_count') {
+        return [
+          {
+            type: 'setMemory',
+            scope: 'game',
+            key: 'selected',
+            value: input.value,
+          },
+        ];
+      }
+      return [
+        {
+          type: 'requestChoice',
+          kind: 'integer',
+          player: 'p1',
+          choiceId: 'pass_count',
+          min: 4,
+          max: 12,
+          defaultValue: 8,
+          messageKey: 'choose_number',
+        },
+      ];
+    },
+  },
+};
+
 describe('contract v2 rule choices', () => {
+  it('onGameStartの整数選択を範囲検証してRuleInputへ渡す', () => {
+    const { config, runtime } = fixture(integerChoiceRule);
+    const started = startGame(config, runtime);
+
+    expect(started.state.private.pendingChoice).toMatchObject({
+      hook: 'onGameStart',
+      kind: 'integer',
+      player: 'p1',
+      choiceId: 'pass_count',
+      min: 4,
+      max: 12,
+      defaultValue: 8,
+    });
+
+    const snapshot = buildPlayerSnapshot(
+      config,
+      started.state,
+      {
+        setId: 'set-integer-choice',
+        setPhase: { name: 'gameInProgress', gameIndex: 0 },
+        members: seats.map((id) => ({ id, displayName: id, isAI: false })),
+        setResults: [],
+      },
+      'p1',
+      runtime,
+    );
+    expect(snapshot.pendingChoice).toMatchObject({
+      kind: 'integer',
+      min: 4,
+      max: 12,
+      defaultValue: 8,
+    });
+
+    const invalid = reduceGame(
+      config,
+      started.state,
+      {
+        type: 'ruleInput',
+        player: 'p1',
+        choiceId: 'pass_count',
+        value: 13,
+      },
+      runtime,
+    );
+    expect(invalid.rejections).toEqual([
+      { player: 'p1', code: 'INVALID_RULE_CHOICE' },
+    ]);
+
+    const completed = reduceGame(
+      config,
+      started.state,
+      {
+        type: 'ruleInput',
+        player: 'p1',
+        choiceId: 'pass_count',
+        value: 8,
+      },
+      runtime,
+    );
+    expect(completed.rejections).toEqual([]);
+    expect(completed.state.public.phase).toBe('awaitingPlay');
+    expect(completed.state.private.memory['r-choice-integer']).toMatchObject({
+      selected: 8,
+    });
+  });
+
   it('onGameStartの選択完了まで最初の手番を開始しない', () => {
     const { config, runtime } = fixture(gameStartChoiceRule);
     const started = startGame(config, runtime);

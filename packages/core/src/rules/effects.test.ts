@@ -1152,6 +1152,7 @@ describe('GE-04 effect pipeline and lifecycle hooks', () => {
 
   it('skipTurnsをパスとして消化し、全員分なら場を流してリードへ戻す', () => {
     const ruleEntry = entry('r0105-skip-pass');
+    let afterPassCalls = 0;
     const module: RuleModule = {
       meta: {
         ruleId: ruleEntry.ruleId,
@@ -1163,6 +1164,10 @@ describe('GE-04 effect pipeline and lifecycle hooks', () => {
         messages: {},
       },
       hooks: {
+        afterPass: () => {
+          afterPassCalls += 1;
+          return [];
+        },
         afterPlay: () => [
           { type: 'skipTurns', player: 'p2', count: 1 },
           { type: 'skipTurns', player: 'p3', count: 1 },
@@ -1207,6 +1212,73 @@ describe('GE-04 effect pipeline and lifecycle hooks', () => {
     });
     expect(transition.state.public.field.current).toBeUndefined();
     expect(transition.state.public.turn).toBe('p1');
+    expect(afterPassCalls).toBe(0);
+  });
+
+  it('自発的パスの反映後・次手番決定前にafterPass効果を適用する', () => {
+    const ruleEntry = entry('r0105-after-pass');
+    const module: RuleModule = {
+      meta: {
+        ruleId: ruleEntry.ruleId,
+        name: ruleEntry.name,
+        description: 'after pass fixture',
+        kind: 'original',
+        proposalId: 'fixture',
+        contractVersion: 2,
+        messages: { fired: 'pass fired' },
+      },
+      hooks: {
+        afterPass(context, pass) {
+          expect(context.game.history.at(-1)).toEqual({
+            type: 'passed',
+            player: pass.player,
+          });
+          return [
+            { type: 'forceRank', player: pass.player, rank: 'lowest' },
+            { type: 'announce', messageKey: 'fired' },
+          ];
+        },
+      },
+    };
+    const config: GameConfig = {
+      gameIndex: 0,
+      seats,
+      gameSeed: 'after-pass',
+      ruleChain: [ruleEntry],
+    };
+    const ruleRuntime = runtime(module);
+    const started = startGame(config, ruleRuntime).state;
+    const leader = started.public.turn;
+    const card = leader ? started.players[leader]?.hand[0] : undefined;
+    if (!leader || !card) throw new Error('Expected opening play');
+    const played = reduceGame(
+      config,
+      started,
+      { type: 'play', player: leader, cards: [card.id] },
+      ruleRuntime,
+    );
+    const passer = played.state.public.turn;
+    if (!passer) throw new Error('Expected passer');
+
+    const passed = reduceGame(
+      config,
+      played.state,
+      { type: 'pass', player: passer },
+      ruleRuntime,
+    );
+
+    expect(passed.rejections).toEqual([]);
+    expect(passed.state.players[passer]).toMatchObject({
+      status: 'retired',
+      standing: 4,
+    });
+    expect(passed.state.public.turn).not.toBe(passer);
+    expect(passed.events.map(({ type }) => type)).toContain('playerRetired');
+    expect(passed.events).toContainEqual({
+      type: 'ruleFired',
+      ruleId: ruleEntry.ruleId,
+      messageKey: 'fired',
+    });
   });
 
   it('afterFieldClearの退場でactiveが1人になったらその場で終局する', () => {

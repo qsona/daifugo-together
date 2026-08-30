@@ -29,6 +29,7 @@ import { Dialog, DialogBody } from './components/Dialog';
 import { Toast } from './components/Toast';
 import { BombThrowMiniGame } from './components/BombThrowMiniGame';
 import { BinaryQuizMiniGame } from './components/BinaryQuizMiniGame';
+import { IntegerChoiceDialog } from './components/IntegerChoiceDialog';
 import { RuleDetailModal } from './components/RuleDetailModal';
 import type { RuleVote, SetFunRating } from './screens/SetResultScreen';
 import {
@@ -1826,13 +1827,22 @@ function ConnectedApp({
       game.pendingChoice?.seat === room.you.seatId &&
       (game.pendingChoice.kind === 'player'
         ? game.pendingChoice.players !== null
-        : game.pendingChoice.cards !== null)
+        : game.pendingChoice.kind === 'integer'
+          ? typeof game.pendingChoice.min === 'number' &&
+            typeof game.pendingChoice.max === 'number' &&
+            typeof game.pendingChoice.defaultValue === 'number'
+          : game.pendingChoice.cards !== null)
         ? game.pendingChoice
         : null;
     const pendingCardChoice =
-      pendingChoice && pendingChoice.kind !== 'player' ? pendingChoice : null;
+      pendingChoice &&
+      (pendingChoice.kind === undefined || pendingChoice.kind === 'cards')
+        ? pendingChoice
+        : null;
     const pendingPlayerChoice =
       pendingChoice?.kind === 'player' ? pendingChoice : null;
+    const pendingIntegerChoice =
+      pendingChoice?.kind === 'integer' ? pendingChoice : null;
     const pendingChoicePresentation = pendingChoice
       ? choicePresentation({
           choiceId: pendingChoice.choiceId,
@@ -1844,6 +1854,25 @@ function ConnectedApp({
             )?.name ?? null,
         })
       : null;
+    const pendingRuleName = game.pendingChoice
+      ? (room.activeRules.find(
+          (rule) => rule.ruleId === game.pendingChoice?.ruleId,
+        )?.name ?? null)
+      : null;
+    const waitingChoicePresentation =
+      game.pendingChoice && game.pendingChoice.seat !== room.you.seatId
+        ? {
+            ruleName: pendingRuleName,
+            instruction:
+              game.pendingChoice.kind === 'integer'
+                ? '前回の大貧民が回数を決めています'
+                : `${
+                    room.members.find(
+                      (member) => member.seatId === game.pendingChoice?.seat,
+                    )?.displayName ?? 'ほかのプレイヤー'
+                  }が選択しています`,
+          }
+        : null;
     const choiceCardIds = new Set(
       pendingCardChoice?.cards?.map((card) => card.id) ?? [],
     );
@@ -1915,8 +1944,16 @@ function ConnectedApp({
           playLabel={
             pendingChoicePresentation?.confirmLabel ?? 'えらんだカードを出す'
           }
-          actionRuleName={pendingChoicePresentation?.ruleName ?? null}
-          actionPrompt={pendingChoicePresentation?.instruction ?? null}
+          actionRuleName={
+            pendingChoicePresentation?.ruleName ??
+            waitingChoicePresentation?.ruleName ??
+            null
+          }
+          actionPrompt={
+            pendingChoicePresentation?.instruction ??
+            waitingChoicePresentation?.instruction ??
+            null
+          }
           turnDeadlineAt={game.turn?.deadlineAt ?? null}
           onViewRules={() => {
             openRules();
@@ -1984,6 +2021,28 @@ function ConnectedApp({
               {pendingPlayerChoice.message ?? '相手を選んでください'}
             </DialogBody>
           </Dialog>
+        )}
+        {pendingIntegerChoice && game.turn && (
+          <IntegerChoiceDialog
+            title={
+              room.activeRules.find(
+                (rule) => rule.ruleId === pendingIntegerChoice.ruleId,
+              )?.name ?? 'ルールの選択'
+            }
+            message={pendingIntegerChoice.message ?? '回数を選んでください'}
+            min={pendingIntegerChoice.min ?? 0}
+            max={pendingIntegerChoice.max ?? 0}
+            defaultValue={pendingIntegerChoice.defaultValue ?? 0}
+            onConfirm={(value) => {
+              invoke(
+                client.ruleIntegerInput(
+                  game.turn?.turnSeq ?? 0,
+                  pendingIntegerChoice.choiceId,
+                  value,
+                ),
+              );
+            }}
+          />
         )}
         {game.miniGame?.kind === 'bomb_throw_15' && (
           <BombThrowMiniGame

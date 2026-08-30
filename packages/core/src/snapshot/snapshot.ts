@@ -147,6 +147,18 @@ export function buildPlayerSnapshot(
               (playerPending ?? pending).player === forPlayer
                 ? [...((playerPending ?? pending).optionPlayerIds ?? [])]
                 : [],
+            min:
+              (playerPending ?? pending).player === forPlayer
+                ? ((playerPending ?? pending).min ?? null)
+                : null,
+            max:
+              (playerPending ?? pending).player === forPlayer
+                ? ((playerPending ?? pending).max ?? null)
+                : null,
+            defaultValue:
+              (playerPending ?? pending).player === forPlayer
+                ? ((playerPending ?? pending).defaultValue ?? null)
+                : null,
           },
   });
 }

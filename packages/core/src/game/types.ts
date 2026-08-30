@@ -143,13 +143,16 @@ export interface PublicGameState {
 }
 
 export interface PendingChoiceRequest {
-  kind?: 'cards' | 'player' | 'miniGame';
+  kind?: 'cards' | 'player' | 'integer' | 'miniGame';
   ruleId: RuleId;
   player: PlayerId;
   choiceId: string;
   messageKey: string;
   optionCardIds?: CardId[];
   optionPlayerIds?: PlayerId[];
+  min?: number;
+  max?: number;
+  defaultValue?: number;
   count?: number;
   miniGame?: 'bomb_throw_15' | 'binary_quiz_race';
   participants?: PlayerId[];
@@ -174,6 +177,11 @@ export type SubmittedRuleChoice =
       player: PlayerId;
       choiceId: string;
       playerId: PlayerId;
+    }
+  | {
+      player: PlayerId;
+      choiceId: string;
+      value: number;
     };
 
 export interface PrivateGameState {
@@ -233,6 +241,15 @@ export type GameAction =
       choiceId: string;
       playerId: PlayerId;
       cardIds?: never;
+      value?: never;
+    }
+  | {
+      type: 'ruleInput';
+      player: PlayerId;
+      choiceId: string;
+      value: number;
+      cardIds?: never;
+      playerId?: never;
     }
   | {
       type: 'ruleInput';
@@ -243,6 +260,7 @@ export type GameAction =
       scores: Record<PlayerId, { score: number; hitsTaken: number }>;
       cardIds?: never;
       playerId?: never;
+      value?: never;
     }
   | {
       type: 'ruleInput';
@@ -253,6 +271,7 @@ export type GameAction =
       scores: Record<PlayerId, { score: number }>;
       cardIds?: never;
       playerId?: never;
+      value?: never;
       winnerPlayerId?: never;
     }
   | {
@@ -367,7 +386,7 @@ export interface PlayerSnapshot {
     params?: Record<string, string>;
   }[];
   pendingChoice?: {
-    kind?: 'cards' | 'player' | 'miniGame';
+    kind?: 'cards' | 'player' | 'integer' | 'miniGame';
     ruleId: RuleId;
     player: PlayerId;
     choiceId: string;
@@ -375,5 +394,8 @@ export interface PlayerSnapshot {
     count: number;
     cards: Card[];
     players?: PlayerId[];
+    min?: number | null;
+    max?: number | null;
+    defaultValue?: number | null;
   } | null;
 }

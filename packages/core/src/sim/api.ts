@@ -254,11 +254,15 @@ export function createSimulationApi(
                         playerId:
                           [...(request.optionPlayerIds ?? [])].sort()[0] ?? '',
                       }
-                    : {
-                        cardIds: [...(request.optionCardIds ?? [])]
-                          .sort()
-                          .slice(0, request.count ?? 0),
-                      }),
+                    : request.kind === 'integer'
+                      ? {
+                          value: request.defaultValue ?? request.min ?? 0,
+                        }
+                      : {
+                          cardIds: [...(request.optionCardIds ?? [])]
+                            .sort()
+                            .slice(0, request.count ?? 0),
+                        }),
                 },
           {
             ...runtimeFor(position),

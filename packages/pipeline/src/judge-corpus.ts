@@ -335,4 +335,15 @@ export const CX_JUDGE_CORPUS: readonly CxJudgeCorpusCase[] = [
       extensionNeeded: false,
     },
   },
+  {
+    id: 'P13',
+    name: 'ギロチン時計',
+    body: '2戦目以降、前のゲームの大貧民が4〜12からNを選ぶ。そのゲームで全員通算N回目の通常パスをした人が大貧民になる。自動スキップは数えず、初戦は発動しない。',
+    expected: {
+      verdict: 'approve',
+      rejectCategory: null,
+      rejectSubtype: null,
+      extensionNeeded: false,
+    },
+  },
 ] as const;
