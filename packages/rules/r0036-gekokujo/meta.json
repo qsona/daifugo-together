@@ -1,0 +1,9 @@
+{
+  "ruleId": "r0036-gekokujo",
+  "name": "下剋上",
+  "description": "前ゲームの大貧民が次ゲームで最初に正常なあがりを成立させた場合、前ゲームの富豪を3位、前ゲームの貧民を2位に確定する。前ゲームの大富豪には既存の都落ちを適用する。",
+  "kind": "local",
+  "proposalId": "01M079YENPW3XJBEBPB411MQAJ",
+  "contractVersion": 1,
+  "messages": {}
+}
