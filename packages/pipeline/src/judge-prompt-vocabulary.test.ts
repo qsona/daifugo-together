@@ -108,4 +108,12 @@ describe('CX-01 プロンプトとエンジン語彙のパリティ', () => {
     expect(prompt).toContain('context.game.ruleIds');
     expect(prompt).toContain('有効ルールID');
   });
+
+  it('公開履歴からプレイとパスをまたぐ状態を導出できると説明する', () => {
+    expect(prompt).toContain('context.game.history');
+    expect(prompt).toContain('played');
+    expect(prompt).toContain('passed');
+    expect(prompt).toContain('onTurnAdvance');
+    expect(prompt).toContain('needs_review にしない');
+  });
 });

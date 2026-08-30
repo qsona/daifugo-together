@@ -315,4 +315,24 @@ export const CX_JUDGE_CORPUS: readonly CxJudgeCorpusCase[] = [
       extensionNeeded: false,
     },
   },
+  {
+    id: 'P12',
+    name: '強化Jバック',
+    body: 'Jをn枚出すと、nターン革命状態が続く',
+    existingRules: [
+      {
+        name: 'イレブンバック',
+        summary:
+          'Jを含む手を出すと、その場が流れるまでカードの強さ順を一時的に反転する。',
+      },
+    ],
+    // 発動時点をsetMemoryへ保存し、played / passedを数えれば現行契約で表現できる。
+    // 継続期間が既存イレブンバックと異なるため、実質重複にも当たらない。
+    expected: {
+      verdict: 'approve',
+      rejectCategory: null,
+      rejectSubtype: null,
+      extensionNeeded: false,
+    },
+  },
 ] as const;

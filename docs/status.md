@@ -11,7 +11,7 @@
   mainのdeploy後にjob 27を行政的rebuildして同じrule実装を再submitする。
 - **通知設定画面 × 認証の残件 J9-4 / J9-5 / J9-7(+ J9-3)** — 端末の通知状態を読まない / 購読・解除がブラウザとサーバーでずれる / OS 拒否後の回復導線なし / 失敗文言が 1 種。着手前に発注書 §5 の不変条件(user activation の維持、ガードのない入口を足すと J9-2 が再発)を読むこと。出典: [archive/workorders/2026-08-02-auth-account-ui-5-push-crossing-followup.md](archive/workorders/2026-08-02-auth-account-ui-5-push-crossing-followup.md)
 - **TU-03 の観察テスト(E14 §4)** — 実装側は完了、開発者による観察テストの実施記録なし。E14-P3-2(AI 間合い 3000〜4500ms)の値確定がこれ待ち。出典: [epics/E14-tutorial.md](epics/E14-tutorial.md) §4
-- **CX-01 の実 app-server 評価(評価セット 22 件)** — 評価 CLI と Fake テストは完成。実モデルでの評価セット完走の記録がない(稼働実績は代替にならない)。出典: [archive/impl-progress.md](archive/impl-progress.md)「E7 CX-01」節
+- **CX-01 の実 app-server 評価(評価セット 23 件)** — 評価 CLI と Fake テストは完成。実モデルでの評価セット完走の記録がない(稼働実績は代替にならない)。P12「強化Jバック」の単独評価は2026-08-31に一致確認済み。出典: [archive/impl-progress.md](archive/impl-progress.md)「E7 CX-01」節
 - **CX-02 の初回実ジョブ(scaffold 後に停止)の始末** — 以後のパイプラインは健全に一周している。当該 attempt が resume 済みか打ち切りかは本番 SQLite の `pipeline_jobs` を見ないと判らない。出典: [product-backlog.md](product-backlog.md) CX-02
 - **`/about`(プライバシー・保存データの説明)が未実装** — サーバーに `about` ルートなし。Google Console が Privacy policy URL を必須にしている場合のみ必須へ昇格。出典: [release-checklist-2026-08-02.md](release-checklist-2026-08-02.md) §0 #9
 - **SQLite バックアップの定期化(優先度低)** — スクリプトと runbook は揃い、リリース前後は実行済み。`schedule:` トリガのワークフローが 0 件で自動化されていない。出典: [decision-log.md](decision-log.md) C-9 / [runbooks/production-backup.md](runbooks/production-backup.md)

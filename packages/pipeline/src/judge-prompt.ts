@@ -1,7 +1,7 @@
 import { MINI_GAME_IDS } from '@daifugo/core';
 import type { PendingCxJudgement } from '@daifugo/server';
 
-export const CX01_PROMPT_VERSION = 'cx01-v19';
+export const CX01_PROMPT_VERSION = 'cx01-v20';
 
 // 実装済みミニゲームの一言説明と、エンジンが強制する固定制約。MINI_GAME_IDS に id を
 // 追加してここを更新し忘れると satisfies がコンパイルエラーになる。
@@ -72,6 +72,12 @@ hook別のEffect許可:
   例: { stronger: '3', weaker: 'joker' }。省略時は直前の例外を維持する
 - context.game.ruleIds はセット開始時に固定された有効ルールIDを優先順位順で返す。
   別ルールが同じゲームで有効かどうかに依存する条件は、この配列で判定できる
+- context.game.history は公開イベントを時系列で返す。各手番の完了は、カードを出した
+  ときは played、通常のパスとルールによる自動スキップは passed として記録される。
+  fieldCleared / turnChanged / ruleFired 等も含む。modifyLegality / modifyStrength は、
+  afterPlay + setMemory で記録した発動時点とこの履歴を同期的に比較し、一定手番・一定回数だけ
+  続く状態や、プレイとパスをまたぐ条件を導出できる。履歴から完全に導出できる提案を、
+  afterPass / onTurnAdvance のような専用フックがないことだけを理由に needs_review にしない
 - スート縛りは suitBindingFromHistory(context.game.history,
   context.game.suitBindingResetAfter) で共有状態として読める。解除後の再成立も共通計算が扱う
 
