@@ -90,5 +90,13 @@
   "r0031-binary-quiz": {
     "version": 1,
     "hash": "791d7a60765135cb0b200b70ebbb02e3a6909bf32ceabe7b0a4a9602ef0d28be"
+  },
+  "r0034-daifugo-no-yoyu": {
+    "version": 1,
+    "hash": "71ee51d09c1ffb352aad585ec60f6a5a59713f467b4c64d70fedab632e3dfec4"
+  },
+  "r0036-gekokujo": {
+    "version": 1,
+    "hash": "fafe26c7e5bedda7726639fbc57c80eec258d37a93998a4d73b3799a41035b67"
   }
 }
