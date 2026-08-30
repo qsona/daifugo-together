@@ -13,6 +13,15 @@ function cardIds(play: Play): string[] {
   return play.cards.map((card) => card.id).sort();
 }
 
+function singleCardPlay(card: Card): Play {
+  return {
+    kind: 'single',
+    cards: [card],
+    count: 1,
+    repRank: card.kind === 'joker' ? 'joker' : card.rank,
+  };
+}
+
 export function sameCandidate(left: Play, right: Play): boolean {
   if (left.kind !== right.kind || left.count !== right.count) {
     return false;
@@ -88,6 +97,39 @@ export function chooseHeuristicPlayForView(
     ranking,
     revolution: view.strengthNote.inverted,
   });
+}
+
+export function chooseHeuristicCardIdsForView(
+  cards: readonly Card[],
+  count: number,
+  view: Pick<PlayerSnapshot, 'hand' | 'strengthNote'>,
+): string[] {
+  const selectableById = new Map(cards.map((card) => [card.id, card]));
+  let selectable = [...selectableById.values()];
+  let remainingHand = [...view.hand];
+  const requested = Number.isSafeInteger(count)
+    ? Math.max(0, Math.min(count, selectable.length))
+    : 0;
+  const strength: StrengthOrder = {
+    ranking: view.strengthNote.inverted
+      ? [...CARD_RANKS].reverse()
+      : [...CARD_RANKS],
+    revolution: view.strengthNote.inverted,
+  };
+  const selected: string[] = [];
+
+  for (let index = 0; index < requested; index += 1) {
+    const choice = chooseHeuristicPlay(
+      selectable.map(singleCardPlay),
+      remainingHand,
+      strength,
+    ).cards[0]!;
+    selected.push(choice.id);
+    selectable = selectable.filter((card) => card.id !== choice.id);
+    remainingHand = remainingHand.filter((card) => card.id !== choice.id);
+  }
+
+  return selected;
 }
 
 export function weakestPlay(plays: readonly Play[], inverted = false): Play {

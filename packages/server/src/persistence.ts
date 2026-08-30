@@ -2,11 +2,12 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 
-import type {
-  ReplayAction,
-  ReplayInit,
-  ReplayRecord,
-  SetResultView,
+import {
+  pendingChoiceRequestForPlayer,
+  type ReplayAction,
+  type ReplayInit,
+  type ReplayRecord,
+  type SetResultView,
 } from '@daifugo/core';
 import Database from 'better-sqlite3';
 import { eq, sql } from 'drizzle-orm';
@@ -178,6 +179,13 @@ function replayAction(
   previous: RoomState,
   next: RoomState,
 ): ReplayAction | undefined {
+  const autoActPending =
+    action.type === 'autoAct'
+      ? pendingChoiceRequestForPlayer(
+          previous.engine?.currentGame?.private.pendingChoice,
+          action.memberId,
+        )
+      : undefined;
   const coreAction: ReplayAction['action'] | undefined =
     action.type === 'play'
       ? { type: 'play', player: action.memberId, cards: action.cards }
@@ -243,23 +251,37 @@ function replayAction(
                         },
                       ) ?? [],
                   }
-              : action.type === 'autoAct'
-                ? action.cards
-                  ? {
-                      type: 'play',
-                      player: action.memberId,
-                      cards: action.cards,
-                    }
-                  : { type: 'pass', player: action.memberId }
-                : action.type === 'advanceIntermission'
-                  ? { type: 'advance' }
-                  : action.type === 'readyIntermission' &&
-                      previous.engine?.phase.name === 'interimResult' &&
-                      next.engine?.phase.name !== 'interimResult'
+              : action.type === 'autoAct' && autoActPending
+                ? {
+                    type: 'ruleInput',
+                    player: action.memberId,
+                    choiceId: autoActPending.choiceId,
+                    ...((autoActPending.kind ?? 'cards') === 'player'
+                      ? {
+                          playerId:
+                            [
+                              ...(autoActPending.optionPlayerIds ?? []),
+                            ].sort()[0] ?? '',
+                        }
+                      : { cardIds: action.cards ?? [] }),
+                  }
+                : action.type === 'autoAct'
+                  ? action.cards
+                    ? {
+                        type: 'play',
+                        player: action.memberId,
+                        cards: action.cards,
+                      }
+                    : { type: 'pass', player: action.memberId }
+                  : action.type === 'advanceIntermission'
                     ? { type: 'advance' }
-                    : action.type === 'requestDrain'
-                      ? { type: 'requestDrain' }
-                      : undefined;
+                    : action.type === 'readyIntermission' &&
+                        previous.engine?.phase.name === 'interimResult' &&
+                        next.engine?.phase.name !== 'interimResult'
+                      ? { type: 'advance' }
+                      : action.type === 'requestDrain'
+                        ? { type: 'requestDrain' }
+                        : undefined;
   return coreAction ? { seq, action: coreAction } : undefined;
 }
 
