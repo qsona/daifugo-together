@@ -1,0 +1,13 @@
+{
+  "ruleId": "r0033-guillotine-clock",
+  "name": "ギロチン時計",
+  "description": "初回ゲームでは発動しない。2ゲーム目以降の開始時、前ゲームの大貧民が4〜12からNを選ぶ。そのゲームで全員通算N回目の通常パスをしたプレイヤーを直ちに最低順位へ強制する。skipTurnsによる自動スキップは数えない。",
+  "kind": "local",
+  "proposalId": "01M079JQC6AC0JMCXNY9Y1BYZ0",
+  "contractVersion": 2,
+  "messages": {
+    "choose_count": "何回目のパスで大貧民にしますか？",
+    "count_set": "{count}回目のパスで大貧民！",
+    "triggered": "ギロチン時計！ {count}回目のパスで大貧民！"
+  }
+}
