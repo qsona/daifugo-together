@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { selectPipelineWork } from './queue-selection.js';
+import {
+  scopePipelineItemsByProposalId,
+  selectPipelineWork,
+} from './queue-selection.js';
 
 describe('pipeline queue selection', () => {
   it('確認待ちがlimitを消費せず、後方のE6/CX-01を処理対象にする', () => {
@@ -21,5 +24,18 @@ describe('pipeline queue selection', () => {
       ],
       confirmations,
     });
+  });
+
+  it('proposal IDを指定すると対象提案以外を処理対象から除外する', () => {
+    const items = [
+      { stage: 'cx01' as const, proposal: { id: 'target' } },
+      { stage: 'cx01' as const, proposal: { id: 'other' } },
+      { stage: 'confirmation' as const, proposal: { id: 'other' } },
+    ];
+
+    expect(scopePipelineItemsByProposalId(items, 'target')).toEqual([
+      { stage: 'cx01', proposal: { id: 'target' } },
+    ]);
+    expect(scopePipelineItemsByProposalId(items, null)).toEqual(items);
   });
 });

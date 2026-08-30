@@ -12,7 +12,10 @@ import {
 import { CodexCxJudge } from './app-server-judge.js';
 import { CX01_PROMPT_VERSION } from './judge-prompt.js';
 import { runCxJudgementBatch } from './cx-batch.js';
-import { selectPipelineWork } from './queue-selection.js';
+import {
+  scopePipelineItemsByProposalId,
+  selectPipelineWork,
+} from './queue-selection.js';
 
 type ScreeningItem =
   | ({ stage: 'e6' } & PendingLocalScreening)
@@ -138,6 +141,7 @@ const baseUrl = new URL(
 );
 const token = adminToken();
 const model = option('--model') ?? DEFAULT_SCREENING_MODEL;
+const proposalId = option('--proposal-id');
 const limit = positiveIntegerOption('--limit', 100);
 const timeoutMs = positiveIntegerOption(
   '--timeout-ms',
@@ -151,7 +155,10 @@ const reasoningEffort = effort();
 const listUrl = new URL('/admin/pipeline/screening', baseUrl);
 // プロンプト版を上げたとき、旧版の未確定AI判定を再判定対象に含めてもらう。
 listUrl.searchParams.set('promptVersion', CX01_PROMPT_VERSION);
-const listed = pendingItems(await requestJson(listUrl, token));
+const listed = scopePipelineItemsByProposalId(
+  pendingItems(await requestJson(listUrl, token)),
+  proposalId,
+);
 const selected = selectPipelineWork(listed, limit);
 const items = selected.actionable;
 
@@ -221,8 +228,9 @@ if (items.length === 0 && selected.confirmations.length === 0) {
   if (e6Items.length > 0) {
     const e6ProposalIds = new Set(e6Items.map((item) => item.proposal.id));
     const existingCxIds = new Set(cxItems.map((item) => item.proposal.id));
-    const newlyEligible = pendingItems(
-      await requestJson(listUrl, token),
+    const newlyEligible = scopePipelineItemsByProposalId(
+      pendingItems(await requestJson(listUrl, token)),
+      proposalId,
     ).filter(
       (item): item is Extract<ScreeningItem, { stage: 'cx01' }> =>
         item.stage === 'cx01' &&
@@ -288,7 +296,10 @@ if (items.length === 0 && selected.confirmations.length === 0) {
       );
     },
   });
-  const confirmations = pendingItems(await requestJson(listUrl, token)).filter(
+  const confirmations = scopePipelineItemsByProposalId(
+    pendingItems(await requestJson(listUrl, token)),
+    proposalId,
+  ).filter(
     (item): item is Extract<ScreeningItem, { stage: 'confirmation' }> =>
       item.stage === 'confirmation',
   );

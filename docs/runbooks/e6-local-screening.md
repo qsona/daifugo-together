@@ -32,6 +32,14 @@ export CODEX_BIN='/absolute/path/to/codex'
 pnpm --filter @daifugo/pipeline judge
 ```
 
+1件だけを判定・再判定するときは提案IDを指定する。指定時は一覧取得後に対象ID以外を
+E6 / CX-01 / confirmationの全段階から除外し、他の未確定提案を変更しない。
+
+```bash
+pnpm --filter @daifugo/pipeline judge -- \
+  --proposal-id <提案ID>
+```
+
 既定モデルは評価セットを満たした `gpt-5.6-sol`、reasoning effort は `medium`。一度に処理する件数や実験モデルは明示的に変更できる。
 
 ```bash

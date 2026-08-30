@@ -239,5 +239,7 @@ AI 判定の属性であり、承認記録が引き継ぐものではない。
 - 評価コーパスへP12を追加し、プロンプト語彙テストと版ハッシュで回帰を固定した。
 - 実モデル評価: `gpt-5.6-sol` / medium、P12は `approve` / `extensionNeeded: false`、
   confidence 0.93、latency 47,998msで期待値と一致した。
-- 検証: `pnpm verify` 成功（182 files / 1,413 tests）。ローカルNodeはv24.15.0で、
+- 検証: `pnpm verify` 成功（182 files / 1,414 tests）。ローカルNodeはv24.15.0で、
   リポジトリ指定のNode 26系ではないためengine warningは継続している。
+- 本番再判定を対象提案だけへ安全に限定するため、judge CLIへ `--proposal-id` を追加した。
+  指定時はE6 / CX-01 / confirmationの全段階で他提案を除外する。
