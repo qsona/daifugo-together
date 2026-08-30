@@ -1,0 +1,9 @@
+{
+  "ruleId": "r0039-enhanced-j-back",
+  "name": "強化Jバック",
+  "description": "自然なランクJをn枚含む合法な手を出すと、その手の解決後から次のn手番が完了するまで、永続的な革命状態を変えずにジョーカー以外の強さ順を一時的に反転する。",
+  "kind": "local",
+  "proposalId": "01M07Q18AVEM959XZ3DBFH7VYG",
+  "contractVersion": 1,
+  "messages": {}
+}
