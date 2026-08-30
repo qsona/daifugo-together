@@ -413,6 +413,10 @@ export async function runAiRuleSimulations(options: {
                 gameSeed: decision.config.gameSeed,
                 gameMemory: structuredClone(game.private.memory),
                 hookCalls: structuredClone(game.private.hookCalls),
+                suitBindingResetAfter:
+                  game.private.suitBindingResetAfter === undefined
+                    ? null
+                    : [...game.private.suitBindingResetAfter],
                 setMemory: structuredClone(decision.state.setMemory),
               },
             };

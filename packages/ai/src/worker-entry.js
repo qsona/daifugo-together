@@ -460,6 +460,16 @@ function rulePlanKey(ruleContext) {
     .join('|');
 }
 
+function restorePrivateRuleState(state, ruleContext) {
+  state.private.memory = ruleContext?.gameMemory ?? {};
+  state.private.hookCalls = ruleContext?.hookCalls ?? {};
+  if (ruleContext?.suitBindingResetAfter) {
+    state.private.suitBindingResetAfter = [
+      ...ruleContext.suitBindingResetAfter,
+    ];
+  }
+}
+
 async function search(payload, deadlineAt, onProgress) {
   const searchStartedAt = performance.now();
   if (payload.config.maxTreeDepth !== 1) {
@@ -490,8 +500,7 @@ async function search(payload, deadlineAt, onProgress) {
   });
   const engineFeatures = core.engineFeaturesOf(ruleChain);
   const sample = determinize(payload.view, payload.seed, -1, engineFeatures);
-  sample.private.memory = payload.ruleContext?.gameMemory ?? {};
-  sample.private.hookCalls = payload.ruleContext?.hookCalls ?? {};
+  restorePrivateRuleState(sample, payload.ruleContext);
   const strength = api.getEffectiveStrengthOrder(api.createPosition(sample));
   const effectiveStrengthInverted =
     strength.ranking.join(',') ===
@@ -538,8 +547,7 @@ async function search(payload, deadlineAt, onProgress) {
       worldIndex,
       engineFeatures,
     );
-    world.private.memory = payload.ruleContext?.gameMemory ?? {};
-    world.private.hookCalls = payload.ruleContext?.hookCalls ?? {};
+    restorePrivateRuleState(world, payload.ruleContext);
     const round = [];
     for (const entry of stats) {
       if (worldIndex > 0 && Date.now() >= cooperativeDeadlineAt) break;

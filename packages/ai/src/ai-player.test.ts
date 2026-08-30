@@ -624,7 +624,7 @@ describe('AI-01', () => {
 });
 
 describe('AI-02 rule following', () => {
-  it('worker内でも固定ルールbundleを読み、合法手だけで新ルール有効セットを完走する', async () => {
+  it('worker内でも固定ルールbundleと非公開ルール状態を復元し、合法手だけでセットを完走する', async () => {
     const module = ai02RuleFixture as RuleModule;
     const moduleUrl = new URL('./test-fixtures/ai02-rule.js', import.meta.url);
     const bundleHash = createHash('sha256')
@@ -658,6 +658,11 @@ describe('AI-02 rule following', () => {
       port,
     );
     if (!state.currentGame) throw new Error('Expected an active game');
+    const openingPlayer = state.currentGame.public.turn;
+    const resetMarker = openingPlayer
+      ? state.currentGame.players[openingPlayer]?.hand[0]?.id
+      : undefined;
+    if (!resetMarker) throw new Error('Expected an opening hand');
     state = {
       ...state,
       currentGame: {
@@ -666,12 +671,16 @@ describe('AI-02 rule following', () => {
           ...state.currentGame.private,
           memory: {
             ...state.currentGame.private.memory,
-            [ruleEntry.ruleId]: { force: true },
+            [ruleEntry.ruleId]: {
+              force: true,
+              requireSuitBindingReset: true,
+            },
           },
           hookCalls: {
             ...state.currentGame.private.hookCalls,
             [`${ruleEntry.ruleId}:modifyStrength`]: 7,
           },
+          suitBindingResetAfter: [resetMarker],
         },
       },
     };
@@ -738,6 +747,7 @@ describe('AI-02 rule following', () => {
               gameSeed: config.gameSeed,
               gameMemory: game.private.memory,
               hookCalls: game.private.hookCalls,
+              suitBindingResetAfter: game.private.suitBindingResetAfter ?? null,
               setMemory: state.setMemory,
             },
           });
@@ -881,6 +891,7 @@ describe('AI-02 rule following', () => {
         },
       },
       hookCalls: started.private.hookCalls,
+      suitBindingResetAfter: null,
       setMemory: {},
     };
     const ai = createAiPlayer({
@@ -1020,6 +1031,7 @@ describe('AI-02 rule following', () => {
       gameSeed: config.gameSeed,
       gameMemory: {},
       hookCalls: started.private.hookCalls,
+      suitBindingResetAfter: null,
       setMemory: {},
     };
     const ai = createAiPlayer({

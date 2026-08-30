@@ -183,6 +183,7 @@ describe('server AI turn boundary', () => {
           gameSeed: 'authority-seed',
           gameMemory: {},
           hookCalls: {},
+          suitBindingResetAfter: null,
           setMemory: {},
         },
       },

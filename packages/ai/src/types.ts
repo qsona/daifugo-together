@@ -1,4 +1,5 @@
 import type {
+  CardId,
   Play,
   PlayerSnapshot,
   RuleChainEntry,
@@ -69,6 +70,8 @@ export interface AiRuleContext {
   gameSeed: string;
   gameMemory: RuleMemory;
   hookCalls: Record<string, number>;
+  /** clearSuitBindingが記録した、現在のスート縛りの解除境界。 */
+  suitBindingResetAfter: CardId[] | null;
   setMemory: RuleMemory;
 }
 

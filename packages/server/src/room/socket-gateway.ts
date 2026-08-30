@@ -360,6 +360,10 @@ export function attachRoomSocketGateway(
           gameSeed: config.gameSeed,
           gameMemory: projectRuleMemory(game.private.memory, ruleChain),
           hookCalls: structuredClone(game.private.hookCalls),
+          suitBindingResetAfter:
+            game.private.suitBindingResetAfter === undefined
+              ? null
+              : [...game.private.suitBindingResetAfter],
           setMemory: projectRuleMemory(engine.setMemory, ruleChain),
         };
         const resolveBundles = options.aiRuleBundles;

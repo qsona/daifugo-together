@@ -11,6 +11,15 @@ export const rule = {
     },
   },
   hooks: {
+    modifyLegality: (context, _play, base) => {
+      if (
+        context.memory.game.requireSuitBindingReset === true &&
+        context.game.suitBindingResetAfter === null
+      ) {
+        return { legal: false };
+      }
+      return base;
+    },
     modifyStrength: (context, base) => {
       if (context.memory.game.throw === true) {
         throw new Error('AI-02 fixture hook failure');
