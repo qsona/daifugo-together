@@ -27,10 +27,6 @@ export function IntegerChoiceDialog({
 }: IntegerChoiceDialogProps) {
   const sliderId = useId();
   const [value, setValue] = useState(() => clamp(defaultValue, min, max));
-  const ticks = Array.from(
-    { length: max - min + 1 },
-    (_, index) => min + index,
-  );
   const changeBy = (amount: number) => {
     setValue((current) => clamp(current + amount, min, max));
   };
@@ -83,11 +79,6 @@ export function IntegerChoiceDialog({
               setValue(Number(event.currentTarget.value));
             }}
           />
-          <div className={styles.ticks} aria-hidden="true">
-            {ticks.map((tick) => (
-              <span key={tick} />
-            ))}
-          </div>
           <div className={styles.labels} aria-hidden="true">
             <span>{min}</span>
             <span>{Math.round((min + max) / 2)}</span>
