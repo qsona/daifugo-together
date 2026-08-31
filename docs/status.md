@@ -5,8 +5,6 @@
 
 ## 進行中
 
-- **CX-02 job 32「強化Jバック」** — `cx01-v20` で再判定・SPEC承認済み。自然なJを
-  n枚出した後の次n手番だけ強さ順を反転し、パス・自動スキップも1手番に数える実装待ち。
 - **CX-02 job 27「2択クイズ」** — rule PR #41 の `diff-guard` / `quality` / `rule-tests` は成功したが、
   `simulation` が20分上限でcancelされた。原因は `SimulationApi` が二択クイズの200ms tickを
   MCTS内で逐次再生していたこと。phase境界へのfast-forwardをroot `main`で実装・検証中で、
